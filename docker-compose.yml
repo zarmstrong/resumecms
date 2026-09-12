@@ -6,7 +6,7 @@ services:
     environment:
       - RESUMECMS_APP_PASSWORD=${RESUMECMS_APP_PASSWORD:?Set RESUMECMS_APP_PASSWORD in your .env file}
       - RESUMECMS_SESSION_SECRET=${RESUMECMS_SESSION_SECRET:-please-change-this-session-secret}
-      - PORT=4000
+      - RESUMECMS_PORT=4000
       - RESUMECMS_DATA_DIR=/data
     volumes:
       - zresume-data:/data

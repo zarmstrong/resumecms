@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PUPPETEER_SKIP_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     NODE_ENV=production \
-    PORT=4000 \
+    RESUMECMS_PORT=4000 \
     RESUMECMS_DATA_DIR=/data
 
 WORKDIR /app/server
