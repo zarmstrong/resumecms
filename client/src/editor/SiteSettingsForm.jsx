@@ -9,7 +9,9 @@ import {
 
 const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
+  { value: 'snug', label: 'Snug' },
   { value: 'cozy', label: 'Cozy' },
+  { value: 'roomy', label: 'Roomy' },
   { value: 'spacious', label: 'Spacious' },
 ];
 

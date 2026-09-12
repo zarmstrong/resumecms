@@ -33,7 +33,9 @@ export function normalizeSiteColors(site) {
 // it as a simple dropdown instead of raw CSS input.
 export const PILL_PADDING_CSS = {
   compact: '1px 6px',
+  snug: '2px 9px',
   cozy: '4px 12px',
+  roomy: '5px 14px',
   spacious: '6px 16px',
 };
 
