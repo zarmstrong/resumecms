@@ -32,6 +32,10 @@
   margin: 8px 0;
 }
 
+.ed-captcha {
+  margin: 14px 0;
+}
+
 /* ---- Shell ------------------------------------------------------------ */
 .ed-shell {
   min-height: 100vh;

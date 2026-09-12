@@ -24,7 +24,9 @@ async function request(path, options = {}) {
 
 export const api = {
   authStatus: () => request('/auth/status'),
-  login: (password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }),
+  getCaptchaConfig: () => request('/auth/captcha-config'),
+  login: (password, captchaToken) =>
+    request('/auth/login', { method: 'POST', body: JSON.stringify({ password, captchaToken }) }),
   logout: () => request('/auth/logout', { method: 'POST' }),
 
   getHeader: () => request('/header'),

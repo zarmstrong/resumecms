@@ -93,6 +93,9 @@ the server.
 | `RESUMECMS_SESSION_SECRET` | yes | Random string used to sign session cookies. |
 | `PORT` | no | Server port. Defaults to `4000`. |
 | `RESUMECMS_DATA_DIR` | no | Where the SQLite file lives. Defaults to `/data`. |
+| `RESUMECMS_CAPTCHA_PROVIDER` | no | `turnstile` or `recaptcha` to require a captcha on login. Unset disables it. |
+| `RESUMECMS_TURNSTILE_SITE_KEY` / `RESUMECMS_TURNSTILE_SECRET_KEY` | if using Turnstile | From the [Cloudflare Turnstile dashboard](https://dash.cloudflare.com/?to=/:account/turnstile). |
+| `RESUMECMS_RECAPTCHA_SITE_KEY` / `RESUMECMS_RECAPTCHA_SECRET_KEY` | if using reCAPTCHA | From the [Google reCAPTCHA admin console](https://www.google.com/recaptcha/admin) (v2 "I'm not a robot" checkbox type). |
 
 Generate a strong `RESUMECMS_SESSION_SECRET` with e.g. `openssl rand -hex 32`.
 
@@ -103,11 +106,12 @@ authenticated editor session (cookie set by `/api/auth/login`).
 
 | Method & path | Purpose |
 |---|---|
-| `POST /api/auth/login` | `{ password }` → sets session cookie |
+| `POST /api/auth/login` | `{ password, captchaToken }` → sets session cookie |
 | `POST /api/auth/logout` | clears session |
 | `GET /api/auth/status` | `{ authenticated }` |
+| `GET /api/auth/captcha-config` | `{ provider, siteKey }` — `provider` is `null` if captcha is disabled |
 | `GET/PUT /api/header` | header/contact fields |
-| `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background) |
+| `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered (editor use) |
 | `POST /api/blocks` | create a block: `{ type, data }` |
 | `PUT /api/blocks/:id` | update `data`, `visibleWeb`, and/or `visiblePrint` |
@@ -126,7 +130,14 @@ needed for a single-instance deployment.
 
 `POST /api/auth/login` is rate-limited to 10 failed attempts per IP per
 15 minutes (successful logins don't count against the limit) to slow down
-password brute-forcing. If you run this behind a reverse proxy, set
+password brute-forcing. Set `RESUMECMS_CAPTCHA_PROVIDER` to `turnstile` or
+`recaptcha` (with the matching site/secret key pair, see above) to also
+require solving a captcha before the password is even checked — the login
+form loads the provider's widget dynamically and the server verifies the
+token server-side on every attempt. Leaving it unset disables the captcha
+entirely; rate limiting alone still applies either way.
+
+If you run this behind a reverse proxy, set
 Express's `trust proxy` setting so rate limiting keys on the real client
 IP instead of the proxy's — but only if you actually control that proxy,
 since trusting `X-Forwarded-For` blindly lets a client spoof its way

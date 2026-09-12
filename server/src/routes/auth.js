@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { publicCaptchaConfig, verifyCaptcha } from '../captcha.js';
 
 const router = Router();
 
@@ -20,13 +21,23 @@ router.get('/status', (req, res) => {
   res.json({ authenticated: !!(req.session && req.session.authenticated) });
 });
 
-router.post('/login', loginLimiter, (req, res) => {
-  const { password } = req.body || {};
+router.get('/captcha-config', (req, res) => {
+  res.json(publicCaptchaConfig());
+});
+
+router.post('/login', loginLimiter, async (req, res) => {
+  const { password, captchaToken } = req.body || {};
   if (!APP_PASSWORD) {
     return res.status(500).json({
       error: 'Server misconfigured: RESUMECMS_APP_PASSWORD is not set. See README for setup.',
     });
   }
+
+  const captchaOk = await verifyCaptcha(captchaToken, req.ip);
+  if (!captchaOk) {
+    return res.status(400).json({ error: 'Captcha verification failed. Please try again.' });
+  }
+
   if (password === APP_PASSWORD) {
     req.session.authenticated = true;
     return res.json({ authenticated: true });
