@@ -1,6 +1,11 @@
 import { HeaderBlock } from './HeaderBlock.jsx';
 import { BLOCK_RENDERERS } from './blockRenderers.jsx';
-import { normalizeSiteColors, contrastTextFor } from './siteColors.js';
+import {
+  normalizeSiteColors,
+  contrastTextFor,
+  normalizePillPadding,
+  PILL_PADDING_CSS,
+} from './siteColors.js';
 import './resume.css';
 
 // mode: 'web' | 'print' | 'preview'
@@ -9,6 +14,7 @@ import './resume.css';
 export function ResumeView({ header, site, blocks, mode = 'web' }) {
   const isPreview = mode === 'preview';
   const colors = normalizeSiteColors(site);
+  const pillPad = PILL_PADDING_CSS[normalizePillPadding(site)];
   const colorVars = {
     '--r-accent': colors.accent,
     '--r-heading': colors.heading,
@@ -18,7 +24,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
   if (colors.skillsCategoryText) colorVars['--r-skills-text'] = colors.skillsCategoryText;
   if (colors.skillsCategoryPill) {
     colorVars['--r-skills-pill'] = colors.skillsCategoryPill;
-    colorVars['--r-skills-pad'] = '4px 12px';
+    colorVars['--r-skills-pad'] = pillPad;
     colorVars['--r-skills-radius'] = '3px';
     if (!colors.skillsCategoryText) {
       colorVars['--r-skills-text'] = contrastTextFor(colors.skillsCategoryPill);
@@ -27,7 +33,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
   if (colors.datesText) colorVars['--r-dates-text'] = colors.datesText;
   if (colors.datesPill) {
     colorVars['--r-dates-pill'] = colors.datesPill;
-    colorVars['--r-dates-pad'] = '4px 12px';
+    colorVars['--r-dates-pad'] = pillPad;
     colorVars['--r-dates-radius'] = '3px';
     if (!colors.datesText) {
       colorVars['--r-dates-text'] = contrastTextFor(colors.datesPill);

@@ -1,4 +1,10 @@
-import { normalizeSiteColors } from '../resume/siteColors.js';
+import { normalizeSiteColors, normalizePillPadding } from '../resume/siteColors.js';
+
+const PILL_PADDING_OPTIONS = [
+  { value: 'compact', label: 'Compact' },
+  { value: 'cozy', label: 'Cozy' },
+  { value: 'spacious', label: 'Spacious' },
+];
 
 const COLOR_FIELDS = [
   { key: 'accent', label: 'Accent', hint: 'Section rules and links' },
@@ -122,6 +128,21 @@ export function SiteSettingsForm({ site, onChange }) {
           />
         ))}
       </div>
+
+      <label className="ed-field">
+        <span>Pill padding</span>
+        <select
+          className="ed-input"
+          value={normalizePillPadding(site)}
+          onChange={(e) => onChange({ ...site, pillPadding: e.target.value })}
+        >
+          {PILL_PADDING_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }

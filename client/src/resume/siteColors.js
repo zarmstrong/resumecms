@@ -29,6 +29,21 @@ export function normalizeSiteColors(site) {
   };
 }
 
+// Pill padding is a preset, not a free-form value, so the editor can offer
+// it as a simple dropdown instead of raw CSS input.
+export const PILL_PADDING_CSS = {
+  compact: '1px 6px',
+  cozy: '4px 12px',
+  spacious: '6px 16px',
+};
+
+export const DEFAULT_PILL_PADDING = 'cozy';
+
+export function normalizePillPadding(site) {
+  const value = site?.pillPadding;
+  return PILL_PADDING_CSS[value] ? value : DEFAULT_PILL_PADDING;
+}
+
 // Picks readable label text (white or near-black) for a given pill
 // background color, so a solid-color tag stays legible without the user
 // having to separately pick a matching text color.
