@@ -61,7 +61,7 @@ You'll need Node 20+.
 # terminal 1 — API server
 cd server
 npm install
-RESUMECMS_APP_PASSWORD=devpass RESUMECMS_SESSION_SECRET=devsecret RESUMECMS_DATA_DIR=./data RESUMECMS_PORT=4000 npm run dev
+RESUMECMS_APP_PASSWORD=devpass RESUMECMS_SESSION_SECRET=devsecret RESUMECMS_DATA_DIR=./data npm run dev
 
 # terminal 2 — client with hot reload, proxied to the API above
 cd client
@@ -91,7 +91,7 @@ the server.
 |---|---|---|
 | `RESUMECMS_APP_PASSWORD` | yes | Password to sign in to `/editor`. |
 | `RESUMECMS_SESSION_SECRET` | yes | Random string used to sign session cookies. |
-| `RESUMECMS_PORT` | no | Server port. Defaults to `4000`. |
+| `PORT` | no | Server port. Defaults to `4000`. |
 | `RESUMECMS_DATA_DIR` | no | Where the SQLite file lives. Defaults to `/data`. |
 
 Generate a strong `RESUMECMS_SESSION_SECRET` with e.g. `openssl rand -hex 32`.

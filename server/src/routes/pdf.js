@@ -24,7 +24,7 @@ function getBrowser() {
 
 router.get('/resume.pdf', async (req, res) => {
   try {
-    const port = process.env.RESUMECMS_PORT || 4000;
+    const port = process.env.PORT || 4000;
     const printUrl = `http://127.0.0.1:${port}/print`;
 
     const browser = await getBrowser();

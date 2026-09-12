@@ -12,7 +12,7 @@ import pdfRoutes from './routes/pdf.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const PORT = process.env.RESUMECMS_PORT || 4000;
+const PORT = process.env.PORT || 4000;
 const SESSION_SECRET = process.env.RESUMECMS_SESSION_SECRET || 'dev-secret-change-me';
 
 app.use(cors({ origin: true, credentials: true }));
