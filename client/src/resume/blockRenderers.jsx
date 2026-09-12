@@ -25,7 +25,7 @@ export function ExperienceBlock({ data, mode = 'web' }) {
       <div className="r-experience-top">
         <div className="r-experience-title">{data.jobTitle}</div>
         <div className="r-experience-dates">
-          {data.startDate} – {data.endDate}
+          {data.endDate ? `${data.startDate} – ${data.endDate}` : data.startDate}
         </div>
       </div>
       <div className="r-experience-company">
@@ -61,7 +61,7 @@ export function EducationBlock({ data }) {
       <div className="r-experience-top">
         <div className="r-experience-title">{data.degree}</div>
         <div className="r-experience-dates">
-          {data.startDate} – {data.endDate}
+          {data.endDate ? `${data.startDate} – ${data.endDate}` : data.startDate}
         </div>
       </div>
       <div className="r-experience-company">
