@@ -32,11 +32,11 @@ export function normalizeSiteColors(site) {
 // Pill padding is a preset, not a free-form value, so the editor can offer
 // it as a simple dropdown instead of raw CSS input.
 export const PILL_PADDING_CSS = {
-  compact: '1px 6px',
-  snug: '2px 9px',
-  cozy: '4px 12px',
-  roomy: '5px 14px',
-  spacious: '6px 16px',
+  compact: '0px 4px',
+  snug: '1px 6px',
+  cozy: '2px 8px',
+  roomy: '3px 10px',
+  spacious: '4px 12px',
 };
 
 export const DEFAULT_PILL_PADDING = 'cozy';
