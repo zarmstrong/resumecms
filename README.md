@@ -116,6 +116,22 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag |
 | `GET /api/public/resume.pdf` | public, generates and streams a PDF |
 
+## Logging and security
+
+Every request is logged to stdout as one JSON line (method, URL, status,
+response time, IP, referrer, user agent) — `docker compose logs` (or
+whatever log driver you point Docker at) captures it, and it pipes cleanly
+into `jq` for filtering. No separate log file or aggregation stack is
+needed for a single-instance deployment.
+
+`POST /api/auth/login` is rate-limited to 10 failed attempts per IP per
+15 minutes (successful logins don't count against the limit) to slow down
+password brute-forcing. If you run this behind a reverse proxy, set
+Express's `trust proxy` setting so rate limiting keys on the real client
+IP instead of the proxy's — but only if you actually control that proxy,
+since trusting `X-Forwarded-For` blindly lets a client spoof its way
+around the limit.
+
 ## What's intentionally out of scope (v1)
 
 - Multi-user auth — this is single-password, single-tenant by design.

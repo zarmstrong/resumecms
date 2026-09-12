@@ -1,14 +1,26 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
 const APP_PASSWORD = process.env.RESUMECMS_APP_PASSWORD;
 
+// Brute-force protection: only failed attempts count against the limit, so
+// a legitimate user who logs in successfully is never penalized.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Too many login attempts. Please try again later.' },
+});
+
 router.get('/status', (req, res) => {
   res.json({ authenticated: !!(req.session && req.session.authenticated) });
 });
 
-router.post('/login', (req, res) => {
+router.post('/login', loginLimiter, (req, res) => {
   const { password } = req.body || {};
   if (!APP_PASSWORD) {
     return res.status(500).json({
