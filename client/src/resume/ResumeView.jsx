@@ -15,6 +15,18 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
     '--r-text': colors.text,
     '--r-bg': colors.background,
   };
+  if (colors.skillsCategoryText) colorVars['--r-skills-text'] = colors.skillsCategoryText;
+  if (colors.skillsCategoryPill) {
+    colorVars['--r-skills-pill'] = colors.skillsCategoryPill;
+    colorVars['--r-skills-pad'] = '2px 10px';
+    colorVars['--r-skills-radius'] = '999px';
+  }
+  if (colors.datesText) colorVars['--r-dates-text'] = colors.datesText;
+  if (colors.datesPill) {
+    colorVars['--r-dates-pill'] = colors.datesPill;
+    colorVars['--r-dates-pad'] = '2px 10px';
+    colorVars['--r-dates-radius'] = '999px';
+  }
 
   return (
     <div className={`r-page r-mode-${mode}`} style={colorVars}>

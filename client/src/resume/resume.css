@@ -102,7 +102,11 @@
 .r-skills-label {
   font-family: var(--font-ui);
   font-weight: 600;
-  color: var(--r-accent, var(--slate));
+  color: var(--r-skills-text, var(--r-accent, var(--slate)));
+  background: var(--r-skills-pill, transparent);
+  padding: var(--r-skills-pad, 0);
+  border-radius: var(--r-skills-radius, 0);
+  width: fit-content;
 }
 
 .r-experience,
@@ -121,7 +125,10 @@
 .r-experience-dates {
   font-family: var(--font-ui);
   font-size: 13px;
-  color: var(--slate);
+  color: var(--r-dates-text, var(--slate));
+  background: var(--r-dates-pill, transparent);
+  padding: var(--r-dates-pad, 0);
+  border-radius: var(--r-dates-radius, 0);
   white-space: nowrap;
 }
 

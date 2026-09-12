@@ -3,6 +3,13 @@ export const DEFAULT_SITE_COLORS = {
   heading: '#14181c',
   text: '#14181c',
   background: '#ffffff',
+  // Optional per-element overrides. Empty string means "not set" — the
+  // element falls back to its normal color (accent/slate) with no pill
+  // background, so leaving these unset changes nothing.
+  skillsCategoryText: '',
+  skillsCategoryPill: '',
+  datesText: '',
+  datesPill: '',
 };
 
 // `site.colors` is the current shape. Older saved sites only have a flat
@@ -15,5 +22,9 @@ export function normalizeSiteColors(site) {
     heading: colors.heading || DEFAULT_SITE_COLORS.heading,
     text: colors.text || DEFAULT_SITE_COLORS.text,
     background: colors.background || DEFAULT_SITE_COLORS.background,
+    skillsCategoryText: colors.skillsCategoryText || DEFAULT_SITE_COLORS.skillsCategoryText,
+    skillsCategoryPill: colors.skillsCategoryPill || DEFAULT_SITE_COLORS.skillsCategoryPill,
+    datesText: colors.datesText || DEFAULT_SITE_COLORS.datesText,
+    datesPill: colors.datesPill || DEFAULT_SITE_COLORS.datesPill,
   };
 }

@@ -283,6 +283,13 @@
   color: var(--ink);
 }
 
+.ed-color-field-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
 .ed-color-field-hint {
   font-size: 11px;
   color: var(--slate-light);
