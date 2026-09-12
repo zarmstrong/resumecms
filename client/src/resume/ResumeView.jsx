@@ -1,5 +1,6 @@
 import { HeaderBlock } from './HeaderBlock.jsx';
 import { BLOCK_RENDERERS } from './blockRenderers.jsx';
+import { normalizeSiteColors } from './siteColors.js';
 import './resume.css';
 
 // mode: 'web' | 'print' | 'preview'
@@ -7,9 +8,16 @@ import './resume.css';
 // visibility flags, dimming the ones that are hidden from web/print.
 export function ResumeView({ header, site, blocks, mode = 'web' }) {
   const isPreview = mode === 'preview';
+  const colors = normalizeSiteColors(site);
+  const colorVars = {
+    '--r-accent': colors.accent,
+    '--r-heading': colors.heading,
+    '--r-text': colors.text,
+    '--r-bg': colors.background,
+  };
 
   return (
-    <div className={`r-page r-mode-${mode}`}>
+    <div className={`r-page r-mode-${mode}`} style={colorVars}>
       <HeaderBlock
         header={header}
         showActions={mode === 'web'}

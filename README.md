@@ -107,7 +107,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/auth/logout` | clears session |
 | `GET /api/auth/status` | `{ authenticated }` |
 | `GET/PUT /api/header` | header/contact fields |
-| `GET/PUT /api/site` | site settings (title, accent color) |
+| `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background) |
 | `GET /api/blocks` | all blocks, unfiltered (editor use) |
 | `POST /api/blocks` | create a block: `{ type, data }` |
 | `PUT /api/blocks/:id` | update `data`, `visibleWeb`, and/or `visiblePrint` |

@@ -1,6 +1,7 @@
 .r-page {
   font-family: var(--font-resume);
-  color: var(--ink);
+  color: var(--r-text, var(--ink));
+  background: var(--r-bg, var(--panel));
   max-width: 720px;
   margin: 0 auto;
   padding: 48px 40px 80px;
@@ -26,6 +27,7 @@
 .r-name {
   font-size: 30px;
   font-weight: 600;
+  color: var(--r-heading, var(--ink));
   margin: 0 0 4px;
 }
 
@@ -45,9 +47,9 @@
 }
 
 .r-contact a {
-  color: var(--slate);
+  color: var(--r-accent, var(--slate));
   text-decoration: none;
-  border-bottom: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--r-accent, var(--line-strong));
 }
 
 .r-header-actions {
@@ -79,8 +81,8 @@
   font-weight: 600;
   font-family: var(--font-ui);
   letter-spacing: 0.02em;
-  color: var(--ink);
-  border-bottom: 1px solid var(--line);
+  color: var(--r-heading, var(--ink));
+  border-bottom: 1px solid var(--r-accent, var(--line));
   padding-bottom: 6px;
   margin: 30px 0 14px;
 }
@@ -100,7 +102,7 @@
 .r-skills-label {
   font-family: var(--font-ui);
   font-weight: 600;
-  color: var(--slate);
+  color: var(--r-accent, var(--slate));
 }
 
 .r-experience,
@@ -113,6 +115,7 @@
   justify-content: space-between;
   gap: 12px;
   font-weight: 600;
+  color: var(--r-heading, var(--ink));
 }
 
 .r-experience-dates {
@@ -129,7 +132,7 @@
 }
 
 .r-experience-company a {
-  color: var(--slate);
+  color: var(--r-accent, var(--slate));
 }
 
 .r-experience-tagline {
@@ -150,6 +153,7 @@
 
 .r-custom-title {
   font-size: 16px;
+  color: var(--r-heading, var(--ink));
   margin: 0 0 8px;
 }
 
@@ -174,7 +178,6 @@
 /* Screen display (not print) */
 @media screen {
   .r-mode-web {
-    background: var(--panel);
     box-shadow: 0 0 0 1px var(--line);
     margin: 32px auto;
     border-radius: var(--radius);

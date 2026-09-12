@@ -260,6 +260,52 @@
   padding-left: 8px;
 }
 
+.ed-color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.ed-color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--slate);
+}
+
+.ed-color-field-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ed-color-field-hint {
+  font-size: 11px;
+  color: var(--slate-light);
+}
+
+.ed-color-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ed-color-swatch {
+  flex-shrink: 0;
+  width: 36px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.ed-color-row .ed-input {
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+}
+
 /* ---- Buttons --------------------------------------------------------------- */
 .ed-btn {
   font-family: var(--font-ui);

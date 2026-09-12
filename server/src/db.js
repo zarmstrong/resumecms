@@ -48,7 +48,15 @@ function ensureSetting(key, value) {
 }
 
 ensureSetting('header', defaultHeader);
-ensureSetting('site', { title: 'My Resume', accent: '#2F6F4E' });
+ensureSetting('site', {
+  title: 'My Resume',
+  colors: {
+    accent: '#2f6f4e',
+    heading: '#14181c',
+    text: '#14181c',
+    background: '#ffffff',
+  },
+});
 
 if (blockCount === 0) {
   const now = new Date().toISOString();

@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { BlockList } from './BlockList.jsx';
 import { AddBlockMenu } from './AddBlockMenu.jsx';
 import { HeaderEditorForm } from './HeaderEditorForm.jsx';
+import { SiteSettingsForm } from './SiteSettingsForm.jsx';
 import { ResumeView } from '../resume/ResumeView.jsx';
 import { defaultDataForType } from './blockDefaults.js';
 
@@ -10,16 +11,19 @@ const SAVE_DEBOUNCE_MS = 500;
 
 export function EditorPage({ onLogout }) {
   const [header, setHeader] = useState(null);
+  const [site, setSite] = useState(null);
   const [blocks, setBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [headerOpen, setHeaderOpen] = useState(false);
+  const [siteOpen, setSiteOpen] = useState(false);
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved
 
   const debounceTimers = useRef({});
 
   useEffect(() => {
-    Promise.all([api.getHeader(), api.getBlocks()]).then(([h, b]) => {
+    Promise.all([api.getHeader(), api.getSite(), api.getBlocks()]).then(([h, s, b]) => {
       setHeader(h.header);
+      setSite(s.site);
       setBlocks(b.blocks);
       setLoading(false);
     });
@@ -46,6 +50,16 @@ export function EditorPage({ onLogout }) {
     clearTimeout(debounceTimers.current[id]);
     debounceTimers.current[id] = setTimeout(async () => {
       await api.updateBlock(id, { data: newData });
+      flashSaved();
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  function handleSiteChange(newSite) {
+    setSite(newSite);
+    setSaveState('saving');
+    clearTimeout(debounceTimers.current.__site);
+    debounceTimers.current.__site = setTimeout(async () => {
+      await api.putSite(newSite);
       flashSaved();
     }, SAVE_DEBOUNCE_MS);
   }
@@ -117,6 +131,18 @@ export function EditorPage({ onLogout }) {
           </section>
 
           <section className="ed-panel">
+            <button className="ed-panel-toggle" onClick={() => setSiteOpen((v) => !v)}>
+              <span>Site Settings &amp; Colors</span>
+              <span>{siteOpen ? '−' : '+'}</span>
+            </button>
+            {siteOpen && (
+              <div className="ed-panel-body">
+                <SiteSettingsForm site={site} onChange={handleSiteChange} />
+              </div>
+            )}
+          </section>
+
+          <section className="ed-panel">
             <div className="ed-panel-label">Resume Sections</div>
             <BlockList
               blocks={blocks}
@@ -132,7 +158,7 @@ export function EditorPage({ onLogout }) {
         <div className="ed-right-pane">
           <div className="ed-preview-label">Live preview — dimmed blocks are hidden from web and/or print</div>
           <div className="ed-preview-frame">
-            <ResumeView header={header} blocks={blocks} mode="preview" />
+            <ResumeView header={header} site={site} blocks={blocks} mode="preview" />
           </div>
         </div>
       </div>
