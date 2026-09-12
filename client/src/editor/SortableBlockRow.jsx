@@ -7,6 +7,7 @@ import { SkillsGroupForm } from './blockForms/SkillsGroupForm.jsx';
 import { ExperienceForm } from './blockForms/ExperienceForm.jsx';
 import { EducationForm } from './blockForms/EducationForm.jsx';
 import { CustomForm } from './blockForms/CustomForm.jsx';
+import { VisibilityToggle } from './VisibilityToggle.jsx';
 
 const FORM_COMPONENTS = {
   heading: HeadingForm,
@@ -83,18 +84,5 @@ export function SortableBlockRow({ block, onChangeData, onChangeVisibility, onDe
         </div>
       )}
     </div>
-  );
-}
-
-function VisibilityToggle({ label, active, onClick }) {
-  return (
-    <button
-      type="button"
-      className={`ed-vis-toggle${active ? ' ed-vis-toggle-active' : ''}`}
-      onClick={onClick}
-      title={active ? `Visible: ${label}` : `Hidden: ${label}`}
-    >
-      {label}
-    </button>
   );
 }

@@ -1,13 +1,16 @@
-export function ExperienceForm({ data, onChange }) {
-  const bullets = data.bullets || [];
+import { normalizeBullet } from '../../resume/bulletUtils.js';
+import { VisibilityToggle } from '../VisibilityToggle.jsx';
 
-  function setBullet(i, value) {
+export function ExperienceForm({ data, onChange }) {
+  const bullets = (data.bullets || []).map(normalizeBullet);
+
+  function patchBullet(i, patch) {
     const next = [...bullets];
-    next[i] = value;
+    next[i] = { ...next[i], ...patch };
     onChange({ ...data, bullets: next });
   }
   function addBullet() {
-    onChange({ ...data, bullets: [...bullets, ''] });
+    onChange({ ...data, bullets: [...bullets, { text: '', visibleWeb: true, visiblePrint: true }] });
   }
   function removeBullet(i) {
     onChange({ ...data, bullets: bullets.filter((_, idx) => idx !== i) });
@@ -89,9 +92,21 @@ export function ExperienceForm({ data, onChange }) {
             <textarea
               className="ed-textarea"
               rows={2}
-              value={b}
-              onChange={(e) => setBullet(i, e.target.value)}
+              value={b.text}
+              onChange={(e) => patchBullet(i, { text: e.target.value })}
             />
+            <div className="ed-visibility-toggles">
+              <VisibilityToggle
+                label="Web"
+                active={b.visibleWeb}
+                onClick={() => patchBullet(i, { visibleWeb: !b.visibleWeb })}
+              />
+              <VisibilityToggle
+                label="Print/PDF"
+                active={b.visiblePrint}
+                onClick={() => patchBullet(i, { visiblePrint: !b.visiblePrint })}
+              />
+            </div>
             <button type="button" className="ed-icon-btn" onClick={() => removeBullet(i)} aria-label="Remove bullet">
               ✕
             </button>

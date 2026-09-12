@@ -1,3 +1,5 @@
+import { normalizeBullet } from './bulletUtils.js';
+
 export function HeadingBlock({ data }) {
   return <h2 className="r-heading">{data.text}</h2>;
 }
@@ -11,7 +13,13 @@ export function SkillsGroupBlock({ data }) {
   );
 }
 
-export function ExperienceBlock({ data }) {
+export function ExperienceBlock({ data, mode = 'web' }) {
+  const bullets = (data.bullets || []).map(normalizeBullet);
+  const visibleBullets =
+    mode === 'preview'
+      ? bullets
+      : bullets.filter((b) => (mode === 'print' ? b.visiblePrint : b.visibleWeb));
+
   return (
     <div className="r-experience">
       <div className="r-experience-top">
@@ -31,11 +39,16 @@ export function ExperienceBlock({ data }) {
         {data.location ? <span className="r-experience-location">, {data.location}</span> : null}
       </div>
       {data.tagline ? <div className="r-experience-tagline">{data.tagline}</div> : null}
-      {Array.isArray(data.bullets) && data.bullets.length > 0 && (
+      {visibleBullets.length > 0 && (
         <ul className="r-bullets">
-          {data.bullets.map((b, i) => (
-            <li key={i}>{b}</li>
-          ))}
+          {visibleBullets.map((b, i) => {
+            const dimmed = mode === 'preview' && !(b.visibleWeb && b.visiblePrint);
+            return (
+              <li key={i} className={dimmed ? 'r-bullet-dimmed' : undefined}>
+                {b.text}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

@@ -166,6 +166,11 @@
   opacity: 0.35;
 }
 
+/* Editor preview: dim individual bullets hidden from both web + print */
+.r-bullet-dimmed {
+  opacity: 0.35;
+}
+
 /* Screen display (not print) */
 @media screen {
   .r-mode-web {

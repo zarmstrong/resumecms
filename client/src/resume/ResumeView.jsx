@@ -30,7 +30,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
               className={`r-block${dimmed ? ' r-block-dimmed' : ''}`}
               data-block-type={block.type}
             >
-              <Renderer data={block.data} />
+              <Renderer data={block.data} mode={mode} />
             </div>
           );
         })}

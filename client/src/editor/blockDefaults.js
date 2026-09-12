@@ -21,7 +21,7 @@ export function defaultDataForType(type) {
         startDate: '',
         endDate: 'Current',
         tagline: '',
-        bullets: ['New accomplishment.'],
+        bullets: [{ text: 'New accomplishment.', visibleWeb: true, visiblePrint: true }],
       };
     case 'education':
       return { degree: 'Degree', institution: 'Institution', location: '', startDate: '', endDate: '' };
