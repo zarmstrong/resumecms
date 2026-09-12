@@ -28,3 +28,17 @@ export function normalizeSiteColors(site) {
     datesPill: colors.datesPill || DEFAULT_SITE_COLORS.datesPill,
   };
 }
+
+// Picks readable label text (white or near-black) for a given pill
+// background color, so a solid-color tag stays legible without the user
+// having to separately pick a matching text color.
+export function contrastTextFor(hex) {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!match) return '#ffffff';
+  const n = parseInt(match[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness >= 150 ? '#14181c' : '#ffffff';
+}

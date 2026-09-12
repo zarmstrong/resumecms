@@ -107,6 +107,8 @@
   padding: var(--r-skills-pad, 0);
   border-radius: var(--r-skills-radius, 0);
   width: fit-content;
+  line-height: 1.4;
+  align-self: start;
 }
 
 .r-experience,
@@ -130,6 +132,8 @@
   padding: var(--r-dates-pad, 0);
   border-radius: var(--r-dates-radius, 0);
   white-space: nowrap;
+  line-height: 1.4;
+  align-self: flex-start;
 }
 
 .r-experience-company {

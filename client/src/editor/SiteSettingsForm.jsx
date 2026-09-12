@@ -20,8 +20,8 @@ const OPTIONAL_COLOR_FIELDS = [
   {
     key: 'skillsCategoryPill',
     label: 'Skills category pill',
-    hint: 'Badge background behind skill category labels',
-    preview: () => '#e7f0ea',
+    hint: 'Solid tag background behind skill category labels (text auto-picks white/dark for contrast)',
+    preview: () => '#7a2e2e',
   },
   {
     key: 'datesText',
@@ -32,8 +32,8 @@ const OPTIONAL_COLOR_FIELDS = [
   {
     key: 'datesPill',
     label: 'Employment dates pill',
-    hint: 'Badge background behind employment/education dates',
-    preview: () => '#eef0f3',
+    hint: 'Solid tag background behind employment/education dates (text auto-picks white/dark for contrast)',
+    preview: () => '#2c5f7c',
   },
 ];
 
