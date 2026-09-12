@@ -43,7 +43,7 @@ separately from the block list since a resume only has one.
 
 ```bash
 cp .env.example .env
-# edit .env and set APP_PASSWORD and SESSION_SECRET
+# edit .env and set RESUMECMS_APP_PASSWORD and RESUMECMS_SESSION_SECRET
 
 docker compose up --build
 ```
@@ -61,7 +61,7 @@ You'll need Node 20+.
 # terminal 1 — API server
 cd server
 npm install
-APP_PASSWORD=devpass SESSION_SECRET=devsecret DATA_DIR=./data npm run dev
+RESUMECMS_APP_PASSWORD=devpass RESUMECMS_SESSION_SECRET=devsecret RESUMECMS_DATA_DIR=./data npm run dev
 
 # terminal 2 — client with hot reload, proxied to the API above
 cd client
@@ -89,12 +89,12 @@ the server.
 
 | Variable | Required | Description |
 |---|---|---|
-| `APP_PASSWORD` | yes | Password to sign in to `/editor`. |
-| `SESSION_SECRET` | yes | Random string used to sign session cookies. |
+| `RESUMECMS_APP_PASSWORD` | yes | Password to sign in to `/editor`. |
+| `RESUMECMS_SESSION_SECRET` | yes | Random string used to sign session cookies. |
 | `PORT` | no | Server port. Defaults to `4000`. |
-| `DATA_DIR` | no | Where the SQLite file lives. Defaults to `/data`. |
+| `RESUMECMS_DATA_DIR` | no | Where the SQLite file lives. Defaults to `/data`. |
 
-Generate a strong `SESSION_SECRET` with e.g. `openssl rand -hex 32`.
+Generate a strong `RESUMECMS_SESSION_SECRET` with e.g. `openssl rand -hex 32`.
 
 ## API reference
 

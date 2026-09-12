@@ -26,7 +26,7 @@ ENV PUPPETEER_SKIP_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     NODE_ENV=production \
     PORT=4000 \
-    DATA_DIR=/data
+    RESUMECMS_DATA_DIR=/data
 
 WORKDIR /app/server
 COPY server/package.json ./

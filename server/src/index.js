@@ -13,7 +13,7 @@ import pdfRoutes from './routes/pdf.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 4000;
-const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-me';
+const SESSION_SECRET = process.env.RESUMECMS_SESSION_SECRET || 'dev-secret-change-me';
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
@@ -46,7 +46,7 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`zresume server listening on port ${PORT}`);
-  if (!process.env.APP_PASSWORD) {
-    console.warn('WARNING: APP_PASSWORD is not set. The editor login will not work until it is.');
+  if (!process.env.RESUMECMS_APP_PASSWORD) {
+    console.warn('WARNING: RESUMECMS_APP_PASSWORD is not set. The editor login will not work until it is.');
   }
 });
