@@ -44,6 +44,29 @@ export function normalizePillPadding(site) {
   return PILL_PADDING_CSS[value] ? value : DEFAULT_PILL_PADDING;
 }
 
+// Curated resume typefaces. Each `css` value is loaded via the Google
+// Fonts link in index.html (Georgia is a system font, so it needs nothing).
+export const FONT_OPTIONS = [
+  { value: 'source-serif', label: 'Source Serif 4', css: "'Source Serif 4', Georgia, serif" },
+  { value: 'pt-serif', label: 'PT Serif', css: "'PT Serif', Georgia, serif" },
+  { value: 'lora', label: 'Lora', css: "'Lora', Georgia, serif" },
+  { value: 'merriweather', label: 'Merriweather', css: "'Merriweather', Georgia, serif" },
+  { value: 'georgia', label: 'Georgia', css: "Georgia, 'Times New Roman', serif" },
+  { value: 'ibm-plex-sans', label: 'IBM Plex Sans', css: "'IBM Plex Sans', system-ui, sans-serif" },
+  { value: 'inter', label: 'Inter', css: "'Inter', system-ui, sans-serif" },
+];
+
+export const DEFAULT_FONT = 'source-serif';
+
+export function normalizeResumeFont(site) {
+  const value = site?.font;
+  return FONT_OPTIONS.some((f) => f.value === value) ? value : DEFAULT_FONT;
+}
+
+export function fontCssFor(value) {
+  return (FONT_OPTIONS.find((f) => f.value === value) || FONT_OPTIONS[0]).css;
+}
+
 // Picks readable label text (white or near-black) for a given pill
 // background color, so a solid-color tag stays legible without the user
 // having to separately pick a matching text color.

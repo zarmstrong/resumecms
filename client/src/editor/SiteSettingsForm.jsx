@@ -1,4 +1,9 @@
-import { normalizeSiteColors, normalizePillPadding } from '../resume/siteColors.js';
+import {
+  normalizeSiteColors,
+  normalizePillPadding,
+  normalizeResumeFont,
+  FONT_OPTIONS,
+} from '../resume/siteColors.js';
 
 const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
@@ -88,6 +93,21 @@ export function SiteSettingsForm({ site, onChange }) {
           value={site.title || ''}
           onChange={(e) => onChange({ ...site, title: e.target.value })}
         />
+      </label>
+
+      <label className="ed-field">
+        <span>Font</span>
+        <select
+          className="ed-input"
+          value={normalizeResumeFont(site)}
+          onChange={(e) => onChange({ ...site, font: e.target.value })}
+        >
+          {FONT_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
       </label>
 
       <div className="ed-color-grid">

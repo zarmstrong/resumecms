@@ -5,6 +5,8 @@ import {
   contrastTextFor,
   normalizePillPadding,
   PILL_PADDING_CSS,
+  normalizeResumeFont,
+  fontCssFor,
 } from './siteColors.js';
 import './resume.css';
 
@@ -20,6 +22,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
     '--r-heading': colors.heading,
     '--r-text': colors.text,
     '--r-bg': colors.background,
+    '--font-resume': fontCssFor(normalizeResumeFont(site)),
   };
   if (colors.skillsCategoryText) colorVars['--r-skills-text'] = colors.skillsCategoryText;
   if (colors.skillsCategoryPill) {
