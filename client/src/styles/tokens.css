@@ -1,0 +1,61 @@
+:root {
+  /* Core palette */
+  --ink: #14181c;
+  --paper: #f7f6f3;
+  --panel: #ffffff;
+  --slate: #4b5563;
+  --slate-light: #8a92a0;
+  --line: #d8d3c8;
+  --line-strong: #b9b3a4;
+
+  /* Signal accent - used for "included" / active states */
+  --signal: #2f6f4e;
+  --signal-dim: #e3ede7;
+
+  /* Muted warning - used for "excluded from output" states, sparingly */
+  --warn: #b8542c;
+  --warn-dim: #f3e6df;
+
+  /* Typography */
+  --font-ui: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-resume: 'Source Serif 4', Georgia, serif;
+
+  --radius: 3px;
+  --shadow-none: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
+
+a {
+  color: var(--signal);
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

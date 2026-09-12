@@ -1,0 +1,16 @@
+services:
+  zresume:
+    build: .
+    ports:
+      - '4000:4000'
+    environment:
+      - APP_PASSWORD=${APP_PASSWORD:?Set APP_PASSWORD in your .env file}
+      - SESSION_SECRET=${SESSION_SECRET:-please-change-this-session-secret}
+      - PORT=4000
+      - DATA_DIR=/data
+    volumes:
+      - zresume-data:/data
+    restart: unless-stopped
+
+volumes:
+  zresume-data:

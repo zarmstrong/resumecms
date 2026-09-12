@@ -1,0 +1,44 @@
+const BASE = '/api';
+
+async function request(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const body = await res.json();
+      detail = body.error || '';
+    } catch {
+      // ignore
+    }
+    const err = new Error(detail || `Request failed: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+export const api = {
+  authStatus: () => request('/auth/status'),
+  login: (password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
+
+  getHeader: () => request('/header'),
+  putHeader: (header) => request('/header', { method: 'PUT', body: JSON.stringify(header) }),
+
+  getSite: () => request('/site'),
+  putSite: (site) => request('/site', { method: 'PUT', body: JSON.stringify(site) }),
+
+  getBlocks: () => request('/blocks'),
+  createBlock: (type, data) => request('/blocks', { method: 'POST', body: JSON.stringify({ type, data }) }),
+  updateBlock: (id, patch) => request(`/blocks/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  deleteBlock: (id) => request(`/blocks/${id}`, { method: 'DELETE' }),
+  reorderBlocks: (orderedIds) =>
+    request('/blocks/reorder', { method: 'POST', body: JSON.stringify({ orderedIds }) }),
+
+  getPublicResume: (mode) => request(`/public/resume?mode=${mode}`),
+};
