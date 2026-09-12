@@ -67,6 +67,28 @@ export function fontCssFor(value) {
   return (FONT_OPTIONS.find((f) => f.value === value) || FONT_OPTIONS[0]).css;
 }
 
+// Name/title can optionally break from the main resume font. Empty means
+// "match the site font" — the header inherits --font-resume as normal.
+export function normalizeNameFont(site) {
+  const value = site?.nameFont;
+  return FONT_OPTIONS.some((f) => f.value === value) ? value : '';
+}
+
+export const FONT_SIZE_CSS = {
+  smallest: '13px',
+  small: '14.5px',
+  normal: '16px',
+  large: '17.5px',
+  largest: '19px',
+};
+
+export const DEFAULT_FONT_SIZE = 'normal';
+
+export function normalizeFontSize(site) {
+  const value = site?.fontSize;
+  return FONT_SIZE_CSS[value] ? value : DEFAULT_FONT_SIZE;
+}
+
 // Picks readable label text (white or near-black) for a given pill
 // background color, so a solid-color tag stays legible without the user
 // having to separately pick a matching text color.

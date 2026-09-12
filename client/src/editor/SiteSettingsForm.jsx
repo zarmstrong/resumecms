@@ -2,6 +2,8 @@ import {
   normalizeSiteColors,
   normalizePillPadding,
   normalizeResumeFont,
+  normalizeNameFont,
+  normalizeFontSize,
   FONT_OPTIONS,
 } from '../resume/siteColors.js';
 
@@ -9,6 +11,14 @@ const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
   { value: 'cozy', label: 'Cozy' },
   { value: 'spacious', label: 'Spacious' },
+];
+
+const FONT_SIZE_OPTIONS = [
+  { value: 'smallest', label: 'Smallest' },
+  { value: 'small', label: 'Small' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'large', label: 'Large' },
+  { value: 'largest', label: 'Largest' },
 ];
 
 const COLOR_FIELDS = [
@@ -77,6 +87,39 @@ function OptionalColorField({ label, hint, value, onChange, previewValue }) {
   );
 }
 
+function NameFontField({ site, onChange }) {
+  const siteFont = normalizeResumeFont(site);
+  const override = normalizeNameFont(site);
+  const matched = !override;
+
+  return (
+    <div className="ed-color-field">
+      <span className="ed-color-field-label ed-color-field-toggle">
+        <input
+          type="checkbox"
+          checked={matched}
+          onChange={(e) => onChange({ ...site, nameFont: e.target.checked ? '' : siteFont })}
+        />
+        Match site font
+      </span>
+      <span className="ed-color-field-hint">Name and professional title</span>
+      {!matched && (
+        <select
+          className="ed-input"
+          value={override}
+          onChange={(e) => onChange({ ...site, nameFont: e.target.value })}
+        >
+          {FONT_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
+
 export function SiteSettingsForm({ site, onChange }) {
   const colors = normalizeSiteColors(site);
 
@@ -95,20 +138,39 @@ export function SiteSettingsForm({ site, onChange }) {
         />
       </label>
 
-      <label className="ed-field">
-        <span>Font</span>
-        <select
-          className="ed-input"
-          value={normalizeResumeFont(site)}
-          onChange={(e) => onChange({ ...site, font: e.target.value })}
-        >
-          {FONT_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="ed-field-row">
+        <label className="ed-field">
+          <span>Font</span>
+          <select
+            className="ed-input"
+            value={normalizeResumeFont(site)}
+            onChange={(e) => onChange({ ...site, font: e.target.value })}
+          >
+            {FONT_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="ed-field">
+          <span>Font size</span>
+          <select
+            className="ed-input"
+            value={normalizeFontSize(site)}
+            onChange={(e) => onChange({ ...site, fontSize: e.target.value })}
+          >
+            {FONT_SIZE_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <NameFontField site={site} onChange={onChange} />
 
       <div className="ed-color-grid">
         {COLOR_FIELDS.map(({ key, label, hint }) => (

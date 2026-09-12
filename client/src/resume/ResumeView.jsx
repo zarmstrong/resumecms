@@ -6,6 +6,9 @@ import {
   normalizePillPadding,
   PILL_PADDING_CSS,
   normalizeResumeFont,
+  normalizeNameFont,
+  normalizeFontSize,
+  FONT_SIZE_CSS,
   fontCssFor,
 } from './siteColors.js';
 import './resume.css';
@@ -23,7 +26,10 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
     '--r-text': colors.text,
     '--r-bg': colors.background,
     '--font-resume': fontCssFor(normalizeResumeFont(site)),
+    '--r-font-size': FONT_SIZE_CSS[normalizeFontSize(site)],
   };
+  const nameFont = normalizeNameFont(site);
+  if (nameFont) colorVars['--r-name-font'] = fontCssFor(nameFont);
   if (colors.skillsCategoryText) colorVars['--r-skills-text'] = colors.skillsCategoryText;
   if (colors.skillsCategoryPill) {
     colorVars['--r-skills-pill'] = colors.skillsCategoryPill;
