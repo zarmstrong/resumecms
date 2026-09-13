@@ -258,6 +258,40 @@
   margin-bottom: 6px;
 }
 
+.ed-bullet-children {
+  margin-left: 24px;
+}
+
+.ed-btn-sub {
+  margin-bottom: 6px;
+  font-size: 0.85em;
+}
+
+.ed-bullet-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ed-bullet-import {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-alt, var(--panel));
+}
+
+.ed-bullet-import-hint {
+  font-size: 11px;
+  color: var(--slate-light);
+}
+
+.ed-bullet-import .ed-btn {
+  align-self: flex-start;
+}
+
 .ed-custom-item {
   flex-direction: column;
   border-left: 2px solid var(--line);

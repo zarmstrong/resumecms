@@ -10,6 +10,16 @@ function bulletVisible(bullet, mode) {
   return mode === 'print' ? bullet.visiblePrint !== false : bullet.visibleWeb !== false;
 }
 
+// Bullets can nest one level deep (2 levels total). Recurse into `children`
+// so nested bullets get the same visibility filtering as top-level ones.
+function filterBulletForMode(bullet, mode) {
+  if (typeof bullet === 'string') return { text: bullet, children: [] };
+  const children = Array.isArray(bullet.children)
+    ? bullet.children.filter((c) => bulletVisible(c, mode)).map((c) => filterBulletForMode(c, mode))
+    : [];
+  return { text: bullet.text, children };
+}
+
 function filterBulletsForMode(block, mode) {
   if (block.type !== 'experience' || !Array.isArray(block.data.bullets)) return block;
   return {
@@ -18,7 +28,7 @@ function filterBulletsForMode(block, mode) {
       ...block.data,
       bullets: block.data.bullets
         .filter((b) => bulletVisible(b, mode))
-        .map((b) => (typeof b === 'string' ? b : b.text)),
+        .map((b) => filterBulletForMode(b, mode)),
     },
   };
 }

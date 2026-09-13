@@ -14,12 +14,32 @@ export function SkillsGroupBlock({ data }) {
   );
 }
 
+function bulletsForMode(bullets, mode) {
+  return mode === 'preview'
+    ? bullets
+    : bullets.filter((b) => (mode === 'print' ? b.visiblePrint : b.visibleWeb));
+}
+
+function BulletList({ bullets, mode }) {
+  const visible = bulletsForMode(bullets, mode);
+  if (visible.length === 0) return null;
+  return (
+    <ul className="r-bullets">
+      {visible.map((b, i) => {
+        const dimmed = mode === 'preview' && !(b.visibleWeb && b.visiblePrint);
+        return (
+          <li key={i} className={dimmed ? 'r-bullet-dimmed' : undefined}>
+            {b.text}
+            <BulletList bullets={b.children} mode={mode} />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function ExperienceBlock({ data, mode = 'web' }) {
-  const bullets = (data.bullets || []).map(normalizeBullet);
-  const visibleBullets =
-    mode === 'preview'
-      ? bullets
-      : bullets.filter((b) => (mode === 'print' ? b.visiblePrint : b.visibleWeb));
+  const bullets = (data.bullets || []).map((b) => normalizeBullet(b));
 
   return (
     <div className="r-experience">
@@ -40,18 +60,7 @@ export function ExperienceBlock({ data, mode = 'web' }) {
         {data.location ? <span className="r-experience-location">, {data.location}</span> : null}
       </div>
       {data.tagline ? <div className="r-experience-tagline">{data.tagline}</div> : null}
-      {visibleBullets.length > 0 && (
-        <ul className="r-bullets">
-          {visibleBullets.map((b, i) => {
-            const dimmed = mode === 'preview' && !(b.visibleWeb && b.visiblePrint);
-            return (
-              <li key={i} className={dimmed ? 'r-bullet-dimmed' : undefined}>
-                {b.text}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <BulletList bullets={bullets} mode={mode} />
     </div>
   );
 }

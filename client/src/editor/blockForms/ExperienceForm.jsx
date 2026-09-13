@@ -1,19 +1,51 @@
-import { normalizeBullet } from '../../resume/bulletUtils.js';
+import { useState } from 'react';
+import { MAX_BULLET_DEPTH, normalizeBullet } from '../../resume/bulletUtils.js';
 import { VisibilityToggle } from '../VisibilityToggle.jsx';
 
-export function ExperienceForm({ data, onChange }) {
-  const bullets = (data.bullets || []).map(normalizeBullet);
+function newBullet(text = '') {
+  return { text, visibleWeb: true, visiblePrint: true, children: [] };
+}
 
-  function patchBullet(i, patch) {
-    const next = [...bullets];
-    next[i] = { ...next[i], ...patch };
+// `path` addresses a bullet by index at each nesting level, e.g. [1] is the
+// second top-level bullet, [1, 0] is its first sub-bullet.
+function updateAtPath(list, path, update) {
+  const [idx, ...rest] = path;
+  return list.map((b, i) => {
+    if (i !== idx) return b;
+    return rest.length === 0 ? update(b) : { ...b, children: updateAtPath(b.children, rest, update) };
+  });
+}
+
+function removeAtPath(list, path) {
+  const [idx, ...rest] = path;
+  if (rest.length === 0) return list.filter((_, i) => i !== idx);
+  return list.map((b, i) => (i === idx ? { ...b, children: removeAtPath(b.children, rest) } : b));
+}
+
+export function ExperienceForm({ data, onChange }) {
+  const bullets = (data.bullets || []).map((b) => normalizeBullet(b));
+  const [importText, setImportText] = useState(null); // null = import panel hidden
+
+  function updateBullets(next) {
     onChange({ ...data, bullets: next });
   }
-  function addBullet() {
-    onChange({ ...data, bullets: [...bullets, { text: '', visibleWeb: true, visiblePrint: true }] });
+  function patchBullet(path, patch) {
+    updateBullets(updateAtPath(bullets, path, (b) => ({ ...b, ...patch })));
   }
-  function removeBullet(i) {
-    onChange({ ...data, bullets: bullets.filter((_, idx) => idx !== i) });
+  function addBullet() {
+    updateBullets([...bullets, newBullet()]);
+  }
+  function addSubBullet(path) {
+    updateBullets(updateAtPath(bullets, path, (b) => ({ ...b, children: [...b.children, newBullet()] })));
+  }
+  function removeBullet(path) {
+    updateBullets(removeAtPath(bullets, path));
+  }
+  const importLines = (importText || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  function importBullets() {
+    if (importLines.length === 0) return;
+    updateBullets([...bullets, ...importLines.map((text) => newBullet(text))]);
+    setImportText(null);
   }
 
   return (
@@ -88,33 +120,99 @@ export function ExperienceForm({ data, onChange }) {
       <div className="ed-field">
         <span>Bullet points</span>
         {bullets.map((b, i) => (
-          <div className="ed-bullet-row" key={i}>
+          <BulletEditor
+            key={i}
+            bullet={b}
+            path={[i]}
+            patchBullet={patchBullet}
+            addSubBullet={addSubBullet}
+            removeBullet={removeBullet}
+          />
+        ))}
+        <div className="ed-bullet-actions">
+          <button type="button" className="ed-btn ed-btn-ghost" onClick={addBullet}>
+            + Add bullet
+          </button>
+          <button
+            type="button"
+            className="ed-btn ed-btn-ghost"
+            onClick={() => setImportText(importText === null ? '' : null)}
+          >
+            {importText === null ? 'Import bullets' : 'Cancel import'}
+          </button>
+        </div>
+        {importText !== null && (
+          <div className="ed-bullet-import">
             <textarea
               className="ed-textarea"
-              rows={2}
-              value={b.text}
-              onChange={(e) => patchBullet(i, { text: e.target.value })}
+              rows={6}
+              placeholder="Paste bullet points here, one per line…"
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              autoFocus
             />
-            <div className="ed-visibility-toggles">
-              <VisibilityToggle
-                label="Web"
-                active={b.visibleWeb}
-                onClick={() => patchBullet(i, { visibleWeb: !b.visibleWeb })}
-              />
-              <VisibilityToggle
-                label="Print/PDF"
-                active={b.visiblePrint}
-                onClick={() => patchBullet(i, { visiblePrint: !b.visiblePrint })}
-              />
+            <div className="ed-bullet-import-hint">
+              Each line becomes its own bullet. Nested sub-bullets aren't supported here — add
+              those individually below.
             </div>
-            <button type="button" className="ed-icon-btn" onClick={() => removeBullet(i)} aria-label="Remove bullet">
-              ✕
+            <button
+              type="button"
+              className="ed-btn ed-btn-primary"
+              disabled={importLines.length === 0}
+              onClick={importBullets}
+            >
+              Add {importLines.length || ''} bullet{importLines.length === 1 ? '' : 's'}
             </button>
           </div>
-        ))}
-        <button type="button" className="ed-btn ed-btn-ghost" onClick={addBullet}>
-          + Add bullet
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BulletEditor({ bullet, path, patchBullet, addSubBullet, removeBullet }) {
+  const depth = path.length - 1;
+  return (
+    <div className="ed-bullet">
+      <div className={`ed-bullet-row ed-bullet-depth-${depth}`}>
+        <textarea
+          className="ed-textarea"
+          rows={2}
+          value={bullet.text}
+          onChange={(e) => patchBullet(path, { text: e.target.value })}
+        />
+        <div className="ed-visibility-toggles">
+          <VisibilityToggle
+            label="Web"
+            active={bullet.visibleWeb}
+            onClick={() => patchBullet(path, { visibleWeb: !bullet.visibleWeb })}
+          />
+          <VisibilityToggle
+            label="Print/PDF"
+            active={bullet.visiblePrint}
+            onClick={() => patchBullet(path, { visiblePrint: !bullet.visiblePrint })}
+          />
+        </div>
+        <button type="button" className="ed-icon-btn" onClick={() => removeBullet(path)} aria-label="Remove bullet">
+          ✕
         </button>
+      </div>
+      <div className="ed-bullet-children">
+        {bullet.children.map((child, i) => (
+          <BulletEditor
+            key={i}
+            bullet={child}
+            path={[...path, i]}
+            patchBullet={patchBullet}
+            addSubBullet={addSubBullet}
+            removeBullet={removeBullet}
+          />
+        ))}
+        {depth < MAX_BULLET_DEPTH && (
+          <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={() => addSubBullet(path)}>
+            + Add sub-bullet
+          </button>
+        )}
       </div>
     </div>
   );
