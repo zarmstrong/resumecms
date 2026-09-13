@@ -10,6 +10,9 @@ export const DEFAULT_SITE_COLORS = {
   skillsCategoryPill: '',
   datesText: '',
   datesPill: '',
+  // Empty means "auto" — the Sidebar body layout tints the side rail from
+  // the accent color itself (see resume.css's color-mix() fallback).
+  sidebarBackground: '',
 };
 
 // `site.colors` is the current shape. Older saved sites only have a flat
@@ -26,6 +29,7 @@ export function normalizeSiteColors(site) {
     skillsCategoryPill: colors.skillsCategoryPill || DEFAULT_SITE_COLORS.skillsCategoryPill,
     datesText: colors.datesText || DEFAULT_SITE_COLORS.datesText,
     datesPill: colors.datesPill || DEFAULT_SITE_COLORS.datesPill,
+    sidebarBackground: colors.sidebarBackground || DEFAULT_SITE_COLORS.sidebarBackground,
   };
 }
 
@@ -89,6 +93,21 @@ export const DEFAULT_FONT_SIZE = 'normal';
 export function normalizeFontSize(site) {
   const value = site?.fontSize;
   return FONT_SIZE_CSS[value] ? value : DEFAULT_FONT_SIZE;
+}
+
+export const LINE_SPACING_CSS = {
+  tight: '1.25',
+  snug: '1.4',
+  normal: '1.5',
+  relaxed: '1.65',
+  loose: '1.8',
+};
+
+export const DEFAULT_LINE_SPACING = 'normal';
+
+export function normalizeLineSpacing(site) {
+  const value = site?.lineSpacing;
+  return LINE_SPACING_CSS[value] ? value : DEFAULT_LINE_SPACING;
 }
 
 // Picks readable label text (white or near-black) for a given pill

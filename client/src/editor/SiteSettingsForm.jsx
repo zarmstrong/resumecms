@@ -4,9 +4,11 @@ import {
   normalizeResumeFont,
   normalizeNameFont,
   normalizeFontSize,
+  normalizeLineSpacing,
   FONT_OPTIONS,
 } from '../resume/siteColors.js';
 import { normalizeTemplate, TEMPLATE_OPTIONS } from '../resume/templates.js';
+import { normalizeLayout, LAYOUT_OPTIONS } from '../resume/layouts.js';
 
 const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
@@ -22,6 +24,14 @@ const FONT_SIZE_OPTIONS = [
   { value: 'normal', label: 'Normal' },
   { value: 'large', label: 'Large' },
   { value: 'largest', label: 'Largest' },
+];
+
+const LINE_SPACING_OPTIONS = [
+  { value: 'tight', label: 'Tight' },
+  { value: 'snug', label: 'Snug' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'relaxed', label: 'Relaxed' },
+  { value: 'loose', label: 'Loose' },
 ];
 
 const COLOR_FIELDS = [
@@ -58,6 +68,12 @@ const OPTIONAL_COLOR_FIELDS = [
     label: 'Employment dates pill',
     hint: 'Solid tag background behind employment/education dates (text auto-picks white/dark for contrast)',
     preview: () => '#2c5f7c',
+  },
+  {
+    key: 'sidebarBackground',
+    label: 'Sidebar background',
+    hint: 'Only used by the Sidebar body layout — overrides its automatic accent-tinted background',
+    preview: () => '#eef2ea',
   },
 ];
 
@@ -142,13 +158,28 @@ export function SiteSettingsForm({ site, onChange }) {
       </label>
 
       <label className="ed-field">
-        <span>Template</span>
+        <span>Header style</span>
         <select
           className="ed-input"
           value={normalizeTemplate(site)}
           onChange={(e) => onChange({ ...site, template: e.target.value })}
         >
           {TEMPLATE_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="ed-field">
+        <span>Body layout</span>
+        <select
+          className="ed-input"
+          value={normalizeLayout(site)}
+          onChange={(e) => onChange({ ...site, layout: e.target.value })}
+        >
+          {LAYOUT_OPTIONS.map(({ value, label }) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -186,6 +217,21 @@ export function SiteSettingsForm({ site, onChange }) {
             ))}
           </select>
         </label>
+
+        <label className="ed-field">
+          <span>Line spacing</span>
+          <select
+            className="ed-input"
+            value={normalizeLineSpacing(site)}
+            onChange={(e) => onChange({ ...site, lineSpacing: e.target.value })}
+          >
+            {LINE_SPACING_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <NameFontField site={site} onChange={onChange} />
@@ -214,7 +260,7 @@ export function SiteSettingsForm({ site, onChange }) {
       </div>
 
       <div className="ed-panel-label" style={{ padding: '6px 0 0' }}>
-        Skills &amp; dates accents
+        Optional accent overrides
       </div>
       <div className="ed-color-grid">
         {OPTIONAL_COLOR_FIELDS.map(({ key, label, hint, preview }) => (

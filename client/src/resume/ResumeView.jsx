@@ -10,9 +10,12 @@ import {
   normalizeNameFont,
   normalizeFontSize,
   FONT_SIZE_CSS,
+  normalizeLineSpacing,
+  LINE_SPACING_CSS,
   fontCssFor,
 } from './siteColors.js';
 import { normalizeTemplate } from './templates.js';
+import { normalizeLayout, splitBlocksForSidebar } from './layouts.js';
 import './resume.css';
 
 // mode: 'web' | 'print' | 'preview'
@@ -29,6 +32,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
     '--r-bg': colors.background,
     '--font-resume': fontCssFor(normalizeResumeFont(site)),
     '--r-font-size': FONT_SIZE_CSS[normalizeFontSize(site)],
+    '--r-line-spacing': LINE_SPACING_CSS[normalizeLineSpacing(site)],
     // Only used by the "banner" template, which paints the header in the
     // accent color and needs readable text on top of it.
     '--r-banner-text': contrastTextFor(colors.accent),
@@ -53,6 +57,16 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
       colorVars['--r-dates-text'] = contrastTextFor(colors.datesPill);
     }
   }
+  // A custom sidebar background can be dark; without this the sidebar's
+  // heading/body text (which default to near-black) would go illegible.
+  // Applied as an inline style on just the sidebar element below, not here,
+  // so it doesn't affect the rest of the page.
+  let sidebarTextStyle;
+  if (colors.sidebarBackground) {
+    colorVars['--r-sidebar-bg'] = colors.sidebarBackground;
+    const sidebarText = contrastTextFor(colors.sidebarBackground);
+    sidebarTextStyle = { color: sidebarText, '--r-heading': sidebarText, '--slate': sidebarText, '--slate-light': sidebarText };
+  }
 
   // In print/PDF output there's no card floating on the app background —
   // the resume's own background must fill the whole physical page, or any
@@ -69,8 +83,28 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
     };
   }, [mode, colors.background]);
 
+  const layout = normalizeLayout(site);
+  const sidebarSplit = layout === 'sidebar' ? splitBlocksForSidebar(blocks) : null;
+
+  function renderBlock(block) {
+    const Renderer = BLOCK_RENDERERS[block.type];
+    if (!Renderer) return null;
+
+    const dimmed = isPreview && !(block.visibleWeb && block.visiblePrint);
+
+    return (
+      <div
+        key={block.id}
+        className={`r-block${dimmed ? ' r-block-dimmed' : ''}`}
+        data-block-type={block.type}
+      >
+        <Renderer data={block.data} mode={mode} />
+      </div>
+    );
+  }
+
   return (
-    <div className={`r-page r-mode-${mode}`} style={colorVars}>
+    <div className={`r-page r-mode-${mode} r-layout-${layout}`} style={colorVars}>
       <HeaderBlock
         header={header}
         showActions={mode === 'web'}
@@ -78,25 +112,16 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
         pdfHref={mode === 'web' ? '/api/public/resume.pdf' : null}
         template={normalizeTemplate(site)}
       />
-      <div className="r-body">
-        {blocks.map((block) => {
-          const Renderer = BLOCK_RENDERERS[block.type];
-          if (!Renderer) return null;
-
-          const dimmed =
-            isPreview && !(block.visibleWeb && block.visiblePrint) ? true : false;
-
-          return (
-            <div
-              key={block.id}
-              className={`r-block${dimmed ? ' r-block-dimmed' : ''}`}
-              data-block-type={block.type}
-            >
-              <Renderer data={block.data} mode={mode} />
-            </div>
-          );
-        })}
-      </div>
+      {sidebarSplit ? (
+        <div className="r-body r-body-sidebar">
+          <div className="r-sidebar" style={sidebarTextStyle}>
+            {sidebarSplit.sidebar.map(renderBlock)}
+          </div>
+          <div className="r-main">{sidebarSplit.main.map(renderBlock)}</div>
+        </div>
+      ) : (
+        <div className="r-body">{blocks.map(renderBlock)}</div>
+      )}
     </div>
   );
 }
