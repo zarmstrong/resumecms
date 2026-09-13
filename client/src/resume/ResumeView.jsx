@@ -12,6 +12,7 @@ import {
   FONT_SIZE_CSS,
   fontCssFor,
 } from './siteColors.js';
+import { normalizeTemplate } from './templates.js';
 import './resume.css';
 
 // mode: 'web' | 'print' | 'preview'
@@ -72,6 +73,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
         showActions={mode === 'web'}
         onPrint={() => window.print()}
         pdfHref={mode === 'web' ? '/api/public/resume.pdf' : null}
+        template={normalizeTemplate(site)}
       />
       <div className="r-body">
         {blocks.map((block) => {

@@ -6,6 +6,7 @@ import {
   normalizeFontSize,
   FONT_OPTIONS,
 } from '../resume/siteColors.js';
+import { normalizeTemplate, TEMPLATE_OPTIONS } from '../resume/templates.js';
 
 const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
@@ -138,6 +139,21 @@ export function SiteSettingsForm({ site, onChange }) {
           value={site.title || ''}
           onChange={(e) => onChange({ ...site, title: e.target.value })}
         />
+      </label>
+
+      <label className="ed-field">
+        <span>Template</span>
+        <select
+          className="ed-input"
+          value={normalizeTemplate(site)}
+          onChange={(e) => onChange({ ...site, template: e.target.value })}
+        >
+          {TEMPLATE_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
       </label>
 
       <div className="ed-field-row">
