@@ -1,4 +1,4 @@
-# zresume-cms
+# resume-cms
 
 A self-hosted, single-user resume site + CMS. Drag-and-drop block editor,
 per-block visibility control for web vs. print/PDF, and a public resume page
@@ -50,7 +50,7 @@ docker compose up --build
 
 Visit `http://localhost:4000` for the public resume, and
 `http://localhost:4000/editor` to sign in and edit. Data is stored in a
-SQLite file on a named Docker volume (`zresume-data`), so it survives
+SQLite file on a named Docker volume (`resume-data`), so it survives
 container restarts and rebuilds.
 
 ## Local development (without Docker)
@@ -164,7 +164,7 @@ the `totp` row directly from the settings table on the host running the
 container:
 
 ```bash
-sqlite3 /path/to/your/data-dir/zresume.sqlite3 "DELETE FROM settings WHERE key='totp';"
+sqlite3 /path/to/your/data-dir/resume.sqlite3 "DELETE FROM settings WHERE key='totp';"
 ```
 
 This immediately disables the code requirement on next login.

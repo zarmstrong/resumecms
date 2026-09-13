@@ -23,7 +23,7 @@ app.use(accessLogger);
 app.use(express.json({ limit: '2mb' }));
 app.use(
   cookieSession({
-    name: 'zresume_session',
+    name: 'resume_session',
     secret: SESSION_SECRET,
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     httpOnly: true,
@@ -53,7 +53,7 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`zresume server listening on port ${PORT}`);
+  console.log(`resume server listening on port ${PORT}`);
   if (!process.env.RESUMECMS_APP_PASSWORD) {
     console.warn('WARNING: RESUMECMS_APP_PASSWORD is not set. The editor login will not work until it is.');
   }

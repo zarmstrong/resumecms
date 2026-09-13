@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 const DATA_DIR = process.env.RESUMECMS_DATA_DIR || '/data';
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const DB_PATH = path.join(DATA_DIR, 'zresume.sqlite3');
+const DB_PATH = path.join(DATA_DIR, 'resume.sqlite3');
 export const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 

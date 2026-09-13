@@ -1,9 +1,10 @@
 services:
-  zresume:
+  resume:
     build: .
     ports:
       - '4000:4000'
     environment:
+      - RESUMECMS_ADMIN_USERNAME=${RESUMECMS_ADMIN_USERNAME:?Set RESUMECMS_ADMIN_USERNAME in your .env file}
       - RESUMECMS_APP_PASSWORD=${RESUMECMS_APP_PASSWORD:?Set RESUMECMS_APP_PASSWORD in your .env file}
       - RESUMECMS_SESSION_SECRET=${RESUMECMS_SESSION_SECRET:-please-change-this-session-secret}
       - PORT=4000
@@ -14,8 +15,8 @@ services:
       - RESUMECMS_RECAPTCHA_SITE_KEY=${RESUMECMS_RECAPTCHA_SITE_KEY:-}
       - RESUMECMS_RECAPTCHA_SECRET_KEY=${RESUMECMS_RECAPTCHA_SECRET_KEY:-}
     volumes:
-      - zresume-data:/data
+      - resume-data:/data
     restart: unless-stopped
 
 volumes:
-  zresume-data:
+  resume-data:
