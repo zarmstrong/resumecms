@@ -2,7 +2,7 @@
   font-family: var(--font-resume);
   color: var(--r-text, var(--ink));
   background: var(--r-bg, var(--panel));
-  max-width: 720px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 48px 40px 80px;
   line-height: 1.5;
