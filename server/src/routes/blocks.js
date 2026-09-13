@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
-import { db, getSetting, setSetting } from '../db.js';
+import { db, getSetting, setSetting, touchDraft } from '../db.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
@@ -25,6 +25,7 @@ router.get('/header', (req, res) => {
 
 router.put('/header', (req, res) => {
   setSetting('header', req.body || {});
+  touchDraft();
   res.json({ header: getSetting('header') });
 });
 
@@ -34,6 +35,7 @@ router.get('/site', (req, res) => {
 
 router.put('/site', (req, res) => {
   setSetting('site', req.body || {});
+  touchDraft();
   res.json({ site: getSetting('site') });
 });
 
@@ -52,6 +54,7 @@ router.post('/blocks', (req, res) => {
     `INSERT INTO blocks (id, type, position, visible_web, visible_print, data, created_at, updated_at)
      VALUES (?, ?, ?, 1, 1, ?, ?, ?)`
   ).run(id, type, maxPos + 1, JSON.stringify(data || {}), now, now);
+  touchDraft();
   const row = db.prepare('SELECT * FROM blocks WHERE id = ?').get(id);
   res.status(201).json({ block: rowToBlock(row) });
 });
@@ -78,6 +81,7 @@ router.put('/blocks/:id', (req, res) => {
     now,
     id
   );
+  touchDraft();
   const row = db.prepare('SELECT * FROM blocks WHERE id = ?').get(id);
   res.json({ block: rowToBlock(row) });
 });
@@ -85,6 +89,7 @@ router.put('/blocks/:id', (req, res) => {
 router.delete('/blocks/:id', (req, res) => {
   const { id } = req.params;
   db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
+  touchDraft();
   res.json({ ok: true });
 });
 
@@ -98,6 +103,7 @@ router.post('/blocks/reorder', (req, res) => {
     ids.forEach((id, i) => update.run(i, id));
   });
   txn(orderedIds);
+  touchDraft();
   const rows = db.prepare('SELECT * FROM blocks ORDER BY position ASC').all();
   res.json({ blocks: rows.map(rowToBlock) });
 });

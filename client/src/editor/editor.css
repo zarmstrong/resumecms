@@ -346,6 +346,11 @@
   color: var(--signal);
 }
 
+.ed-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .ed-icon-btn {
   background: none;
   border: none;

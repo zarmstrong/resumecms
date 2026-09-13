@@ -1,62 +1,26 @@
 import { Router } from 'express';
-import puppeteer from 'puppeteer';
+import fs from 'node:fs';
+import path from 'node:path';
 import { getSetting } from '../db.js';
 
 const router = Router();
+const DATA_DIR = process.env.RESUMECMS_DATA_DIR || '/data';
+export const PDF_PATH = path.join(DATA_DIR, 'resume.pdf');
 
-let browserPromise = null;
-function getBrowser() {
-  if (!browserPromise) {
-    browserPromise = puppeteer
-      .launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      })
-      .catch((err) => {
-        // Don't cache a failed launch — let the next request try again
-        // (e.g. after a transient issue) instead of failing forever.
-        browserPromise = null;
-        throw err;
-      });
+router.get('/resume.pdf', (req, res) => {
+  if (!fs.existsSync(PDF_PATH)) {
+    return res.status(404).json({ error: 'No PDF has been published yet' });
   }
-  return browserPromise;
-}
 
-router.get('/resume.pdf', async (req, res) => {
-  try {
-    const port = process.env.PORT || 4000;
-    const printUrl = `http://127.0.0.1:${port}/print`;
+  const published = getSetting('published_resume') || {};
+  const site = published.site || {};
+  const fileName = `${(site.title || 'resume').replace(/[^a-z0-9-_]+/gi, '-')}.pdf`;
 
-    const browser = await getBrowser();
-    const page = await browser.newPage();
-    await page.goto(printUrl, { waitUntil: 'networkidle0' });
-    // The client app sets this flag once the resume data has fetched and rendered.
-    await page.waitForFunction('window.__PDF_READY__ === true', { timeout: 15000 });
-
-    const pdfBytes = await page.pdf({
-      format: 'Letter',
-      printBackground: true,
-      margin: { top: '0.5in', bottom: '0.5in', left: '0.5in', right: '0.5in' },
-    });
-    await page.close();
-    // Puppeteer returns a Uint8Array; res.send() only special-cases real
-    // Buffers for binary output, otherwise it JSON-serializes the bytes.
-    const pdfBuffer = Buffer.from(pdfBytes);
-
-    const site = getSetting('site') || {};
-    const fileName = `${(site.title || 'resume').replace(/[^a-z0-9-_]+/gi, '-')}.pdf`;
-
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${fileName}"`,
-    });
-    res.send(pdfBuffer);
-  } catch (err) {
-    // Logged with detail for debugging; the response stays generic since
-    // this route is public and err.message could leak internal details.
-    console.error('PDF generation failed:', err);
-    res.status(500).json({ error: 'PDF generation failed' });
-  }
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="${fileName}"`,
+  });
+  res.sendFile(PDF_PATH);
 });
 
 export default router;

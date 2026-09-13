@@ -117,3 +117,35 @@ export function setSetting(key, value) {
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
   ).run(key, JSON.stringify(value));
 }
+
+// Bumped by every draft-mutating route so the editor can show an
+// "unpublished changes" indicator that survives a page reload.
+export function touchDraft() {
+  setSetting('draft_meta', { lastEditedAt: new Date().toISOString() });
+}
+
+function rowToBlock(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    position: row.position,
+    visibleWeb: !!row.visible_web,
+    visiblePrint: !!row.visible_print,
+    data: JSON.parse(row.data),
+  };
+}
+
+// The public site and PDF used to be generated straight from the draft
+// tables above (edits went live immediately). Existing installs already
+// have real content in those tables, so on first boot after adding the
+// draft/published split, whatever is currently there becomes the initial
+// published snapshot — otherwise the public site would go blank on deploy.
+if (!getSetting('published_resume')) {
+  const rows = db.prepare('SELECT * FROM blocks ORDER BY position ASC').all();
+  setSetting('published_resume', {
+    header: getSetting('header'),
+    site: getSetting('site'),
+    blocks: rows.map(rowToBlock),
+    publishedAt: new Date().toISOString(),
+  });
+}

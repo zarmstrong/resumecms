@@ -43,4 +43,8 @@ export const api = {
     request('/blocks/reorder', { method: 'POST', body: JSON.stringify({ orderedIds }) }),
 
   getPublicResume: (mode) => request(`/public/resume?mode=${mode}`),
+
+  publish: () => request('/publish', { method: 'POST' }),
+  publishStatus: () => request('/publish/status'),
+  discardDraft: () => request('/discard-draft', { method: 'POST' }),
 };

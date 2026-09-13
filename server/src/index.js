@@ -1,14 +1,17 @@
 import express from 'express';
 import cookieSession from 'cookie-session';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import './db.js'; // ensures schema + seed run on boot
 import { accessLogger } from './logger.js';
+import { renderResumePdf } from './pdfRenderer.js';
 
 import authRoutes from './routes/auth.js';
 import blockRoutes from './routes/blocks.js';
 import publicRoutes from './routes/public.js';
-import pdfRoutes from './routes/pdf.js';
+import pdfRoutes, { PDF_PATH } from './routes/pdf.js';
+import publishRoutes from './routes/publish.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -35,6 +38,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/public', publicRoutes); // /api/public/resume
 app.use('/api/public', pdfRoutes); // /api/public/resume.pdf
 app.use('/api', blockRoutes); // /api/header, /api/site, /api/blocks... (auth-gated)
+app.use('/api', publishRoutes); // /api/publish, /api/publish/status, /api/discard-draft (auth-gated)
 
 // Serve the built client (Vite output) for everything else, including
 // client-side routes like /editor and /print — the SPA router handles them.
@@ -48,5 +52,15 @@ app.listen(PORT, () => {
   console.log(`zresume server listening on port ${PORT}`);
   if (!process.env.RESUMECMS_APP_PASSWORD) {
     console.warn('WARNING: RESUMECMS_APP_PASSWORD is not set. The editor login will not work until it is.');
+  }
+
+  // A published snapshot can exist (seeded from pre-existing draft content
+  // on first boot after this feature shipped) without a PDF file ever
+  // having been generated for it yet — render one now so the download link
+  // isn't broken until someone happens to click Publish.
+  if (!fs.existsSync(PDF_PATH)) {
+    renderResumePdf()
+      .then((buffer) => fs.writeFileSync(PDF_PATH, buffer))
+      .catch((err) => console.error('Initial PDF generation failed:', err));
   }
 });

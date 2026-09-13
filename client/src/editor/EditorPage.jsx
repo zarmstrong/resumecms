@@ -9,6 +9,17 @@ import { defaultDataForType } from './blockDefaults.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
+function timeAgo(iso) {
+  if (!iso) return null;
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export function EditorPage({ onLogout }) {
   const [header, setHeader] = useState(null);
   const [site, setSite] = useState(null);
@@ -17,16 +28,23 @@ export function EditorPage({ onLogout }) {
   const [headerOpen, setHeaderOpen] = useState(false);
   const [siteOpen, setSiteOpen] = useState(false);
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved
+  const [publishedAt, setPublishedAt] = useState(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [publishState, setPublishState] = useState('idle'); // idle | publishing | published
 
   const debounceTimers = useRef({});
 
   useEffect(() => {
-    Promise.all([api.getHeader(), api.getSite(), api.getBlocks()]).then(([h, s, b]) => {
-      setHeader(h.header);
-      setSite(s.site);
-      setBlocks(b.blocks);
-      setLoading(false);
-    });
+    Promise.all([api.getHeader(), api.getSite(), api.getBlocks(), api.publishStatus()]).then(
+      ([h, s, b, status]) => {
+        setHeader(h.header);
+        setSite(s.site);
+        setBlocks(b.blocks);
+        setPublishedAt(status.publishedAt);
+        setIsDirty(status.isDirty);
+        setLoading(false);
+      }
+    );
   }, []);
 
   function flashSaved() {
@@ -34,8 +52,30 @@ export function EditorPage({ onLogout }) {
     setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1200);
   }
 
+  async function handlePublish() {
+    setPublishState('publishing');
+    try {
+      const { publishedAt: newPublishedAt } = await api.publish();
+      setPublishedAt(newPublishedAt);
+      setIsDirty(false);
+      setPublishState('published');
+      setTimeout(() => setPublishState((s) => (s === 'published' ? 'idle' : s)), 1500);
+    } catch {
+      setPublishState('idle');
+    }
+  }
+
+  async function handleDiscard() {
+    const draft = await api.discardDraft();
+    setHeader(draft.header);
+    setSite(draft.site);
+    setBlocks(draft.blocks);
+    setIsDirty(false);
+  }
+
   function handleHeaderChange(newHeader) {
     setHeader(newHeader);
+    setIsDirty(true);
     setSaveState('saving');
     clearTimeout(debounceTimers.current.__header);
     debounceTimers.current.__header = setTimeout(async () => {
@@ -46,6 +86,7 @@ export function EditorPage({ onLogout }) {
 
   function handleBlockDataChange(id, newData) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, data: newData } : b)));
+    setIsDirty(true);
     setSaveState('saving');
     clearTimeout(debounceTimers.current[id]);
     debounceTimers.current[id] = setTimeout(async () => {
@@ -56,6 +97,7 @@ export function EditorPage({ onLogout }) {
 
   function handleSiteChange(newSite) {
     setSite(newSite);
+    setIsDirty(true);
     setSaveState('saving');
     clearTimeout(debounceTimers.current.__site);
     debounceTimers.current.__site = setTimeout(async () => {
@@ -66,6 +108,7 @@ export function EditorPage({ onLogout }) {
 
   async function handleVisibilityChange(id, patch) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+    setIsDirty(true);
     setSaveState('saving');
     await api.updateBlock(id, patch);
     flashSaved();
@@ -73,6 +116,7 @@ export function EditorPage({ onLogout }) {
 
   async function handleReorder(reordered) {
     setBlocks(reordered);
+    setIsDirty(true);
     setSaveState('saving');
     await api.reorderBlocks(reordered.map((b) => b.id));
     flashSaved();
@@ -81,11 +125,13 @@ export function EditorPage({ onLogout }) {
   async function handleAdd(type) {
     const { block } = await api.createBlock(type, defaultDataForType(type));
     setBlocks((prev) => [...prev, block]);
+    setIsDirty(true);
   }
 
   async function handleDelete(id) {
     setBlocks((prev) => prev.filter((b) => b.id !== id));
     await api.deleteBlock(id);
+    setIsDirty(true);
   }
 
   async function handleLogout() {
@@ -102,8 +148,19 @@ export function EditorPage({ onLogout }) {
         <div className="ed-topbar-status">
           {saveState === 'saving' && 'Saving…'}
           {saveState === 'saved' && 'Saved'}
+          {saveState === 'idle' && (isDirty ? 'Unpublished changes' : `Published ${timeAgo(publishedAt) || 'never'}`)}
         </div>
         <div className="ed-topbar-actions">
+          {isDirty && (
+            <button className="ed-btn ed-btn-ghost" onClick={handleDiscard}>
+              Discard changes
+            </button>
+          )}
+          <button className="ed-btn ed-btn-primary" onClick={handlePublish} disabled={publishState === 'publishing'}>
+            {publishState === 'publishing' && 'Publishing…'}
+            {publishState === 'published' && 'Published'}
+            {publishState === 'idle' && 'Publish'}
+          </button>
           <a className="ed-btn ed-btn-ghost" href="/" target="_blank" rel="noreferrer">
             View public site
           </a>
@@ -156,7 +213,7 @@ export function EditorPage({ onLogout }) {
         </div>
 
         <div className="ed-right-pane">
-          <div className="ed-preview-label">Live preview — dimmed blocks are hidden from web and/or print</div>
+          <div className="ed-preview-label">Draft preview — dimmed blocks are hidden from web and/or print</div>
           <div className="ed-preview-frame">
             <ResumeView header={header} site={site} blocks={blocks} mode="preview" />
           </div>
