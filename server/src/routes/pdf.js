@@ -13,8 +13,9 @@ router.get('/resume.pdf', (req, res) => {
   }
 
   const published = getSetting('published_resume') || {};
-  const site = published.site || {};
-  const fileName = `${(site.title || 'resume').replace(/[^a-z0-9-_]+/gi, '-')}.pdf`;
+  const header = published.header || {};
+  const name = (header.name || 'Resume').trim().replace(/[^a-z0-9]+/gi, ' ').trim().replace(/\s+/g, '-');
+  const fileName = `Resume-of-${name}.pdf`;
 
   res.set({
     'Content-Type': 'application/pdf',
