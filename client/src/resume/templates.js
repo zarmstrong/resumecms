@@ -4,6 +4,9 @@
 export const TEMPLATE_OPTIONS = [
   { value: 'classic', label: 'Classic' },
   { value: 'labeled-header', label: 'Labeled contact header' },
+  { value: 'centered', label: 'Centered' },
+  { value: 'compact', label: 'Compact' },
+  { value: 'banner', label: 'Accent banner' },
 ];
 
 export const DEFAULT_TEMPLATE = 'classic';

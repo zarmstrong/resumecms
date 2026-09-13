@@ -19,6 +19,29 @@ function ContactRow({ label, children }) {
   );
 }
 
+// The plain inline contact list (no letter labels) shared by every template
+// except "labeled-header", which uses ContactRow instead.
+function ContactInline({ header, className }) {
+  return (
+    <div className={className}>
+      {header.location && <span>{header.location}</span>}
+      {header.email && (
+        <span>
+          <a href={safeHref(`mailto:${header.email}`)}>{header.email}</a>
+        </span>
+      )}
+      {header.phone && <span>{header.phone}</span>}
+      {(header.links || []).map((link, i) => (
+        <span key={i}>
+          <a href={safeHref(link.url)} target="_blank" rel="noreferrer">
+            {link.label}
+          </a>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function HeaderActions({ onPrint, pdfHref }) {
   return (
     <div className="r-header-actions">
@@ -37,6 +60,8 @@ function HeaderActions({ onPrint, pdfHref }) {
 export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 'classic' }) {
   if (!header) return null;
 
+  const actions = showActions && <HeaderActions onPrint={onPrint} pdfHref={pdfHref} />;
+
   if (template === 'labeled-header') {
     return (
       <div className="r-header r-header-labeled">
@@ -45,7 +70,7 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
           <div className="r-title">{header.title}</div>
         </div>
         <div className="r-header-side">
-          {showActions && <HeaderActions onPrint={onPrint} pdfHref={pdfHref} />}
+          {actions}
           <div className="r-contact r-contact-labeled">
             {header.location && <ContactRow label="a">{header.location}</ContactRow>}
             {header.email && (
@@ -67,29 +92,53 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
     );
   }
 
+  if (template === 'centered') {
+    return (
+      <div className="r-header r-header-centered">
+        {actions}
+        <h1 className="r-name">{header.name}</h1>
+        <div className="r-title">{header.title}</div>
+        <ContactInline header={header} className="r-contact r-contact-centered" />
+      </div>
+    );
+  }
+
+  if (template === 'compact') {
+    return (
+      <div className="r-header r-header-compact">
+        <div className="r-header-compact-id">
+          <span className="r-name r-name-compact">{header.name}</span>
+          {header.title && <span className="r-title-compact">{header.title}</span>}
+        </div>
+        <ContactInline header={header} className="r-contact r-contact-compact" />
+        {actions}
+      </div>
+    );
+  }
+
+  if (template === 'banner') {
+    return (
+      <div className="r-header r-header-banner">
+        <div className="r-header-banner-top">
+          <div>
+            <h1 className="r-name">{header.name}</h1>
+            <div className="r-title">{header.title}</div>
+          </div>
+          {actions}
+        </div>
+        <ContactInline header={header} className="r-contact r-contact-banner" />
+      </div>
+    );
+  }
+
   return (
     <div className="r-header">
       <div className="r-header-main">
         <h1 className="r-name">{header.name}</h1>
         <div className="r-title">{header.title}</div>
-        <div className="r-contact">
-          {header.location && <span>{header.location}</span>}
-          {header.email && (
-            <span>
-              <a href={safeHref(`mailto:${header.email}`)}>{header.email}</a>
-            </span>
-          )}
-          {header.phone && <span>{header.phone}</span>}
-          {(header.links || []).map((link, i) => (
-            <span key={i}>
-              <a href={safeHref(link.url)} target="_blank" rel="noreferrer">
-                {link.label}
-              </a>
-            </span>
-          ))}
-        </div>
+        <ContactInline header={header} className="r-contact" />
       </div>
-      {showActions && <HeaderActions onPrint={onPrint} pdfHref={pdfHref} />}
+      {actions}
     </div>
   );
 }

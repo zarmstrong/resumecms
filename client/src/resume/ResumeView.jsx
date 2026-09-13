@@ -29,6 +29,9 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
     '--r-bg': colors.background,
     '--font-resume': fontCssFor(normalizeResumeFont(site)),
     '--r-font-size': FONT_SIZE_CSS[normalizeFontSize(site)],
+    // Only used by the "banner" template, which paints the header in the
+    // accent color and needs readable text on top of it.
+    '--r-banner-text': contrastTextFor(colors.accent),
   };
   const nameFont = normalizeNameFont(site);
   if (nameFont) colorVars['--r-name-font'] = fontCssFor(nameFont);

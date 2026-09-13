@@ -101,6 +101,102 @@
   border-bottom: 1px solid var(--r-accent, var(--line-strong));
 }
 
+/* "centered" template: name/title/contact centered; actions float top-right. */
+.r-header-centered {
+  display: block;
+  position: relative;
+  text-align: center;
+}
+
+.r-header-centered .r-header-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.r-contact-centered {
+  justify-content: center;
+}
+
+/* "compact" template: name, title, contact, and actions share one wrapping
+   line for a condensed, letterhead-style header. */
+.r-header-compact {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 20px;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+}
+
+.r-header-compact-id {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-right: auto;
+}
+
+.r-name-compact {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.25em;
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+}
+
+.r-title-compact {
+  color: var(--slate);
+  font-size: 0.9375em;
+}
+
+.r-contact-compact {
+  font-size: 0.8125em;
+}
+
+/* "banner" template: header sits inside an accent-colored panel, with text
+   color auto-picked (white/near-black) for contrast against the accent. */
+.r-header-banner {
+  display: block;
+  background: var(--r-accent, var(--panel));
+  color: var(--r-banner-text, #ffffff);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  border-bottom: none;
+}
+
+.r-header-banner .r-name,
+.r-header-banner .r-title {
+  color: inherit;
+}
+
+.r-header-banner-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.r-contact-banner {
+  margin-top: 14px;
+  color: inherit;
+  opacity: 0.92;
+}
+
+.r-contact-banner a {
+  color: inherit;
+  border-bottom-color: currentColor;
+}
+
+.r-header-banner .r-action-btn {
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+}
+
+.r-header-banner .r-action-btn:hover {
+  border-color: currentColor;
+  color: inherit;
+  opacity: 0.8;
+}
+
 .r-action-btn {
   font-family: var(--font-ui);
   font-size: 13px;
