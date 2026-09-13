@@ -21,17 +21,20 @@ function summarize(block) {
   const d = block.data || {};
   switch (block.type) {
     case 'heading':
-      return d.text;
+      return { title: d.text };
     case 'skills_group':
-      return d.category;
-    case 'experience':
-      return `${d.jobTitle || 'Untitled'} — ${d.company || ''}`;
+      return { title: d.category };
+    case 'experience': {
+      const dates = [d.startDate, d.endDate].filter(Boolean).join(' – ');
+      const subtitle = [d.company, dates].filter(Boolean).join(' · ');
+      return { title: d.jobTitle || 'Untitled', subtitle: subtitle || null };
+    }
     case 'education':
-      return `${d.degree || 'Untitled'} — ${d.institution || ''}`;
+      return { title: `${d.degree || 'Untitled'} — ${d.institution || ''}` };
     case 'custom':
-      return d.title || 'Untitled';
+      return { title: d.title || 'Untitled' };
     default:
-      return '';
+      return { title: '' };
   }
 }
 
@@ -48,6 +51,7 @@ export function SortableBlockRow({ block, onChangeData, onChangeVisibility, onDe
   };
 
   const FormComponent = FORM_COMPONENTS[block.type];
+  const { title, subtitle } = summarize(block);
 
   return (
     <div ref={setNodeRef} style={style} className="ed-block-row">
@@ -57,7 +61,8 @@ export function SortableBlockRow({ block, onChangeData, onChangeVisibility, onDe
         </button>
         <button className="ed-block-summary" onClick={() => setExpanded((v) => !v)}>
           <span className="ed-block-type">{BLOCK_TYPE_LABELS[block.type] || block.type}</span>
-          <span className="ed-block-title">{summarize(block)}</span>
+          <span className="ed-block-title">{title}</span>
+          {subtitle && <span className="ed-block-subtitle">{subtitle}</span>}
         </button>
 
         <div className="ed-visibility-toggles">
