@@ -3,7 +3,9 @@ import { api } from '../api.js';
 import { Captcha } from './Captcha.jsx';
 
 export function LoginPage({ onAuthenticated }) {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [totpToken, setTotpToken] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [captchaConfig, setCaptchaConfig] = useState(null);
@@ -14,17 +16,18 @@ export function LoginPage({ onAuthenticated }) {
     api
       .getCaptchaConfig()
       .then(setCaptchaConfig)
-      .catch(() => setCaptchaConfig({ provider: null, siteKey: null }));
+      .catch(() => setCaptchaConfig({ provider: null, siteKey: null, totpRequired: false }));
   }, []);
 
   const captchaRequired = Boolean(captchaConfig?.provider);
+  const totpRequired = Boolean(captchaConfig?.totpRequired);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      await api.login(password, captchaToken);
+      await api.login(username, password, captchaToken, totpToken);
       onAuthenticated();
     } catch (err) {
       setError(err.message);
@@ -39,15 +42,36 @@ export function LoginPage({ onAuthenticated }) {
     <div className="ed-login-screen">
       <form className="ed-login-card" onSubmit={handleSubmit}>
         <h1 className="ed-login-title">Editor</h1>
-        <p className="ed-login-sub">Enter the site password to make changes.</p>
+        <p className="ed-login-sub">Sign in to make changes.</p>
         <input
           autoFocus
+          type="text"
+          autoComplete="username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Username"
+          className="ed-input"
+        />
+        <input
           type="password"
+          autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           className="ed-input"
         />
+        {totpRequired && (
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            autoComplete="one-time-code"
+            value={totpToken}
+            onChange={(e) => setTotpToken(e.target.value)}
+            placeholder="Authentication code"
+            className="ed-input"
+          />
+        )}
         {captchaRequired && (
           <Captcha
             provider={captchaConfig.provider}

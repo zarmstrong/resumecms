@@ -25,9 +25,14 @@ async function request(path, options = {}) {
 export const api = {
   authStatus: () => request('/auth/status'),
   getCaptchaConfig: () => request('/auth/captcha-config'),
-  login: (password, captchaToken) =>
-    request('/auth/login', { method: 'POST', body: JSON.stringify({ password, captchaToken }) }),
+  login: (username, password, captchaToken, totpToken) =>
+    request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password, captchaToken, totpToken }) }),
   logout: () => request('/auth/logout', { method: 'POST' }),
+
+  getTotpStatus: () => request('/auth/totp/status'),
+  setupTotp: () => request('/auth/totp/setup', { method: 'POST' }),
+  confirmTotp: (token) => request('/auth/totp/confirm', { method: 'POST', body: JSON.stringify({ token }) }),
+  disableTotp: () => request('/auth/totp/disable', { method: 'POST' }),
 
   getHeader: () => request('/header'),
   putHeader: (header) => request('/header', { method: 'PUT', body: JSON.stringify(header) }),

@@ -4,6 +4,7 @@ import { BlockList } from './BlockList.jsx';
 import { AddBlockMenu } from './AddBlockMenu.jsx';
 import { HeaderEditorForm } from './HeaderEditorForm.jsx';
 import { SiteSettingsForm } from './SiteSettingsForm.jsx';
+import { TotpSettings } from './TotpSettings.jsx';
 import { ResumeView } from '../resume/ResumeView.jsx';
 import { defaultDataForType } from './blockDefaults.js';
 
@@ -27,6 +28,7 @@ export function EditorPage({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [headerOpen, setHeaderOpen] = useState(false);
   const [siteOpen, setSiteOpen] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved
   const [publishedAt, setPublishedAt] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -195,6 +197,18 @@ export function EditorPage({ onLogout }) {
             {siteOpen && (
               <div className="ed-panel-body">
                 <SiteSettingsForm site={site} onChange={handleSiteChange} />
+              </div>
+            )}
+          </section>
+
+          <section className="ed-panel">
+            <button className="ed-panel-toggle" onClick={() => setSecurityOpen((v) => !v)}>
+              <span>Two-Factor Authentication</span>
+              <span>{securityOpen ? '−' : '+'}</span>
+            </button>
+            {securityOpen && (
+              <div className="ed-panel-body">
+                <TotpSettings />
               </div>
             )}
           </section>

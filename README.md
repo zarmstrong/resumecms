@@ -43,7 +43,7 @@ separately from the block list since a resume only has one.
 
 ```bash
 cp .env.example .env
-# edit .env and set RESUMECMS_APP_PASSWORD and RESUMECMS_SESSION_SECRET
+# edit .env and set RESUMECMS_ADMIN_USERNAME, RESUMECMS_APP_PASSWORD, and RESUMECMS_SESSION_SECRET
 
 docker compose up --build
 ```
@@ -61,7 +61,7 @@ You'll need Node 20+.
 # terminal 1 — API server
 cd server
 npm install
-RESUMECMS_APP_PASSWORD=devpass RESUMECMS_SESSION_SECRET=devsecret RESUMECMS_DATA_DIR=./data npm run dev
+RESUMECMS_ADMIN_USERNAME=admin RESUMECMS_APP_PASSWORD=devpass RESUMECMS_SESSION_SECRET=devsecret RESUMECMS_DATA_DIR=./data npm run dev
 
 # terminal 2 — client with hot reload, proxied to the API above
 cd client
@@ -89,6 +89,7 @@ the server.
 
 | Variable | Required | Description |
 |---|---|---|
+| `RESUMECMS_ADMIN_USERNAME` | yes | Username to sign in to `/editor`. |
 | `RESUMECMS_APP_PASSWORD` | yes | Password to sign in to `/editor`. |
 | `RESUMECMS_SESSION_SECRET` | yes | Random string used to sign session cookies. |
 | `PORT` | no | Server port. Defaults to `4000`. |
@@ -106,10 +107,14 @@ authenticated editor session (cookie set by `/api/auth/login`).
 
 | Method & path | Purpose |
 |---|---|
-| `POST /api/auth/login` | `{ password, captchaToken }` → sets session cookie |
+| `POST /api/auth/login` | `{ username, password, captchaToken, totpToken }` → sets session cookie |
 | `POST /api/auth/logout` | clears session |
 | `GET /api/auth/status` | `{ authenticated }` |
-| `GET /api/auth/captcha-config` | `{ provider, siteKey }` — `provider` is `null` if captcha is disabled |
+| `GET /api/auth/captcha-config` | `{ provider, siteKey, totpRequired }` — `provider` is `null` if captcha is disabled |
+| `GET /api/auth/totp/status` | `{ enabled }` (auth-gated) |
+| `POST /api/auth/totp/setup` | generates a new pending secret, returns `{ secret, otpauthUrl, qrDataUrl }` (auth-gated) |
+| `POST /api/auth/totp/confirm` | `{ token }` → verifies and enables 2FA (auth-gated) |
+| `POST /api/auth/totp/disable` | turns 2FA off (auth-gated) |
 | `GET/PUT /api/header` | header/contact fields |
 | `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered (editor use) |
@@ -143,9 +148,30 @@ IP instead of the proxy's — but only if you actually control that proxy,
 since trusting `X-Forwarded-For` blindly lets a client spoof its way
 around the limit.
 
+### Two-factor authentication (TOTP)
+
+From the editor's "Two-Factor Authentication" panel you can enable
+app-based 2FA (Google Authenticator, 1Password, Authy, etc.): it shows a QR
+code (and the raw key as a manual-entry fallback) and asks you to confirm
+with a code before turning enforcement on. Once enabled, login requires
+that code in addition to the username and password. It's stored in the
+same SQLite database as your content, not in an env var — nothing to
+configure ahead of time, and it's off by default.
+
+**If you lose access to your authenticator app**, there's no in-app
+recovery (turning 2FA off requires being logged in). Recover by deleting
+the `totp` row directly from the settings table on the host running the
+container:
+
+```bash
+sqlite3 /path/to/your/data-dir/zresume.sqlite3 "DELETE FROM settings WHERE key='totp';"
+```
+
+This immediately disables the code requirement on next login.
+
 ## What's intentionally out of scope (v1)
 
-- Multi-user auth — this is single-password, single-tenant by design.
+- Multi-user auth — this is single-account, single-tenant by design (one username/password pair, with optional TOTP 2FA).
 - Image/photo uploads — add them as a future block type if you need them.
 - Rich text formatting inside bullets/body text (currently plain text).
 - Undo/version history.
