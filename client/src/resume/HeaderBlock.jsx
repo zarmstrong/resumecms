@@ -1,3 +1,5 @@
+import { safeHref } from './safeUrl.js';
+
 export function HeaderBlock({ header, showActions, onPrint, pdfHref }) {
   if (!header) return null;
   return (
@@ -9,13 +11,13 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref }) {
           {header.location && <span>{header.location}</span>}
           {header.email && (
             <span>
-              <a href={`mailto:${header.email}`}>{header.email}</a>
+              <a href={safeHref(`mailto:${header.email}`)}>{header.email}</a>
             </span>
           )}
           {header.phone && <span>{header.phone}</span>}
           {(header.links || []).map((link, i) => (
             <span key={i}>
-              <a href={link.url} target="_blank" rel="noreferrer">
+              <a href={safeHref(link.url)} target="_blank" rel="noreferrer">
                 {link.label}
               </a>
             </span>

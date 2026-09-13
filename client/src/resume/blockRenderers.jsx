@@ -1,4 +1,5 @@
 import { normalizeBullet } from './bulletUtils.js';
+import { safeHref } from './safeUrl.js';
 
 export function HeadingBlock({ data }) {
   return <h2 className="r-heading">{data.text}</h2>;
@@ -29,8 +30,8 @@ export function ExperienceBlock({ data, mode = 'web' }) {
         </div>
       </div>
       <div className="r-experience-company">
-        {data.companyUrl ? (
-          <a href={data.companyUrl} target="_blank" rel="noreferrer">
+        {safeHref(data.companyUrl) ? (
+          <a href={safeHref(data.companyUrl)} target="_blank" rel="noreferrer">
             {data.company}
           </a>
         ) : (
