@@ -32,8 +32,14 @@ WORKDIR /app/server
 COPY server/package.json ./
 RUN npm install --omit=dev
 
-COPY server/ ./
-COPY --from=client-build /app/client/dist /app/client/dist
+COPY --chown=node:node server/ ./
+COPY --chown=node:node --from=client-build /app/client/dist /app/client/dist
+RUN chown -R node:node /app/server/node_modules && mkdir -p /data && chown node:node /data
+
+# Chromium runs with --no-sandbox (see routes/pdf.js), so it doesn't need
+# root or extra Docker capabilities — running the whole process as a
+# non-root user is a plain drop-in.
+USER node
 
 VOLUME ["/data"]
 EXPOSE 4000
