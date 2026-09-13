@@ -33,12 +33,15 @@ router.get('/resume.pdf', async (req, res) => {
     // The client app sets this flag once the resume data has fetched and rendered.
     await page.waitForFunction('window.__PDF_READY__ === true', { timeout: 15000 });
 
-    const pdfBuffer = await page.pdf({
+    const pdfBytes = await page.pdf({
       format: 'Letter',
       printBackground: true,
       margin: { top: '0.5in', bottom: '0.5in', left: '0.5in', right: '0.5in' },
     });
     await page.close();
+    // Puppeteer returns a Uint8Array; res.send() only special-cases real
+    // Buffers for binary output, otherwise it JSON-serializes the bytes.
+    const pdfBuffer = Buffer.from(pdfBytes);
 
     const site = getSetting('site') || {};
     const fileName = `${(site.title || 'resume').replace(/[^a-z0-9-_]+/gi, '-')}.pdf`;

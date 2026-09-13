@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { HeaderBlock } from './HeaderBlock.jsx';
 import { BLOCK_RENDERERS } from './blockRenderers.jsx';
 import {
@@ -48,6 +49,21 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
       colorVars['--r-dates-text'] = contrastTextFor(colors.datesPill);
     }
   }
+
+  // In print/PDF output there's no card floating on the app background —
+  // the resume's own background must fill the whole physical page, or any
+  // leftover space after the last block on a page shows the app's page
+  // color instead, producing a visible color seam at a page break.
+  useEffect(() => {
+    if (mode !== 'print') return undefined;
+    const prevBg = document.body.style.background;
+    document.documentElement.style.background = colors.background;
+    document.body.style.background = colors.background;
+    return () => {
+      document.documentElement.style.background = '';
+      document.body.style.background = prevBg;
+    };
+  }, [mode, colors.background]);
 
   return (
     <div className={`r-page r-mode-${mode}`} style={colorVars}>
