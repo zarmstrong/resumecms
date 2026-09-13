@@ -1,10 +1,20 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { timingSafeEqual, createHash } from 'node:crypto';
 import { publicCaptchaConfig, verifyCaptcha } from '../captcha.js';
 
 const router = Router();
 
 const APP_PASSWORD = process.env.RESUMECMS_APP_PASSWORD;
+
+// Hashing both sides to a fixed length before comparing means a mismatched
+// password length can't itself leak an early exit, and timingSafeEqual
+// keeps the comparison itself from leaking how many leading bytes matched.
+function passwordMatches(candidate) {
+  const a = createHash('sha256').update(String(candidate)).digest();
+  const b = createHash('sha256').update(APP_PASSWORD).digest();
+  return timingSafeEqual(a, b);
+}
 
 // Brute-force protection: only failed attempts count against the limit, so
 // a legitimate user who logs in successfully is never penalized.
@@ -38,7 +48,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Captcha verification failed. Please try again.' });
   }
 
-  if (password === APP_PASSWORD) {
+  if (typeof password === 'string' && passwordMatches(password)) {
     req.session.authenticated = true;
     return res.json({ authenticated: true });
   }

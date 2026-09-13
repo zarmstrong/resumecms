@@ -52,8 +52,10 @@ router.get('/resume.pdf', async (req, res) => {
     });
     res.send(pdfBuffer);
   } catch (err) {
+    // Logged with detail for debugging; the response stays generic since
+    // this route is public and err.message could leak internal details.
     console.error('PDF generation failed:', err);
-    res.status(500).json({ error: 'PDF generation failed', detail: String(err.message || err) });
+    res.status(500).json({ error: 'PDF generation failed' });
   }
 });
 

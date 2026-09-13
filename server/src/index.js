@@ -1,6 +1,5 @@
 import express from 'express';
 import cookieSession from 'cookie-session';
-import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './db.js'; // ensures schema + seed run on boot
@@ -17,7 +16,6 @@ const PORT = process.env.PORT || 4000;
 const SESSION_SECRET = process.env.RESUMECMS_SESSION_SECRET || 'dev-secret-change-me';
 
 app.use(accessLogger);
-app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 app.use(
   cookieSession({
