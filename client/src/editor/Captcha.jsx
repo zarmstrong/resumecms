@@ -67,8 +67,10 @@ export function Captcha({ provider, siteKey, onToken, resetKey }) {
     }
 
     // reCAPTCHA finishes initializing asynchronously after its script loads;
-    // ready() waits for that. Turnstile's render() is safe to call right away.
-    if (typeof api.ready === 'function') {
+    // ready() waits for that. Turnstile's render() is safe to call right away,
+    // and calling turnstile.ready() here would actually throw — it detects
+    // the async/defer script tag above and refuses to run in that case.
+    if (provider === 'recaptcha' && typeof api.ready === 'function') {
       api.ready(renderWidget);
     } else {
       renderWidget();
