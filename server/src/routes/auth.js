@@ -1,17 +1,14 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { timingSafeEqual, createHash } from 'node:crypto';
-import { authenticator } from 'otplib';
+import { verify } from 'otplib';
 import { publicCaptchaConfig, verifyCaptcha } from '../captcha.js';
 import { getSetting, setSetting } from '../db.js';
 import { hashPassword, verifyPassword } from '../passwords.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { TOTP_STEP_SECONDS, TOTP_EPOCH_TOLERANCE_SECONDS } from '../totpConfig.js';
 
 const router = Router();
-
-// otplib's default time step (also assumed by the `period=30` in the
-// otpauth:// URI generated in routes/totp.js).
-const TOTP_STEP_SECONDS = 30;
 
 // Hashing to a fixed length before comparing means a mismatched username
 // length can't itself leak an early exit, and timingSafeEqual keeps the
@@ -84,14 +81,17 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 
   if (totp?.enabled) {
-    const delta = typeof totpToken === 'string' ? authenticator.checkDelta(totpToken, totp.secret) : null;
-    if (delta === null) {
+    const result =
+      typeof totpToken === 'string'
+        ? await verify({ secret: totp.secret, token: totpToken, epochTolerance: TOTP_EPOCH_TOLERANCE_SECONDS })
+        : { valid: false };
+    if (!result.valid) {
       return res.status(401).json({ error: authError });
     }
     // Reject a code already used for this or an earlier time step, so a
     // captured request (e.g. via a MITM'd network hop) can't be replayed to
     // start a second session with the same one-time code.
-    const step = Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + delta;
+    const step = Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + result.delta;
     if (typeof totp.lastUsedStep === 'number' && step <= totp.lastUsedStep) {
       return res.status(401).json({ error: authError });
     }
