@@ -44,11 +44,19 @@ app.use('/api/public', pdfRoutes); // /api/public/resume.pdf
 app.use('/api', blockRoutes); // /api/header, /api/site, /api/blocks... (auth-gated)
 app.use('/api', publishRoutes); // /api/publish, /api/publish/status, /api/discard-draft (auth-gated)
 
+// An /api/* request that reached here matched none of the routes above —
+// 404 it explicitly rather than letting it fall through to the SPA
+// catch-all below, which would otherwise mask a bad API path behind a
+// misleading 200 index.html response.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // Serve the built client (Vite output) for everything else, including
 // client-side routes like /editor and /print — the SPA router handles them.
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
 app.use(express.static(clientDist));
-app.get('*', (req, res) => {
+app.get('/*splat', (req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
