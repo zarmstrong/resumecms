@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { LINK_TYPES, DEFAULT_LINK_TYPE, linkTypeConfig, inferLinkType } from '../resume/linkTypes.js';
-import { fileToResizedDataUrl } from './imageUtils.js';
+import { PhotoCropper } from './PhotoCropper.jsx';
 
 export function HeaderEditorForm({ header, onChange }) {
   const links = header.links || [];
   const [photoError, setPhotoError] = useState('');
+  const [cropImageUrl, setCropImageUrl] = useState(null); // object URL of the file being cropped, or null
 
-  async function handlePhotoChange(e) {
+  function handlePhotoChange(e) {
     const file = e.target.files && e.target.files[0];
     e.target.value = ''; // allow re-selecting the same file if they pick it again
     if (!file) return;
@@ -14,13 +15,18 @@ export function HeaderEditorForm({ header, onChange }) {
       setPhotoError('Please choose an image file.');
       return;
     }
-    try {
-      const photoUrl = await fileToResizedDataUrl(file);
-      setPhotoError('');
-      onChange({ ...header, photoUrl });
-    } catch {
-      setPhotoError('Could not process that image.');
-    }
+    setPhotoError('');
+    setCropImageUrl(URL.createObjectURL(file));
+  }
+
+  function closeCropper() {
+    URL.revokeObjectURL(cropImageUrl);
+    setCropImageUrl(null);
+  }
+
+  function handleCropConfirm(photoUrl) {
+    closeCropper();
+    onChange({ ...header, photoUrl });
   }
 
   function removePhoto() {
@@ -71,6 +77,9 @@ export function HeaderEditorForm({ header, onChange }) {
           </div>
         </div>
         {photoError && <div className="ed-field-error">{photoError}</div>}
+        {cropImageUrl && (
+          <PhotoCropper imageUrl={cropImageUrl} onCancel={closeCropper} onConfirm={handleCropConfirm} />
+        )}
       </div>
       <label className="ed-field">
         <span>Name</span>

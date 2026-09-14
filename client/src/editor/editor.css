@@ -463,6 +463,76 @@
   color: var(--warn);
 }
 
+/* ---- Headshot cropper ------------------------------------------------- */
+.ed-cropper-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.ed-cropper {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 100%;
+}
+
+.ed-cropper-frame {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #000;
+  cursor: grab;
+  touch-action: none;
+}
+
+.ed-cropper-frame:active {
+  cursor: grabbing;
+}
+
+.ed-cropper-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Circular "spotlight" mask: a giant box-shadow outside the circle darkens
+   everything but the crop area, without needing a separate SVG/canvas mask. */
+.ed-cropper-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.ed-cropper-zoom {
+  width: 260px;
+  max-width: 100%;
+}
+
+.ed-cropper-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
 .ed-icon-btn {
   background: none;
   border: none;
