@@ -7,6 +7,17 @@ export const BLOCK_TYPE_LABELS = {
   custom: 'Custom Block',
 };
 
+export const CUSTOM_BODY_TYPES = [
+  { value: 'text', label: 'Text' },
+  { value: 'list', label: 'List' },
+  { value: 'link', label: 'Link' },
+  { value: 'tags', label: 'Tags' },
+];
+
+export function defaultCustomItem() {
+  return { heading: '', bodyType: 'text', text: 'New item.' };
+}
+
 export function defaultDataForType(type) {
   switch (type) {
     case 'heading':
@@ -29,7 +40,7 @@ export function defaultDataForType(type) {
     case 'education':
       return { degree: 'Degree', institution: 'Institution', location: '', startDate: '', endDate: '' };
     case 'custom':
-      return { title: 'Custom Section', items: [{ heading: '', body: 'New item.' }] };
+      return { title: 'Custom Section', items: [defaultCustomItem()] };
     default:
       return {};
   }

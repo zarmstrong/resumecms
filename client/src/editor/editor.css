@@ -13,17 +13,20 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .ed-login-title {
   font-size: 20px;
-  margin: 0 0 6px;
+  margin: 0;
 }
 
 .ed-login-sub {
   font-size: 14px;
   color: var(--slate);
-  margin: 0 0 18px;
+  margin: 0 0 6px;
 }
 
 .ed-login-error {
@@ -350,6 +353,12 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 14px;
+}
+
+.ed-tags-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .ed-color-field {

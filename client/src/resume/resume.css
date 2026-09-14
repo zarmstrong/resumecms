@@ -558,8 +558,11 @@
   font-size: 0.875em;
   padding: 3px 10px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--r-accent, #2f6f4e) 10%, var(--r-bg, #ffffff));
-  border: 1px solid color-mix(in srgb, var(--r-accent, #2f6f4e) 30%, var(--r-bg, #ffffff));
+  /* --r-tag-color is set per tag group (see custom "tags" items) to
+     override the accent color for just that group; unset falls through to
+     the site accent as before. */
+  background: color-mix(in srgb, var(--r-tag-color, var(--r-accent, #2f6f4e)) 10%, var(--r-bg, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--r-tag-color, var(--r-accent, #2f6f4e)) 30%, var(--r-bg, #ffffff));
   color: var(--r-text, var(--ink));
   white-space: nowrap;
 }

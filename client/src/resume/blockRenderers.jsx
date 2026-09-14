@@ -21,11 +21,25 @@ export function SummaryBlock({ data }) {
   return <p className="r-summary">{data.text}</p>;
 }
 
-function splitItems(items) {
+export function splitItems(items) {
   return (items || '')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function splitLines(items) {
+  return (items || '')
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+// Legacy custom items were saved as `{ heading, body }` with no bodyType.
+// Treat those as plain text so old data keeps rendering unchanged.
+function normalizeCustomItem(item) {
+  if (item.bodyType) return item;
+  return { ...item, bodyType: 'text', text: item.body };
 }
 
 export function SkillsGroupBlock({ data, skillsDisplay = 'rows' }) {
@@ -116,17 +130,54 @@ export function EducationBlock({ data }) {
   );
 }
 
+function CustomItemBody({ item }) {
+  switch (item.bodyType) {
+    case 'list':
+      return (
+        <ul className="r-bullets">
+          {splitLines(item.items).map((line, i) => (
+            <li key={i}>{line}</li>
+          ))}
+        </ul>
+      );
+    case 'link':
+      return safeHref(item.url) ? (
+        <a className="r-custom-item-body" href={safeHref(item.url)} target="_blank" rel="noreferrer">
+          {item.label || item.url}
+        </a>
+      ) : item.label ? (
+        <div className="r-custom-item-body">{item.label}</div>
+      ) : null;
+    case 'tags':
+      return (
+        <div className="r-skills-chip-list" style={item.tagColor ? { '--r-tag-color': item.tagColor } : undefined}>
+          {splitItems(item.items).map((tag, i) => (
+            <span className="r-skills-chip" key={i}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      );
+    case 'text':
+    default:
+      return item.text ? <div className="r-custom-item-body">{item.text}</div> : null;
+  }
+}
+
 export function CustomBlock({ data }) {
   return (
     <div className="r-custom">
       {data.title ? <h3 className="r-custom-title">{data.title}</h3> : null}
       {Array.isArray(data.items) &&
-        data.items.map((item, i) => (
-          <div className="r-custom-item" key={i}>
-            {item.heading ? <div className="r-custom-item-heading">{item.heading}</div> : null}
-            {item.body ? <div className="r-custom-item-body">{item.body}</div> : null}
-          </div>
-        ))}
+        data.items.map((item, i) => {
+          const normalized = normalizeCustomItem(item);
+          return (
+            <div className="r-custom-item" key={i}>
+              {normalized.heading ? <div className="r-custom-item-heading">{normalized.heading}</div> : null}
+              <CustomItemBody item={normalized} />
+            </div>
+          );
+        })}
     </div>
   );
 }
