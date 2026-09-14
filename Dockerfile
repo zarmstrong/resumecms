@@ -1,5 +1,5 @@
 # ---- Stage 1: build the React client ----------------------------------
-FROM node:20-bookworm-slim AS client-build
+FROM node:24-bookworm-slim AS client-build
 WORKDIR /app/client
 COPY client/package.json ./
 RUN npm install
@@ -8,7 +8,7 @@ COPY templates/ /app/templates/
 RUN npm run build
 
 # ---- Stage 2: server runtime -------------------------------------------
-FROM node:20-bookworm-slim
+FROM node:24-bookworm-slim
 
 # System Chromium is used for PDF export instead of Puppeteer's bundled
 # download (faster, smaller, more reliable across architectures).

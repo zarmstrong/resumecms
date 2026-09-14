@@ -9,13 +9,13 @@
     "dev": "node --watch src/index.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^13.0.3",
     "cookie-session": "^2.1.0",
     "express": "^4.19.2",
     "express-rate-limit": "^8.7.0",
     "morgan": "^1.12.1",
     "otplib": "^13.5.0",
-    "puppeteer": "^23.4.0",
+    "puppeteer": "^25.10.0",
     "qrcode": "^1.5.4"
   },
   "overrides": {
