@@ -244,6 +244,26 @@
   flex: 0 0 90px;
 }
 
+.ed-checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.ed-block-style-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line-strong);
+}
+
+.ed-block-style-heading {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--slate-light);
+}
+
 .ed-input,
 .ed-textarea {
   font-family: var(--font-ui);

@@ -1,8 +1,19 @@
 import { normalizeBullet } from './bulletUtils.js';
 import { safeHref } from './safeUrl.js';
+import { headingFontSize } from './blockStyle.js';
+
+// Joins whichever of the two date fields is actually filled in — no
+// dangling " – " when only a start or only an end date is set.
+function formatDateRange(start, end) {
+  return [start, end].filter(Boolean).join(' – ');
+}
 
 export function HeadingBlock({ data }) {
-  return <h2 className="r-heading">{data.text}</h2>;
+  return (
+    <h2 className="r-heading" style={{ fontSize: headingFontSize(data) }}>
+      {data.text}
+    </h2>
+  );
 }
 
 export function SummaryBlock({ data }) {
@@ -50,9 +61,7 @@ export function ExperienceBlock({ data, mode = 'web' }) {
     <div className="r-experience">
       <div className="r-experience-top">
         <div className="r-experience-title">{data.jobTitle}</div>
-        <div className="r-experience-dates">
-          {data.endDate ? `${data.startDate} – ${data.endDate}` : data.startDate}
-        </div>
+        <div className="r-experience-dates">{formatDateRange(data.startDate, data.endDate)}</div>
       </div>
       <div className="r-experience-company">
         {safeHref(data.companyUrl) ? (
@@ -75,9 +84,7 @@ export function EducationBlock({ data }) {
     <div className="r-education">
       <div className="r-experience-top">
         <div className="r-experience-title">{data.degree}</div>
-        <div className="r-experience-dates">
-          {data.endDate ? `${data.startDate} – ${data.endDate}` : data.startDate}
-        </div>
+        <div className="r-experience-dates">{formatDateRange(data.startDate, data.endDate)}</div>
       </div>
       <div className="r-experience-company">
         {data.institution}

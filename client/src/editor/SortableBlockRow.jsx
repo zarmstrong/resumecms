@@ -9,6 +9,7 @@ import { ExperienceForm } from './blockForms/ExperienceForm.jsx';
 import { EducationForm } from './blockForms/EducationForm.jsx';
 import { CustomForm } from './blockForms/CustomForm.jsx';
 import { VisibilityToggle } from './VisibilityToggle.jsx';
+import { BlockStyleForm } from './BlockStyleForm.jsx';
 
 const FORM_COMPONENTS = {
   heading: HeadingForm,
@@ -89,9 +90,12 @@ export function SortableBlockRow({ block, onChangeData, onChangeVisibility, onDe
         </button>
       </div>
 
-      {expanded && FormComponent && (
+      {expanded && (
         <div className="ed-block-row-body">
-          <FormComponent data={block.data} onChange={(newData) => onChangeData(block.id, newData)} />
+          {FormComponent && (
+            <FormComponent data={block.data} onChange={(newData) => onChangeData(block.id, newData)} />
+          )}
+          <BlockStyleForm data={block.data} onChange={(newData) => onChangeData(block.id, newData)} />
         </div>
       )}
     </div>

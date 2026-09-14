@@ -16,6 +16,7 @@ import {
 } from './siteColors.js';
 import { normalizeTemplate } from './templates.js';
 import { normalizeLayout, splitBlocksForSidebar } from './layouts.js';
+import { blockWrapperStyle, blockWrapperClassName } from './blockStyle.js';
 import './resume.css';
 
 // mode: 'web' | 'print' | 'preview'
@@ -43,7 +44,11 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
   if (colors.skillsCategoryPill) {
     colorVars['--r-skills-pill'] = colors.skillsCategoryPill;
     colorVars['--r-skills-pad'] = pillPad;
-    colorVars['--r-skills-radius'] = '3px';
+    // Rounder than the dates pill (3px) — a category label can wrap to
+    // multiple lines in the narrow label column, and a more generous
+    // radius reads as a deliberate rounded "chip" in that case instead of
+    // a barely-rounded rectangle.
+    colorVars['--r-skills-radius'] = '8px';
     if (!colors.skillsCategoryText) {
       colorVars['--r-skills-text'] = contrastTextFor(colors.skillsCategoryPill);
     }
@@ -95,8 +100,9 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
     return (
       <div
         key={block.id}
-        className={`r-block${dimmed ? ' r-block-dimmed' : ''}`}
+        className={`r-block${dimmed ? ' r-block-dimmed' : ''}${blockWrapperClassName(block.data)}`}
         data-block-type={block.type}
+        style={blockWrapperStyle(block.data)}
       >
         <Renderer data={block.data} mode={mode} />
       </div>

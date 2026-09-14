@@ -258,22 +258,22 @@
 }
 
 .r-heading {
-  font-size: 0.8125em;
+  font-size: 1em;
   font-weight: 600;
   font-family: var(--font-ui);
   letter-spacing: 0.02em;
   color: var(--r-heading, var(--ink));
   border-bottom: 1px solid var(--r-accent, var(--line));
   padding-bottom: 6px;
-  margin: 30px 0 14px;
+  margin: var(--r-block-space-above, 30px) 0 var(--r-block-space-below, 14px);
 }
 
 .r-block:first-child .r-heading {
-  margin-top: 0;
+  margin-top: var(--r-block-space-above, 0);
 }
 
 .r-summary {
-  margin: 0 0 18px;
+  margin: var(--r-block-space-above, 0) 0 var(--r-block-space-below, 18px);
   color: var(--r-text, var(--ink));
 }
 
@@ -282,7 +282,8 @@
   grid-template-columns: 130px 1fr;
   gap: 12px;
   font-size: 0.90625em;
-  margin-bottom: 6px;
+  margin-top: var(--r-block-space-above, 0);
+  margin-bottom: var(--r-block-space-below, 6px);
 }
 
 .r-skills-label {
@@ -294,12 +295,14 @@
   border-radius: var(--r-skills-radius, 0);
   width: fit-content;
   line-height: 1.4;
-  align-self: start;
+  align-self: center;
+  text-align: center;
 }
 
 .r-experience,
 .r-education {
-  margin-bottom: 18px;
+  margin-top: var(--r-block-space-above, 0);
+  margin-bottom: var(--r-block-space-below, 18px);
 }
 
 .r-experience-top {
@@ -352,6 +355,11 @@
   margin-top: 3px;
 }
 
+.r-custom {
+  margin-top: var(--r-block-space-above, 0);
+  margin-bottom: var(--r-block-space-below, 0);
+}
+
 .r-custom-title {
   color: var(--r-heading, var(--ink));
   margin: 0 0 8px;
@@ -390,7 +398,7 @@
 }
 
 .r-sidebar .r-block:first-child .r-heading {
-  margin-top: 0;
+  margin-top: var(--r-block-space-above, 0);
 }
 
 /* The sidebar is too narrow for the two-column skills grid and the
@@ -498,6 +506,15 @@
 /* Editor preview: dim blocks that are hidden from both web + print */
 .r-block-dimmed {
   opacity: 0.35;
+}
+
+/* Optional per-block "highlight" customization — a tinted, rounded box
+   around the block, using the same color-mix technique as the sidebar. */
+.r-block-highlight {
+  background: var(--panel-alt, #f4f1ea);
+  background: color-mix(in srgb, var(--r-accent, #2f6f4e) 8%, var(--r-bg, #ffffff));
+  border-radius: var(--radius);
+  padding: 16px 18px;
 }
 
 /* Editor preview: dim individual bullets hidden from both web + print */
