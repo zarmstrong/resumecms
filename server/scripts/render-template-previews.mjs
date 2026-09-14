@@ -86,15 +86,21 @@ async function main() {
   let serverOutput = '';
   server.stdout.on('data', (chunk) => (serverOutput += chunk));
   server.stderr.on('data', (chunk) => (serverOutput += chunk));
-  // A spawn failure (e.g. the "node" binary not found) emits 'error' on the
-  // ChildProcess — with no listener at all, Node treats that as unhandled
-  // and crashes the script outright instead of letting us report it. This
-  // permanent listener keeps that from ever happening (including for an
-  // error after startup, e.g. the process dying mid-render); the one-time
-  // copy below races it against waitForServer() so a startup failure
-  // surfaces immediately with its real cause instead of only after that
-  // timeout.
-  server.on('error', (err) => console.error('Throwaway server process error:', err.message));
+  // Track the child's lifecycle from the moment it's spawned, not lazily
+  // (e.g. only once killAndWait() is later called in the finally block) —
+  // a spawn failure fires 'error' and, per Node's docs, never 'exit', so a
+  // listener attached only at teardown time could easily miss an event
+  // that already happened and hang forever. A permanent listener from here
+  // also keeps Node from treating an unlistened 'error' event as fatal and
+  // crashing the whole script outright.
+  const serverState = { done: false };
+  server.once('exit', () => {
+    serverState.done = true;
+  });
+  server.once('error', (err) => {
+    serverState.done = true;
+    console.error('Throwaway server process error:', err.message);
+  });
 
   let browser;
   try {
@@ -124,7 +130,7 @@ async function main() {
     // Precise kill on the PID we spawned and are holding a reference to —
     // never a name/pattern-based kill, which on a host running other node
     // processes could hit something other than this throwaway server.
-    await killAndWait(server);
+    await killAndWait(server, serverState);
     rmSync(dataDir, { recursive: true, force: true });
   }
 }
@@ -133,18 +139,20 @@ async function main() {
 // event loop alive until it actually exits, not just until it's signaled —
 // wait for that, with a SIGKILL escalation in case it ignores SIGTERM, so
 // this script reliably exits on its own instead of hanging after its work
-// is done.
-function killAndWait(child, timeoutMs = 3000) {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+// is done. `state` is the same object main() started tracking from the
+// moment the child was spawned — checking state.done (rather than e.g.
+// child.exitCode, or attaching fresh 'exit'/'error' listeners here) is what
+// makes this correct even if the child already died before this function
+// was called: a late listener could otherwise miss an event that already
+// fired and wait forever for one that will never come again.
+function killAndWait(child, state, timeoutMs = 3000) {
+  if (state.done) return Promise.resolve();
   return new Promise((resolve) => {
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
     const done = () => {
       clearTimeout(timer);
       resolve();
     };
-    // 'exit' covers the normal case; 'error' covers the child never having
-    // started at all (e.g. spawn failure), which can fire without a
-    // matching 'exit' and would otherwise leave this promise unresolved.
     child.once('exit', done);
     child.once('error', done);
     child.kill('SIGTERM');
