@@ -9,8 +9,7 @@ import {
   normalizeBulletStyle,
   FONT_OPTIONS,
 } from '../resume/siteColors.js';
-import { normalizeTemplate, TEMPLATE_OPTIONS } from '../resume/templates.js';
-import { normalizeLayout, LAYOUT_OPTIONS } from '../resume/layouts.js';
+import { normalizeTemplate, normalizeLayout, HEADER_TEMPLATES, LAYOUT_TEMPLATES } from '../resume/templateRegistry.js';
 
 const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
@@ -181,8 +180,8 @@ export function SiteSettingsForm({ site, onChange }) {
           value={normalizeTemplate(site)}
           onChange={(e) => onChange({ ...site, template: e.target.value })}
         >
-          {TEMPLATE_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>
+          {HEADER_TEMPLATES.map(({ id, label }) => (
+            <option key={id} value={id}>
               {label}
             </option>
           ))}
@@ -196,8 +195,8 @@ export function SiteSettingsForm({ site, onChange }) {
           value={normalizeLayout(site)}
           onChange={(e) => onChange({ ...site, layout: e.target.value })}
         >
-          {LAYOUT_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>
+          {LAYOUT_TEMPLATES.map(({ id, label }) => (
+            <option key={id} value={id}>
               {label}
             </option>
           ))}

@@ -1,0 +1,41 @@
+/* "timeline": experience/education entries hang off a connecting vertical
+   line with a dot marker, drawn on the block wrapper (so the inner
+   element's own margin is zeroed to avoid doubling it). The border-left
+   only spans this element's own box, so back-to-back entries would leave a
+   gap in the line at the margin between them — the :has() rule below
+   converts that trailing margin into padding (still inside the border)
+   whenever another timeline entry follows, so the line reads as one
+   continuous run instead of broken segments. */
+.r-layout-timeline .r-body [data-block-type='experience'],
+.r-layout-timeline .r-body [data-block-type='education'] {
+  position: relative;
+  padding-left: 22px;
+  margin-bottom: 18px;
+  border-left: 2px solid var(--r-accent, var(--line-strong));
+}
+
+.r-layout-timeline .r-body [data-block-type='experience']:has(+ [data-block-type='experience']),
+.r-layout-timeline .r-body [data-block-type='experience']:has(+ [data-block-type='education']),
+.r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='experience']),
+.r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='education']) {
+  padding-bottom: 18px;
+  margin-bottom: 0;
+}
+
+.r-layout-timeline .r-body [data-block-type='experience']::before,
+.r-layout-timeline .r-body [data-block-type='education']::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--r-bg, #ffffff);
+  border: 2px solid var(--r-accent, var(--line-strong));
+}
+
+.r-layout-timeline .r-body [data-block-type='experience'] .r-experience,
+.r-layout-timeline .r-body [data-block-type='education'] .r-education {
+  margin-bottom: 0;
+}

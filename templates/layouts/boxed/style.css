@@ -1,0 +1,14 @@
+/* "boxed": each experience/education entry sits in its own bordered card;
+   same margin-zeroing approach as the timeline layout. */
+.r-layout-boxed .r-body [data-block-type='experience'],
+.r-layout-boxed .r-body [data-block-type='education'] {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.r-layout-boxed .r-body [data-block-type='experience'] .r-experience,
+.r-layout-boxed .r-body [data-block-type='education'] .r-education {
+  margin-bottom: 0;
+}

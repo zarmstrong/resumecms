@@ -1,0 +1,5 @@
+{
+  "label": "Minimal / ATS-friendly",
+  "description": "Strips color fills and accent colors from the body so it reads as plain, high-contrast text — friendlier to ATS parsers and print toner.",
+  "author": "resumecms"
+}

@@ -18,8 +18,12 @@ import {
   BULLET_STYLE_CSS,
   fontCssFor,
 } from './siteColors.js';
-import { normalizeTemplate } from './templates.js';
-import { normalizeLayout, splitBlocksForSidebar, skillsDisplayFor } from './layouts.js';
+import {
+  normalizeTemplate,
+  normalizeLayout,
+  skillsDisplayFor,
+  getLayoutTemplate,
+} from './templateRegistry.js';
 import { blockWrapperStyle, blockWrapperClassName } from './blockStyle.js';
 import './resume.css';
 
@@ -68,16 +72,10 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
       colorVars['--r-dates-text'] = contrastTextFor(colors.datesPill);
     }
   }
-  // A custom sidebar background can be dark; without this the sidebar's
-  // heading/body text (which default to near-black) would go illegible.
-  // Applied as an inline style on just the sidebar element below, not here,
-  // so it doesn't affect the rest of the page.
-  let sidebarTextStyle;
-  if (colors.sidebarBackground) {
-    colorVars['--r-sidebar-bg'] = colors.sidebarBackground;
-    const sidebarText = contrastTextFor(colors.sidebarBackground);
-    sidebarTextStyle = { color: sidebarText, '--r-heading': sidebarText, '--slate': sidebarText, '--slate-light': sidebarText };
-  }
+  // Feeds the "sidebar" layout's CSS fallback (color-mix() off the accent
+  // color) when unset; contrast handling for a custom background lives in
+  // that layout's own component, which receives `colors` directly.
+  if (colors.sidebarBackground) colorVars['--r-sidebar-bg'] = colors.sidebarBackground;
 
   // In print/PDF output there's no card floating on the app background —
   // the resume's own background must fill the whole physical page, or any
@@ -95,7 +93,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
   }, [mode, colors.background]);
 
   const layout = normalizeLayout(site);
-  const sidebarSplit = layout === 'sidebar' ? splitBlocksForSidebar(blocks) : null;
+  const LayoutComponent = getLayoutTemplate(layout).Component;
   const skillsDisplay = skillsDisplayFor(site);
 
   function renderBlock(block) {
@@ -125,13 +123,8 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
         pdfHref={mode === 'web' ? '/api/public/resume.pdf' : null}
         template={normalizeTemplate(site)}
       />
-      {sidebarSplit ? (
-        <div className="r-body r-body-sidebar">
-          <div className="r-sidebar" style={sidebarTextStyle}>
-            {sidebarSplit.sidebar.map(renderBlock)}
-          </div>
-          <div className="r-main">{sidebarSplit.main.map(renderBlock)}</div>
-        </div>
+      {LayoutComponent ? (
+        <LayoutComponent blocks={blocks} renderBlock={renderBlock} mode={mode} colors={colors} />
       ) : (
         <div className="r-body">{blocks.map(renderBlock)}</div>
       )}

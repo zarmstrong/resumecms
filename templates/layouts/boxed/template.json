@@ -1,0 +1,6 @@
+{
+  "label": "Boxed cards",
+  "description": "Each experience/education entry sits in its own bordered card; skills render as individual chips.",
+  "author": "resumecms",
+  "skillsDisplay": "chips"
+}
