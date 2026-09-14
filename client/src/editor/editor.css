@@ -291,6 +291,18 @@
   margin-bottom: 6px;
 }
 
+.ed-bullet-row {
+  align-items: stretch;
+}
+
+.ed-bullet-row > .ed-textarea {
+  height: auto;
+}
+
+.ed-bullet-row > .ed-icon-btn {
+  align-self: flex-start;
+}
+
 .ed-link-item {
   margin-bottom: 10px;
 }
@@ -313,9 +325,16 @@
   margin-left: 24px;
 }
 
+.ed-bullet-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .ed-btn-sub {
-  margin-bottom: 6px;
   font-size: 0.85em;
+  white-space: nowrap;
 }
 
 .ed-bullet-actions {

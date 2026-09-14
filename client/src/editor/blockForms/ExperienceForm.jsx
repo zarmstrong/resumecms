@@ -192,39 +192,47 @@ function BulletEditor({ bullet, path, patchBullet, addSubBullet, removeBullet })
           value={bullet.text}
           onChange={(e) => patchBullet(path, { text: e.target.value })}
         />
-        <div className="ed-visibility-toggles">
-          <VisibilityToggle
-            label="Web"
-            active={bullet.visibleWeb}
-            onClick={() => patchBullet(path, { visibleWeb: !bullet.visibleWeb })}
-          />
-          <VisibilityToggle
-            label="Print/PDF"
-            active={bullet.visiblePrint}
-            onClick={() => patchBullet(path, { visiblePrint: !bullet.visiblePrint })}
-          />
+        <div className="ed-bullet-side">
+          <div className="ed-visibility-toggles">
+            <VisibilityToggle
+              label="Web"
+              active={bullet.visibleWeb}
+              onClick={() => patchBullet(path, { visibleWeb: !bullet.visibleWeb })}
+            />
+            <VisibilityToggle
+              label="Print/PDF"
+              active={bullet.visiblePrint}
+              onClick={() => patchBullet(path, { visiblePrint: !bullet.visiblePrint })}
+            />
+          </div>
+          {depth < MAX_BULLET_DEPTH && (
+            <button
+              type="button"
+              className="ed-btn ed-btn-ghost ed-btn-sub"
+              onClick={() => addSubBullet(path)}
+            >
+              + Add sub-bullet
+            </button>
+          )}
         </div>
         <button type="button" className="ed-icon-btn" onClick={() => removeBullet(path)} aria-label="Remove bullet">
           ✕
         </button>
       </div>
-      <div className="ed-bullet-children">
-        {bullet.children.map((child, i) => (
-          <BulletEditor
-            key={i}
-            bullet={child}
-            path={[...path, i]}
-            patchBullet={patchBullet}
-            addSubBullet={addSubBullet}
-            removeBullet={removeBullet}
-          />
-        ))}
-        {depth < MAX_BULLET_DEPTH && (
-          <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={() => addSubBullet(path)}>
-            + Add sub-bullet
-          </button>
-        )}
-      </div>
+      {bullet.children.length > 0 && (
+        <div className="ed-bullet-children">
+          {bullet.children.map((child, i) => (
+            <BulletEditor
+              key={i}
+              bullet={child}
+              path={[...path, i]}
+              patchBullet={patchBullet}
+              addSubBullet={addSubBullet}
+              removeBullet={removeBullet}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
