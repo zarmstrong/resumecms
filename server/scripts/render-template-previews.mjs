@@ -86,12 +86,23 @@ async function main() {
   let serverOutput = '';
   server.stdout.on('data', (chunk) => (serverOutput += chunk));
   server.stderr.on('data', (chunk) => (serverOutput += chunk));
+  // A spawn failure (e.g. the "node" binary not found) emits 'error' on the
+  // ChildProcess — with no listener at all, Node treats that as unhandled
+  // and crashes the script outright instead of letting us report it. This
+  // permanent listener keeps that from ever happening (including for an
+  // error after startup, e.g. the process dying mid-render); the one-time
+  // copy below races it against waitForServer() so a startup failure
+  // surfaces immediately with its real cause instead of only after that
+  // timeout.
+  server.on('error', (err) => console.error('Throwaway server process error:', err.message));
 
   let browser;
   try {
-    await waitForServer(BASE_URL).catch((err) => {
-      throw new Error(`${err.message}\n--- server output ---\n${serverOutput}`);
-    });
+    await Promise.race([waitForServer(BASE_URL), new Promise((_, reject) => server.once('error', reject))]).catch(
+      (err) => {
+        throw new Error(`${err.message}\n--- server output ---\n${serverOutput}`);
+      }
+    );
 
     browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
 
