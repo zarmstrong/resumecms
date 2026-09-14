@@ -57,9 +57,17 @@ export const FONT_OPTIONS = [
   { value: 'pt-serif', label: 'PT Serif', css: "'PT Serif', Georgia, serif" },
   { value: 'lora', label: 'Lora', css: "'Lora', Georgia, serif" },
   { value: 'merriweather', label: 'Merriweather', css: "'Merriweather', Georgia, serif" },
+  { value: 'eb-garamond', label: 'EB Garamond', css: "'EB Garamond', Garamond, serif" },
+  { value: 'libre-baskerville', label: 'Libre Baskerville', css: "'Libre Baskerville', Georgia, serif" },
+  { value: 'playfair-display', label: 'Playfair Display', css: "'Playfair Display', Georgia, serif" },
+  { value: 'crimson-text', label: 'Crimson Text', css: "'Crimson Text', Georgia, serif" },
   { value: 'georgia', label: 'Georgia', css: "Georgia, 'Times New Roman', serif" },
   { value: 'ibm-plex-sans', label: 'IBM Plex Sans', css: "'IBM Plex Sans', system-ui, sans-serif" },
   { value: 'inter', label: 'Inter', css: "'Inter', system-ui, sans-serif" },
+  { value: 'roboto', label: 'Roboto', css: "'Roboto', system-ui, sans-serif" },
+  { value: 'open-sans', label: 'Open Sans', css: "'Open Sans', system-ui, sans-serif" },
+  { value: 'montserrat', label: 'Montserrat', css: "'Montserrat', system-ui, sans-serif" },
+  { value: 'work-sans', label: 'Work Sans', css: "'Work Sans', system-ui, sans-serif" },
 ];
 
 export const DEFAULT_FONT = 'source-serif';
@@ -108,6 +116,38 @@ export const DEFAULT_LINE_SPACING = 'normal';
 export function normalizeLineSpacing(site) {
   const value = site?.lineSpacing;
   return LINE_SPACING_CSS[value] ? value : DEFAULT_LINE_SPACING;
+}
+
+// Deliberately narrow — a nudge lighter or heavier on body text, not a
+// bold/italic toggle. Headings keep their own explicit font-weight, so this
+// only affects running text.
+export const FONT_WEIGHT_CSS = {
+  light: '300',
+  normal: '400',
+  medium: '500',
+};
+
+export const DEFAULT_FONT_WEIGHT = 'normal';
+
+export function normalizeFontWeight(site) {
+  const value = site?.fontWeight;
+  return FONT_WEIGHT_CSS[value] ? value : DEFAULT_FONT_WEIGHT;
+}
+
+export const BULLET_STYLE_CSS = {
+  disc: 'disc',
+  circle: 'circle',
+  square: 'square',
+  dash: '"–  "',
+  arrow: '"→  "',
+  none: 'none',
+};
+
+export const DEFAULT_BULLET_STYLE = 'disc';
+
+export function normalizeBulletStyle(site) {
+  const value = site?.bulletStyle;
+  return BULLET_STYLE_CSS[value] ? value : DEFAULT_BULLET_STYLE;
 }
 
 // Picks readable label text (white or near-black) for a given pill

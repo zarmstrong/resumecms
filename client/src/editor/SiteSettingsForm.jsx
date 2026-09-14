@@ -5,6 +5,8 @@ import {
   normalizeNameFont,
   normalizeFontSize,
   normalizeLineSpacing,
+  normalizeFontWeight,
+  normalizeBulletStyle,
   FONT_OPTIONS,
 } from '../resume/siteColors.js';
 import { normalizeTemplate, TEMPLATE_OPTIONS } from '../resume/templates.js';
@@ -32,6 +34,21 @@ const LINE_SPACING_OPTIONS = [
   { value: 'normal', label: 'Normal' },
   { value: 'relaxed', label: 'Relaxed' },
   { value: 'loose', label: 'Loose' },
+];
+
+const FONT_WEIGHT_OPTIONS = [
+  { value: 'light', label: 'Light' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'medium', label: 'Medium' },
+];
+
+const BULLET_STYLE_OPTIONS = [
+  { value: 'disc', label: 'Disc (•)' },
+  { value: 'circle', label: 'Circle (◦)' },
+  { value: 'square', label: 'Square (▪)' },
+  { value: 'dash', label: 'Dash (–)' },
+  { value: 'arrow', label: 'Arrow (→)' },
+  { value: 'none', label: 'None' },
 ];
 
 const COLOR_FIELDS = [
@@ -219,6 +236,21 @@ export function SiteSettingsForm({ site, onChange }) {
         </label>
 
         <label className="ed-field">
+          <span>Font weight</span>
+          <select
+            className="ed-input"
+            value={normalizeFontWeight(site)}
+            onChange={(e) => onChange({ ...site, fontWeight: e.target.value })}
+          >
+            {FONT_WEIGHT_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="ed-field">
           <span>Line spacing</span>
           <select
             className="ed-input"
@@ -275,20 +307,37 @@ export function SiteSettingsForm({ site, onChange }) {
         ))}
       </div>
 
-      <label className="ed-field">
-        <span>Pill padding</span>
-        <select
-          className="ed-input"
-          value={normalizePillPadding(site)}
-          onChange={(e) => onChange({ ...site, pillPadding: e.target.value })}
-        >
-          {PILL_PADDING_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="ed-field-row">
+        <label className="ed-field">
+          <span>Pill padding</span>
+          <select
+            className="ed-input"
+            value={normalizePillPadding(site)}
+            onChange={(e) => onChange({ ...site, pillPadding: e.target.value })}
+          >
+            {PILL_PADDING_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="ed-field">
+          <span>Bullet style</span>
+          <select
+            className="ed-input"
+            value={normalizeBulletStyle(site)}
+            onChange={(e) => onChange({ ...site, bulletStyle: e.target.value })}
+          >
+            {BULLET_STYLE_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
     </div>
   );
 }

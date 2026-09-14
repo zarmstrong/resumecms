@@ -12,6 +12,10 @@ import {
   FONT_SIZE_CSS,
   normalizeLineSpacing,
   LINE_SPACING_CSS,
+  normalizeFontWeight,
+  FONT_WEIGHT_CSS,
+  normalizeBulletStyle,
+  BULLET_STYLE_CSS,
   fontCssFor,
 } from './siteColors.js';
 import { normalizeTemplate } from './templates.js';
@@ -34,6 +38,8 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
     '--font-resume': fontCssFor(normalizeResumeFont(site)),
     '--r-font-size': FONT_SIZE_CSS[normalizeFontSize(site)],
     '--r-line-spacing': LINE_SPACING_CSS[normalizeLineSpacing(site)],
+    '--r-font-weight': FONT_WEIGHT_CSS[normalizeFontWeight(site)],
+    '--r-bullet-style': BULLET_STYLE_CSS[normalizeBulletStyle(site)],
     // Only used by the "banner" template, which paints the header in the
     // accent color and needs readable text on top of it.
     '--r-banner-text': contrastTextFor(colors.accent),
