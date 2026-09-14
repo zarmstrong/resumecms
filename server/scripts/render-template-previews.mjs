@@ -107,10 +107,15 @@ function killAndWait(child, timeoutMs = 3000) {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise((resolve) => {
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
-    child.once('exit', () => {
+    const done = () => {
       clearTimeout(timer);
       resolve();
-    });
+    };
+    // 'exit' covers the normal case; 'error' covers the child never having
+    // started at all (e.g. spawn failure), which can fire without a
+    // matching 'exit' and would otherwise leave this promise unresolved.
+    child.once('exit', done);
+    child.once('error', done);
     child.kill('SIGTERM');
   });
 }

@@ -1,16 +1,16 @@
 # Contributing resume templates
 
-This folder holds three kinds of contributable template, from least to most
+This folder holds three kinds of contributable templates, from least to most
 involved:
 
 - **[Presets](#presets)** — no code. A JSON file bundling an existing header
   + layout + optional colors/fonts under one name, shown as a card in the
   editor's gallery.
-- **[Layouts](#headers--layouts)** — code (a React component), controls how
-  section blocks are arranged below the header. Some existing layouts are
-  pure CSS instead (no component needed).
-- **[Headers](#headers--layouts)** — code (a React component), controls the
-  name/title/photo/contact-info region at the top of the page.
+- **[Layouts](#headers--layouts)** — code (a React component) that controls
+  how section blocks are arranged below the header. Some existing layouts
+  are pure CSS instead (no component needed).
+- **[Headers](#headers--layouts)** — code (a React component) that controls
+  the name/title/photo/contact-info region at the top of the page.
 
 Headers and layouts are two **independent** axes (see
 [`client/src/resume/templateRegistry.js`](../client/src/resume/templateRegistry.js)).
