@@ -11,7 +11,7 @@
 // Usage: node server/scripts/render-template-previews.mjs
 // (or via the isolated docker-compose "tools" profile — see docker-compose.yml)
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,7 @@ import puppeteer from 'puppeteer';
 const SERVER_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url))); // .../server
 const REPO_ROOT = path.dirname(SERVER_DIR);
 const PRESETS_DIR = path.join(REPO_ROOT, 'templates', 'presets');
+const CLIENT_DIST_INDEX = path.join(REPO_ROOT, 'client', 'dist', 'index.html');
 const PORT = process.env.RENDER_PREVIEWS_PORT || '4321';
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
@@ -33,7 +34,15 @@ function waitForServer(url, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     (function poll() {
       fetch(url)
-        .then(() => resolve())
+        .then((response) => {
+          // A response at all doesn't mean the server is actually up and
+          // serving the app — e.g. a 404 for a missing client/dist would
+          // otherwise be mistaken for "ready" here, only to fail later with
+          // a much less actionable timeout deep in the render loop.
+          if (response.ok) return resolve();
+          if (Date.now() > deadline) return reject(new Error(`server at ${url} never returned an OK response (last: ${response.status})`));
+          setTimeout(poll, 300);
+        })
         .catch((err) => {
           if (Date.now() > deadline) return reject(new Error(`server never came up at ${url}: ${err.message}`));
           setTimeout(poll, 300);
@@ -49,7 +58,18 @@ async function main() {
     return;
   }
 
+  if (!existsSync(CLIENT_DIST_INDEX)) {
+    throw new Error(
+      `client/dist isn't built yet (expected ${CLIENT_DIST_INDEX}). Run "cd client && npm run build" first.`
+    );
+  }
+
   const dataDir = mkdtempSync(path.join(tmpdir(), 'resumecms-preview-'));
+  // The server auto-generates an initial PDF (its own separate headless
+  // Chromium launch, see src/pdfRenderer.js) whenever RESUMECMS_DATA_DIR has
+  // no resume.pdf yet — irrelevant to this tool and pure overhead, so
+  // pre-seed an empty placeholder to skip it.
+  writeFileSync(path.join(dataDir, 'resume.pdf'), '');
   console.log(`Booting a throwaway server (port ${PORT}, ephemeral data dir ${dataDir})...`);
 
   const server = spawn('node', ['src/index.js'], {
