@@ -30,12 +30,17 @@
 
 html,
 body {
+  height: 100%;
   margin: 0;
   padding: 0;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
 }
 
 button {
