@@ -110,6 +110,7 @@ export function ExperienceBlock({ data, mode = 'web' }) {
         {data.location ? <span className="r-experience-location">, {data.location}</span> : null}
       </div>
       {data.tagline ? <div className="r-experience-tagline">{data.tagline}</div> : null}
+      {data.description ? <p className="r-experience-description">{data.description}</p> : null}
       <BulletList bullets={bullets} mode={mode} />
     </div>
   );

@@ -117,6 +117,17 @@ export function ExperienceForm({ data, onChange }) {
         />
       </label>
 
+      <label className="ed-field">
+        <span>Description (optional)</span>
+        <textarea
+          className="ed-textarea"
+          rows={3}
+          value={data.description || ''}
+          onChange={(e) => onChange({ ...data, description: e.target.value })}
+          placeholder="A short blurb about the role, shown above the bullet points"
+        />
+      </label>
+
       <div className="ed-field">
         <span>Bullet points</span>
         {bullets.map((b, i) => (

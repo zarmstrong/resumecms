@@ -33,9 +33,9 @@ export function defaultDataForType(type) {
         companyUrl: '',
         location: '',
         startDate: '',
-        endDate: 'Current',
+        endDate: '',
         tagline: '',
-        bullets: [{ text: 'New accomplishment.', visibleWeb: true, visiblePrint: true }],
+        bullets: [],
       };
     case 'education':
       return { degree: 'Degree', institution: 'Institution', location: '', startDate: '', endDate: '' };
