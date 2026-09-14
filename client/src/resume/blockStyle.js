@@ -21,19 +21,27 @@ export function normalizeBlockStyle(data) {
   return (data && data.style) || {};
 }
 
-// Setting margin directly on the block wrapper only ever grows the gap —
-// it collapses with the child element's own top/bottom margin (e.g. a
-// heading's built-in 30px top margin) to whichever is larger, so a preset
-// smaller than that built-in margin has no visible effect. To let a preset
-// shrink the gap too, these are instead passed down as CSS custom
-// properties that each block type's own margin rule in resume.css reads
-// (falling back to that type's current default when unset) — replacing the
-// margin outright rather than competing with it.
+// Overriding the block's own margin (via the CSS vars each block type's
+// margin rule reads) isn't enough on its own: that margin still collapses
+// with the *neighboring* block's margin, and CSS collapsing takes whichever
+// side is larger. Most block types default to 0 top margin (only headings
+// have a built-in one), so a preset spaceAbove routinely lost to the
+// previous block's own 14-18px bottom margin and looked like it did
+// nothing. Applying the preset as padding on the wrapper instead guarantees
+// it actually shows — padding never collapses — while the paired var reset
+// (forced to 0) stops this block's own default margin from *also* adding on
+// top of that padding, which would otherwise double-count it.
 export function blockWrapperStyle(data) {
   const style = normalizeBlockStyle(data);
   const wrapperStyle = {};
-  if (BLOCK_SPACING_CSS[style.spaceAbove]) wrapperStyle['--r-block-space-above'] = BLOCK_SPACING_CSS[style.spaceAbove];
-  if (BLOCK_SPACING_CSS[style.spaceBelow]) wrapperStyle['--r-block-space-below'] = BLOCK_SPACING_CSS[style.spaceBelow];
+  if (BLOCK_SPACING_CSS[style.spaceAbove]) {
+    wrapperStyle.paddingTop = BLOCK_SPACING_CSS[style.spaceAbove];
+    wrapperStyle['--r-block-space-above'] = '0px';
+  }
+  if (BLOCK_SPACING_CSS[style.spaceBelow]) {
+    wrapperStyle.paddingBottom = BLOCK_SPACING_CSS[style.spaceBelow];
+    wrapperStyle['--r-block-space-below'] = '0px';
+  }
   return wrapperStyle;
 }
 
