@@ -13,14 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Validate templates/ metadata
-        run: node scripts/validate-templates.mjs
-
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: client/package-lock.json
+
+      - name: Validate templates/ metadata
+        run: node scripts/validate-templates.mjs
 
       - name: Build client (catches broken template components)
         run: |
