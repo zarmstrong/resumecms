@@ -1,0 +1,8 @@
+{
+  "id": "labeled-header",
+  "label": "Labeled contact header",
+  "description": "Contact details lined up on the right with letter labels (a/e/p), single-column body.",
+  "author": "resumecms",
+  "header": "labeled-header",
+  "layout": "classic"
+}

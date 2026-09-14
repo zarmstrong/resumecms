@@ -1,0 +1,8 @@
+{
+  "id": "banner",
+  "label": "Accent banner",
+  "description": "A full-width accent-colored contact banner under the header, single-column body.",
+  "author": "resumecms",
+  "header": "banner",
+  "layout": "classic"
+}

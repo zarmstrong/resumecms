@@ -23,6 +23,14 @@ const layoutComponents = import.meta.glob('../../../templates/layouts/*/index.js
   eager: true,
   import: 'default',
 });
+// Curated bundles combining a header + layout + colors/fonts (see
+// TemplateGallery.jsx) — unlike headers/layouts these already carry their
+// own `id` field (validated to match their folder name), so no id-from-path
+// step is needed here.
+const presetMeta = import.meta.glob('../../../templates/presets/*/template.json', {
+  eager: true,
+  import: 'default',
+});
 
 function idFromPath(path) {
   const match = path.match(/\/([^/]+)\/[^/]+$/);
@@ -44,6 +52,11 @@ function buildRegistry(metaGlob, componentGlob) {
 
 export const HEADER_TEMPLATES = buildRegistry(headerMeta, headerComponents);
 export const LAYOUT_TEMPLATES = buildRegistry(layoutMeta, layoutComponents);
+export const PRESETS = Object.values(presetMeta).sort((a, b) => a.label.localeCompare(b.label));
+
+export function getPreset(id) {
+  return PRESETS.find((p) => p.id === id);
+}
 
 export const DEFAULT_TEMPLATE = 'classic';
 export const DEFAULT_LAYOUT = 'classic';
@@ -66,9 +79,8 @@ export function getLayoutTemplate(id) {
   return LAYOUT_TEMPLATES.find((l) => l.id === id) || LAYOUT_TEMPLATES.find((l) => l.id === DEFAULT_LAYOUT);
 }
 
-// A layout with no Component is pure CSS (its style.css is imported as a
-// side effect from its own index.jsx-less folder — see
-// LAYOUT_STYLESHEETS below) and renders through the default flat block list.
+// A layout with no Component is pure CSS (its style.css is imported below
+// as a side effect) and renders through the default flat block list.
 export function skillsDisplayFor(site) {
   return getLayoutTemplate(normalizeLayout(site)).skillsDisplay || 'rows';
 }

@@ -1,0 +1,9 @@
+{
+  "id": "sidebar-sage",
+  "label": "Sidebar (Sage)",
+  "description": "Two-column resume with skills and education pinned to a tinted side rail.",
+  "author": "resumecms",
+  "header": "classic",
+  "layout": "sidebar",
+  "colors": { "accent": "#3f6b52", "sidebarBackground": "#eef2ea" }
+}

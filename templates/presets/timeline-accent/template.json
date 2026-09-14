@@ -1,0 +1,8 @@
+{
+  "id": "timeline-accent",
+  "label": "Timeline",
+  "description": "Experience and education hang off a connecting vertical line with a dot marker.",
+  "author": "resumecms",
+  "header": "centered",
+  "layout": "timeline"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "centered",
+  "label": "Centered",
+  "description": "Everything center-aligned up top, single-column body.",
+  "author": "resumecms",
+  "header": "centered",
+  "layout": "classic"
+}

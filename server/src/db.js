@@ -52,6 +52,10 @@ function ensureSetting(key, value) {
 ensureSetting('header', defaultHeader);
 ensureSetting('site', {
   title: 'My Resume',
+  // Cosmetic only — highlights the matching card in the editor's template
+  // gallery. Nothing in the rendering path reads this; ResumeView falls
+  // back to the "classic" header/layout when template/layout are unset.
+  templateId: 'classic',
   colors: {
     accent: '#2f6f4e',
     heading: '#14181c',
