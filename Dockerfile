@@ -4,6 +4,7 @@ WORKDIR /app/client
 COPY client/package.json ./
 RUN npm install
 COPY client/ ./
+COPY templates/ /app/templates/
 RUN npm run build
 
 # ---- Stage 2: server runtime -------------------------------------------

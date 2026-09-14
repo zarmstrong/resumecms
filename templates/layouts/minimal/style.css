@@ -1,0 +1,25 @@
+/* "minimal": strip color fills and accent colors from the body so it reads
+   as plain, high-contrast text — friendlier to ATS parsers and to print
+   toner. The header keeps whatever header style is chosen independently. */
+.r-layout-minimal .r-body .r-heading {
+  color: var(--r-text, var(--ink));
+  border-bottom-color: var(--line-strong);
+}
+
+.r-layout-minimal .r-body .r-skills-label {
+  color: var(--r-text, var(--ink));
+  background: transparent;
+  padding: 0;
+  font-weight: 700;
+}
+
+.r-layout-minimal .r-body .r-experience-dates {
+  color: var(--r-text, var(--ink));
+  background: transparent;
+  padding: 0;
+}
+
+.r-layout-minimal .r-body a {
+  color: var(--r-text, var(--ink));
+  border-bottom: 1px solid var(--line-strong);
+}
