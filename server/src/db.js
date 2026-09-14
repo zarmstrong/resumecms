@@ -34,6 +34,7 @@ const blockCount = db.prepare('SELECT COUNT(*) AS n FROM blocks').get().n;
 const defaultHeader = {
   name: 'Your Name',
   title: 'Your Professional Title',
+  subtitle: '',
   location: 'City, State, Country',
   email: 'you@example.com',
   phone: '',

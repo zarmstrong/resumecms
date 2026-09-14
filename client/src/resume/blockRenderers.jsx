@@ -5,6 +5,11 @@ export function HeadingBlock({ data }) {
   return <h2 className="r-heading">{data.text}</h2>;
 }
 
+export function SummaryBlock({ data }) {
+  if (!data.text) return null;
+  return <p className="r-summary">{data.text}</p>;
+}
+
 export function SkillsGroupBlock({ data }) {
   return (
     <div className="r-skills-row">
@@ -99,6 +104,7 @@ export function CustomBlock({ data }) {
 
 export const BLOCK_RENDERERS = {
   heading: HeadingBlock,
+  summary: SummaryBlock,
   skills_group: SkillsGroupBlock,
   experience: ExperienceBlock,
   education: EducationBlock,

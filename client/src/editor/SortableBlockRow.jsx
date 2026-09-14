@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { BLOCK_TYPE_LABELS } from './blockDefaults.js';
 import { HeadingForm } from './blockForms/HeadingForm.jsx';
+import { SummaryForm } from './blockForms/SummaryForm.jsx';
 import { SkillsGroupForm } from './blockForms/SkillsGroupForm.jsx';
 import { ExperienceForm } from './blockForms/ExperienceForm.jsx';
 import { EducationForm } from './blockForms/EducationForm.jsx';
@@ -11,6 +12,7 @@ import { VisibilityToggle } from './VisibilityToggle.jsx';
 
 const FORM_COMPONENTS = {
   heading: HeadingForm,
+  summary: SummaryForm,
   skills_group: SkillsGroupForm,
   experience: ExperienceForm,
   education: EducationForm,
@@ -22,6 +24,10 @@ function summarize(block) {
   switch (block.type) {
     case 'heading':
       return { title: d.text };
+    case 'summary': {
+      const text = d.text || '';
+      return { title: text.length > 60 ? `${text.slice(0, 60)}…` : text || 'Untitled' };
+    }
     case 'skills_group':
       return { title: d.category };
     case 'experience': {

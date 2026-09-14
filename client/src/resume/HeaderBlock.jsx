@@ -1,14 +1,5 @@
 import { safeHref } from './safeUrl.js';
-
-// Single-letter tag shown before each contact value in the "labeled-header"
-// template, e.g. "e: you@example.com". Derived from the link URL so users
-// don't have to type it themselves.
-function linkGlyph(url) {
-  const u = (url || '').toLowerCase();
-  if (u.includes('linkedin.com')) return 'i';
-  if (u.includes('github.com')) return 'g';
-  return 'w';
-}
+import { linkGlyph } from './linkTypes.js';
 
 function ContactRow({ label, children }) {
   return (
@@ -33,6 +24,7 @@ function ContactInline({ header, className }) {
       {header.phone && <span>{header.phone}</span>}
       {(header.links || []).map((link, i) => (
         <span key={i}>
+          <span className="r-link-badge">{linkGlyph(link)}</span>
           <a href={safeHref(link.url)} target="_blank" rel="noreferrer">
             {link.label}
           </a>
@@ -68,6 +60,7 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
         <div className="r-header-main">
           <h1 className="r-name">{header.name}</h1>
           <div className="r-title">{header.title}</div>
+          {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
         </div>
         <div className="r-header-side">
           {actions}
@@ -80,7 +73,7 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
             )}
             {header.phone && <ContactRow label="p">{header.phone}</ContactRow>}
             {(header.links || []).map((link, i) => (
-              <ContactRow key={i} label={linkGlyph(link.url)}>
+              <ContactRow key={i} label={linkGlyph(link)}>
                 <a href={safeHref(link.url)} target="_blank" rel="noreferrer">
                   {link.label}
                 </a>
@@ -98,6 +91,7 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
         {actions}
         <h1 className="r-name">{header.name}</h1>
         <div className="r-title">{header.title}</div>
+        {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
         <ContactInline header={header} className="r-contact r-contact-centered" />
       </div>
     );
@@ -109,6 +103,7 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
         <div className="r-header-compact-id">
           <span className="r-name r-name-compact">{header.name}</span>
           {header.title && <span className="r-title-compact">{header.title}</span>}
+          {header.subtitle && <span className="r-subtitle-compact">{header.subtitle}</span>}
         </div>
         <ContactInline header={header} className="r-contact r-contact-compact" />
         {actions}
@@ -123,6 +118,7 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
           <div>
             <h1 className="r-name">{header.name}</h1>
             <div className="r-title">{header.title}</div>
+            {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
           </div>
           {actions}
         </div>
@@ -136,6 +132,7 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
       <div className="r-header-main">
         <h1 className="r-name">{header.name}</h1>
         <div className="r-title">{header.title}</div>
+        {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
         <ContactInline header={header} className="r-contact" />
       </div>
       {actions}

@@ -1,6 +1,6 @@
 import { BLOCK_TYPE_LABELS } from './blockDefaults.js';
 
-const ORDER = ['heading', 'skills_group', 'experience', 'education', 'custom'];
+const ORDER = ['heading', 'summary', 'skills_group', 'experience', 'education', 'custom'];
 
 export function AddBlockMenu({ onAdd }) {
   return (
