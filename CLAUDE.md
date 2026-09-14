@@ -52,7 +52,7 @@ fails unless you install Chromium yourself and set `PUPPETEER_EXECUTABLE_PATH`.
 The editor's writes (`PUT/POST/DELETE /api/blocks*`, `/api/header`,
 `/api/site`) mutate the live "draft" tables directly and call `touchDraft()`
 (`server/src/db.js`) to bump `draft_meta.lastEditedAt`. The public site and
-PDF (`server/src/routes/public.js`, `pdf.js`) never read the draft tables —
+PDF (`server/src/routes/public.js`, `server/src/routes/pdf.js`) never read the draft tables —
 they read the `published_resume` setting, a full snapshot written only by
 `POST /api/publish` (`server/src/routes/publish.js`). `GET
 /api/publish/status` compares `draft_meta.lastEditedAt` against
