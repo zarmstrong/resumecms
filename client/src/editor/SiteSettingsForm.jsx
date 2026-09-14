@@ -10,6 +10,7 @@ import {
   FONT_OPTIONS,
 } from '../resume/siteColors.js';
 import { normalizeTemplate, normalizeLayout, HEADER_TEMPLATES, LAYOUT_TEMPLATES } from '../resume/templateRegistry.js';
+import { TemplateGallery } from './TemplateGallery.jsx';
 
 const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
@@ -174,34 +175,44 @@ export function SiteSettingsForm({ site, onChange }) {
       </label>
 
       <label className="ed-field">
-        <span>Header style</span>
-        <select
-          className="ed-input"
-          value={normalizeTemplate(site)}
-          onChange={(e) => onChange({ ...site, template: e.target.value })}
-        >
-          {HEADER_TEMPLATES.map(({ id, label }) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <span>Template</span>
+        <TemplateGallery site={site} onChange={onChange} />
       </label>
 
-      <label className="ed-field">
-        <span>Body layout</span>
-        <select
-          className="ed-input"
-          value={normalizeLayout(site)}
-          onChange={(e) => onChange({ ...site, layout: e.target.value })}
-        >
-          {LAYOUT_TEMPLATES.map(({ id, label }) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <details className="ed-field">
+        <summary>Advanced: customize header/layout manually</summary>
+        <div className="ed-field-row" style={{ marginTop: 10 }}>
+          <label className="ed-field">
+            <span>Header style</span>
+            <select
+              className="ed-input"
+              value={normalizeTemplate(site)}
+              onChange={(e) => onChange({ ...site, template: e.target.value })}
+            >
+              {HEADER_TEMPLATES.map(({ id, label }) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="ed-field">
+            <span>Body layout</span>
+            <select
+              className="ed-input"
+              value={normalizeLayout(site)}
+              onChange={(e) => onChange({ ...site, layout: e.target.value })}
+            >
+              {LAYOUT_TEMPLATES.map(({ id, label }) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </details>
 
       <div className="ed-field-row">
         <label className="ed-field">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { api } from './api.js';
 import { PublicResumePage } from './resume/PublicResumePage.jsx';
+import { TemplatePreviewPage } from './resume/TemplatePreviewPage.jsx';
 import { LoginPage } from './editor/LoginPage.jsx';
 import { EditorPage } from './editor/EditorPage.jsx';
 import './editor/editor.css';
@@ -27,6 +28,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<PublicResumePage mode="web" />} />
         <Route path="/print" element={<PublicResumePage mode="print" />} />
+        <Route path="/template-preview" element={<TemplatePreviewPage />} />
+        <Route path="/template-preview/preset/:id" element={<TemplatePreviewPage />} />
         <Route path="/editor" element={<EditorGate />} />
       </Routes>
     </BrowserRouter>

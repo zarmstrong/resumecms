@@ -1,0 +1,8 @@
+{
+  "id": "compact",
+  "label": "Compact",
+  "description": "A dense single-row header to save vertical space, single-column body.",
+  "author": "resumecms",
+  "header": "compact",
+  "layout": "classic"
+}

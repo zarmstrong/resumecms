@@ -1,0 +1,8 @@
+{
+  "id": "boxed-cards",
+  "label": "Boxed cards",
+  "description": "Compact header with each experience/education entry in its own bordered card.",
+  "author": "resumecms",
+  "header": "compact",
+  "layout": "boxed"
+}

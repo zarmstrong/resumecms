@@ -650,3 +650,70 @@
     display: none;
   }
 }
+
+/* ---- Template gallery ------------------------------------------------- */
+.ed-template-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.ed-template-card {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+}
+
+.ed-template-card-active {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 1px var(--signal);
+}
+
+.ed-template-card-preview {
+  height: 240px;
+  overflow: hidden;
+  background: #f4f1ea;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+}
+
+/* The live ResumeView renders at its natural ~960px width; scale it down
+   to card size instead of maintaining a separate mini-layout, so the
+   preview can never drift out of sync with the real renderer. */
+.ed-template-card-scale {
+  width: 960px;
+  transform: scale(0.25);
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+.ed-template-card-info {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.ed-template-card-label {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.ed-template-card-description {
+  font-size: 12px;
+  color: var(--slate);
+  flex: 1;
+}
+
+.ed-template-card-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
