@@ -205,7 +205,7 @@ export function EditorPage({ onLogout }) {
             </button>
             {siteOpen && (
               <div className="ed-panel-body">
-                <SiteSettingsForm site={site} onChange={handleSiteChange} />
+                <SiteSettingsForm header={header} site={site} blocks={blocks} onChange={handleSiteChange} />
               </div>
             )}
           </section>

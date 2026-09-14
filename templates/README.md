@@ -122,11 +122,15 @@ cd client && npm run dev     # terminal 2
   ad-hoc combo, rendered against shared placeholder data. Use this while
   developing a new header or layout, before it has a preset.
 - `http://localhost:5173/template-preview/preset/<id>` — a specific preset.
-- Or open `/editor` → Site Settings → the template gallery, which is a live
-  render of every preset (not a screenshot), so it's always accurate.
+- Or open `/editor` → Site Settings → "Change template…", which lists every
+  registered header and layout and renders your **real** resume content
+  live as you browse them — the most accurate way to check a new header or
+  layout looks right, since it's not placeholder text.
 
-None of these touch real resume data — they all render
-[`client/src/resume/sampleResume.js`](../client/src/resume/sampleResume.js).
+The two `/template-preview` routes above don't touch real resume data —
+they render
+[`client/src/resume/sampleResume.js`](../client/src/resume/sampleResume.js)
+instead, since they need no editor login.
 
 ## Regenerating preset thumbnails
 

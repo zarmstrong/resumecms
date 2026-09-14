@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   normalizeSiteColors,
   normalizePillPadding,
@@ -9,8 +10,8 @@ import {
   normalizeBulletStyle,
   FONT_OPTIONS,
 } from '../resume/siteColors.js';
-import { normalizeTemplate, normalizeLayout, HEADER_TEMPLATES, LAYOUT_TEMPLATES } from '../resume/templateRegistry.js';
-import { TemplateGallery } from './TemplateGallery.jsx';
+import { normalizeTemplate, normalizeLayout, getHeaderTemplate, getLayoutTemplate } from '../resume/templateRegistry.js';
+import { TemplatePickerModal } from './TemplatePickerModal.jsx';
 
 const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
@@ -156,8 +157,9 @@ function NameFontField({ site, onChange }) {
   );
 }
 
-export function SiteSettingsForm({ site, onChange }) {
+export function SiteSettingsForm({ header, site, blocks, onChange }) {
   const colors = normalizeSiteColors(site);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   function setColor(key, value) {
     onChange({ ...site, colors: { ...colors, [key]: value } });
@@ -176,43 +178,25 @@ export function SiteSettingsForm({ site, onChange }) {
 
       <label className="ed-field">
         <span>Template</span>
-        <TemplateGallery site={site} onChange={onChange} />
+        <div className="ed-template-summary">
+          <span className="ed-template-summary-text">
+            {getHeaderTemplate(normalizeTemplate(site)).label} header + {getLayoutTemplate(normalizeLayout(site)).label} layout
+          </span>
+          <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={() => setPickerOpen(true)}>
+            Change template…
+          </button>
+        </div>
       </label>
 
-      <details className="ed-field">
-        <summary>Advanced: customize header/layout manually</summary>
-        <div className="ed-field-row" style={{ marginTop: 10 }}>
-          <label className="ed-field">
-            <span>Header style</span>
-            <select
-              className="ed-input"
-              value={normalizeTemplate(site)}
-              onChange={(e) => onChange({ ...site, template: e.target.value, templateId: undefined })}
-            >
-              {HEADER_TEMPLATES.map(({ id, label }) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="ed-field">
-            <span>Body layout</span>
-            <select
-              className="ed-input"
-              value={normalizeLayout(site)}
-              onChange={(e) => onChange({ ...site, layout: e.target.value, templateId: undefined })}
-            >
-              {LAYOUT_TEMPLATES.map(({ id, label }) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </details>
+      {pickerOpen && (
+        <TemplatePickerModal
+          header={header}
+          site={site}
+          blocks={blocks}
+          onChange={onChange}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
 
       <div className="ed-field-row">
         <label className="ed-field">

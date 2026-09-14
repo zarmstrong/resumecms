@@ -1,6 +1,6 @@
-// Placeholder resume content used by the template preview/gallery (see
-// TemplatePreviewPage.jsx, editor/TemplateGallery.jsx) so a template can be
-// previewed without touching anyone's real draft. Mirrors the seed content
+// Placeholder resume content used by TemplatePreviewPage.jsx (a shareable,
+// no-auth preview of a header/layout/preset) so a template can be previewed
+// there without touching anyone's real draft. Mirrors the seed content
 // server/src/db.js inserts for a brand-new install — kept as a separate
 // client-side copy since the client can't import server code and this
 // placeholder text changes essentially never.
