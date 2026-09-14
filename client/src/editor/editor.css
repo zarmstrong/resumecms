@@ -433,6 +433,36 @@
   cursor: default;
 }
 
+.ed-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ed-photo-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line-strong);
+}
+
+.ed-photo-preview-empty {
+  background: var(--panel-alt, #f4f1ea);
+}
+
+.ed-photo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.ed-field-error {
+  font-size: 12px;
+  color: var(--warn);
+}
+
 .ed-icon-btn {
   background: none;
   border: none;

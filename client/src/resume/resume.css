@@ -24,6 +24,25 @@
   margin-bottom: 28px;
 }
 
+/* Groups an optional headshot with the name/title block so the pair moves
+   together as one flex item — keeps the header's outer space-between
+   (identity block vs. actions/side rail) working the same as it did before
+   a photo could be added. */
+.r-header-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.r-header-photo {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .r-name,
 .r-title {
   font-family: var(--r-name-font, inherit);
@@ -144,6 +163,10 @@
   justify-content: center;
 }
 
+.r-header-photo-centered {
+  margin: 0 0 14px;
+}
+
 /* "compact" template: name, title, contact, and actions share one wrapping
    line for a condensed, letterhead-style header. */
 .r-header-compact {
@@ -182,6 +205,12 @@
   font-size: 0.8125em;
 }
 
+.r-header-photo-compact {
+  width: 44px;
+  height: 44px;
+  align-self: center;
+}
+
 /* "banner" template: header sits inside an accent-colored panel, with text
    color auto-picked (white/near-black) for contrast against the accent. */
 .r-header-banner {
@@ -214,6 +243,10 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 20px;
+}
+
+.r-header-photo-banner {
+  border: 2px solid var(--r-banner-text, #ffffff);
 }
 
 .r-contact-banner {
@@ -501,6 +534,34 @@
 .r-layout-boxed .r-body [data-block-type='experience'] .r-experience,
 .r-layout-boxed .r-body [data-block-type='education'] .r-education {
   margin-bottom: 0;
+}
+
+/* "chips" skills display (currently used by the "boxed" layout, see
+   layouts.js#skillsDisplayFor): each skill renders as its own small pill
+   instead of one label + a comma-separated list. */
+.r-skills-chips-row {
+  margin-top: var(--r-block-space-above, 0);
+  margin-bottom: var(--r-block-space-below, 10px);
+}
+
+.r-skills-chips-row .r-skills-label {
+  margin-bottom: 6px;
+}
+
+.r-skills-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.r-skills-chip {
+  font-size: 0.875em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--r-accent, #2f6f4e) 10%, var(--r-bg, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--r-accent, #2f6f4e) 30%, var(--r-bg, #ffffff));
+  color: var(--r-text, var(--ink));
+  white-space: nowrap;
 }
 
 /* Editor preview: dim blocks that are hidden from both web + print */

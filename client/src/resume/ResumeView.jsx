@@ -15,7 +15,7 @@ import {
   fontCssFor,
 } from './siteColors.js';
 import { normalizeTemplate } from './templates.js';
-import { normalizeLayout, splitBlocksForSidebar } from './layouts.js';
+import { normalizeLayout, splitBlocksForSidebar, skillsDisplayFor } from './layouts.js';
 import { blockWrapperStyle, blockWrapperClassName } from './blockStyle.js';
 import './resume.css';
 
@@ -90,6 +90,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
 
   const layout = normalizeLayout(site);
   const sidebarSplit = layout === 'sidebar' ? splitBlocksForSidebar(blocks) : null;
+  const skillsDisplay = skillsDisplayFor(site);
 
   function renderBlock(block) {
     const Renderer = BLOCK_RENDERERS[block.type];
@@ -104,7 +105,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
         data-block-type={block.type}
         style={blockWrapperStyle(block.data)}
       >
-        <Renderer data={block.data} mode={mode} />
+        <Renderer data={block.data} mode={mode} skillsDisplay={skillsDisplay} />
       </div>
     );
   }

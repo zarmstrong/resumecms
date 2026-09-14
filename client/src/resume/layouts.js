@@ -16,6 +16,19 @@ export function normalizeLayout(site) {
   return LAYOUT_OPTIONS.some((l) => l.value === value) ? value : DEFAULT_LAYOUT;
 }
 
+// Each body layout picks its own default presentation for skills_group
+// blocks, the same way "sidebar" already stacks them and "minimal" already
+// strips their pill styling in CSS — "boxed" pairs naturally with each
+// skill rendered as its own small chip rather than one label + a comma
+// list. Layouts not listed here fall back to 'rows' (today's default).
+const SKILLS_DISPLAY_BY_LAYOUT = {
+  boxed: 'chips',
+};
+
+export function skillsDisplayFor(site) {
+  return SKILLS_DISPLAY_BY_LAYOUT[normalizeLayout(site)] || 'rows';
+}
+
 // "sidebar" layout only: a heading and the blocks under it move to the
 // narrow side rail when every block in that section is one of these types;
 // everything else (experience, custom, and any heading with no body yet)

@@ -21,7 +21,29 @@ export function SummaryBlock({ data }) {
   return <p className="r-summary">{data.text}</p>;
 }
 
-export function SkillsGroupBlock({ data }) {
+function splitItems(items) {
+  return (items || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function SkillsGroupBlock({ data, skillsDisplay = 'rows' }) {
+  if (skillsDisplay === 'chips') {
+    return (
+      <div className="r-skills-chips-row">
+        <div className="r-skills-label">{data.category}</div>
+        <div className="r-skills-chip-list">
+          {splitItems(data.items).map((item, i) => (
+            <span className="r-skills-chip" key={i}>
+              {item}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="r-skills-row">
       <div className="r-skills-label">{data.category}</div>

@@ -34,6 +34,11 @@ function ContactInline({ header, className }) {
   );
 }
 
+function HeadshotImage({ header, className = '' }) {
+  if (!header.photoUrl) return null;
+  return <img className={`r-header-photo ${className}`.trim()} src={header.photoUrl} alt="" />;
+}
+
 function HeaderActions({ onPrint, pdfHref }) {
   return (
     <div className="r-header-actions">
@@ -57,10 +62,13 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
   if (template === 'labeled-header') {
     return (
       <div className="r-header r-header-labeled">
-        <div className="r-header-main">
-          <h1 className="r-name">{header.name}</h1>
-          <div className="r-title">{header.title}</div>
-          {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
+        <div className="r-header-identity">
+          <HeadshotImage header={header} />
+          <div className="r-header-main">
+            <h1 className="r-name">{header.name}</h1>
+            <div className="r-title">{header.title}</div>
+            {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
+          </div>
         </div>
         <div className="r-header-side">
           {actions}
@@ -89,6 +97,7 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
     return (
       <div className="r-header r-header-centered">
         {actions}
+        <HeadshotImage header={header} className="r-header-photo-centered" />
         <h1 className="r-name">{header.name}</h1>
         <div className="r-title">{header.title}</div>
         {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
@@ -100,6 +109,7 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
   if (template === 'compact') {
     return (
       <div className="r-header r-header-compact">
+        <HeadshotImage header={header} className="r-header-photo-compact" />
         <div className="r-header-compact-id">
           <span className="r-name r-name-compact">{header.name}</span>
           {header.title && <span className="r-title-compact">{header.title}</span>}
@@ -115,10 +125,13 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
     return (
       <div className="r-header r-header-banner">
         <div className="r-header-banner-top">
-          <div>
-            <h1 className="r-name">{header.name}</h1>
-            <div className="r-title">{header.title}</div>
-            {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
+          <div className="r-header-identity">
+            <HeadshotImage header={header} className="r-header-photo-banner" />
+            <div>
+              <h1 className="r-name">{header.name}</h1>
+              <div className="r-title">{header.title}</div>
+              {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
+            </div>
           </div>
           {actions}
         </div>
@@ -129,11 +142,14 @@ export function HeaderBlock({ header, showActions, onPrint, pdfHref, template = 
 
   return (
     <div className="r-header">
-      <div className="r-header-main">
-        <h1 className="r-name">{header.name}</h1>
-        <div className="r-title">{header.title}</div>
-        {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
-        <ContactInline header={header} className="r-contact" />
+      <div className="r-header-identity">
+        <HeadshotImage header={header} />
+        <div className="r-header-main">
+          <h1 className="r-name">{header.name}</h1>
+          <div className="r-title">{header.title}</div>
+          {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
+          <ContactInline header={header} className="r-contact" />
+        </div>
       </div>
       {actions}
     </div>

@@ -1,7 +1,32 @@
+import { useState } from 'react';
 import { LINK_TYPES, DEFAULT_LINK_TYPE, linkTypeConfig, inferLinkType } from '../resume/linkTypes.js';
+import { fileToResizedDataUrl } from './imageUtils.js';
 
 export function HeaderEditorForm({ header, onChange }) {
   const links = header.links || [];
+  const [photoError, setPhotoError] = useState('');
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // allow re-selecting the same file if they pick it again
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Please choose an image file.');
+      return;
+    }
+    try {
+      const photoUrl = await fileToResizedDataUrl(file);
+      setPhotoError('');
+      onChange({ ...header, photoUrl });
+    } catch {
+      setPhotoError('Could not process that image.');
+    }
+  }
+
+  function removePhoto() {
+    setPhotoError('');
+    onChange({ ...header, photoUrl: '' });
+  }
 
   function setLink(i, patch) {
     const next = [...links];
@@ -25,6 +50,28 @@ export function HeaderEditorForm({ header, onChange }) {
 
   return (
     <div className="ed-form">
+      <div className="ed-field">
+        <span>Headshot (optional)</span>
+        <div className="ed-photo-row">
+          {header.photoUrl ? (
+            <img className="ed-photo-preview" src={header.photoUrl} alt="" />
+          ) : (
+            <div className="ed-photo-preview ed-photo-preview-empty" />
+          )}
+          <div className="ed-photo-actions">
+            <label className="ed-btn ed-btn-ghost">
+              {header.photoUrl ? 'Replace photo' : 'Upload photo'}
+              <input type="file" accept="image/*" onChange={handlePhotoChange} hidden />
+            </label>
+            {header.photoUrl && (
+              <button type="button" className="ed-btn ed-btn-ghost" onClick={removePhoto}>
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+        {photoError && <div className="ed-field-error">{photoError}</div>}
+      </div>
       <label className="ed-field">
         <span>Name</span>
         <input
