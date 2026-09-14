@@ -18,5 +18,27 @@ services:
       - resume-data:/data
     restart: unless-stopped
 
+  # Maintainer/contributor tooling only — regenerates templates/presets/*/preview.png.
+  # Excluded from a normal `docker compose up` (the "tools" profile), and
+  # fully isolated from the "resume" service above: its own ephemeral data
+  # dir (not the resume-data volume), no published port, and the only host
+  # path it touches is a bind mount of ./templates so the images land back
+  # in the repo. Run explicitly with:
+  #   docker compose --profile tools run --rm resume-preview
+  # render-template-previews.mjs boots its own throwaway server internally
+  # (its own ephemeral data dir + port, regardless of the container's own
+  # env), so this service needs no environment beyond the image's defaults.
+  resume-preview:
+    build: .
+    profiles: ['tools']
+    # The "resume" service above runs as non-root for defense-in-depth
+    # around Chromium (see Dockerfile) — that doesn't matter for this
+    # throwaway local tool, and running as root here avoids write-permission
+    # friction on the ./templates bind mount across different host setups.
+    user: root
+    volumes:
+      - ./templates:/app/templates
+    command: ['node', 'scripts/render-template-previews.mjs']
+
 volumes:
   resume-data:

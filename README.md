@@ -39,6 +39,17 @@ visibility exactly like built-in blocks.
 The header (name, title, contact info, links) is a singleton, edited
 separately from the block list since a resume only has one.
 
+## Templates
+
+The editor's Site Settings has a gallery of curated **presets** — a header
+style + body layout + optional colors/fonts bundled under one name — each
+rendered live against placeholder content so you can browse looks without
+touching your real draft. Presets, and the header/layout styles underneath
+them, live under [`templates/`](templates/) and are open to contribution —
+see [`templates/README.md`](templates/README.md) for the schema and
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the full workflow, including a new
+structural layout (not just a recombination of existing ones).
+
 ## Quickstart (Docker)
 
 ```bash
