@@ -555,6 +555,51 @@
   color: var(--warn);
 }
 
+/* ---- Account settings modal -------------------------------------------
+   No close-on-backdrop-click behavior by design: this modal is dismissed
+   only via its explicit Save/Close buttons. */
+.ed-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.ed-modal {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: 420px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.ed-modal-header h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.ed-modal-section {
+  margin-bottom: 20px;
+}
+
+.ed-modal-section h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--slate-light);
+}
+
+.ed-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .ed-add-menu {
   padding: 10px 14px 16px;
 }

@@ -4,7 +4,7 @@ import { BlockList } from './BlockList.jsx';
 import { AddBlockMenu } from './AddBlockMenu.jsx';
 import { HeaderEditorForm } from './HeaderEditorForm.jsx';
 import { SiteSettingsForm } from './SiteSettingsForm.jsx';
-import { TotpSettings } from './TotpSettings.jsx';
+import { SettingsModal } from './SettingsModal.jsx';
 import { ResumeView } from '../resume/ResumeView.jsx';
 import { defaultDataForType } from './blockDefaults.js';
 
@@ -28,7 +28,8 @@ export function EditorPage({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [headerOpen, setHeaderOpen] = useState(false);
   const [siteOpen, setSiteOpen] = useState(false);
-  const [securityOpen, setSecurityOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [username, setUsername] = useState('');
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved
   const [publishedAt, setPublishedAt] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -37,16 +38,21 @@ export function EditorPage({ onLogout }) {
   const debounceTimers = useRef({});
 
   useEffect(() => {
-    Promise.all([api.getHeader(), api.getSite(), api.getBlocks(), api.publishStatus()]).then(
-      ([h, s, b, status]) => {
-        setHeader(h.header);
-        setSite(s.site);
-        setBlocks(b.blocks);
-        setPublishedAt(status.publishedAt);
-        setIsDirty(status.isDirty);
-        setLoading(false);
-      }
-    );
+    Promise.all([
+      api.getHeader(),
+      api.getSite(),
+      api.getBlocks(),
+      api.publishStatus(),
+      api.getCredentials(),
+    ]).then(([h, s, b, status, credentials]) => {
+      setHeader(h.header);
+      setSite(s.site);
+      setBlocks(b.blocks);
+      setPublishedAt(status.publishedAt);
+      setIsDirty(status.isDirty);
+      setUsername(credentials.username);
+      setLoading(false);
+    });
   }, []);
 
   function flashSaved() {
@@ -169,6 +175,9 @@ export function EditorPage({ onLogout }) {
           <a className="ed-btn ed-btn-ghost" href="/api/public/resume.pdf">
             Download PDF
           </a>
+          <button className="ed-btn ed-btn-ghost" onClick={() => setSettingsOpen(true)}>
+            Account Settings
+          </button>
           <button className="ed-btn ed-btn-ghost" onClick={handleLogout}>
             Log out
           </button>
@@ -202,18 +211,6 @@ export function EditorPage({ onLogout }) {
           </section>
 
           <section className="ed-panel">
-            <button className="ed-panel-toggle" onClick={() => setSecurityOpen((v) => !v)}>
-              <span>Two-Factor Authentication</span>
-              <span>{securityOpen ? '−' : '+'}</span>
-            </button>
-            {securityOpen && (
-              <div className="ed-panel-body">
-                <TotpSettings />
-              </div>
-            )}
-          </section>
-
-          <section className="ed-panel">
             <div className="ed-panel-label">Resume Sections</div>
             <BlockList
               blocks={blocks}
@@ -233,6 +230,14 @@ export function EditorPage({ onLogout }) {
           </div>
         </div>
       </div>
+
+      {settingsOpen && (
+        <SettingsModal
+          username={username}
+          onUsernameChange={setUsername}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }

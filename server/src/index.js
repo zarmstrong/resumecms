@@ -3,7 +3,7 @@ import cookieSession from 'cookie-session';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import './db.js'; // ensures schema + seed run on boot
+import { getSetting } from './db.js'; // also ensures schema + seed run on boot
 import { accessLogger } from './logger.js';
 import { renderResumePdf } from './pdfRenderer.js';
 
@@ -54,8 +54,11 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`resume server listening on port ${PORT}`);
-  if (!process.env.RESUMECMS_APP_PASSWORD) {
-    console.warn('WARNING: RESUMECMS_APP_PASSWORD is not set. The editor login will not work until it is.');
+  if (!getSetting('credentials')) {
+    console.warn(
+      'WARNING: No login credentials configured. Set RESUMECMS_ADMIN_USERNAME/RESUMECMS_APP_PASSWORD before ' +
+        'first boot to seed the initial login (the editor login will not work until it is).'
+    );
   }
 
   // A published snapshot can exist (seeded from pre-existing draft content

@@ -89,8 +89,8 @@ the server.
 
 | Variable | Required | Description |
 |---|---|---|
-| `RESUMECMS_ADMIN_USERNAME` | yes | Username to sign in to `/editor`. |
-| `RESUMECMS_APP_PASSWORD` | yes | Password to sign in to `/editor`. |
+| `RESUMECMS_ADMIN_USERNAME` | yes | Initial username to sign in to `/editor`. Only read once, to seed the DB on first boot — change it later from Account Settings in the editor, not this variable. |
+| `RESUMECMS_APP_PASSWORD` | yes | Initial password to sign in to `/editor`. Only read once, to seed the DB on first boot — change it later from Account Settings in the editor, not this variable. |
 | `RESUMECMS_SESSION_SECRET` | yes | Random string used to sign session cookies. |
 | `PORT` | no | Server port. Defaults to `4000`. |
 | `RESUMECMS_DATA_DIR` | no | Where the SQLite file lives. Defaults to `/data`. |

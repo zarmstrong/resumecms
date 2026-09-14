@@ -34,6 +34,9 @@ export const api = {
   confirmTotp: (token) => request('/auth/totp/confirm', { method: 'POST', body: JSON.stringify({ token }) }),
   disableTotp: () => request('/auth/totp/disable', { method: 'POST' }),
 
+  getCredentials: () => request('/auth/credentials'),
+  updateCredentials: (payload) => request('/auth/credentials', { method: 'POST', body: JSON.stringify(payload) }),
+
   getHeader: () => request('/header'),
   putHeader: (header) => request('/header', { method: 'PUT', body: JSON.stringify(header) }),
 

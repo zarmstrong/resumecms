@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { hashPassword } from './passwords.js';
 
 const DATA_DIR = process.env.RESUMECMS_DATA_DIR || '/data';
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -117,6 +118,18 @@ export function setSetting(key, value) {
   db.prepare(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
   ).run(key, JSON.stringify(value));
+}
+
+// RESUMECMS_ADMIN_USERNAME/RESUMECMS_APP_PASSWORD are only read here, once,
+// to seed the real credentials record on first boot. After that the DB is
+// the source of truth (see routes/auth.js) — changing the env vars later has
+// no effect, so a password change from the editor survives a redeploy.
+if (!getSetting('credentials')) {
+  const seedUsername = process.env.RESUMECMS_ADMIN_USERNAME;
+  const seedPassword = process.env.RESUMECMS_APP_PASSWORD;
+  if (seedUsername && seedPassword) {
+    setSetting('credentials', { username: seedUsername, passwordHash: hashPassword(seedPassword) });
+  }
 }
 
 // Bumped by every draft-mutating route so the editor can show an
