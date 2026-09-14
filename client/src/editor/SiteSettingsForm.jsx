@@ -187,7 +187,7 @@ export function SiteSettingsForm({ site, onChange }) {
             <select
               className="ed-input"
               value={normalizeTemplate(site)}
-              onChange={(e) => onChange({ ...site, template: e.target.value })}
+              onChange={(e) => onChange({ ...site, template: e.target.value, templateId: undefined })}
             >
               {HEADER_TEMPLATES.map(({ id, label }) => (
                 <option key={id} value={id}>
@@ -202,7 +202,7 @@ export function SiteSettingsForm({ site, onChange }) {
             <select
               className="ed-input"
               value={normalizeLayout(site)}
-              onChange={(e) => onChange({ ...site, layout: e.target.value })}
+              onChange={(e) => onChange({ ...site, layout: e.target.value, templateId: undefined })}
             >
               {LAYOUT_TEMPLATES.map(({ id, label }) => (
                 <option key={id} value={id}>

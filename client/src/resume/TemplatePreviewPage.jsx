@@ -30,9 +30,9 @@ export function TemplatePreviewPage() {
       };
 
   useEffect(() => {
-    // Mirrors PublicResumePage's window.__PDF_READY__ flag — lets a
-    // Puppeteer-driven screenshot script (see server/scripts/) know the
-    // page has finished rendering.
+    // Mirrors PublicResumePage's window.__PDF_READY__ flag — lets an
+    // external screenshot/automation tool know the page has finished
+    // rendering, without it having to guess at a timeout.
     window.__PREVIEW_READY__ = true;
     return () => {
       delete window.__PREVIEW_READY__;

@@ -1,6 +1,6 @@
 import { ResumeView } from '../resume/ResumeView.jsx';
 import { sampleHeader, sampleBlocks } from '../resume/sampleResume.js';
-import { PRESETS } from '../resume/templateRegistry.js';
+import { PRESETS, normalizeTemplate, normalizeLayout } from '../resume/templateRegistry.js';
 import { normalizeSiteColors } from '../resume/siteColors.js';
 
 // Each card is a real, live ResumeView fed placeholder data — never the
@@ -47,6 +47,14 @@ function TemplateCard({ preset, active, onUse }) {
 
 export function TemplateGallery({ site, onChange }) {
   const colors = normalizeSiteColors(site);
+  // templateId is unset on installs from before this feature, and cleared
+  // whenever the Advanced header/layout selects are used directly — in
+  // both cases fall back to whichever preset (if any) matches the header +
+  // layout actually in effect, so "In use" reflects real state instead of
+  // going stale or blank.
+  const activeId =
+    site?.templateId ||
+    PRESETS.find((p) => p.header === normalizeTemplate(site) && p.layout === normalizeLayout(site))?.id;
 
   function useTemplate(preset) {
     onChange({
@@ -68,7 +76,7 @@ export function TemplateGallery({ site, onChange }) {
         <TemplateCard
           key={preset.id}
           preset={preset}
-          active={site?.templateId === preset.id}
+          active={activeId === preset.id}
           onUse={() => useTemplate(preset)}
         />
       ))}
