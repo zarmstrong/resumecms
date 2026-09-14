@@ -10,6 +10,15 @@ export default defineConfig({
       // can't use a stable "./…" relative path) import shared rendering
       // helpers as `@resume/safeUrl.js` etc. regardless of nesting depth.
       '@resume': fileURLToPath(new URL('./src/resume', import.meta.url)),
+      // Rolldown (vite 8+) resolves a file's imports — including the
+      // auto-injected `react/jsx-runtime` import from JSX syntax — relative
+      // to that file's own location rather than the vite project root, so
+      // templates/ (outside client/, with no node_modules of its own) can't
+      // resolve react at all without this. esbuild/Rollup (vite <8) didn't
+      // have this restriction.
+      'react/jsx-runtime': fileURLToPath(new URL('./node_modules/react/jsx-runtime.js', import.meta.url)),
+      'react/jsx-dev-runtime': fileURLToPath(new URL('./node_modules/react/jsx-dev-runtime.js', import.meta.url)),
+      react: fileURLToPath(new URL('./node_modules/react', import.meta.url)),
     },
   },
   server: {
