@@ -6,13 +6,12 @@ function OptionList({ title, options, selectedId, onSelect }) {
   return (
     <div className="ed-template-picker-group">
       <div className="ed-template-picker-group-title">{title}</div>
-      <div className="ed-template-picker-options" role="listbox" aria-label={title}>
+      <div className="ed-template-picker-options" role="group" aria-label={title}>
         {options.map((opt) => (
           <button
             key={opt.id}
             type="button"
-            role="option"
-            aria-selected={opt.id === selectedId}
+            aria-pressed={opt.id === selectedId}
             className={`ed-template-picker-option${opt.id === selectedId ? ' ed-template-picker-option-active' : ''}`}
             onClick={() => onSelect(opt.id)}
           >

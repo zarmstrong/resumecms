@@ -756,6 +756,19 @@
   zoom: 0.62;
 }
 
+/* Firefox doesn't support `zoom` — fall back to transform: scale() there.
+   It doesn't reflow layout the way `zoom` does, so the scrollable area
+   stays sized to the full unscaled resume (extra blank space below short
+   content instead of a tight fit) — an imperfect but working fallback
+   rather than silently rendering full-size and breaking the modal's
+   sizing entirely. */
+@supports not (zoom: 1) {
+  .ed-template-picker-preview-scale {
+    transform: scale(0.62);
+    transform-origin: top left;
+  }
+}
+
 @media (max-width: 900px) {
   .ed-template-picker-body {
     grid-template-columns: 1fr;
