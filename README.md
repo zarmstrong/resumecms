@@ -41,11 +41,13 @@ separately from the block list since a resume only has one.
 
 ## Templates
 
-The editor's Site Settings has a gallery of curated **presets** — a header
-style + body layout + optional colors/fonts bundled under one name — each
-rendered live against placeholder content so you can browse looks without
-touching your real draft. Presets, and the header/layout styles underneath
-them, live under [`templates/`](templates/) and are open to contribution —
+The editor's Site Settings has a "Change template…" button opening a modal
+where header style and body layout are browsed and picked independently,
+mixed freely, and previewed live against your actual resume content before
+you commit to anything. Headers, layouts, and the curated **presets** that
+bundle a header + layout + optional colors/fonts under one shareable name
+(previewable via `/template-preview/preset/<id>`, and used to generate the
+thumbnails in [`templates/`](templates/)) are all open to contribution —
 see [`templates/README.md`](templates/README.md) for the schema and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full workflow, including a new
 structural layout (not just a recombination of existing ones).
