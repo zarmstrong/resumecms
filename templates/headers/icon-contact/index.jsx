@@ -5,7 +5,7 @@ import { linkGlyph } from '@resume/linkTypes.js';
 function IconContactItem({ glyph, children }) {
   return (
     <span className="r-icon-contact-item">
-      <span className="r-link-badge">{glyph}</span>
+      <span className="r-link-badge" aria-hidden="true">{glyph}</span>
       {children}
     </span>
   );

@@ -337,7 +337,7 @@
     align-items: flex-start;
   }
 
-  .r-contact-split {
+  .r-header-split .r-contact-split {
     justify-content: flex-start;
     text-align: left;
   }
