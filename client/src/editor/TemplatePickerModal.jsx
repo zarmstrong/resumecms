@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ResumeView } from '../resume/ResumeView.jsx';
 import { HEADER_TEMPLATES, LAYOUT_TEMPLATES, normalizeTemplate, normalizeLayout } from '../resume/templateRegistry.js';
 
@@ -32,8 +32,19 @@ function OptionList({ title, options, selectedId, onSelect }) {
 export function TemplatePickerModal({ header, site, blocks, onChange, onClose }) {
   const [previewTemplate, setPreviewTemplate] = useState(normalizeTemplate(site));
   const [previewLayout, setPreviewLayout] = useState(normalizeLayout(site));
+  const previewRef = useRef(null);
 
   const previewSite = { ...site, template: previewTemplate, layout: previewLayout };
+
+  // Belt-and-suspenders alongside `inert` below (every current browser
+  // supports it, but this is cheap insurance regardless): strip every real
+  // link/button the preview renders out of the tab order after each
+  // render, since a template or content change can introduce new ones.
+  useEffect(() => {
+    previewRef.current?.querySelectorAll('a, button, input, select, textarea, [tabindex]').forEach((el) => {
+      el.setAttribute('tabindex', '-1');
+    });
+  });
 
   function handleUse() {
     onChange({ ...site, template: previewTemplate, layout: previewLayout });
@@ -63,11 +74,14 @@ export function TemplatePickerModal({ header, site, blocks, onChange, onClose })
             />
           </div>
 
-          {/* inert, not just pointer-events: none — this is a real ResumeView
-              with real <a> tags (mailto/contact/company links); without it
-              those would both be clickable (navigating away mid-browse) and
-              sit in the dialog's tab order as a pile of unrelated stops. */}
-          <div className="ed-template-picker-preview" inert>
+          {/* inert — this is a real ResumeView with real <a> tags
+              (mailto/contact/company links); without it those would both be
+              clickable (navigating away mid-browse) and sit in the dialog's
+              tab order as a pile of unrelated stops. The tabindex effect
+              above and pointer-events: none in CSS are redundant with
+              `inert` in any current browser, but cost nothing and cover a
+              browser old enough not to support it. */}
+          <div className="ed-template-picker-preview" inert ref={previewRef}>
             <div className="ed-template-picker-preview-scale">
               <ResumeView header={header} site={previewSite} blocks={blocks} mode="preview" />
             </div>

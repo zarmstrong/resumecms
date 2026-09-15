@@ -754,6 +754,12 @@
    reserving space for the full, unscaled resume. */
 .ed-template-picker-preview-scale {
   zoom: 0.62;
+  /* Redundant with the preview container's `inert` attribute in any current
+     browser, but harmless there and a real second layer of protection
+     against accidental link activation in one old enough not to support
+     it — blocks mouse/touch, paired with the tabindex="-1" effect in
+     TemplatePickerModal.jsx for keyboard. */
+  pointer-events: none;
 }
 
 /* Firefox doesn't support `zoom` — fall back to transform: scale() there.
