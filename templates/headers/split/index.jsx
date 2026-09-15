@@ -13,7 +13,7 @@ export default function SplitHeader({ header, showActions, onPrint, pdfHref }) {
       </div>
       <div className="r-header-split-side">
         {showActions && <HeaderActions onPrint={onPrint} pdfHref={pdfHref} />}
-        <ContactInline header={header} className="r-contact r-contact-split" />
+        <ContactInline header={header} className="r-contact r-contact-end" />
       </div>
     </div>
   );

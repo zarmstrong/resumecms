@@ -10,7 +10,7 @@ export default function PhotoRightHeader({ header, showActions, onPrint, pdfHref
           <h1 className="r-name">{header.name}</h1>
           <div className="r-title">{header.title}</div>
           {header.subtitle && <div className="r-subtitle">{header.subtitle}</div>}
-          <ContactInline header={header} className="r-contact r-contact-split" />
+          <ContactInline header={header} className="r-contact r-contact-end" />
         </div>
       </div>
     </div>

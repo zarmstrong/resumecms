@@ -323,7 +323,7 @@
   min-width: 0;
 }
 
-.r-contact-split {
+.r-contact-end {
   justify-content: flex-end;
   text-align: right;
 }
@@ -337,7 +337,7 @@
     align-items: flex-start;
   }
 
-  .r-header-split .r-contact-split {
+  .r-header-split .r-contact-end {
     justify-content: flex-start;
     text-align: left;
   }
