@@ -63,7 +63,11 @@ export function TemplatePickerModal({ header, site, blocks, onChange, onClose })
             />
           </div>
 
-          <div className="ed-template-picker-preview">
+          {/* inert, not just pointer-events: none — this is a real ResumeView
+              with real <a> tags (mailto/contact/company links); without it
+              those would both be clickable (navigating away mid-browse) and
+              sit in the dialog's tab order as a pile of unrelated stops. */}
+          <div className="ed-template-picker-preview" inert>
             <div className="ed-template-picker-preview-scale">
               <ResumeView header={header} site={previewSite} blocks={blocks} mode="preview" />
             </div>
