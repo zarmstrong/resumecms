@@ -1,0 +1,10 @@
+{
+  "id": "ruled-sidebar-emerald",
+  "label": "Ruled Sidebar Emerald",
+  "description": "A photo-free emerald ruled header with the two-column sidebar layout.",
+  "author": "resumecms",
+  "header": "ruled",
+  "layout": "sidebar",
+  "colors": { "accent": "#0f6b52", "sidebarBackground": "#e5f2ee" },
+  "font": "inter"
+}

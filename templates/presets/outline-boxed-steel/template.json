@@ -1,0 +1,10 @@
+{
+  "id": "outline-boxed-steel",
+  "label": "Outline Boxed Steel",
+  "description": "A steel-blue bordered header paired with bordered entry cards for a consistent, structured look.",
+  "author": "resumecms",
+  "header": "outline",
+  "layout": "boxed",
+  "colors": { "accent": "#3d5a80" },
+  "font": "work-sans"
+}

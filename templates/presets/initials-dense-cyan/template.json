@@ -1,0 +1,10 @@
+{
+  "id": "initials-dense-cyan",
+  "label": "Initials Dense Cyan",
+  "description": "A cyan monogram header over tighter body spacing, for a compact one-pager with personality.",
+  "author": "resumecms",
+  "header": "initials",
+  "layout": "compact-dense",
+  "colors": { "accent": "#0e7c86" },
+  "font": "montserrat"
+}

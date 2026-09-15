@@ -1,0 +1,12 @@
+/* "small-caps": headings and company/school names (.r-experience-company is
+   shared by both the experience and education renderers) go small-caps
+   with wider letter-spacing for an elegant editorial feel. */
+.r-layout-small-caps .r-body .r-heading {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+
+.r-layout-small-caps .r-body .r-experience-company {
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}

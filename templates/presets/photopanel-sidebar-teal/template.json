@@ -1,0 +1,10 @@
+{
+  "id": "photopanel-sidebar-teal",
+  "label": "Photo Panel Sidebar Teal",
+  "description": "A teal photo panel header with the two-column sidebar layout.",
+  "author": "resumecms",
+  "header": "photopanel",
+  "layout": "sidebar",
+  "colors": { "accent": "#157a6e", "sidebarBackground": "#e6f2f0" },
+  "font": "source-serif"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "labeled-dense-mustard",
+  "label": "Labeled Dense Mustard",
+  "description": "The labeled contact header over tighter body spacing, in a warm mustard accent.",
+  "author": "resumecms",
+  "header": "labeled-header",
+  "layout": "compact-dense",
+  "colors": { "accent": "#b8860b" },
+  "font": "montserrat"
+}

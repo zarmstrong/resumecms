@@ -1,0 +1,7 @@
+/* "rule-entries": a thin rule separates back-to-back entries of the same
+   type, instead of boxing each one in a card (compare boxed/soft-cards). */
+.r-layout-rule-entries .r-body [data-block-type='experience'] + [data-block-type='experience'],
+.r-layout-rule-entries .r-body [data-block-type='education'] + [data-block-type='education'] {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}

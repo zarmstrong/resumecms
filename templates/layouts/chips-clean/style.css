@@ -1,0 +1,8 @@
+/* "chips-clean": pairs the existing "chips" skills display (see
+   template.json) with a plain, borderless heading style instead of the
+   default underline. */
+.r-layout-chips-clean .r-body .r-heading {
+  border-bottom: none;
+  letter-spacing: 0.04em;
+  padding-bottom: 2px;
+}

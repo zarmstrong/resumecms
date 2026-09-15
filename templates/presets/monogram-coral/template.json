@@ -1,0 +1,10 @@
+{
+  "id": "monogram-coral",
+  "label": "Monogram Coral",
+  "description": "A coral initials monogram header with the minimal, ATS-friendly body layout underneath.",
+  "author": "resumecms",
+  "header": "initials",
+  "layout": "minimal",
+  "colors": { "accent": "#e2664f" },
+  "font": "montserrat"
+}

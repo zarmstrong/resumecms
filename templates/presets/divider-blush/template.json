@@ -1,0 +1,10 @@
+{
+  "id": "divider-blush",
+  "label": "Divider Blush",
+  "description": "Uppercase divider-rule section headings in blush pink under a classic header, set in a warm serif.",
+  "author": "resumecms",
+  "header": "classic",
+  "layout": "divider",
+  "colors": { "accent": "#c2687a" },
+  "font": "crimson-text"
+}

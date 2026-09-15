@@ -1,0 +1,10 @@
+{
+  "id": "monogram-ribbon-amber",
+  "label": "Monogram Ribbon Amber",
+  "description": "An amber initials monogram header with bold ribbon section headings — a warm, modern, creative look.",
+  "author": "resumecms",
+  "header": "initials",
+  "layout": "ribbon",
+  "colors": { "accent": "#c97a2b" },
+  "font": "work-sans"
+}

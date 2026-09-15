@@ -131,15 +131,15 @@ function NameFontField({ site, onChange }) {
 
   return (
     <div className="ed-color-field">
-      <span className="ed-color-field-label ed-color-field-toggle">
+      <span className="ed-color-field-label">Name and professional title font</span>
+      <label className="ed-color-field-toggle">
         <input
           type="checkbox"
           checked={matched}
           onChange={(e) => onChange({ ...site, nameFont: e.target.checked ? '' : siteFont })}
         />
         Match site font
-      </span>
-      <span className="ed-color-field-hint">Name and professional title</span>
+      </label>
       {!matched && (
         <select
           className="ed-input"

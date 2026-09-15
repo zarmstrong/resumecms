@@ -1,0 +1,10 @@
+{
+  "id": "outline-ribbon-forest",
+  "label": "Outline Ribbon Forest",
+  "description": "A forest-green bordered header with bold ribbon section headings.",
+  "author": "resumecms",
+  "header": "outline",
+  "layout": "ribbon",
+  "colors": { "accent": "#3c6e47" },
+  "font": "pt-serif"
+}

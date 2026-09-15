@@ -1,0 +1,10 @@
+{
+  "id": "framed-sidebar-forest",
+  "label": "Framed Sidebar Forest",
+  "description": "A forest-green framed photo header with the two-column sidebar layout, for a warm editorial resume.",
+  "author": "resumecms",
+  "header": "framed",
+  "layout": "sidebar",
+  "colors": { "accent": "#2f5233", "sidebarBackground": "#edf1ea" },
+  "font": "pt-serif"
+}
