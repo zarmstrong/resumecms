@@ -697,6 +697,12 @@
   gap: 6px;
   max-height: 260px;
   overflow-y: auto;
+  /* Without reserved space, the scrollbar sits on top of each option's
+     right border/text instead of beside it. scrollbar-gutter reserves the
+     space even before scrolling kicks in (so nothing shifts when it does);
+     the padding is the fallback for browsers that don't support it. */
+  scrollbar-gutter: stable;
+  padding-right: 8px;
 }
 
 .ed-template-picker-option {
