@@ -2,19 +2,38 @@ import { useEffect, useRef, useState } from 'react';
 import { ResumeView } from '../resume/ResumeView.jsx';
 import { HEADER_TEMPLATES, LAYOUT_TEMPLATES, normalizeTemplate, normalizeLayout } from '../resume/templateRegistry.js';
 
+// Real ARIA APG radio-group keyboard behavior, not just the roles: only the
+// checked option is a tab stop (roving tabindex), and arrow keys both move
+// focus and change the selection, wrapping at the ends — matching how a
+// native <input type="radio"> group behaves.
 function OptionList({ title, options, selectedId, onSelect }) {
+  const buttonRefs = useRef([]);
+
+  function handleKeyDown(e, index) {
+    const forward = e.key === 'ArrowDown' || e.key === 'ArrowRight';
+    const backward = e.key === 'ArrowUp' || e.key === 'ArrowLeft';
+    if (!forward && !backward) return;
+    e.preventDefault();
+    const nextIndex = forward ? (index + 1) % options.length : (index - 1 + options.length) % options.length;
+    onSelect(options[nextIndex].id);
+    buttonRefs.current[nextIndex]?.focus();
+  }
+
   return (
     <div className="ed-template-picker-group">
       <div className="ed-template-picker-group-title">{title}</div>
       <div className="ed-template-picker-options" role="radiogroup" aria-label={title}>
-        {options.map((opt) => (
+        {options.map((opt, index) => (
           <button
             key={opt.id}
+            ref={(el) => (buttonRefs.current[index] = el)}
             type="button"
             role="radio"
             aria-checked={opt.id === selectedId}
+            tabIndex={opt.id === selectedId ? 0 : -1}
             className={`ed-template-picker-option${opt.id === selectedId ? ' ed-template-picker-option-active' : ''}`}
             onClick={() => onSelect(opt.id)}
+            onKeyDown={(e) => handleKeyDown(e, index)}
           >
             <span className="ed-template-picker-option-label">{opt.label}</span>
             <span className="ed-template-picker-option-desc">{opt.description}</span>
@@ -50,7 +69,12 @@ export function TemplatePickerModal({ header, site, blocks, onChange, onClose })
   }, [previewTemplate, previewLayout, header, blocks]);
 
   function handleUse() {
-    onChange({ ...site, template: previewTemplate, layout: previewLayout });
+    // Explicitly drop templateId (undefined is omitted by JSON.stringify)
+    // rather than just spreading site — an install from before this modal
+    // replaced the old preset gallery can still have it set, and PUT
+    // /api/site overwrites the whole setting, so leaving it in the spread
+    // would carry that dead field forward on every future save too.
+    onChange({ ...site, template: previewTemplate, layout: previewLayout, templateId: undefined });
     onClose();
   }
 
