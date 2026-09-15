@@ -6,12 +6,13 @@ function OptionList({ title, options, selectedId, onSelect }) {
   return (
     <div className="ed-template-picker-group">
       <div className="ed-template-picker-group-title">{title}</div>
-      <div className="ed-template-picker-options" role="group" aria-label={title}>
+      <div className="ed-template-picker-options" role="radiogroup" aria-label={title}>
         {options.map((opt) => (
           <button
             key={opt.id}
             type="button"
-            aria-pressed={opt.id === selectedId}
+            role="radio"
+            aria-checked={opt.id === selectedId}
             className={`ed-template-picker-option${opt.id === selectedId ? ' ed-template-picker-option-active' : ''}`}
             onClick={() => onSelect(opt.id)}
           >
@@ -38,13 +39,15 @@ export function TemplatePickerModal({ header, site, blocks, onChange, onClose })
 
   // Belt-and-suspenders alongside `inert` below (every current browser
   // supports it, but this is cheap insurance regardless): strip every real
-  // link/button the preview renders out of the tab order after each
-  // render, since a template or content change can introduce new ones.
+  // link/button the preview renders out of the tab order whenever it can
+  // have rendered new ones — not on every render (this component's own
+  // state changes cover it; blocks/header changing while the modal is open
+  // would too, in case a debounced save/reload comes through mid-browse).
   useEffect(() => {
     previewRef.current?.querySelectorAll('a, button, input, select, textarea, [tabindex]').forEach((el) => {
       el.setAttribute('tabindex', '-1');
     });
-  });
+  }, [previewTemplate, previewLayout, header, blocks]);
 
   function handleUse() {
     onChange({ ...site, template: previewTemplate, layout: previewLayout });
