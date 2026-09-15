@@ -74,14 +74,37 @@
 .ed-columns {
   flex: 1;
   display: grid;
-  grid-template-columns: 420px 1fr;
+  /* Actual widths are set inline per render (draggable, see .ed-resizer);
+     this is just the fallback before the first render's inline style
+     applies. */
+  grid-template-columns: 480px 6px 1fr;
   min-height: 0;
 }
 
 .ed-left-pane {
-  border-right: 1px solid var(--line);
   overflow-y: auto;
   padding: 16px;
+  min-width: 0;
+}
+
+/* Drag handle between the two panes. A dedicated grid column (rather than a
+   border/margin on ed-left-pane) so its hit area isn't limited to a 1px
+   line — the visible bar is thin, but the whole column is draggable. */
+.ed-resizer {
+  cursor: col-resize;
+  background: var(--line);
+  position: relative;
+}
+
+.ed-resizer::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+}
+
+.ed-resizer:hover,
+.ed-resizer-active {
+  background: var(--signal);
 }
 
 .ed-right-pane {
@@ -139,6 +162,14 @@
 
 .ed-block-row {
   border-bottom: 1px solid var(--line);
+}
+
+/* Nested under a section heading — indent and add a rail so the hierarchy
+   reads at a glance without needing a tree-line UI. */
+.ed-block-row-nested {
+  margin-left: 22px;
+  border-left: 2px solid var(--line-strong);
+  padding-left: 10px;
 }
 
 .ed-block-row-header {
@@ -643,8 +674,14 @@
 }
 
 @media (max-width: 900px) {
+  /* !important: the left pane's width (and this column layout) is set via
+     an inline style for the drag-to-resize handle, which otherwise beats a
+     plain stylesheet rule regardless of media query. */
   .ed-columns {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+  }
+  .ed-resizer {
+    display: none;
   }
   .ed-right-pane {
     display: none;

@@ -44,11 +44,13 @@ export const api = {
   putSite: (site) => request('/site', { method: 'PUT', body: JSON.stringify(site) }),
 
   getBlocks: () => request('/blocks'),
-  createBlock: (type, data) => request('/blocks', { method: 'POST', body: JSON.stringify({ type, data }) }),
+  createBlock: (type, data, parentId = null) =>
+    request('/blocks', { method: 'POST', body: JSON.stringify({ type, data, parentId }) }),
   updateBlock: (id, patch) => request(`/blocks/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
   deleteBlock: (id) => request(`/blocks/${id}`, { method: 'DELETE' }),
-  reorderBlocks: (orderedIds) =>
-    request('/blocks/reorder', { method: 'POST', body: JSON.stringify({ orderedIds }) }),
+  // items: [{ id, parentId }] in the desired flat order (a heading's
+  // children immediately follow it) — see BlockList.jsx's flat-order model.
+  reorderBlocks: (items) => request('/blocks/reorder', { method: 'POST', body: JSON.stringify({ items }) }),
 
   getPublicResume: (mode) => request(`/public/resume?mode=${mode}`),
 

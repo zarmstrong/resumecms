@@ -6,10 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A self-hosted, single-user resume site + CMS (see [README.md](README.md) for
 the full product description, environment variables, and API reference).
-Content is a flat, reorderable list of **blocks** (`{ id, type, position,
+Content is a reorderable list of **blocks** (`{ id, type, position, parentId,
 visibleWeb, visiblePrint, data }`); built-in types are `heading`,
 `skills_group`, `experience`, `education`, plus a freeform `custom` type.
-The header (name/title/contact) is a separate singleton setting.
+Any block except `heading` and `summary` may nest one level deep under a
+`heading` block via `parentId` (see "Block nesting" below). The header
+(name/title/contact) is a separate singleton setting.
 
 Three surfaces render from the same data/components: `/` (public), `/print`
 (used internally for PDF export), and `/editor` (password + optional TOTP
@@ -75,6 +77,39 @@ specific route registered after the broad `/api` mount would first hit
 `blockRoutes`' unconditional `requireAuth` and get rejected. Keep
 new auth-exempt or differently-gated route groups registered before the
 general `/api` mount, not after.
+
+### Block nesting
+
+A block's `parentId` (nullable, on the `blocks` table and in the API) points
+at a `heading` block's `id`; only `experience`, `skills_group`, `education`,
+and `custom` blocks can be nested, and only one level deep — a `heading`
+can't itself have a `parentId`, and `summary` can't have one at all. This is
+enforced server-side in `server/src/routes/blocks.js`'s `assertValidParent`,
+called from every route that can set `parentId` (`POST /blocks`, `PUT
+/blocks/:id`, `POST /blocks/reorder`). Deleting a heading promotes its
+children back to top-level rather than deleting them.
+
+`position` is only unique within a sibling group (all blocks sharing a
+`parentId`), not globally — so anything that needs the actual display order
+must call `orderBlocksHierarchically()` (`server/src/db.js`), which walks
+each heading's children (sorted by their own `position`) in right after it.
+Every place that hands a flat `blocks` array to a consumer — `GET /blocks`,
+`POST /blocks/reorder`'s response, and the `published_resume` snapshot built
+in `publish.js` — already runs it, so `client/src/editor/BlockList.jsx` and
+`ResumeView.jsx` can both treat the array they receive as already in the
+right order; neither re-derives nesting from scratch.
+
+The editor's `BlockList` has no separate "move into this section" control —
+nesting is purely a side effect of drag position. Dropping a block directly
+after a heading (and before the next heading or top-level block) nests it
+there; dropping it anywhere else un-nests it. See
+`reparentByPosition()` in `BlockList.jsx`.
+
+Layout templates that want to react to nesting (e.g. put a heading's whole
+group in a side column) can group `blocks` by `parentId` themselves — see
+`templates/layouts/sidebar/index.jsx`'s `splitBlocksForSidebar`, which
+currently infers grouping from block-type adjacency and could be simplified
+to use `parentId` directly now that it's explicit.
 
 ### Pluggable header/layout templates
 

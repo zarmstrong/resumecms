@@ -1,19 +1,42 @@
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
-import { db, getSetting, setSetting, touchDraft } from '../db.js';
+import { db, getSetting, setSetting, touchDraft, rowToBlock, orderBlocksHierarchically } from '../db.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 
-function rowToBlock(row) {
-  return {
-    id: row.id,
-    type: row.type,
-    position: row.position,
-    visibleWeb: !!row.visible_web,
-    visiblePrint: !!row.visible_print,
-    data: JSON.parse(row.data),
-  };
+// Only these types can be nested under a heading; `heading` itself can't
+// (no multi-level nesting) and `summary` stays top-level only.
+const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'custom']);
+
+// Throws (with an http status) if parentId isn't a valid parent for a block
+// of the given type — null/undefined is always fine (top-level).
+function assertValidParent(parentId, type) {
+  if (parentId == null) return;
+  if (!NESTABLE_TYPES.has(type)) {
+    const err = new Error(`${type} blocks can't be nested under a heading`);
+    err.status = 400;
+    throw err;
+  }
+  const parent = db.prepare('SELECT * FROM blocks WHERE id = ?').get(parentId);
+  if (!parent) {
+    const err = new Error('parentId does not reference an existing block');
+    err.status = 400;
+    throw err;
+  }
+  if (parent.type !== 'heading') {
+    const err = new Error('parentId must reference a heading block');
+    err.status = 400;
+    throw err;
+  }
+}
+
+function nextPosition(parentId) {
+  const row =
+    parentId == null
+      ? db.prepare('SELECT COALESCE(MAX(position), -1) AS m FROM blocks WHERE parent_id IS NULL').get()
+      : db.prepare('SELECT COALESCE(MAX(position), -1) AS m FROM blocks WHERE parent_id = ?').get(parentId);
+  return row.m + 1;
 }
 
 // All routes below require an authenticated editor session.
@@ -41,19 +64,23 @@ router.put('/site', (req, res) => {
 
 router.get('/blocks', (req, res) => {
   const rows = db.prepare('SELECT * FROM blocks ORDER BY position ASC').all();
-  res.json({ blocks: rows.map(rowToBlock) });
+  res.json({ blocks: orderBlocksHierarchically(rows.map(rowToBlock)) });
 });
 
 router.post('/blocks', (req, res) => {
-  const { type, data } = req.body || {};
+  const { type, data, parentId = null } = req.body || {};
   if (!type) return res.status(400).json({ error: 'type is required' });
-  const maxPos = db.prepare('SELECT COALESCE(MAX(position), -1) AS m FROM blocks').get().m;
+  try {
+    assertValidParent(parentId, type);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
   const now = new Date().toISOString();
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO blocks (id, type, position, visible_web, visible_print, data, created_at, updated_at)
-     VALUES (?, ?, ?, 1, 1, ?, ?, ?)`
-  ).run(id, type, maxPos + 1, JSON.stringify(data || {}), now, now);
+    `INSERT INTO blocks (id, type, position, parent_id, visible_web, visible_print, data, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?)`
+  ).run(id, type, nextPosition(parentId), parentId, JSON.stringify(data || {}), now, now);
   touchDraft();
   const row = db.prepare('SELECT * FROM blocks WHERE id = ?').get(id);
   res.status(201).json({ block: rowToBlock(row) });
@@ -65,6 +92,15 @@ router.put('/blocks/:id', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Block not found' });
 
   const { data, visibleWeb, visiblePrint } = req.body || {};
+  const parentIdProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'parentId');
+  const parentId = parentIdProvided ? req.body.parentId : undefined;
+  if (parentIdProvided) {
+    try {
+      assertValidParent(parentId, existing.type);
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message });
+    }
+  }
   const now = new Date().toISOString();
 
   db.prepare(
@@ -72,12 +108,18 @@ router.put('/blocks/:id', (req, res) => {
        data = COALESCE(?, data),
        visible_web = COALESCE(?, visible_web),
        visible_print = COALESCE(?, visible_print),
+       parent_id = ?,
+       position = ?,
        updated_at = ?
      WHERE id = ?`
   ).run(
     data !== undefined ? JSON.stringify(data) : null,
     visibleWeb !== undefined ? (visibleWeb ? 1 : 0) : null,
     visiblePrint !== undefined ? (visiblePrint ? 1 : 0) : null,
+    parentIdProvided ? parentId : existing.parent_id,
+    // Re-parenting drops the block at the end of its new sibling group;
+    // fine-grained ordering within a group happens via /blocks/reorder.
+    parentIdProvided && parentId !== existing.parent_id ? nextPosition(parentId) : existing.position,
     now,
     id
   );
@@ -88,24 +130,56 @@ router.put('/blocks/:id', (req, res) => {
 
 router.delete('/blocks/:id', (req, res) => {
   const { id } = req.params;
-  db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
+  const txn = db.transaction(() => {
+    // Deleting a heading shouldn't silently delete the entries nested under
+    // it — promote them back to top-level first.
+    const children = db.prepare('SELECT id FROM blocks WHERE parent_id = ?').all(id);
+    for (const child of children) {
+      db.prepare('UPDATE blocks SET parent_id = NULL, position = ? WHERE id = ?').run(
+        nextPosition(null),
+        child.id
+      );
+    }
+    db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
+  });
+  txn();
   touchDraft();
   res.json({ ok: true });
 });
 
 router.post('/blocks/reorder', (req, res) => {
-  const { orderedIds } = req.body || {};
-  if (!Array.isArray(orderedIds)) {
-    return res.status(400).json({ error: 'orderedIds must be an array' });
+  const { items } = req.body || {};
+  if (!Array.isArray(items) || items.some((item) => !item || typeof item.id !== 'string')) {
+    return res.status(400).json({ error: 'items must be an array of { id, parentId }' });
   }
-  const update = db.prepare('UPDATE blocks SET position = ? WHERE id = ?');
-  const txn = db.transaction((ids) => {
-    ids.forEach((id, i) => update.run(i, id));
+
+  const rows = db.prepare('SELECT * FROM blocks').all();
+  const typeById = new Map(rows.map((r) => [r.id, r.type]));
+  for (const { id, parentId } of items) {
+    if (!typeById.has(id)) {
+      return res.status(400).json({ error: `unknown block id: ${id}` });
+    }
+    try {
+      assertValidParent(parentId ?? null, typeById.get(id));
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message });
+    }
+  }
+
+  const update = db.prepare('UPDATE blocks SET parent_id = ?, position = ? WHERE id = ?');
+  const txn = db.transaction((entries) => {
+    const counters = new Map();
+    for (const { id, parentId } of entries) {
+      const key = parentId ?? null;
+      const position = counters.get(key) ?? 0;
+      counters.set(key, position + 1);
+      update.run(key, position, id);
+    }
   });
-  txn(orderedIds);
+  txn(items);
   touchDraft();
-  const rows = db.prepare('SELECT * FROM blocks ORDER BY position ASC').all();
-  res.json({ blocks: rows.map(rowToBlock) });
+  const updatedRows = db.prepare('SELECT * FROM blocks ORDER BY position ASC').all();
+  res.json({ blocks: orderBlocksHierarchically(updatedRows.map(rowToBlock)) });
 });
 
 export default router;

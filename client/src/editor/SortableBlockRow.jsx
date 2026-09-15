@@ -45,7 +45,7 @@ function summarize(block) {
   }
 }
 
-export function SortableBlockRow({ block, onChangeData, onChangeVisibility, onDelete }) {
+export function SortableBlockRow({ block, nested, onChangeData, onChangeVisibility, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
@@ -61,7 +61,7 @@ export function SortableBlockRow({ block, onChangeData, onChangeVisibility, onDe
   const { title, subtitle } = summarize(block);
 
   return (
-    <div ref={setNodeRef} style={style} className="ed-block-row">
+    <div ref={setNodeRef} style={style} className={`ed-block-row${nested ? ' ed-block-row-nested' : ''}`}>
       <div className="ed-block-row-header">
         <button className="ed-drag-handle" {...attributes} {...listeners} aria-label="Drag to reorder">
           ⠿

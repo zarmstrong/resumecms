@@ -17,16 +17,21 @@ exact same components.
 
 ## How content is modeled
 
-Everything below the header is a flat, reorderable list of **blocks**. Every
+Everything below the header is a reorderable list of **blocks**. Every
 block — built-in or custom — has the same shape:
 
 ```
-{ id, type, position, visibleWeb, visiblePrint, data }
+{ id, type, position, parentId, visibleWeb, visiblePrint, data }
 ```
 
 - `visibleWeb` — show this block on the public `/` page.
 - `visiblePrint` — include this block in the browser print view *and* the
   generated PDF (they share the same template, so one flag covers both).
+- `parentId` — nests this block one level deep under a `heading` block's
+  `id`; `null` for a top-level block. Only `experience`, `skills_group`,
+  `education`, and `custom` blocks can be nested — a `heading` can't be
+  nested under another heading, and `summary` always stays top-level. In
+  the editor, drag a block to sit directly under a heading to nest it there.
 
 Built-in block types: `heading`, `skills_group`, `experience`, `education`.
 
@@ -130,11 +135,11 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/auth/totp/disable` | turns 2FA off (auth-gated) |
 | `GET/PUT /api/header` | header/contact fields |
 | `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
-| `GET /api/blocks` | all blocks, unfiltered (editor use) |
-| `POST /api/blocks` | create a block: `{ type, data }` |
-| `PUT /api/blocks/:id` | update `data`, `visibleWeb`, and/or `visiblePrint` |
-| `DELETE /api/blocks/:id` | delete a block |
-| `POST /api/blocks/reorder` | `{ orderedIds: [...] }` |
+| `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
+| `POST /api/blocks` | create a block: `{ type, data, parentId? }` |
+| `PUT /api/blocks/:id` | update `data`, `visibleWeb`, `visiblePrint`, and/or `parentId` |
+| `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted) |
+| `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
 | `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag |
 | `GET /api/public/resume.pdf` | public, generates and streams a PDF |
 

@@ -10,6 +10,21 @@ import { defaultDataForType } from './blockDefaults.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
+const LEFT_PANE_WIDTH_KEY = 'resumecms-editor-left-pane-width';
+const LEFT_PANE_MIN = 340;
+const LEFT_PANE_MAX = 760;
+const LEFT_PANE_DEFAULT = 480;
+
+function loadLeftPaneWidth() {
+  try {
+    const stored = Number(localStorage.getItem(LEFT_PANE_WIDTH_KEY));
+    if (Number.isFinite(stored) && stored >= LEFT_PANE_MIN && stored <= LEFT_PANE_MAX) return stored;
+  } catch {
+    // localStorage unavailable (private browsing, etc.) — fall back below.
+  }
+  return LEFT_PANE_DEFAULT;
+}
+
 function timeAgo(iso) {
   if (!iso) return null;
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -34,8 +49,42 @@ export function EditorPage({ onLogout }) {
   const [publishedAt, setPublishedAt] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
   const [publishState, setPublishState] = useState('idle'); // idle | publishing | published
+  const [leftWidth, setLeftWidth] = useState(loadLeftPaneWidth);
+  const [resizingPane, setResizingPane] = useState(false);
 
   const debounceTimers = useRef({});
+  const columnsRef = useRef(null);
+
+  function handleResizerPointerDown(e) {
+    e.preventDefault();
+    setResizingPane(true);
+  }
+
+  useEffect(() => {
+    if (!resizingPane) return undefined;
+    function handleMove(e) {
+      if (!columnsRef.current) return;
+      const left = columnsRef.current.getBoundingClientRect().left;
+      setLeftWidth(Math.min(LEFT_PANE_MAX, Math.max(LEFT_PANE_MIN, e.clientX - left)));
+    }
+    function handleUp() {
+      setResizingPane(false);
+    }
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [resizingPane]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LEFT_PANE_WIDTH_KEY, String(leftWidth));
+    } catch {
+      // ignore — nothing to persist to
+    }
+  }, [leftWidth]);
 
   useEffect(() => {
     Promise.all([
@@ -126,7 +175,7 @@ export function EditorPage({ onLogout }) {
     setBlocks(reordered);
     setIsDirty(true);
     setSaveState('saving');
-    await api.reorderBlocks(reordered.map((b) => b.id));
+    await api.reorderBlocks(reordered.map((b) => ({ id: b.id, parentId: b.parentId || null })));
     flashSaved();
   }
 
@@ -150,7 +199,7 @@ export function EditorPage({ onLogout }) {
   if (loading) return <div className="ed-loading">Loading editor…</div>;
 
   return (
-    <div className="ed-shell">
+    <div className="ed-shell" style={resizingPane ? { cursor: 'col-resize', userSelect: 'none' } : undefined}>
       <header className="ed-topbar">
         <div className="ed-topbar-title">Resume Editor</div>
         <div className="ed-topbar-status">
@@ -184,7 +233,7 @@ export function EditorPage({ onLogout }) {
         </div>
       </header>
 
-      <div className="ed-columns">
+      <div className="ed-columns" ref={columnsRef} style={{ gridTemplateColumns: `${leftWidth}px 6px 1fr` }}>
         <div className="ed-left-pane">
           <section className="ed-panel">
             <button className="ed-panel-toggle" onClick={() => setHeaderOpen((v) => !v)}>
@@ -222,6 +271,14 @@ export function EditorPage({ onLogout }) {
             <AddBlockMenu onAdd={handleAdd} />
           </section>
         </div>
+
+        <div
+          className={`ed-resizer${resizingPane ? ' ed-resizer-active' : ''}`}
+          onPointerDown={handleResizerPointerDown}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize editor panel"
+        />
 
         <div className="ed-right-pane">
           <div className="ed-preview-label">Draft preview — dimmed blocks are hidden from web and/or print</div>

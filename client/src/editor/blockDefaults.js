@@ -7,6 +7,11 @@ export const BLOCK_TYPE_LABELS = {
   custom: 'Custom Block',
 };
 
+// Mirrors NESTABLE_TYPES in server/src/routes/blocks.js: these are the only
+// types that can live under a heading. `heading` can't nest (no multi-level
+// sections) and `summary` always stays top-level.
+export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'custom']);
+
 export const CUSTOM_BODY_TYPES = [
   { value: 'text', label: 'Text' },
   { value: 'list', label: 'List' },

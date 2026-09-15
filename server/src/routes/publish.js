@@ -1,30 +1,19 @@
 import { Router } from 'express';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { db, getSetting, setSetting } from '../db.js';
+import { db, getSetting, setSetting, rowToBlock, orderBlocksHierarchically } from '../db.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { renderResumePdf } from '../pdfRenderer.js';
 import { PDF_PATH } from './pdf.js';
 
 const router = Router();
 
-function rowToBlock(row) {
-  return {
-    id: row.id,
-    type: row.type,
-    position: row.position,
-    visibleWeb: !!row.visible_web,
-    visiblePrint: !!row.visible_print,
-    data: JSON.parse(row.data),
-  };
-}
-
 function currentDraft() {
   const rows = db.prepare('SELECT * FROM blocks ORDER BY position ASC').all();
   return {
     header: getSetting('header'),
     site: getSetting('site'),
-    blocks: rows.map(rowToBlock),
+    blocks: orderBlocksHierarchically(rows.map(rowToBlock)),
   };
 }
 
@@ -65,16 +54,24 @@ router.post('/discard-draft', (req, res) => {
 
   const now = new Date().toISOString();
   const insert = db.prepare(`
-    INSERT INTO blocks (id, type, position, visible_web, visible_print, data, created_at, updated_at)
-    VALUES (@id, @type, @position, @visibleWeb, @visiblePrint, @data, @now, @now)
+    INSERT INTO blocks (id, type, position, parent_id, visible_web, visible_print, data, created_at, updated_at)
+    VALUES (@id, @type, @position, @parentId, @visibleWeb, @visiblePrint, @data, @now, @now)
   `);
   const txn = db.transaction((blocks) => {
     db.prepare('DELETE FROM blocks').run();
-    blocks.forEach((block, i) => {
+    // published.blocks is already in hierarchical order (a heading directly
+    // followed by its children), but `position` must be re-derived per
+    // sibling group, not from the flat array index.
+    const positionByParent = new Map();
+    blocks.forEach((block) => {
+      const parentId = block.parentId || null;
+      const position = positionByParent.get(parentId) ?? 0;
+      positionByParent.set(parentId, position + 1);
       insert.run({
         id: block.id || randomUUID(),
         type: block.type,
-        position: i,
+        position,
+        parentId,
         visibleWeb: block.visibleWeb ? 1 : 0,
         visiblePrint: block.visiblePrint ? 1 : 0,
         data: JSON.stringify(block.data),
