@@ -58,8 +58,9 @@ export function SortableBlockRow({ block, nested, drop, nestTarget, moving, onCh
 
   return (
     <div ref={setNodeRef} className={`ed-block-row${nested ? ' ed-block-row-nested' : ''}${isDragging || moving ? ' ed-block-row-dragging' : ''}${nestTarget ? ' ed-block-nest-target' : ''}${drop?.headingId ? ' ed-block-nest-active' : ''}`}>
-      {drop && <div className={`ed-drop-indicator ed-drop-${drop.headingId ? 'inside' : drop.edge}${drop.parentId ? ' ed-drop-nested' : ''}`}><span>{drop.label}</span></div>}
+      {drop && !drop.headingId && <div className={`ed-drop-indicator ed-drop-${drop.edge}${drop.parentId ? ' ed-drop-nested' : ''}`}><span>{drop.label}</span></div>}
       <div className="ed-block-row-header">
+        {drop?.headingId && <div className="ed-drop-indicator ed-drop-inside ed-drop-nested"><span>{drop.label}</span></div>}
         <button ref={setActivatorNodeRef} className="ed-drag-handle" {...attributes} {...listeners} aria-label="Drag to reorder or nest">
           ⠿
         </button>

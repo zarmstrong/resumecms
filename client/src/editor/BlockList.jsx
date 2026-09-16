@@ -25,7 +25,8 @@ function BlockRows({ blocks, ...callbacks }) {
         ))}
       </div>
       <div className="ed-sr-only" role="status" aria-live="polite">{drop?.label || ''}</div>
-      <DragOverlay dropAnimation={null}>
+      {/* Keep the preview below the destination indicator (z-index: 5). */}
+      <DragOverlay dropAnimation={null} zIndex={4}>
         {dragged ? <div className="ed-drag-preview">{BLOCK_TYPE_LABELS[dragged.type]}{dragged.type === 'heading' ? `: ${dragged.data?.text || 'Untitled section'}` : ''}</div> : null}
       </DragOverlay>
     </>
@@ -49,12 +50,17 @@ export function BlockList({ blocks, onReorder, ...callbacks }) {
       const { x, y } = pointerCoordinates;
       if (x < listRect.left || x > listRect.right || y < rect.top || y > rect.bottom) continue;
       const over = blocks.find((b) => b.id === container.id);
-      let placement = pointerPlacement(over, rect, pointerCoordinates);
+      // Editing forms must not move the heading's nesting target away from
+      // its title. Keep the full row as a hit area, but measure its header.
+      const placementRect = over.type === 'heading'
+        ? node.querySelector('.ed-block-row-header')?.getBoundingClientRect() ?? rect
+        : rect;
+      let placement = pointerPlacement(over, placementRect, pointerCoordinates);
       // A heading's center is always a nesting target, including when
       // dragging straight down by a top-level row's left-hand grip.
       const topLevel = over.type !== 'heading' && x < listRect.left + 22;
       if (placement === 'inside' && (!NESTABLE_TYPES.has(moved.type) || topLevel)) {
-        placement = y < rect.top + rect.height / 2 ? 'before' : 'after';
+        placement = y < placementRect.top + placementRect.height / 2 ? 'before' : 'after';
       }
       const projection = projectBlockDrop(blocks, active.id, container.id, placement, topLevel);
       return projection ? [{ id: container.id, data: { projection } }] : [];

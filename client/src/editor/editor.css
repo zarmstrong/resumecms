@@ -179,6 +179,7 @@
 }
 
 .ed-block-row-header {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
