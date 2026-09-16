@@ -335,6 +335,7 @@
 
   .r-header-split-side {
     align-items: flex-start;
+    max-width: none;
   }
 
   .r-header-split .r-contact-end {
