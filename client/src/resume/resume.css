@@ -555,6 +555,11 @@
   text-decoration: none;
 }
 
+.r-contact a.r-contact-chip {
+  color: var(--r-text, var(--ink));
+  border-bottom-color: color-mix(in srgb, var(--r-accent, #2f6f4e) 30%, var(--r-bg, #ffffff));
+}
+
 /* "side-tag" template: the title renders as a small pill next to the name. */
 .r-sidetag-row {
   display: flex;
