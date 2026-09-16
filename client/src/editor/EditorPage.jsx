@@ -54,6 +54,12 @@ export function EditorPage({ onLogout }) {
 
   const debounceTimers = useRef({});
   const columnsRef = useRef(null);
+  // Tracks the in-progress width during a drag so handleUp can persist the
+  // final value directly — avoids a synchronous localStorage write on every
+  // pointermove (one per pixel dragged), which was making the resize feel
+  // janky. React state (leftWidth) still updates every move for live visual
+  // feedback; only the persistence is deferred to drag end.
+  const leftWidthRef = useRef(leftWidth);
 
   function handleResizerPointerDown(e) {
     e.preventDefault();
@@ -65,10 +71,17 @@ export function EditorPage({ onLogout }) {
     function handleMove(e) {
       if (!columnsRef.current) return;
       const left = columnsRef.current.getBoundingClientRect().left;
-      setLeftWidth(Math.min(LEFT_PANE_MAX, Math.max(LEFT_PANE_MIN, e.clientX - left)));
+      const next = Math.min(LEFT_PANE_MAX, Math.max(LEFT_PANE_MIN, e.clientX - left));
+      leftWidthRef.current = next;
+      setLeftWidth(next);
     }
     function handleUp() {
       setResizingPane(false);
+      try {
+        localStorage.setItem(LEFT_PANE_WIDTH_KEY, String(leftWidthRef.current));
+      } catch {
+        // ignore — nothing to persist to
+      }
     }
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
@@ -77,14 +90,6 @@ export function EditorPage({ onLogout }) {
       window.removeEventListener('pointerup', handleUp);
     };
   }, [resizingPane]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LEFT_PANE_WIDTH_KEY, String(leftWidth));
-    } catch {
-      // ignore — nothing to persist to
-    }
-  }, [leftWidth]);
 
   useEffect(() => {
     Promise.all([

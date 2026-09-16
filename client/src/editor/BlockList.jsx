@@ -20,6 +20,7 @@ import { NESTABLE_TYPES } from './blockDefaults.js';
 // what keeps nesting to one level.
 function reparentMovedBlock(orderedBlocks, movedId) {
   const index = orderedBlocks.findIndex((b) => b.id === movedId);
+  if (index === -1) return orderedBlocks; // dragged block no longer exists (state changed mid-drag) — nothing to do
   const moved = orderedBlocks[index];
 
   let parentId = null;

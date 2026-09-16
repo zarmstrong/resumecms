@@ -7,10 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A self-hosted, single-user resume site + CMS (see [README.md](README.md) for
 the full product description, environment variables, and API reference).
 Content is a reorderable list of **blocks** (`{ id, type, position, parentId,
-visibleWeb, visiblePrint, data }`); built-in types are `heading`,
+visibleWeb, visiblePrint, data }`); built-in types are `heading`, `summary`,
 `skills_group`, `experience`, `education`, plus a freeform `custom` type.
-Any block except `heading` and `summary` may nest one level deep under a
-`heading` block via `parentId` (see "Block nesting" below). The header
+`experience`, `skills_group`, `education`, and `custom` blocks may each nest
+one level deep under a `heading` block via `parentId` — this is an explicit
+allowlist (`NESTABLE_TYPES` in `routes/blocks.js`), not "everything but
+heading/summary", so a new block type added later is top-level-only until
+deliberately added to it (see "Block nesting" below). The header
 (name/title/contact) is a separate singleton setting.
 
 Three surfaces render from the same data/components: `/` (public), `/print`
@@ -101,9 +104,10 @@ right order; neither re-derives nesting from scratch.
 
 The editor's `BlockList` has no separate "move into this section" control —
 nesting is purely a side effect of drag position. Dropping a block directly
-after a heading (and before the next heading or top-level block) nests it
-there; dropping it anywhere else un-nests it. See
-`reparentByPosition()` in `BlockList.jsx`.
+after a heading (or among an existing group's children) nests it there;
+dropping it anywhere else un-nests it — and only the dragged block's
+`parentId` is ever recomputed, never any other block's. See
+`reparentMovedBlock()` in `BlockList.jsx`.
 
 Layout templates that want to react to nesting (e.g. put a heading's whole
 group in a side column) can group `blocks` by `parentId` themselves — see
