@@ -45,11 +45,17 @@ function reparentMovedBlock(orderedBlocks, movedId) {
 
 export function BlockList({ blocks, onReorder, onChangeData, onChangeVisibility, onDelete }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  // A block's parentId can point at a heading that's no longer in this list
-  // (a stale reference — see orderBlocksHierarchically's own handling of
-  // this in server/src/db.js); indenting it anyway would show it nested
-  // under nothing, so only indent when the parent heading actually exists.
-  const headingIds = new Set(blocks.filter((b) => b.type === 'heading').map((b) => b.id));
+  // A block's parentId can point at a heading that's no longer in this list,
+  // or (via corrupted/imported data) at a heading that isn't itself
+  // top-level — a stale reference either way, since assertValidParent
+  // server-side only ever allows nesting under a top-level heading (see
+  // orderBlocksHierarchically's own handling of this in server/src/db.js).
+  // Indenting it anyway would show it nested under a relationship the
+  // server doesn't recognize, so only indent when the parent is an actual
+  // top-level heading.
+  const topLevelHeadingIds = new Set(
+    blocks.filter((b) => b.type === 'heading' && b.parentId == null).map((b) => b.id)
+  );
 
   function handleDragEnd(event) {
     const { active, over } = event;
@@ -68,7 +74,7 @@ export function BlockList({ blocks, onReorder, onChangeData, onChangeVisibility,
             <SortableBlockRow
               key={block.id}
               block={block}
-              nested={!!block.parentId && headingIds.has(block.parentId)}
+              nested={!!block.parentId && topLevelHeadingIds.has(block.parentId)}
               onChangeData={onChangeData}
               onChangeVisibility={onChangeVisibility}
               onDelete={onDelete}
