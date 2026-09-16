@@ -181,6 +181,12 @@ export function orderBlocksHierarchically(blocks) {
   const visited = new Set();
   function visit(parentId) {
     for (const block of childrenByParent.get(parentId) || []) {
+      // A heading can never get a parentId through the API (assertValidParent
+      // rejects it), so a cycle can only exist via direct SQLite edits — but
+      // if it does, without this guard two headings pointing at each other
+      // would recurse forever. Skipping an already-visited block breaks the
+      // cycle instead of stack-overflowing every render/publish/PDF call.
+      if (visited.has(block.id)) continue;
       ordered.push(block);
       visited.add(block.id);
       if (block.type === 'heading') visit(block.id);

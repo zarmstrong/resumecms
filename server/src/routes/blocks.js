@@ -139,12 +139,15 @@ router.put('/blocks/:id', (req, res) => {
 router.delete('/blocks/:id', (req, res) => {
   const { id } = req.params;
   const txn = db.transaction(() => {
-    // Deleting a heading shouldn't silently delete the entries nested under
-    // it — promote them back to top-level first, preserving their relative
-    // order (SQLite doesn't guarantee row order without ORDER BY) and
-    // appending them after whatever's already top-level. One nextPosition()
-    // call up front instead of one per child, since a child's own UPDATE
-    // doesn't change what "the current top-level max" is for the next one.
+    // If the deleted block is a heading, this shouldn't silently delete the
+    // entries nested under it — promote them back to top-level first,
+    // preserving their relative order (SQLite doesn't guarantee row order
+    // without ORDER BY) and appending them after whatever's already
+    // top-level. One nextPosition() call up front instead of one per child,
+    // since a child's own UPDATE doesn't change what "the current top-level
+    // max" is for the next one. (Non-heading blocks never have children —
+    // only a heading can be a parentId target — so this is a no-op for
+    // them, not specially cased.)
     const children = db.prepare('SELECT id FROM blocks WHERE parent_id = ? ORDER BY position ASC').all(id);
     const promote = db.prepare('UPDATE blocks SET parent_id = NULL, position = ? WHERE id = ?');
     let position = nextPosition(null);
@@ -161,8 +164,12 @@ router.delete('/blocks/:id', (req, res) => {
 
 router.post('/blocks/reorder', (req, res) => {
   const { items } = req.body || {};
-  if (!Array.isArray(items) || items.some((item) => !item || typeof item.id !== 'string')) {
-    return res.status(400).json({ error: 'items must be an array of { id, parentId }' });
+  const isValidItem = (item) =>
+    item &&
+    typeof item.id === 'string' &&
+    (item.parentId === null || item.parentId === undefined || typeof item.parentId === 'string');
+  if (!Array.isArray(items) || items.some((item) => !isValidItem(item))) {
+    return res.status(400).json({ error: 'items must be an array of { id, parentId }, parentId being a string or null' });
   }
 
   const rows = db.prepare('SELECT * FROM blocks').all();
