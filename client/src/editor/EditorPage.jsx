@@ -14,6 +14,7 @@ const LEFT_PANE_WIDTH_KEY = 'resumecms-editor-left-pane-width';
 const LEFT_PANE_MIN = 340;
 const LEFT_PANE_MAX = 760;
 const LEFT_PANE_DEFAULT = 480;
+const RESIZE_STEP = 16;
 
 function loadLeftPaneWidth() {
   try {
@@ -61,9 +62,34 @@ export function EditorPage({ onLogout }) {
   // feedback; only the persistence is deferred to drag end.
   const leftWidthRef = useRef(leftWidth);
 
+  function persistLeftWidth(width) {
+    try {
+      localStorage.setItem(LEFT_PANE_WIDTH_KEY, String(width));
+    } catch {
+      // ignore — nothing to persist to
+    }
+  }
+
   function handleResizerPointerDown(e) {
     e.preventDefault();
     setResizingPane(true);
+  }
+
+  // Arrow keys move the pane boundary in fixed steps, Home/End jump to the
+  // min/max — the keyboard equivalent of the pointer drag below, since
+  // role="separator" alone doesn't make an element operable.
+  function handleResizerKeyDown(e) {
+    let next;
+    if (e.key === 'ArrowLeft') next = leftWidth - RESIZE_STEP;
+    else if (e.key === 'ArrowRight') next = leftWidth + RESIZE_STEP;
+    else if (e.key === 'Home') next = LEFT_PANE_MIN;
+    else if (e.key === 'End') next = LEFT_PANE_MAX;
+    else return;
+    e.preventDefault();
+    next = Math.min(LEFT_PANE_MAX, Math.max(LEFT_PANE_MIN, next));
+    leftWidthRef.current = next;
+    setLeftWidth(next);
+    persistLeftWidth(next);
   }
 
   useEffect(() => {
@@ -77,11 +103,7 @@ export function EditorPage({ onLogout }) {
     }
     function handleUp() {
       setResizingPane(false);
-      try {
-        localStorage.setItem(LEFT_PANE_WIDTH_KEY, String(leftWidthRef.current));
-      } catch {
-        // ignore — nothing to persist to
-      }
+      persistLeftWidth(leftWidthRef.current);
     }
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
@@ -177,10 +199,18 @@ export function EditorPage({ onLogout }) {
   }
 
   async function handleReorder(reordered) {
+    // Optimistic update first so the drag feels instant, then reconcile
+    // with the server's response: it re-derives canonical order via
+    // orderBlocksHierarchically, which isn't guaranteed to exactly match
+    // what the client sent (e.g. reparentMovedBlock only recomputes the
+    // dragged block's parentId, so the rest of the list's ordering is
+    // whatever it already was) — without this the UI could keep showing a
+    // stale order until the next reload.
     setBlocks(reordered);
     setIsDirty(true);
     setSaveState('saving');
-    await api.reorderBlocks(reordered.map((b) => ({ id: b.id, parentId: b.parentId || null })));
+    const { blocks: canonical } = await api.reorderBlocks(reordered.map((b) => ({ id: b.id, parentId: b.parentId || null })));
+    setBlocks(canonical);
     flashSaved();
   }
 
@@ -280,9 +310,14 @@ export function EditorPage({ onLogout }) {
         <div
           className={`ed-resizer${resizingPane ? ' ed-resizer-active' : ''}`}
           onPointerDown={handleResizerPointerDown}
+          onKeyDown={handleResizerKeyDown}
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize editor panel"
+          aria-valuenow={leftWidth}
+          aria-valuemin={LEFT_PANE_MIN}
+          aria-valuemax={LEFT_PANE_MAX}
+          tabIndex={0}
         />
 
         <div className="ed-right-pane">

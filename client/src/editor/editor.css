@@ -103,8 +103,14 @@
 }
 
 .ed-resizer:hover,
+.ed-resizer:focus-visible,
 .ed-resizer-active {
   background: var(--signal);
+}
+
+.ed-resizer:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
 }
 
 .ed-right-pane {

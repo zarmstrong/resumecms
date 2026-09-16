@@ -13,6 +13,14 @@ const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'cust
 // of the given type — null/undefined is always fine (top-level).
 function assertValidParent(parentId, type) {
   if (parentId == null) return;
+  if (typeof parentId !== 'string') {
+    // Without this, a non-string parentId (object/array) reaches the
+    // SQLite bind below and better-sqlite3 throws its own error — a raw
+    // 500 with an internal message, instead of a clean, stable 400.
+    const err = new Error('parentId must be a string');
+    err.status = 400;
+    throw err;
+  }
   if (!NESTABLE_TYPES.has(type)) {
     const err = new Error(`${type} blocks can't be nested under a heading`);
     err.status = 400;
