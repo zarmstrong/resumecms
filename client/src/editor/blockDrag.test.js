@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pointerPlacement, projectBlockDrop } from './blockDrag.js';
+import { createBlockReorderItems, pointerPlacement, projectBlockDrop } from './blockDrag.js';
 
 const block = (id, type = 'experience', parentId = null) => ({ id, type, parentId, data: { text: id } });
 const h = block('h', 'heading');
@@ -8,6 +8,42 @@ const a = block('a');
 const b = block('b');
 const c = block('c', 'experience', 'h');
 const ids = (projection) => projection.ordered.map((b) => b.id);
+
+test('reordering another block clears invalid parents and preserves valid nesting', () => {
+  const blocks = [h, c, a, b,
+    block('missing', 'experience', 'deleted-heading'),
+    block('non-heading', 'custom', 'a'),
+    block('bad-heading', 'heading', 'h'),
+    block('bad-child', 'education', 'bad-heading'),
+    block('summary', 'summary', 'h'),
+    block('unknown', 'unknown', 'h'),
+    block('empty', 'skills_group', ''),
+    block('malformed', 'custom', {}),
+  ];
+  const snapshot = structuredClone(blocks);
+  const { ordered } = projectBlockDrop(blocks, 'b', 'a', 'before');
+  const items = createBlockReorderItems(ordered, blocks);
+  assert.deepEqual(items.map((b) => b.id), ['h', 'c', 'b', 'a', ...blocks.slice(4).map((b) => b.id)]);
+  assert.deepEqual(items.filter((b) => b.parentId !== null), [{ id: 'c', parentId: 'h' }]);
+  assert.deepEqual(blocks, snapshot);
+});
+
+test('reorder payload retains newly requested nesting for every supported type', () => {
+  for (const type of ['experience', 'education', 'skills_group', 'custom']) {
+    const blocks = [h, block('entry', type)];
+    const { ordered } = projectBlockDrop(blocks, 'entry', 'h', 'inside');
+    assert.deepEqual(createBlockReorderItems(ordered, blocks), [
+      { id: 'h', parentId: null }, { id: 'entry', parentId: 'h' },
+    ]);
+  }
+});
+
+test('repairing a malformed heading also clears its children for pre-update API validation', () => {
+  const blocks = [h, block('bad-heading', 'heading', 'h'), block('child', 'custom', 'bad-heading'), a];
+  const { ordered } = projectBlockDrop(blocks, 'bad-heading', 'a', 'after');
+  assert.equal(ordered.find((b) => b.id === 'bad-heading').parentId, null);
+  assert.ok(createBlockReorderItems(ordered, blocks).every((b) => b.parentId === null));
+});
 
 test('dropping onto a heading nests from either direction, including an adjacent row', () => {
   for (const blocks of [[a, h, c], [h, a, c], [h, c, a]]) {

@@ -7,6 +7,7 @@ import { SiteSettingsForm } from './SiteSettingsForm.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
 import { ResumeView } from '../resume/ResumeView.jsx';
 import { defaultDataForType } from './blockDefaults.js';
+import { createBlockReorderItems } from './blockDrag.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -210,7 +211,7 @@ export function EditorPage({ onLogout }) {
     const requestId = ++reorderRequestIdRef.current;
     try {
       const { blocks: canonical } = await api.reorderBlocks(
-        reordered.map((b) => ({ id: b.id, parentId: b.parentId ?? null }))
+        createBlockReorderItems(reordered, blocks)
       );
       if (reorderRequestIdRef.current !== requestId) return;
       setBlocks(canonical);

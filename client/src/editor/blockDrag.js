@@ -1,5 +1,20 @@
 import { NESTABLE_TYPES } from './blockDefaults.js';
 
+// The API validates parents against the current rows before applying the
+// reorder. A malformed heading being promoted in this request is therefore
+// not a valid parent yet. Clear invalid links even on blocks that weren't moved.
+export function createBlockReorderItems(orderedBlocks, currentBlocks) {
+  const headingIds = new Set(currentBlocks
+    .filter((b) => b.type === 'heading' && b.parentId == null)
+    .map((b) => b.id));
+  return orderedBlocks.map((b) => ({
+    id: b.id,
+    parentId: NESTABLE_TYPES.has(b.type) && typeof b.parentId === 'string' && headingIds.has(b.parentId)
+      ? b.parentId
+      : null,
+  }));
+}
+
 // Resolve a pointer target into a legal position in the one-level tree. Both
 // the indicator and the saved order use this projection, including section moves.
 export function projectBlockDrop(blocks, activeId, overId, placement, topLevel = false) {
