@@ -1,0 +1,10 @@
+{
+  "id": "initials-boxed-sky",
+  "label": "Initials Boxed Sky",
+  "description": "A sky-blue monogram header with each entry in its own bordered card.",
+  "author": "resumecms",
+  "header": "initials",
+  "layout": "boxed",
+  "colors": { "accent": "#2f6690" },
+  "font": "open-sans"
+}

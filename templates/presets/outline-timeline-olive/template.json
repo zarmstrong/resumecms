@@ -1,0 +1,10 @@
+{
+  "id": "outline-timeline-olive",
+  "label": "Outline Timeline Olive",
+  "description": "An olive bordered header over a connecting-line timeline of experience and education.",
+  "author": "resumecms",
+  "header": "outline",
+  "layout": "timeline",
+  "colors": { "accent": "#6b6b2f" },
+  "font": "lora"
+}

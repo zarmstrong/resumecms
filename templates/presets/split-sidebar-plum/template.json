@@ -1,0 +1,10 @@
+{
+  "id": "split-sidebar-plum",
+  "label": "Split Sidebar Plum",
+  "description": "A plum split-panel header paired with the two-column sidebar layout, for a bold, creative-industry resume.",
+  "author": "resumecms",
+  "header": "split",
+  "layout": "sidebar",
+  "colors": { "accent": "#6b3f6b", "sidebarBackground": "#f3ecf3" },
+  "font": "playfair-display"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "centered-soft-cards-plum",
+  "label": "Centered Soft Cards Plum",
+  "description": "A centered header over soft-shadowed entry cards, in a rich plum accent.",
+  "author": "resumecms",
+  "header": "centered",
+  "layout": "soft-cards",
+  "colors": { "accent": "#7a4069" },
+  "font": "merriweather"
+}

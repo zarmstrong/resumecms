@@ -1,0 +1,10 @@
+{
+  "id": "framed-teal",
+  "label": "Framed Teal",
+  "description": "A large framed photo in teal, over the classic single-column layout.",
+  "author": "resumecms",
+  "header": "framed",
+  "layout": "classic",
+  "colors": { "accent": "#1d6b6b" },
+  "font": "eb-garamond"
+}

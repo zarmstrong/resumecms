@@ -1,0 +1,20 @@
+/* "divider": headings go uppercase and letter-spaced with a short accent
+   rule underneath (via ::after) instead of a full-width underline. */
+.r-layout-divider .r-body .r-heading {
+  border-bottom: none;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.875em;
+  padding-bottom: 10px;
+  position: relative;
+}
+
+.r-layout-divider .r-body .r-heading::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 36px;
+  height: 3px;
+  background: var(--r-accent, var(--ink));
+}

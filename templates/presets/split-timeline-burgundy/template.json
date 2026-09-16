@@ -1,0 +1,10 @@
+{
+  "id": "split-timeline-burgundy",
+  "label": "Split Timeline Burgundy",
+  "description": "A burgundy split-panel header over a connecting-line timeline of experience and education.",
+  "author": "resumecms",
+  "header": "split",
+  "layout": "timeline",
+  "colors": { "accent": "#6d1f2b" },
+  "font": "eb-garamond"
+}

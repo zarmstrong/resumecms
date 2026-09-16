@@ -1,0 +1,10 @@
+{
+  "id": "split-navy",
+  "label": "Split Navy",
+  "description": "A bold navy accent panel header over the classic single-column layout — a clean, corporate look.",
+  "author": "resumecms",
+  "header": "split",
+  "layout": "classic",
+  "colors": { "accent": "#1f3a5f" },
+  "font": "ibm-plex-sans"
+}

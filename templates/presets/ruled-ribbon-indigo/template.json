@@ -1,0 +1,10 @@
+{
+  "id": "ruled-ribbon-indigo",
+  "label": "Ruled Ribbon Indigo",
+  "description": "A photo-free indigo header paired with bold ribbon section headings — a sharp, modern, text-first look.",
+  "author": "resumecms",
+  "header": "ruled",
+  "layout": "ribbon",
+  "colors": { "accent": "#3b3f8f" },
+  "font": "roboto"
+}

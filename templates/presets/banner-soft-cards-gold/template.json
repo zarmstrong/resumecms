@@ -1,0 +1,10 @@
+{
+  "id": "banner-soft-cards-gold",
+  "label": "Banner Soft Cards Gold",
+  "description": "The accent banner header over soft-shadowed entry cards, in a warm gold.",
+  "author": "resumecms",
+  "header": "banner",
+  "layout": "soft-cards",
+  "colors": { "accent": "#a67c00" },
+  "font": "playfair-display"
+}

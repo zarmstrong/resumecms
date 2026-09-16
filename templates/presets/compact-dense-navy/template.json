@@ -1,0 +1,10 @@
+{
+  "id": "compact-dense-navy",
+  "label": "Compact Dense Navy",
+  "description": "The single-row compact header paired with tighter body spacing — a navy, information-dense one-pager.",
+  "author": "resumecms",
+  "header": "compact",
+  "layout": "compact-dense",
+  "colors": { "accent": "#14456b" },
+  "font": "roboto"
+}

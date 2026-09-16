@@ -1,0 +1,13 @@
+/* "compact-dense": tighter default vertical rhythm for packing more onto
+   one page. Set as custom-property defaults at the .r-body level rather
+   than hardcoded margins, so a block's own spacing override (set inline via
+   blockWrapperStyle, see blockStyle.js) still wins — same as the site-wide
+   default in resume.css. */
+.r-layout-compact-dense .r-body {
+  --r-block-space-above: 18px;
+  --r-block-space-below: 8px;
+}
+
+.r-layout-compact-dense .r-body .r-bullets li {
+  margin-bottom: 1px;
+}

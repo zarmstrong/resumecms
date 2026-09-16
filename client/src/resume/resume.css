@@ -273,6 +273,317 @@
   opacity: 0.8;
 }
 
+/* "split" template: name/title sit in a solid accent-colored panel; contact
+   info and actions stay on the plain background at the right. */
+.r-header-split {
+  display: flex;
+  align-items: stretch;
+  border-bottom: none;
+  border-radius: var(--radius);
+  overflow: hidden;
+  padding: 0;
+}
+
+.r-header-split-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--r-accent, var(--panel));
+  color: var(--r-banner-text, #ffffff);
+  padding: 28px 32px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.r-header-split-panel .r-name,
+.r-header-split-panel .r-title,
+.r-header-split-panel .r-subtitle {
+  color: inherit;
+}
+
+.r-header-split-panel .r-subtitle {
+  opacity: 0.85;
+}
+
+.r-header-photo-split {
+  border: 2px solid var(--r-banner-text, #ffffff);
+}
+
+.r-header-split-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px 28px;
+  /* Capped (not flex-shrink:0) so a long, unbroken contact row wraps onto
+     multiple right-aligned lines within this box instead of refusing to
+     shrink and crushing the accent panel down to near-zero width. */
+  max-width: 42%;
+  min-width: 0;
+}
+
+.r-contact-end {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .r-header-split {
+    flex-direction: column;
+  }
+
+  .r-header-split-side {
+    align-items: flex-start;
+    max-width: none;
+  }
+
+  .r-header-split .r-contact-end {
+    justify-content: flex-start;
+    text-align: left;
+  }
+}
+
+/* "initials" template: a solid-color monogram circle stands in for a photo
+   when none is set (header.photoUrl empty) — same size as .r-header-photo
+   so the layout doesn't shift once a real photo is added. */
+.r-header-monogram {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--r-accent, var(--slate-light));
+  color: var(--r-banner-text, #ffffff);
+  font-family: var(--font-ui);
+  font-size: 1.75em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* "framed" template: a large rounded-square photo in an accent-colored
+   frame, otherwise laid out like the classic header. */
+.r-header-framed {
+  gap: 24px;
+}
+
+.r-header-photo-framed {
+  width: 110px;
+  height: 110px;
+  border-radius: 14px;
+  border: 4px solid var(--r-accent, var(--line-strong));
+}
+
+/* "ruled" template: no photo — an uppercase, letter-spaced name with a
+   short accent rule underneath stands in for one. */
+.r-name-ruled {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 1.625em;
+}
+
+.r-header-ruled-mark {
+  width: 40px;
+  height: 3px;
+  background: var(--r-accent, var(--ink));
+  margin: 2px 0 12px;
+}
+
+/* "outline" template: identity and contact sit inside a bordered box
+   instead of the default bottom-only rule. */
+.r-header-outline {
+  border: 2px solid var(--r-accent, var(--line-strong));
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+
+/* "photopanel" template: the photo sits on a plain neutral card (the same
+   panel-alt token the sidebar/highlight blocks fall back to) with an
+   accent-colored border doing the branding — a light accent-tinted
+   background (color-mix at a low percentage) reads as a flat gray smudge
+   for any dark or desaturated accent, which is common for resumes (black,
+   charcoal, navy). No panel is rendered when there's no photo (index.jsx). */
+.r-header-photopanel-block {
+  background: var(--panel-alt, #f4f1ea);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.r-header-photo-photopanel {
+  width: 76px;
+  height: 76px;
+  border: 3px solid var(--r-accent, #ffffff);
+  margin: 0;
+}
+
+/* "photo-right" template: a mirror of the classic header — photo/identity
+   right-aligned, actions (when shown) pinned left. margin-left:auto keeps
+   the identity block flush right even when actions are hidden (print/PDF). */
+.r-header-photoright {
+  justify-content: flex-start;
+}
+
+.r-header-identity-right {
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+
+.r-header-main-right {
+  text-align: right;
+}
+
+/* "byline" template: no photo — name and title fused into one line. */
+.r-name-byline {
+  font-size: 1.5em;
+  font-weight: 600;
+  font-family: var(--r-name-font, inherit);
+  color: var(--r-heading, var(--ink));
+  margin: 0 0 8px;
+}
+
+.r-title-byline {
+  font-size: 0.7em;
+  font-weight: 400;
+  color: var(--slate);
+}
+
+.r-byline-sep {
+  margin: 0 10px;
+  color: var(--r-accent, var(--slate-light));
+  font-weight: 400;
+}
+
+/* "gradient" template: a diagonal gradient band from the accent color into
+   a darker shade, echoing the "banner" template's solid-fill treatment. */
+.r-header-gradient {
+  background: linear-gradient(
+    135deg,
+    var(--r-accent, var(--panel)) 0%,
+    color-mix(in srgb, var(--r-accent, #2f6f4e) 55%, black) 100%
+  );
+  color: var(--r-banner-text, #ffffff);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  border-bottom: none;
+  align-items: center;
+}
+
+.r-header-gradient .r-name,
+.r-header-gradient .r-title,
+.r-header-gradient .r-subtitle {
+  color: inherit;
+}
+
+.r-header-gradient .r-subtitle {
+  opacity: 0.85;
+}
+
+.r-header-photo-gradient {
+  border: 2px solid var(--r-banner-text, #ffffff);
+}
+
+.r-contact-gradient {
+  color: inherit;
+  opacity: 0.92;
+}
+
+.r-contact-gradient a {
+  color: inherit;
+  border-bottom-color: currentColor;
+}
+
+/* "double-rule" template: a newspaper-masthead treatment using a native
+   CSS double border instead of an extra element. */
+.r-header-doublerule {
+  border-top: 2px solid var(--r-accent, var(--ink));
+  border-bottom: 3px double var(--r-accent, var(--ink));
+  padding: 16px 0 18px;
+}
+
+.r-name-doublerule {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* "icon-contact" template: every contact field gets the same small letter
+   badge that .r-link-badge already draws for links. */
+.r-icon-contact-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* "name-badge" template: the name renders as a solid accent-color pill. */
+.r-name-badge-wrap {
+  margin: 0 0 8px;
+}
+
+.r-name-badge {
+  display: inline-block;
+  background: var(--r-accent, var(--ink));
+  color: var(--r-banner-text, #ffffff);
+  font-size: 1.5em;
+  font-weight: 600;
+  font-family: var(--r-name-font, inherit);
+  padding: 6px 14px;
+  border-radius: var(--radius);
+}
+
+.r-title-namebadge {
+  margin-top: 4px;
+}
+
+/* "chip-links" template: contact details as pill chips, reusing the same
+   color-mix technique as .r-skills-chip. */
+.r-contact-chips {
+  gap: 6px;
+}
+
+.r-contact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-ui);
+  font-size: 0.8125em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--r-accent, #2f6f4e) 10%, var(--r-bg, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--r-accent, #2f6f4e) 30%, var(--r-bg, #ffffff));
+  color: var(--r-text, var(--ink));
+  text-decoration: none;
+}
+
+.r-contact a.r-contact-chip {
+  color: var(--r-text, var(--ink));
+  border-bottom-color: color-mix(in srgb, var(--r-accent, #2f6f4e) 30%, var(--r-bg, #ffffff));
+}
+
+/* "side-tag" template: the title renders as a small pill next to the name. */
+.r-sidetag-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.r-name-sidetag {
+  margin: 0;
+}
+
+.r-title-tag {
+  font-family: var(--font-ui);
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--r-banner-text, #ffffff);
+  background: var(--r-accent, var(--slate));
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 .r-action-btn {
   font-family: var(--font-ui);
   font-size: 13px;

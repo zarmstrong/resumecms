@@ -1,0 +1,17 @@
+/* "soft-cards": each experience/education entry sits on a plain card with a
+   soft drop shadow instead of a hard border (compare templates/layouts/boxed). */
+.r-layout-soft-cards .r-body [data-block-type='experience'],
+.r-layout-soft-cards .r-body [data-block-type='education'] {
+  background: var(--r-bg, #ffffff);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  box-shadow:
+    0 1px 2px rgba(20, 24, 28, 0.06),
+    0 4px 10px rgba(20, 24, 28, 0.06);
+}
+
+.r-layout-soft-cards .r-body [data-block-type='experience'] .r-experience,
+.r-layout-soft-cards .r-body [data-block-type='education'] .r-education {
+  margin-bottom: 0;
+}

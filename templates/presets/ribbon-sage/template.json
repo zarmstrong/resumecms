@@ -1,0 +1,10 @@
+{
+  "id": "ribbon-sage",
+  "label": "Ribbon Sage",
+  "description": "Solid sage-green ribbon headings under a classic header, set in a warm serif.",
+  "author": "resumecms",
+  "header": "classic",
+  "layout": "ribbon",
+  "colors": { "accent": "#3f6b52" },
+  "font": "lora"
+}

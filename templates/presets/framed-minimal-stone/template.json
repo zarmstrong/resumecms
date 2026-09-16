@@ -1,0 +1,10 @@
+{
+  "id": "framed-minimal-stone",
+  "label": "Framed Minimal Stone",
+  "description": "A stone-gray framed photo header with the minimal, ATS-friendly body layout.",
+  "author": "resumecms",
+  "header": "framed",
+  "layout": "minimal",
+  "colors": { "accent": "#57534e" },
+  "font": "georgia"
+}

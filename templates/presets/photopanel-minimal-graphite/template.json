@@ -1,0 +1,10 @@
+{
+  "id": "photopanel-minimal-graphite",
+  "label": "Photo Panel Minimal Graphite",
+  "description": "A graphite photo panel header with the minimal, ATS-friendly body layout.",
+  "author": "resumecms",
+  "header": "photopanel",
+  "layout": "minimal",
+  "colors": { "accent": "#3a3a3a" },
+  "font": "ibm-plex-sans"
+}

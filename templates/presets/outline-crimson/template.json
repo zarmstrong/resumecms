@@ -1,0 +1,10 @@
+{
+  "id": "outline-crimson",
+  "label": "Outline Crimson",
+  "description": "A crimson bordered header box over the classic single-column layout.",
+  "author": "resumecms",
+  "header": "outline",
+  "layout": "classic",
+  "colors": { "accent": "#a3273b" },
+  "font": "libre-baskerville"
+}

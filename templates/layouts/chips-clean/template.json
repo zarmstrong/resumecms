@@ -1,0 +1,6 @@
+{
+  "label": "Chips, clean",
+  "description": "Skills render as individual chips, under a borderless, letter-spaced heading style.",
+  "author": "resumecms",
+  "skillsDisplay": "chips"
+}

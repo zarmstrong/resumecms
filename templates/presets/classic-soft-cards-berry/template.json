@@ -1,0 +1,10 @@
+{
+  "id": "classic-soft-cards-berry",
+  "label": "Classic Soft Cards Berry",
+  "description": "The classic header over soft-shadowed entry cards, in a rich berry accent.",
+  "author": "resumecms",
+  "header": "classic",
+  "layout": "soft-cards",
+  "colors": { "accent": "#8e2a6b" },
+  "font": "lora"
+}

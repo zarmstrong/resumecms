@@ -1,0 +1,10 @@
+{
+  "id": "photopanel-rose",
+  "label": "Photo Panel Rose",
+  "description": "A rose-tinted photo panel header over the classic single-column layout.",
+  "author": "resumecms",
+  "header": "photopanel",
+  "layout": "classic",
+  "colors": { "accent": "#b4536b" },
+  "font": "playfair-display"
+}

@@ -1,0 +1,19 @@
+/* "centered-headings": headings are centered with a short accent rule
+   underneath (via ::after), instead of a full-width underline. */
+.r-layout-centered-headings .r-body .r-heading {
+  text-align: center;
+  border-bottom: none;
+  padding-bottom: 12px;
+  position: relative;
+}
+
+.r-layout-centered-headings .r-body .r-heading::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 3px;
+  background: var(--r-accent, var(--ink));
+}

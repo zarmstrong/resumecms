@@ -1,0 +1,11 @@
+/* "ribbon": section headings render as solid accent-color bars instead of
+   an underline. Text color reuses --r-banner-text, the accent-contrast
+   color ResumeView already computes for the "banner" header, so it stays
+   legible against any accent color regardless of which header is chosen. */
+.r-layout-ribbon .r-body .r-heading {
+  background: var(--r-accent, var(--ink));
+  color: var(--r-banner-text, #ffffff);
+  border-bottom: none;
+  border-radius: var(--radius);
+  padding: 7px 14px;
+}

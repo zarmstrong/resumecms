@@ -1,0 +1,10 @@
+{
+  "id": "photopanel-divider-sand",
+  "label": "Photo Panel Divider Sand",
+  "description": "A sand/terracotta photo panel header with uppercase divider-rule section headings.",
+  "author": "resumecms",
+  "header": "photopanel",
+  "layout": "divider",
+  "colors": { "accent": "#b5651d" },
+  "font": "crimson-text"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "ruled-charcoal",
+  "label": "Ruled Charcoal",
+  "description": "A photo-free, uppercase name treatment in charcoal over the minimal, ATS-friendly body layout.",
+  "author": "resumecms",
+  "header": "ruled",
+  "layout": "minimal",
+  "colors": { "accent": "#33312e" },
+  "font": "inter"
+}

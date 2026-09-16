@@ -1,0 +1,18 @@
+/* "numbered": section headings get an auto-incrementing two-digit number
+   via a CSS counter, scoped to .r-body so it restarts per resume. */
+.r-layout-numbered .r-body {
+  counter-reset: r-section;
+}
+
+.r-layout-numbered .r-body .r-heading {
+  counter-increment: r-section;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.r-layout-numbered .r-body .r-heading::before {
+  content: counter(r-section, decimal-leading-zero);
+  color: var(--r-accent, var(--slate));
+  font-weight: 700;
+}
