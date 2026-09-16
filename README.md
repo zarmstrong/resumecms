@@ -32,6 +32,12 @@ block — built-in or custom — has the same shape:
   `education`, and `custom` blocks can be nested — a `heading` can't be
   nested under another heading, and `summary` always stays top-level. In
   the editor, drag a block to sit directly under a heading to nest it there.
+- `position` — only unique within a sibling group (blocks sharing the same
+  `parentId`), not a global ordering key. Don't sort by it yourself; every
+  API response that returns a `blocks` array (`GET /api/blocks`, `POST
+  /api/blocks/reorder`, the public/PDF snapshot) already returns them in
+  the correct overall display order, with each heading's children spliced
+  in right after it.
 
 Built-in block types: `heading`, `skills_group`, `experience`, `education`.
 
