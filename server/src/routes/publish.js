@@ -64,7 +64,7 @@ router.post('/discard-draft', (req, res) => {
     // sibling group, not from the flat array index.
     const positionByParent = new Map();
     blocks.forEach((block) => {
-      const parentId = block.parentId || null;
+      const parentId = block.parentId ?? null;
       const position = positionByParent.get(parentId) ?? 0;
       positionByParent.set(parentId, position + 1);
       insert.run({

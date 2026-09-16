@@ -44,6 +44,16 @@ function assertValidParent(parentId, type, lookup = lookupParentRow) {
     err.status = 400;
     throw err;
   }
+  if (parent.parent_id != null) {
+    // The API never lets a heading itself take a parentId, so this only
+    // fires against a heading that got one some other way (hand-edited
+    // SQLite, imported data) — without this check, nesting under it would
+    // silently produce two levels of nesting despite the documented
+    // one-level guarantee.
+    const err = new Error('parentId must reference a top-level heading block');
+    err.status = 400;
+    throw err;
+  }
 }
 
 function nextPosition(parentId) {

@@ -154,7 +154,7 @@ export function rowToBlock(row) {
     id: row.id,
     type: row.type,
     position: row.position,
-    parentId: row.parent_id || null,
+    parentId: row.parent_id ?? null,
     visibleWeb: !!row.visible_web,
     visiblePrint: !!row.visible_print,
     data: JSON.parse(row.data),
@@ -170,7 +170,7 @@ export function rowToBlock(row) {
 export function orderBlocksHierarchically(blocks) {
   const childrenByParent = new Map();
   for (const block of blocks) {
-    const key = block.parentId || null;
+    const key = block.parentId ?? null;
     if (!childrenByParent.has(key)) childrenByParent.set(key, []);
     childrenByParent.get(key).push(block);
   }

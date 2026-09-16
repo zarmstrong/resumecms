@@ -216,7 +216,7 @@ export function EditorPage({ onLogout }) {
     const requestId = ++reorderRequestIdRef.current;
     try {
       const { blocks: canonical } = await api.reorderBlocks(
-        reordered.map((b) => ({ id: b.id, parentId: b.parentId || null }))
+        reordered.map((b) => ({ id: b.id, parentId: b.parentId ?? null }))
       );
       if (reorderRequestIdRef.current !== requestId) return;
       setBlocks(canonical);
