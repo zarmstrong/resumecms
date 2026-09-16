@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { db, getSetting, setSetting, touchDraft, rowToBlock, orderBlocksHierarchically } from '../db.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { promotedBlockPositions } from '../blockDeletion.js';
 
 const router = Router();
 
@@ -156,21 +157,17 @@ router.put('/blocks/:id', (req, res) => {
 router.delete('/blocks/:id', (req, res) => {
   const { id } = req.params;
   const txn = db.transaction(() => {
-    // If the deleted block is a heading, this shouldn't silently delete the
-    // entries nested under it — promote them back to top-level first,
-    // preserving their relative order (SQLite doesn't guarantee row order
-    // without ORDER BY) and appending them after whatever's already
-    // top-level. One nextPosition() call up front instead of one per child,
-    // since a child's own UPDATE doesn't change what "the current top-level
-    // max" is for the next one. (Non-heading blocks never have children —
-    // only a heading can be a parentId target — so this is a no-op for
-    // them, not specially cased.)
-    const children = db.prepare('SELECT id FROM blocks WHERE parent_id = ? ORDER BY position ASC').all(id);
-    const promote = db.prepare('UPDATE blocks SET parent_id = NULL, position = ? WHERE id = ?');
-    let position = nextPosition(null);
-    for (const child of children) {
-      promote.run(position, child.id);
-      position += 1;
+    // Promote children in place to match the editor's optimistic deletion.
+    // Reindex the top-level siblings from the existing display order so the
+    // promoted entries don't jump to the bottom on refresh or publication.
+    const hasChildren = db.prepare('SELECT 1 FROM blocks WHERE parent_id = ? LIMIT 1').get(id);
+    if (hasChildren) {
+      const rows = db.prepare('SELECT * FROM blocks ORDER BY position ASC').all();
+      const ordered = orderBlocksHierarchically(rows.map(rowToBlock));
+      const promote = db.prepare('UPDATE blocks SET parent_id = NULL, position = ? WHERE id = ?');
+      for (const block of promotedBlockPositions(ordered, id)) {
+        promote.run(block.position, block.id);
+      }
     }
     db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
   });
