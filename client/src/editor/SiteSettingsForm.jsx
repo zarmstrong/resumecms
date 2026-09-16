@@ -143,6 +143,7 @@ function NameFontField({ site, onChange }) {
       {!matched && (
         <select
           className="ed-input"
+          aria-label="Name and professional title font"
           value={override}
           onChange={(e) => onChange({ ...site, nameFont: e.target.value })}
         >
