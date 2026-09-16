@@ -34,24 +34,28 @@ npm test          # node --test — auto-discovers **/*.test.js under server/src
 npm run dev       # vite dev server on :5173, proxies /api -> :4000
 npm run build     # vite build -> client/dist, also validates template components
 npm run preview
+npm test          # node --test src — auto-discovers **/*.test.js under client/src
 
 # templates (from repo root)
 node scripts/validate-templates.mjs   # lints templates/**, no npm install needed
 ```
 
-There's no linter configured in either package. `server/` has a small
-`node:test` suite (plain `*.test.js` files next to the code they cover, e.g.
-`blockDeletion.test.js`) for pure logic that doesn't need a live DB/HTTP
-server — run it with `npm test` from `server/`. `client/` still has no test
-suite. CI has two independent workflows, each scoped by path so it only runs
-when relevant: `.github/workflows/templates.yml` runs
-`scripts/validate-templates.mjs` and a client build when `templates/**`,
-`templateRegistry.js`, or the validator itself changes;
-`.github/workflows/server-tests.yml` runs `npm test` in `server/` when
-`server/**` changes. When touching templates, run both templates commands
-locally before considering the change done; when touching `server/src`,
-run `npm test`. There's no root `package.json`; `server/` and `client/` are
-independent npm packages, each with its own lockfile.
+There's no linter configured in either package. Both `server/` and `client/`
+have a small `node:test` suite (plain `*.test.js` files next to the code
+they cover, e.g. `blockDeletion.test.js`, `blockDrag.test.js`) for pure
+logic that doesn't need a live DB/HTTP server or a DOM — run them with `npm
+test` from the respective package. CI has three independent workflows,
+each scoped by path so it only runs when relevant:
+`.github/workflows/templates.yml` runs `scripts/validate-templates.mjs` and
+a client build when `templates/**`, `templateRegistry.js`, or the validator
+itself changes; `.github/workflows/server-tests.yml` runs `npm test` in
+`server/` when `server/**` changes; `.github/workflows/client-tests.yml`
+runs `npm test` in `client/` when `client/**` changes. When touching
+templates, run both templates commands locally before considering the
+change done; when touching `server/src`, run `npm test` from `server/`;
+when touching `client/src`, run `npm test` from `client/`. There's no root
+`package.json`; `server/` and `client/` are independent npm packages, each
+with its own lockfile.
 
 PDF export needs a real Chromium; the Docker image installs the system
 package and points Puppeteer at it. In local (non-Docker) dev, PDF export

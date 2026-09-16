@@ -224,6 +224,7 @@ export function EditorPage({ onLogout }) {
       // leaving the UI stuck showing an order that was never actually
       // saved.
       const { blocks: fresh } = await api.getBlocks();
+      if (reorderRequestIdRef.current !== requestId) return;
       setBlocks(fresh);
       setSaveState('idle');
     }
