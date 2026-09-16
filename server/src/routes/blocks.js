@@ -186,7 +186,9 @@ router.post('/blocks/reorder', (req, res) => {
     typeof item.id === 'string' &&
     (item.parentId === null || item.parentId === undefined || typeof item.parentId === 'string');
   if (!Array.isArray(items) || items.some((item) => !isValidItem(item))) {
-    return res.status(400).json({ error: 'items must be an array of { id, parentId }, parentId being a string or null' });
+    return res
+      .status(400)
+      .json({ error: 'items must be an array of { id, parentId }, parentId being a string, null, or omitted' });
   }
 
   const rows = db.prepare('SELECT * FROM blocks').all();

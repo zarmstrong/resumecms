@@ -23,11 +23,20 @@ function reparentMovedBlock(orderedBlocks, movedId) {
   if (index === -1) return orderedBlocks; // dragged block no longer exists (state changed mid-drag) — nothing to do
   const moved = orderedBlocks[index];
 
+  // A candidate parent must be an actual top-level heading in the current
+  // list — otherwise a stale/orphaned parentId sitting on the previous
+  // block (see orderBlocksHierarchically's orphan handling) would get
+  // copied onto the moved block too, and the server would then reject the
+  // whole reorder request rather than just leaving one block mis-nested.
+  const topLevelHeadingIds = new Set(
+    orderedBlocks.filter((b) => b.type === 'heading' && b.parentId == null).map((b) => b.id)
+  );
+
   let parentId = null;
   if (moved.type !== 'heading' && NESTABLE_TYPES.has(moved.type)) {
     const prev = orderedBlocks[index - 1];
-    if (prev?.type === 'heading') parentId = prev.id;
-    else if (prev?.parentId != null) parentId = prev.parentId;
+    const candidate = prev?.type === 'heading' ? prev.id : (prev?.parentId ?? null);
+    if (candidate != null && topLevelHeadingIds.has(candidate)) parentId = candidate;
   }
 
   if (moved.parentId === parentId) return orderedBlocks;
