@@ -34,7 +34,7 @@ npm test          # node --test — auto-discovers **/*.test.js under server/src
 npm run dev       # vite dev server on :5173, proxies /api -> :4000
 npm run build     # vite build -> client/dist, also validates template components
 npm run preview
-npm test          # node --test src — auto-discovers **/*.test.js under client/src
+npm test          # node --test — auto-discovers **/*.test.js under client/src
 
 # templates (from repo root)
 node scripts/validate-templates.mjs   # lints templates/**, no npm install needed
