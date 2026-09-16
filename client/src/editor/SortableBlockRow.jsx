@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { BLOCK_TYPE_LABELS } from './blockDefaults.js';
 import { HeadingForm } from './blockForms/HeadingForm.jsx';
 import { SummaryForm } from './blockForms/SummaryForm.jsx';
@@ -45,25 +44,23 @@ function summarize(block) {
   }
 }
 
-export function SortableBlockRow({ block, nested, onChangeData, onChangeVisibility, onDelete }) {
+export function SortableBlockRow({ block, nested, drop, nestTarget, moving, onChangeData, onChangeVisibility, onDelete }) {
   const [expanded, setExpanded] = useState(false);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: block.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
+  const { attributes, listeners, setNodeRef: setDragRef, setActivatorNodeRef, isDragging } = useDraggable({ id: block.id });
+  const { setNodeRef: setDropRef } = useDroppable({ id: block.id });
+  function setNodeRef(node) {
+    setDragRef(node);
+    setDropRef(node);
+  }
 
   const FormComponent = FORM_COMPONENTS[block.type];
   const { title, subtitle } = summarize(block);
 
   return (
-    <div ref={setNodeRef} style={style} className={`ed-block-row${nested ? ' ed-block-row-nested' : ''}`}>
+    <div ref={setNodeRef} className={`ed-block-row${nested ? ' ed-block-row-nested' : ''}${isDragging || moving ? ' ed-block-row-dragging' : ''}${nestTarget ? ' ed-block-nest-target' : ''}${drop?.headingId ? ' ed-block-nest-active' : ''}`}>
+      {drop && <div className={`ed-drop-indicator ed-drop-${drop.headingId ? 'inside' : drop.edge}${drop.parentId ? ' ed-drop-nested' : ''}`}><span>{drop.label}</span></div>}
       <div className="ed-block-row-header">
-        <button className="ed-drag-handle" {...attributes} {...listeners} aria-label="Drag to reorder">
+        <button ref={setActivatorNodeRef} className="ed-drag-handle" {...attributes} {...listeners} aria-label="Drag to reorder or nest">
           ⠿
         </button>
         <button className="ed-block-summary" onClick={() => setExpanded((v) => !v)}>

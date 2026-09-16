@@ -102,12 +102,13 @@ in `publish.js` — already runs it, so `client/src/editor/BlockList.jsx` and
 `ResumeView.jsx` can both treat the array they receive as already in the
 right order; neither re-derives nesting from scratch.
 
-The editor's `BlockList` has no separate "move into this section" control —
-nesting is purely a side effect of drag position. Dropping a block directly
-after a heading (or among an existing group's children) nests it there;
-dropping it anywhere else un-nests it — and only the dragged block's
-`parentId` is ever recomputed, never any other block's. See
-`reparentMovedBlock()` in `BlockList.jsx`.
+The editor's `BlockList` projects the pointer destination before dropping
+(`blockDrag.js`). The center of a heading nests an allowed block; heading
+edges place it before or after the whole section. Dropping among children
+joins their section, while the list's left edge promotes the dragged block
+to top level. A highlighted heading or insertion line labels the projected
+destination. Rows remain stationary during dragging, and moving a heading
+moves its children too. Only the dragged block's `parentId` changes.
 
 Layout templates that want to react to nesting (e.g. put a heading's whole
 group in a side column) can group `blocks` by `parentId` themselves — see

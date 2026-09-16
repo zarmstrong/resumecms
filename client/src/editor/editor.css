@@ -823,3 +823,57 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Keep drop targets stationary while the dragged block follows the pointer. */
+.ed-drag-help {
+  margin: 4px 14px 10px;
+  color: var(--slate);
+  font-size: 12px;
+}
+.ed-block-row { position: relative; }
+.ed-block-row-dragging { opacity: 0.35; }
+.ed-block-nest-target { background: var(--signal-dim); }
+.ed-block-nest-active { outline: 2px solid var(--signal); outline-offset: -2px; }
+.ed-drop-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 3px solid var(--signal);
+  z-index: 5;
+  pointer-events: none;
+  color: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ed-drop-indicator span {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  padding: 2px 6px;
+  background: var(--signal);
+  border-radius: var(--radius);
+}
+.ed-drop-before { top: 0; }
+.ed-drop-after { bottom: 0; }
+.ed-drop-inside { bottom: 0; left: 22px; }
+.ed-drop-nested.ed-drop-before,
+.ed-drop-nested.ed-drop-after { left: 22px; }
+.ed-drag-preview {
+  padding: 10px 14px;
+  border: 2px solid var(--signal);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 4px 12px #0002;
+  cursor: grabbing;
+}
+.ed-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.ed-block-row-nested > .ed-drop-nested { left: 0; }
+.ed-block-row-nested > .ed-drop-indicator:not(.ed-drop-nested) { left: -34px; }

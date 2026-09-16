@@ -200,13 +200,7 @@ export function EditorPage({ onLogout }) {
   }
 
   async function handleReorder(reordered) {
-    // Optimistic update first so the drag feels instant, then reconcile
-    // with the server's response: it re-derives canonical order via
-    // orderBlocksHierarchically, which isn't guaranteed to exactly match
-    // what the client sent (e.g. reparentMovedBlock only recomputes the
-    // dragged block's parentId, so the rest of the list's ordering is
-    // whatever it already was) — without this the UI could keep showing a
-    // stale order until the next reload.
+    // Show the projected drop immediately, then reconcile with the saved order.
     setBlocks(reordered);
     setIsDirty(true);
     setSaveState('saving');
