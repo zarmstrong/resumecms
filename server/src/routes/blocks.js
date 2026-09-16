@@ -132,13 +132,17 @@ router.delete('/blocks/:id', (req, res) => {
   const { id } = req.params;
   const txn = db.transaction(() => {
     // Deleting a heading shouldn't silently delete the entries nested under
-    // it — promote them back to top-level first.
-    const children = db.prepare('SELECT id FROM blocks WHERE parent_id = ?').all(id);
+    // it — promote them back to top-level first, preserving their relative
+    // order (SQLite doesn't guarantee row order without ORDER BY) and
+    // appending them after whatever's already top-level. One nextPosition()
+    // call up front instead of one per child, since a child's own UPDATE
+    // doesn't change what "the current top-level max" is for the next one.
+    const children = db.prepare('SELECT id FROM blocks WHERE parent_id = ? ORDER BY position ASC').all(id);
+    const promote = db.prepare('UPDATE blocks SET parent_id = NULL, position = ? WHERE id = ?');
+    let position = nextPosition(null);
     for (const child of children) {
-      db.prepare('UPDATE blocks SET parent_id = NULL, position = ? WHERE id = ?').run(
-        nextPosition(null),
-        child.id
-      );
+      promote.run(position, child.id);
+      position += 1;
     }
     db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
   });
@@ -155,10 +159,21 @@ router.post('/blocks/reorder', (req, res) => {
 
   const rows = db.prepare('SELECT * FROM blocks').all();
   const typeById = new Map(rows.map((r) => [r.id, r.type]));
+
+  // `items` is documented (README) as the full desired display order, not a
+  // partial patch — a duplicate or missing id would otherwise leave
+  // sibling-group positions inconsistent (gaps, or two blocks sharing one).
+  const seen = new Set();
+  for (const { id } of items) {
+    if (!typeById.has(id)) return res.status(400).json({ error: `unknown block id: ${id}` });
+    if (seen.has(id)) return res.status(400).json({ error: `duplicate block id: ${id}` });
+    seen.add(id);
+  }
+  if (seen.size !== typeById.size) {
+    return res.status(400).json({ error: 'items must include every existing block exactly once' });
+  }
+
   for (const { id, parentId } of items) {
-    if (!typeById.has(id)) {
-      return res.status(400).json({ error: `unknown block id: ${id}` });
-    }
     try {
       assertValidParent(parentId ?? null, typeById.get(id));
     } catch (err) {

@@ -9,21 +9,28 @@ import { NESTABLE_TYPES } from './blockDefaults.js';
 // server/src/db.js) — so that flat array doubles as the editor's display
 // order and its drag-and-drop order: nothing to derive here.
 //
-// Reordering re-derives every block's parentId from its new position in the
-// flat list: dragging a block to sit right after a heading (and before the
-// next heading or top-level block) nests it there; dragging it anywhere
-// else un-nests it. Headings always reset to top-level regardless of where
-// they're dropped, which is what keeps nesting to one level.
-function reparentByPosition(orderedBlocks) {
-  let currentHeadingId = null;
-  return orderedBlocks.map((block) => {
-    if (block.type === 'heading') {
-      currentHeadingId = block.id;
-      return block.parentId == null ? block : { ...block, parentId: null };
-    }
-    const parentId = NESTABLE_TYPES.has(block.type) ? currentHeadingId : null;
-    return block.parentId === parentId ? block : { ...block, parentId };
-  });
+// Only the block that was actually dragged ever has its parentId
+// recomputed — every other block keeps whatever it already had, so moving
+// one block can never silently re-nest or un-nest blocks the user didn't
+// touch (and a nestable block that happens to sit right after a heading,
+// without having been dragged there, stays top-level). The moved block
+// nests under whichever heading — or joins whichever existing group — it
+// now sits directly after; landing anywhere else un-nests it. Headings
+// always reset to top-level regardless of where they're dropped, which is
+// what keeps nesting to one level.
+function reparentMovedBlock(orderedBlocks, movedId) {
+  const index = orderedBlocks.findIndex((b) => b.id === movedId);
+  const moved = orderedBlocks[index];
+
+  let parentId = null;
+  if (moved.type !== 'heading' && NESTABLE_TYPES.has(moved.type)) {
+    const prev = orderedBlocks[index - 1];
+    if (prev?.type === 'heading') parentId = prev.id;
+    else if (prev?.parentId != null) parentId = prev.parentId;
+  }
+
+  if (moved.parentId === parentId) return orderedBlocks;
+  return orderedBlocks.map((b) => (b.id === movedId ? { ...b, parentId } : b));
 }
 
 export function BlockList({ blocks, onReorder, onChangeData, onChangeVisibility, onDelete }) {
@@ -34,7 +41,7 @@ export function BlockList({ blocks, onReorder, onChangeData, onChangeVisibility,
     if (!over || active.id === over.id) return;
     const oldIndex = blocks.findIndex((b) => b.id === active.id);
     const newIndex = blocks.findIndex((b) => b.id === over.id);
-    const reordered = reparentByPosition(arrayMove(blocks, oldIndex, newIndex));
+    const reordered = reparentMovedBlock(arrayMove(blocks, oldIndex, newIndex), active.id);
     onReorder(reordered);
   }
 
