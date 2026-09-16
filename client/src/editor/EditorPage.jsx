@@ -55,6 +55,7 @@ export function EditorPage({ onLogout }) {
 
   const debounceTimers = useRef({});
   const columnsRef = useRef(null);
+  const reorderRequestIdRef = useRef(0);
   // Tracks the in-progress width during a drag so handleUp can persist the
   // final value directly — avoids a synchronous localStorage write on every
   // pointermove (one per pixel dragged), which was making the resize feel
@@ -209,9 +210,28 @@ export function EditorPage({ onLogout }) {
     setBlocks(reordered);
     setIsDirty(true);
     setSaveState('saving');
-    const { blocks: canonical } = await api.reorderBlocks(reordered.map((b) => ({ id: b.id, parentId: b.parentId || null })));
-    setBlocks(canonical);
-    flashSaved();
+    // A second drag can fire before the first request's response lands;
+    // only apply a response if it's still the most recent request, so an
+    // in-flight earlier response can't clobber a later optimistic update.
+    const requestId = ++reorderRequestIdRef.current;
+    try {
+      const { blocks: canonical } = await api.reorderBlocks(
+        reordered.map((b) => ({ id: b.id, parentId: b.parentId || null }))
+      );
+      if (reorderRequestIdRef.current !== requestId) return;
+      setBlocks(canonical);
+      flashSaved();
+    } catch (err) {
+      console.error('Failed to save block order', err);
+      if (reorderRequestIdRef.current !== requestId) return;
+      // The optimistic order may now be invalid (e.g. it references a
+      // parentId the server rejected) — refetch the real state instead of
+      // leaving the UI stuck showing an order that was never actually
+      // saved.
+      const { blocks: fresh } = await api.getBlocks();
+      setBlocks(fresh);
+      setSaveState('idle');
+    }
   }
 
   async function handleAdd(type) {
@@ -221,7 +241,14 @@ export function EditorPage({ onLogout }) {
   }
 
   async function handleDelete(id) {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
+    // The server promotes a deleted heading's children to top-level (see
+    // DELETE /blocks/:id) — mirror that here too, or the client's copy of
+    // those blocks keeps pointing at a now-deleted heading id until the
+    // next full refetch, which the next reorder would send back to the
+    // server and get rejected as an invalid parentId.
+    setBlocks((prev) =>
+      prev.filter((b) => b.id !== id).map((b) => (b.parentId === id ? { ...b, parentId: null } : b))
+    );
     await api.deleteBlock(id);
     setIsDirty(true);
   }

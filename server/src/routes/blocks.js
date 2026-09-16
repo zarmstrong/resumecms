@@ -9,9 +9,16 @@ const router = Router();
 // (no multi-level nesting) and `summary` stays top-level only.
 const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'custom']);
 
+function lookupParentRow(parentId) {
+  return db.prepare('SELECT * FROM blocks WHERE id = ?').get(parentId);
+}
+
 // Throws (with an http status) if parentId isn't a valid parent for a block
-// of the given type — null/undefined is always fine (top-level).
-function assertValidParent(parentId, type) {
+// of the given type — null/undefined is always fine (top-level). `lookup`
+// defaults to a fresh SQLite query per call, which is fine for the
+// single-block routes below; /blocks/reorder already has every row loaded
+// in memory and passes a map lookup instead to avoid one query per item.
+function assertValidParent(parentId, type, lookup = lookupParentRow) {
   if (parentId == null) return;
   if (typeof parentId !== 'string') {
     // Without this, a non-string parentId (object/array) reaches the
@@ -26,7 +33,7 @@ function assertValidParent(parentId, type) {
     err.status = 400;
     throw err;
   }
-  const parent = db.prepare('SELECT * FROM blocks WHERE id = ?').get(parentId);
+  const parent = lookup(parentId);
   if (!parent) {
     const err = new Error('parentId does not reference an existing block');
     err.status = 400;
@@ -174,6 +181,7 @@ router.post('/blocks/reorder', (req, res) => {
 
   const rows = db.prepare('SELECT * FROM blocks').all();
   const typeById = new Map(rows.map((r) => [r.id, r.type]));
+  const rowById = new Map(rows.map((r) => [r.id, r]));
 
   // `items` is documented (README) as the full desired display order, not a
   // partial patch — a duplicate or missing id would otherwise leave
@@ -190,7 +198,7 @@ router.post('/blocks/reorder', (req, res) => {
 
   for (const { id, parentId } of items) {
     try {
-      assertValidParent(parentId ?? null, typeById.get(id));
+      assertValidParent(parentId ?? null, typeById.get(id), (pid) => rowById.get(pid));
     } catch (err) {
       return res.status(err.status || 400).json({ error: err.message });
     }
