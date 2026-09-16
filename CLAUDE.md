@@ -28,6 +28,7 @@ npm run dev      # node --watch src/index.js — needs RESUMECMS_ADMIN_USERNAME,
                   # RESUMECMS_APP_PASSWORD, RESUMECMS_SESSION_SECRET,
                   # RESUMECMS_DATA_DIR set (see README.md)
 npm start
+npm test          # node --test — auto-discovers **/*.test.js under server/src
 
 # client (from client/)
 npm run dev       # vite dev server on :5173, proxies /api -> :4000
@@ -38,13 +39,19 @@ npm run preview
 node scripts/validate-templates.mjs   # lints templates/**, no npm install needed
 ```
 
-There are no test suites or linters configured in either package — CI
-(`.github/workflows/templates.yml`) only runs `scripts/validate-templates.mjs`
-and a client build, and only when `templates/**`, `templateRegistry.js`, or
-the validator itself changes. When touching templates, run both of those
-locally before considering the change done. There's no root `package.json`;
-`server/` and `client/` are independent npm packages, each with its own
-lockfile.
+There's no linter configured in either package. `server/` has a small
+`node:test` suite (plain `*.test.js` files next to the code they cover, e.g.
+`blockDeletion.test.js`) for pure logic that doesn't need a live DB/HTTP
+server — run it with `npm test` from `server/`. `client/` still has no test
+suite. CI has two independent workflows, each scoped by path so it only runs
+when relevant: `.github/workflows/templates.yml` runs
+`scripts/validate-templates.mjs` and a client build when `templates/**`,
+`templateRegistry.js`, or the validator itself changes;
+`.github/workflows/server-tests.yml` runs `npm test` in `server/` when
+`server/**` changes. When touching templates, run both templates commands
+locally before considering the change done; when touching `server/src`,
+run `npm test`. There's no root `package.json`; `server/` and `client/` are
+independent npm packages, each with its own lockfile.
 
 PDF export needs a real Chromium; the Docker image installs the system
 package and points Puppeteer at it. In local (non-Docker) dev, PDF export
