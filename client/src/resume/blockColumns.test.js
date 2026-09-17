@@ -69,6 +69,40 @@ test('a block whose parentId references a missing/non-top-level heading still re
   assert.deepEqual(secondary, []);
 });
 
+test('classifyAuto is called for every group, including overridden ones, so a stateful classifier stays in sync', () => {
+  const blocks = [
+    block('h1', 'heading'),
+    block('h2', 'heading', null, { column: 'secondary' }),
+    block('h3', 'heading'),
+  ];
+  // Mirrors split-columns' real classifier: alternates only once a
+  // *previous* heading has already been seen, so the first heading stays
+  // 'primary' unless overridden.
+  const seen = [];
+  let column = 'primary';
+  let seenHeading = false;
+  const alternating = (group) => {
+    seen.push(group.heading.id);
+    if (seenHeading) column = column === 'primary' ? 'secondary' : 'primary';
+    seenHeading = true;
+    return column;
+  };
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, alternating);
+  assert.deepEqual(seen, ['h1', 'h2', 'h3']);
+  assert.deepEqual(ids(primary), ['h1', 'h3']);
+  assert.deepEqual(ids(secondary), ['h2']);
+});
+
+test('orphaned children keep their original relative order across multiple missing parents', () => {
+  const blocks = [
+    block('a', 'experience', 'missing-2'),
+    block('b', 'experience', 'missing-1'),
+    block('c', 'experience', 'missing-2'),
+  ];
+  const { primary } = groupBlocksIntoColumns(blocks, sidebarClassify);
+  assert.deepEqual(ids(primary), ['a', 'b', 'c']);
+});
+
 test('a heading with no children still forms a group', () => {
   const blocks = [block('h1', 'heading')];
   const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);

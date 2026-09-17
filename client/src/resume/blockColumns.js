@@ -14,8 +14,11 @@ export const HEADING_COLUMN_OPTIONS = [
 
 // blocks: the full ordered array a layout component already receives
 // (orderBlocksHierarchically output — flat, with parentId set).
-// classifyAuto(group, index): 'primary' | 'secondary', called only when the
-// group's heading has no explicit override (or the group has no heading).
+// classifyAuto(group, index): 'primary' | 'secondary'. Called for every
+// group, including ones with an explicit `data.column` override, so a
+// stateful classifier (e.g. split-columns' alternating column) still sees
+// every heading and advances consistently — its result is only used for
+// groups that have no override.
 //
 // Most existing resumes predate block nesting, so a heading and its body are
 // still separate top-level blocks with no parentId linking them. A group is
@@ -52,17 +55,17 @@ export function groupBlocksIntoColumns(blocks, classifyAuto) {
     }
   }
 
-  for (const [parentId, children] of childrenByParent) {
-    if (consumedParentIds.has(parentId)) continue;
-    for (const child of children) groups.push({ heading: null, blocks: [child] });
+  for (const block of blocks) {
+    if (block.parentId == null || consumedParentIds.has(block.parentId)) continue;
+    groups.push({ heading: null, blocks: [block] });
   }
 
   const primary = [];
   const secondary = [];
   groups.forEach((group, index) => {
+    const auto = classifyAuto(group, index);
     const override = group.heading?.data?.column;
-    const column =
-      override === 'primary' || override === 'secondary' ? override : classifyAuto(group, index);
+    const column = override === 'primary' || override === 'secondary' ? override : auto;
     (column === 'secondary' ? secondary : primary).push(...group.blocks);
   });
   return { primary, secondary };
