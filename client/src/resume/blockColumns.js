@@ -8,8 +8,8 @@
 // "sidebar" and "split-columns" carries a user's explicit choices over.
 export const HEADING_COLUMN_OPTIONS = [
   { value: 'auto', label: 'Auto' },
-  { value: 'primary', label: 'Column 1' },
-  { value: 'secondary', label: 'Column 2' },
+  { value: 'primary', label: 'Primary column' },
+  { value: 'secondary', label: 'Secondary column' },
 ];
 
 // blocks: the full ordered array a layout component already receives

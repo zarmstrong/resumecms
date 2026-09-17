@@ -103,8 +103,10 @@ A layout that arranges blocks into two columns (like `sidebar`,
 `sidebar-right`, or `split-columns`) should use the shared
 `groupBlocksIntoColumns(blocks, classifyAuto)` helper
 (`@resume/blockColumns.js`) instead of inventing its own grouping — it
-keeps a heading and whatever's nested under it (via `parentId`) together as
-one unit, and honors a heading's own `data.column` override
+keeps a heading and its section together as one unit — both blocks
+explicitly nested under it (via `parentId`) and, since most resumes predate
+nesting, any unnested top-level blocks that simply follow it up to the next
+heading — and honors a heading's own `data.column` override
 (`'primary' | 'secondary'`, set from the editor's heading form) before
 falling back to your `classifyAuto(group, index)` for anything left
 unpinned:
@@ -114,7 +116,8 @@ import { groupBlocksIntoColumns } from '@resume/blockColumns.js';
 
 function classifyAuto(group, index) {
   // group: { heading: Block | null, blocks: Block[] } — blocks is the
-  // heading plus its nested children, or a single unnested block.
+  // heading plus its nested children and any unnested blocks that follow
+  // it up to the next heading, or a single unnested block.
   return index % 2 === 0 ? 'primary' : 'secondary';
 }
 
