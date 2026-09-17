@@ -6,10 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A self-hosted, single-user resume site + CMS (see [README.md](README.md) for
 the full product description, environment variables, and API reference).
-Content is a flat, reorderable list of **blocks** (`{ id, type, position,
-visibleWeb, visiblePrint, data }`); built-in types are `heading`,
+Content is a reorderable list of **blocks** (`{ id, type, position, parentId,
+visibleWeb, visiblePrint, data }`); built-in types are `heading`, `summary`,
 `skills_group`, `experience`, `education`, plus a freeform `custom` type.
-The header (name/title/contact) is a separate singleton setting.
+`experience`, `skills_group`, `education`, and `custom` blocks may each nest
+one level deep under a `heading` block via `parentId` — this is an explicit
+allowlist (`NESTABLE_TYPES` in `routes/blocks.js`), not "everything but
+heading/summary", so a new block type added later is top-level-only until
+deliberately added to it (see "Block nesting" below). The header
+(name/title/contact) is a separate singleton setting.
 
 Three surfaces render from the same data/components: `/` (public), `/print`
 (used internally for PDF export), and `/editor` (password + optional TOTP
@@ -23,23 +28,34 @@ npm run dev      # node --watch src/index.js — needs RESUMECMS_ADMIN_USERNAME,
                   # RESUMECMS_APP_PASSWORD, RESUMECMS_SESSION_SECRET,
                   # RESUMECMS_DATA_DIR set (see README.md)
 npm start
+npm test          # node --test — auto-discovers **/*.test.js under server/src
 
 # client (from client/)
 npm run dev       # vite dev server on :5173, proxies /api -> :4000
 npm run build     # vite build -> client/dist, also validates template components
 npm run preview
+npm test          # node --test — auto-discovers **/*.test.js under client/src
 
 # templates (from repo root)
 node scripts/validate-templates.mjs   # lints templates/**, no npm install needed
 ```
 
-There are no test suites or linters configured in either package — CI
-(`.github/workflows/templates.yml`) only runs `scripts/validate-templates.mjs`
-and a client build, and only when `templates/**`, `templateRegistry.js`, or
-the validator itself changes. When touching templates, run both of those
-locally before considering the change done. There's no root `package.json`;
-`server/` and `client/` are independent npm packages, each with its own
-lockfile.
+There's no linter configured in either package. Both `server/` and `client/`
+have a small `node:test` suite (plain `*.test.js` files next to the code
+they cover, e.g. `blockDeletion.test.js`, `blockDrag.test.js`) for pure
+logic that doesn't need a live DB/HTTP server or a DOM — run them with `npm
+test` from the respective package. CI has three independent workflows,
+each scoped by path so it only runs when relevant:
+`.github/workflows/templates.yml` runs `scripts/validate-templates.mjs` and
+a client build when `templates/**`, `templateRegistry.js`, or the validator
+itself changes; `.github/workflows/server-tests.yml` runs `npm test` in
+`server/` when `server/**` changes; `.github/workflows/client-tests.yml`
+runs `npm test` in `client/` when `client/**` changes. When touching
+templates, run both templates commands locally before considering the
+change done; when touching `server/src`, run `npm test` from `server/`;
+when touching `client/src`, run `npm test` from `client/`. There's no root
+`package.json`; `server/` and `client/` are independent npm packages, each
+with its own lockfile.
 
 PDF export needs a real Chromium; the Docker image installs the system
 package and points Puppeteer at it. In local (non-Docker) dev, PDF export
@@ -75,6 +91,41 @@ specific route registered after the broad `/api` mount would first hit
 `blockRoutes`' unconditional `requireAuth` and get rejected. Keep
 new auth-exempt or differently-gated route groups registered before the
 general `/api` mount, not after.
+
+### Block nesting
+
+A block's `parentId` (nullable, on the `blocks` table and in the API) points
+at a `heading` block's `id`; only `experience`, `skills_group`, `education`,
+and `custom` blocks can be nested, and only one level deep — a `heading`
+can't itself have a `parentId`, and `summary` can't have one at all. This is
+enforced server-side in `server/src/routes/blocks.js`'s `assertValidParent`,
+called from every route that can set `parentId` (`POST /blocks`, `PUT
+/blocks/:id`, `POST /blocks/reorder`). Deleting a heading promotes its
+children back to top-level rather than deleting them.
+
+`position` is only unique within a sibling group (all blocks sharing a
+`parentId`), not globally — so anything that needs the actual display order
+must call `orderBlocksHierarchically()` (`server/src/db.js`), which walks
+each heading's children (sorted by their own `position`) in right after it.
+Every place that hands a flat `blocks` array to a consumer — `GET /blocks`,
+`POST /blocks/reorder`'s response, and the `published_resume` snapshot built
+in `publish.js` — already runs it, so `client/src/editor/BlockList.jsx` and
+`ResumeView.jsx` can both treat the array they receive as already in the
+right order; neither re-derives nesting from scratch.
+
+The editor's `BlockList` projects the pointer destination before dropping
+(`blockDrag.js`). The center of a heading nests an allowed block; heading
+edges place it before or after the whole section. Dropping among children
+joins their section, while the list's left edge promotes the dragged block
+to top level. A highlighted heading or insertion line labels the projected
+destination. Rows remain stationary during dragging, and moving a heading
+moves its children too. Only the dragged block's `parentId` changes.
+
+Layout templates that want to react to nesting (e.g. put a heading's whole
+group in a side column) can group `blocks` by `parentId` themselves — see
+`templates/layouts/sidebar/index.jsx`'s `splitBlocksForSidebar`, which
+currently infers grouping from block-type adjacency and could be simplified
+to use `parentId` directly now that it's explicit.
 
 ### Pluggable header/layout templates
 

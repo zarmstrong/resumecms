@@ -7,8 +7,25 @@ import { SiteSettingsForm } from './SiteSettingsForm.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
 import { ResumeView } from '../resume/ResumeView.jsx';
 import { defaultDataForType } from './blockDefaults.js';
+import { createBlockReorderItems } from './blockDrag.js';
 
 const SAVE_DEBOUNCE_MS = 500;
+
+const LEFT_PANE_WIDTH_KEY = 'resumecms-editor-left-pane-width';
+const LEFT_PANE_MIN = 340;
+const LEFT_PANE_MAX = 760;
+const LEFT_PANE_DEFAULT = 480;
+const RESIZE_STEP = 16;
+
+function loadLeftPaneWidth() {
+  try {
+    const stored = Number(localStorage.getItem(LEFT_PANE_WIDTH_KEY));
+    if (Number.isFinite(stored) && stored >= LEFT_PANE_MIN && stored <= LEFT_PANE_MAX) return stored;
+  } catch {
+    // localStorage unavailable (private browsing, etc.) — fall back below.
+  }
+  return LEFT_PANE_DEFAULT;
+}
 
 function timeAgo(iso) {
   if (!iso) return null;
@@ -34,8 +51,69 @@ export function EditorPage({ onLogout }) {
   const [publishedAt, setPublishedAt] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
   const [publishState, setPublishState] = useState('idle'); // idle | publishing | published
+  const [leftWidth, setLeftWidth] = useState(loadLeftPaneWidth);
+  const [resizingPane, setResizingPane] = useState(false);
 
   const debounceTimers = useRef({});
+  const columnsRef = useRef(null);
+  const reorderRequestIdRef = useRef(0);
+  // Tracks the in-progress width during a drag so handleUp can persist the
+  // final value directly — avoids a synchronous localStorage write on every
+  // pointermove (one per pixel dragged), which was making the resize feel
+  // janky. React state (leftWidth) still updates every move for live visual
+  // feedback; only the persistence is deferred to drag end.
+  const leftWidthRef = useRef(leftWidth);
+
+  function persistLeftWidth(width) {
+    try {
+      localStorage.setItem(LEFT_PANE_WIDTH_KEY, String(width));
+    } catch {
+      // ignore — nothing to persist to
+    }
+  }
+
+  function handleResizerPointerDown(e) {
+    e.preventDefault();
+    setResizingPane(true);
+  }
+
+  // Arrow keys move the pane boundary in fixed steps, Home/End jump to the
+  // min/max — the keyboard equivalent of the pointer drag below, since
+  // role="separator" alone doesn't make an element operable.
+  function handleResizerKeyDown(e) {
+    let next;
+    if (e.key === 'ArrowLeft') next = leftWidth - RESIZE_STEP;
+    else if (e.key === 'ArrowRight') next = leftWidth + RESIZE_STEP;
+    else if (e.key === 'Home') next = LEFT_PANE_MIN;
+    else if (e.key === 'End') next = LEFT_PANE_MAX;
+    else return;
+    e.preventDefault();
+    next = Math.min(LEFT_PANE_MAX, Math.max(LEFT_PANE_MIN, next));
+    leftWidthRef.current = next;
+    setLeftWidth(next);
+    persistLeftWidth(next);
+  }
+
+  useEffect(() => {
+    if (!resizingPane) return undefined;
+    function handleMove(e) {
+      if (!columnsRef.current) return;
+      const left = columnsRef.current.getBoundingClientRect().left;
+      const next = Math.min(LEFT_PANE_MAX, Math.max(LEFT_PANE_MIN, e.clientX - left));
+      leftWidthRef.current = next;
+      setLeftWidth(next);
+    }
+    function handleUp() {
+      setResizingPane(false);
+      persistLeftWidth(leftWidthRef.current);
+    }
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [resizingPane]);
 
   useEffect(() => {
     Promise.all([
@@ -123,11 +201,33 @@ export function EditorPage({ onLogout }) {
   }
 
   async function handleReorder(reordered) {
+    // Show the projected drop immediately, then reconcile with the saved order.
     setBlocks(reordered);
     setIsDirty(true);
     setSaveState('saving');
-    await api.reorderBlocks(reordered.map((b) => b.id));
-    flashSaved();
+    // A second drag can fire before the first request's response lands;
+    // only apply a response if it's still the most recent request, so an
+    // in-flight earlier response can't clobber a later optimistic update.
+    const requestId = ++reorderRequestIdRef.current;
+    try {
+      const { blocks: canonical } = await api.reorderBlocks(
+        createBlockReorderItems(reordered, blocks)
+      );
+      if (reorderRequestIdRef.current !== requestId) return;
+      setBlocks(canonical);
+      flashSaved();
+    } catch (err) {
+      console.error('Failed to save block order', err);
+      if (reorderRequestIdRef.current !== requestId) return;
+      // The optimistic order may now be invalid (e.g. it references a
+      // parentId the server rejected) — refetch the real state instead of
+      // leaving the UI stuck showing an order that was never actually
+      // saved.
+      const { blocks: fresh } = await api.getBlocks();
+      if (reorderRequestIdRef.current !== requestId) return;
+      setBlocks(fresh);
+      setSaveState('idle');
+    }
   }
 
   async function handleAdd(type) {
@@ -137,7 +237,14 @@ export function EditorPage({ onLogout }) {
   }
 
   async function handleDelete(id) {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
+    // The server promotes a deleted heading's children to top-level (see
+    // DELETE /blocks/:id) — mirror that here too, or the client's copy of
+    // those blocks keeps pointing at a now-deleted heading id until the
+    // next full refetch, which the next reorder would send back to the
+    // server and get rejected as an invalid parentId.
+    setBlocks((prev) =>
+      prev.filter((b) => b.id !== id).map((b) => (b.parentId === id ? { ...b, parentId: null } : b))
+    );
     await api.deleteBlock(id);
     setIsDirty(true);
   }
@@ -150,7 +257,7 @@ export function EditorPage({ onLogout }) {
   if (loading) return <div className="ed-loading">Loading editor…</div>;
 
   return (
-    <div className="ed-shell">
+    <div className="ed-shell" style={resizingPane ? { cursor: 'col-resize', userSelect: 'none' } : undefined}>
       <header className="ed-topbar">
         <div className="ed-topbar-title">Resume Editor</div>
         <div className="ed-topbar-status">
@@ -184,7 +291,7 @@ export function EditorPage({ onLogout }) {
         </div>
       </header>
 
-      <div className="ed-columns">
+      <div className="ed-columns" ref={columnsRef} style={{ gridTemplateColumns: `${leftWidth}px 6px 1fr` }}>
         <div className="ed-left-pane">
           <section className="ed-panel">
             <button className="ed-panel-toggle" onClick={() => setHeaderOpen((v) => !v)}>
@@ -222,6 +329,19 @@ export function EditorPage({ onLogout }) {
             <AddBlockMenu onAdd={handleAdd} />
           </section>
         </div>
+
+        <div
+          className={`ed-resizer${resizingPane ? ' ed-resizer-active' : ''}`}
+          onPointerDown={handleResizerPointerDown}
+          onKeyDown={handleResizerKeyDown}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize editor panel"
+          aria-valuenow={leftWidth}
+          aria-valuemin={LEFT_PANE_MIN}
+          aria-valuemax={LEFT_PANE_MAX}
+          tabIndex={0}
+        />
 
         <div className="ed-right-pane">
           <div className="ed-preview-label">Draft preview — dimmed blocks are hidden from web and/or print</div>
