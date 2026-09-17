@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { db, getSetting, setSetting, touchDraft, rowToBlock, orderBlocksHierarchically } from '../db.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { promotedBlockPositions } from '../blockDeletion.js';
+import { findSplitSectionId } from '../blockReorder.js';
 
 const router = Router();
 
@@ -203,6 +204,13 @@ router.post('/blocks/reorder', (req, res) => {
   }
   if (seen.size !== typeById.size) {
     return res.status(400).json({ error: 'items must include every existing block exactly once' });
+  }
+
+  const splitId = findSplitSectionId(items);
+  if (splitId) {
+    return res
+      .status(400)
+      .json({ error: `items must keep block ${splitId}'s section contiguous, directly after its heading` });
   }
 
   for (const { id, parentId } of items) {
