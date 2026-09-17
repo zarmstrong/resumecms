@@ -97,6 +97,43 @@ matching the folder name, lowercase kebab-case:
   page root always carries this class) — see `templates/layouts/boxed/style.css`
   for an example.
 
+### Splitting blocks into columns
+
+A layout that arranges blocks into two columns (like `sidebar`,
+`sidebar-right`, or `split-columns`) should use the shared
+`groupBlocksIntoColumns(blocks, classifyAuto)` helper
+(`@resume/blockColumns.js`) instead of inventing its own grouping — it
+keeps a heading and whatever's nested under it (via `parentId`) together as
+one unit, and honors a heading's own `data.column` override
+(`'primary' | 'secondary'`, set from the editor's heading form) before
+falling back to your `classifyAuto(group, index)` for anything left
+unpinned:
+
+```jsx
+import { groupBlocksIntoColumns } from '@resume/blockColumns.js';
+
+function classifyAuto(group, index) {
+  // group: { heading: Block | null, blocks: Block[] } — blocks is the
+  // heading plus its nested children, or a single unnested block.
+  return index % 2 === 0 ? 'primary' : 'secondary';
+}
+
+export default function MyTwoColumnLayout({ blocks, renderBlock }) {
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, classifyAuto);
+  return (
+    <div className="r-body">
+      <div>{primary.map(renderBlock)}</div>
+      <div>{secondary.map(renderBlock)}</div>
+    </div>
+  );
+}
+```
+
+`sidebar` and `sidebar-right` share a skills/education auto-classify
+heuristic and rail text-contrast handling via `@resume/sidebarPanel.js` —
+reuse it if you're contributing another rail-style layout rather than
+reimplementing it.
+
 Both `@resume/*` imports work from anywhere under `templates/` via a Vite
 alias to `client/src/resume/` — no fragile relative paths.
 

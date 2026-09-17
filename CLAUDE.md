@@ -122,10 +122,16 @@ destination. Rows remain stationary during dragging, and moving a heading
 moves its children too. Only the dragged block's `parentId` changes.
 
 Layout templates that want to react to nesting (e.g. put a heading's whole
-group in a side column) can group `blocks` by `parentId` themselves — see
-`templates/layouts/sidebar/index.jsx`'s `splitBlocksForSidebar`, which
-currently infers grouping from block-type adjacency and could be simplified
-to use `parentId` directly now that it's explicit.
+group in a side column) use the shared `groupBlocksIntoColumns()` helper
+(`client/src/resume/blockColumns.js`), which groups a heading with whatever
+is nested under it via `parentId` and sorts each group into one of two
+columns. A heading can pin its own section to a column via `data.column`
+(`'primary' | 'secondary'`, editable in the editor's heading form); anything
+else falls to the layout's `classifyAuto(group, index)`. Three layouts use
+this today: `sidebar` and `sidebar-right` (a skills/education rail, left or
+right — see `client/src/resume/sidebarPanel.js` for their shared
+heuristic + rail text-contrast handling) and `split-columns` (two even
+columns, alternating by section).
 
 ### Pluggable header/layout templates
 
@@ -165,9 +171,10 @@ site settings (colors, fonts, sizes, pill styles — `siteColors.js`) into
 CSS custom properties, resolves the header template and layout template
 from `templateRegistry.js`, and renders blocks via `BLOCK_RENDERERS`
 (`blockRenderers.jsx`) — a layout component receives already-resolved
-`blocks`/`renderBlock`/`colors` and decides arrangement (e.g.
-`templates/layouts/sidebar/index.jsx` regroups blocks under headings into a
-side rail vs. main column based on block type). `mode="preview"` (editor
+`blocks`/`renderBlock`/`colors` and decides arrangement (e.g. the
+`sidebar`/`sidebar-right`/`split-columns` layouts split blocks into two
+columns via `groupBlocksIntoColumns()`, see "Block nesting" above).
+`mode="preview"` (editor
 only) renders every block regardless of visibility flags and dims hidden
 ones instead of omitting them.
 

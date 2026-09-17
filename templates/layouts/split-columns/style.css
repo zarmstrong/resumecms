@@ -1,0 +1,19 @@
+/* "split-columns": sections flow into two roughly equal-width columns
+   instead of one, alternating left/right by default (see index.jsx) — no
+   rail tint, just a plain two-up arrangement. */
+.r-body-split-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 32px;
+  align-items: start;
+}
+
+.r-split-column {
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .r-body-split-columns {
+    grid-template-columns: 1fr;
+  }
+}
