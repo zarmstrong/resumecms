@@ -16,6 +16,16 @@ export const HEADING_COLUMN_OPTIONS = [
 // (orderBlocksHierarchically output — flat, with parentId set).
 // classifyAuto(group, index): 'primary' | 'secondary', called only when the
 // group's heading has no explicit override (or the group has no heading).
+//
+// Most existing resumes predate block nesting, so a heading and its body are
+// still separate top-level blocks with no parentId linking them. A group is
+// therefore a heading plus both its explicitly nested children (parentId)
+// *and* whatever unnested top-level blocks immediately follow it, up to the
+// next heading — the same adjacency a resume authored before nesting existed
+// already implied. A block whose parentId points at a heading that isn't a
+// top-level block here (stale/orphaned, e.g. hand-edited data) still needs
+// to render somewhere, so it becomes its own group instead of being dropped
+// — mirrors the server's orderBlocksHierarchically().
 export function groupBlocksIntoColumns(blocks, classifyAuto) {
   const childrenByParent = new Map();
   for (const block of blocks) {
@@ -24,14 +34,27 @@ export function groupBlocksIntoColumns(blocks, classifyAuto) {
     childrenByParent.get(block.parentId).push(block);
   }
 
+  const consumedParentIds = new Set();
   const groups = [];
+  let current = null;
   for (const block of blocks) {
-    if (block.parentId != null) continue; // belongs to its heading's group, handled below
+    if (block.parentId != null) continue; // folded into its heading's group above, or an orphan handled below
     if (block.type === 'heading') {
-      groups.push({ heading: block, blocks: [block, ...(childrenByParent.get(block.id) || [])] });
+      const children = childrenByParent.get(block.id) || [];
+      consumedParentIds.add(block.id);
+      current = { heading: block, blocks: [block, ...children] };
+      groups.push(current);
+    } else if (current) {
+      current.blocks.push(block);
     } else {
-      groups.push({ heading: null, blocks: [block] });
+      current = { heading: null, blocks: [block] };
+      groups.push(current);
     }
+  }
+
+  for (const [parentId, children] of childrenByParent) {
+    if (consumedParentIds.has(parentId)) continue;
+    for (const child of children) groups.push({ heading: null, blocks: [child] });
   }
 
   const primary = [];

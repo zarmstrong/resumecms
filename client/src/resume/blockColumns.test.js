@@ -42,11 +42,31 @@ test('an unrecognized column value falls back to auto-classification', () => {
   assert.deepEqual(ids(secondary), ['h1', 'skills']);
 });
 
-test('a headless top-level block is its own group', () => {
+test('consecutive headless top-level blocks join one group, like unnested content before any heading', () => {
   const blocks = [block('summary', 'summary'), block('skills', 'skills_group')];
   const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);
-  assert.deepEqual(ids(primary), ['summary']);
-  assert.deepEqual(ids(secondary), ['skills']);
+  assert.deepEqual(ids(primary), ['summary', 'skills']);
+  assert.deepEqual(secondary, []);
+});
+
+test('unnested blocks immediately following a heading stay in its group (most resumes predate nesting)', () => {
+  const blocks = [
+    block('h1', 'heading'),
+    block('skills', 'skills_group'),
+    block('edu', 'education'),
+    block('h2', 'heading'),
+    block('exp', 'experience'),
+  ];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);
+  assert.deepEqual(ids(secondary), ['h1', 'skills', 'edu']);
+  assert.deepEqual(ids(primary), ['h2', 'exp']);
+});
+
+test('a block whose parentId references a missing/non-top-level heading still renders as its own group', () => {
+  const blocks = [block('h1', 'heading'), block('orphan', 'experience', 'missing-heading')];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);
+  assert.deepEqual(ids(primary), ['h1', 'orphan']);
+  assert.deepEqual(secondary, []);
 });
 
 test('a heading with no children still forms a group', () => {
