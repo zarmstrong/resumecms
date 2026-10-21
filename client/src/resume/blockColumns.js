@@ -14,11 +14,14 @@ export const HEADING_COLUMN_OPTIONS = [
 
 // blocks: the full ordered array a layout component already receives
 // (orderBlocksHierarchically output — flat, with parentId set).
-// classifyAuto(group, index): 'primary' | 'secondary'. Called for every
-// group, including ones with an explicit `data.column` override, so a
-// stateful classifier (e.g. split-columns' alternating column) still sees
-// every heading and advances consistently — its result is only used for
-// groups that have no override.
+// classifyAuto(group, index, { previousColumn }): 'primary' | 'secondary'.
+// Called for every group, including ones with an explicit `data.column`
+// override, so a stateful classifier (e.g. split-columns' alternating
+// column) still sees every heading and advances consistently — its result
+// is only used for groups that have no override. `previousColumn` is the
+// column the group before this one actually landed in (override included;
+// null for the first group) so a classifier that wants a headless group to
+// follow its neighbor can honor the neighbor's pin.
 //
 // Most existing resumes predate block nesting, so a heading and its body are
 // still separate top-level blocks with no parentId linking them. For a
@@ -69,29 +72,34 @@ export function groupBlocksIntoColumns(blocks, classifyAuto) {
 
   const primary = [];
   const secondary = [];
+  let previousColumn = null;
   groups.forEach((group, index) => {
-    const auto = classifyAuto(group, index);
+    const auto = classifyAuto(group, index, { previousColumn });
     const override = group.heading?.data?.column;
     const column = override === 'primary' || override === 'secondary' ? override : auto;
     (column === 'secondary' ? secondary : primary).push(...group.blocks);
+    previousColumn = column === 'secondary' ? 'secondary' : 'primary';
   });
   return { primary, secondary };
 }
 
 // classifyAuto factory for layouts that alternate sections between two
-// equal columns (split-columns). Stateful on purpose: the column only
-// advances when a *heading* group comes along, so headless groups — a
+// equal columns (split-columns). Stateful on purpose: the alternation only
+// advances when a *heading* group comes along, independent of any pins, so
+// pinning one section doesn't reshuffle the rest. Headless groups — a
 // summary before the first heading, or a top-level block dropped after a
-// nested section — don't consume a column slot and instead stay in the
-// column of whatever section precedes them. Create a fresh one per render.
+// nested section — don't consume a slot; they land in the column the
+// preceding section actually went to (its pin included), so a note placed
+// under a pinned section stays with it. Create a fresh one per render.
 export function makeAlternateByHeadingClassifier() {
   let column = 'primary';
   let seenHeading = false;
-  return (group) => {
+  return (group, index, { previousColumn } = {}) => {
     if (group.heading) {
       if (seenHeading) column = column === 'primary' ? 'secondary' : 'primary';
       seenHeading = true;
+      return column;
     }
-    return column;
+    return previousColumn || column;
   };
 }

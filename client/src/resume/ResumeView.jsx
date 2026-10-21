@@ -96,9 +96,16 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
   const LayoutComponent = getLayoutTemplate(layout).Component;
   const skillsDisplay = skillsDisplayFor(site);
 
-  function renderBlock(block) {
+  // Layouts may pass `{ style }` to add inline styles to the block wrapper
+  // (split-columns uses it for a flex `order`) without adding an extra
+  // element that would break `.r-block:first-child` spacing rules.
+  function renderBlock(block, { style } = {}) {
     const Renderer = BLOCK_RENDERERS[block.type];
     if (!Renderer) return null;
+    // The public API keeps blocks hidden in this mode as content-free
+    // placeholders (server/src/publicBlocks.js) so column layouts group and
+    // classify the same list the editor preview does; they render nothing.
+    if (block.hidden) return null;
 
     const dimmed = isPreview && !(block.visibleWeb && block.visiblePrint);
 
@@ -107,7 +114,7 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
         key={block.id}
         className={`r-block${dimmed ? ' r-block-dimmed' : ''}${blockWrapperClassName(block.data)}`}
         data-block-type={block.type}
-        style={blockWrapperStyle(block.data)}
+        style={style ? { ...blockWrapperStyle(block.data), ...style } : blockWrapperStyle(block.data)}
       >
         <Renderer data={block.data} mode={mode} skillsDisplay={skillsDisplay} />
       </div>

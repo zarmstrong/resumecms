@@ -187,3 +187,60 @@ test('alternating classifier keeps a block placed after a nested section in that
   assert.deepEqual(ids(primary), ['h1', 'exp', 'h3']);
   assert.deepEqual(ids(secondary), ['h2', 'edu', 'note']);
 });
+
+test('alternating classifier keeps a headless group with a pinned section before it', () => {
+  // Projects auto-lands secondary but is pinned primary; the note dropped
+  // after it must follow the pin, not the auto slot. Alternation itself is
+  // unaffected: Education still flips relative to Projects' auto slot.
+  const blocks = [
+    block('h1', 'heading'),
+    block('exp', 'experience', 'h1'),
+    block('h2', 'heading', null, { column: 'primary' }),
+    block('proj', 'custom', 'h2'),
+    block('note', 'custom'),
+    block('h3', 'heading'),
+    block('edu', 'education', 'h3'),
+  ];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, makeAlternateByHeadingClassifier());
+  assert.deepEqual(ids(primary), ['h1', 'exp', 'h2', 'proj', 'note', 'h3', 'edu']);
+  assert.deepEqual(secondary, []);
+});
+
+test('alternating classifier keeps a leading summary with a first section pinned secondary', () => {
+  const blocks = [block('summary', 'summary'), block('h1', 'heading', null, { column: 'secondary' }), block('h2', 'heading')];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, makeAlternateByHeadingClassifier());
+  // The summary has no section before it, so it keeps the auto column.
+  assert.deepEqual(ids(primary), ['summary']);
+  assert.deepEqual(ids(secondary), ['h1', 'h2']);
+});
+
+test('classifyAuto receives the previous group\'s resolved column, pin included', () => {
+  const blocks = [
+    block('h1', 'heading', null, { column: 'secondary' }),
+    block('skills', 'skills_group', 'h1'),
+    block('note', 'custom'),
+    block('h2', 'heading'),
+  ];
+  const seen = [];
+  groupBlocksIntoColumns(blocks, (group, index, { previousColumn }) => {
+    seen.push(previousColumn);
+    return 'primary';
+  });
+  assert.deepEqual(seen, [null, 'secondary', 'primary']);
+});
+
+test('hidden placeholders from the public API take part in grouping like any other block', () => {
+  // public.js keeps a hidden heading as a content-free placeholder so the
+  // published page groups exactly like the editor preview.
+  const blocks = [
+    block('h1', 'heading'),
+    block('exp', 'experience', 'h1'),
+    { ...block('h2', 'heading', null, { column: 'secondary' }), hidden: true },
+    block('proj', 'custom', 'h2'),
+    block('h3', 'heading'),
+    block('edu', 'education', 'h3'),
+  ];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, makeAlternateByHeadingClassifier());
+  assert.deepEqual(ids(primary), ['h1', 'exp', 'h3', 'edu']);
+  assert.deepEqual(ids(secondary), ['h2', 'proj']);
+});

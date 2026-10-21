@@ -12,8 +12,19 @@
   min-width: 0;
 }
 
+/* Narrow viewports: collapse to one column. The column divs stop being
+   boxes so every block becomes a direct flex child and its `order` (its
+   index in the authored block list, set in index.jsx) restores the original
+   reading order instead of "left column, then right column". Blocks space
+   themselves with their own margins, so no gap here. */
 @media (max-width: 700px) {
   .r-body-split-columns {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .r-split-column {
+    display: contents;
   }
 }

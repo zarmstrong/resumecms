@@ -179,10 +179,15 @@ columns via `groupBlocksIntoColumns()`, see "Block nesting" above).
 only) renders every block regardless of visibility flags and dims hidden
 ones instead of omitting them.
 
-Bullet-level visibility (`experience` blocks) is filtered server-side in
-`public.js`, independently of block-level visibility, and bullets can nest
-one level deep — both the visibility filter and the print/PDF path need to
-recurse into `children`.
+Block- and bullet-level visibility are applied server-side in
+`server/src/publicBlocks.js` (called from `routes/public.js`). A block
+hidden in the requested mode is not dropped: it's sent as a content-free
+placeholder (`hidden: true`, only id/type/parentId plus a heading's
+`data.column`) so column layouts group and classify exactly the list the
+editor preview sees, and `ResumeView.renderBlock` returns `null` for it.
+Bullet-level visibility (`experience` blocks) is independent of block-level
+visibility, and bullets can nest one level deep — both the visibility
+filter and the print/PDF path need to recurse into `children`.
 
 ### PDF generation
 

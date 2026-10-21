@@ -113,15 +113,16 @@ its section together as one unit — the blocks explicitly nested under it
 predate nesting), the unnested top-level blocks that simply follow it up to
 the next heading — and honors a heading's own `data.column` override
 (`'primary' | 'secondary'`, set from the editor's heading form) before
-falling back to your `classifyAuto(group, index)` for anything left
-unpinned. A top-level block that follows a heading *with* nested children
+falling back to your `classifyAuto(group, index, { previousColumn })` for
+anything left unpinned (`previousColumn` is where the group before this one
+actually landed, pin included, or `null` for the first group). A top-level block that follows a heading *with* nested children
 was deliberately placed after that section in the editor, so it becomes a
 headless group of its own:
 
 ```jsx
 import { groupBlocksIntoColumns } from '@resume/blockColumns.js';
 
-function classifyAuto(group, index) {
+function classifyAuto(group, index, { previousColumn }) {
   // group: { heading: Block | null, blocks: Block[] } — blocks is the
   // heading plus its nested children (or, for a heading with none, the
   // unnested blocks that follow it up to the next heading), or one or more
@@ -143,8 +144,11 @@ export default function MyTwoColumnLayout({ blocks, renderBlock }) {
 For a layout that alternates sections between two equal columns, reuse
 `makeAlternateByHeadingClassifier()` from the same module (what
 `split-columns` uses): it only advances on heading groups, so a headless
-group stays in the column of the section before it instead of taking a
-slot. `sidebar` and `sidebar-right` share a skills/education auto-classify
+group stays in the column the section before it landed in (its pin
+included) instead of taking a slot. Note that the public API keeps blocks
+hidden in the current mode as content-free placeholders flagged `hidden`
+(so grouping matches the editor preview); `renderBlock` returns `null` for
+them, so a layout never needs to special-case them. `sidebar` and `sidebar-right` share a skills/education auto-classify
 heuristic and rail text-contrast handling via `@resume/sidebarPanel.js`,
 plus the rail's `.r-sidebar`/`.r-main` CSS via `@resume/sidebarPanel.css` —
 import both if you're contributing another rail-style layout rather than
