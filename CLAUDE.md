@@ -137,7 +137,8 @@ columns, alternating by section).
 
 Templates live at the repo root under `templates/headers/<id>/` and
 `templates/layouts/<id>/`, each with a `template.json`
-(`label`/`description`/`author`, layouts also allow `skillsDisplay`).
+(`label`/`description`/`author`, layouts also allow `skillsDisplay` and
+`columns: true` for layouts that honor a heading's column placement).
 Headers require an `index.jsx` component; layouts' `index.jsx` is optional
 (a layout with none is pure CSS — its `style.css` renders through the
 default flat block list; see `templateRegistry.js`'s comment on

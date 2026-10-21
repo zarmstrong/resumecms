@@ -1,5 +1,6 @@
 {
   "label": "Sidebar",
   "description": "Skills and education move into a narrow, tinted side rail; the rest of the sections stay in the wider main column.",
-  "author": "resumecms"
+  "author": "resumecms",
+  "columns": true
 }

@@ -21,43 +21,50 @@ export const HEADING_COLUMN_OPTIONS = [
 // groups that have no override.
 //
 // Most existing resumes predate block nesting, so a heading and its body are
-// still separate top-level blocks with no parentId linking them. A group is
-// therefore a heading plus both its explicitly nested children (parentId)
-// *and* whatever unnested top-level blocks immediately follow it, up to the
-// next heading — the same adjacency a resume authored before nesting existed
-// already implied. A block whose parentId points at a heading that isn't a
-// top-level block here (stale/orphaned, e.g. hand-edited data) still needs
-// to render somewhere, so it becomes its own group instead of being dropped
-// — mirrors the server's orderBlocksHierarchically().
+// still separate top-level blocks with no parentId linking them. For a
+// heading with *no* nested children, its group therefore also absorbs the
+// unnested top-level blocks that immediately follow it, up to the next
+// heading — the same adjacency a resume authored before nesting existed
+// already implied. A heading that does have nested children is treated as
+// authored with nesting in mind: a top-level block placed after it was
+// deliberately dropped "after the whole section" in the editor (see
+// blockDrag.js), so it starts its own headless group instead of being folded
+// in. Consecutive headless blocks share one group.
+//
+// A block whose parentId points at a heading that isn't in `blocks` (its
+// heading was filtered out by visibility in public.js, or stale hand-edited
+// data) still needs to render, and in place — exactly where the flat array
+// already has it — so it's treated like an unnested top-level block.
 export function groupBlocksIntoColumns(blocks, classifyAuto) {
+  const topLevelHeadingIds = new Set();
+  for (const block of blocks) {
+    if (block.parentId == null && block.type === 'heading') topLevelHeadingIds.add(block.id);
+  }
   const childrenByParent = new Map();
   for (const block of blocks) {
-    if (block.parentId == null) continue;
+    if (block.parentId == null || !topLevelHeadingIds.has(block.parentId)) continue;
     if (!childrenByParent.has(block.parentId)) childrenByParent.set(block.parentId, []);
     childrenByParent.get(block.parentId).push(block);
   }
 
-  const consumedParentIds = new Set();
   const groups = [];
   let current = null;
+  let currentAbsorbsFollowing = false;
   for (const block of blocks) {
-    if (block.parentId != null) continue; // folded into its heading's group above, or an orphan handled below
+    // Nested under a heading that's present: already folded into its group.
+    if (block.parentId != null && topLevelHeadingIds.has(block.parentId)) continue;
     if (block.type === 'heading') {
       const children = childrenByParent.get(block.id) || [];
-      consumedParentIds.add(block.id);
       current = { heading: block, blocks: [block, ...children] };
+      currentAbsorbsFollowing = children.length === 0;
       groups.push(current);
-    } else if (current) {
+    } else if (current && currentAbsorbsFollowing) {
       current.blocks.push(block);
     } else {
       current = { heading: null, blocks: [block] };
+      currentAbsorbsFollowing = true;
       groups.push(current);
     }
-  }
-
-  for (const block of blocks) {
-    if (block.parentId == null || consumedParentIds.has(block.parentId)) continue;
-    groups.push({ heading: null, blocks: [block] });
   }
 
   const primary = [];
@@ -69,4 +76,22 @@ export function groupBlocksIntoColumns(blocks, classifyAuto) {
     (column === 'secondary' ? secondary : primary).push(...group.blocks);
   });
   return { primary, secondary };
+}
+
+// classifyAuto factory for layouts that alternate sections between two
+// equal columns (split-columns). Stateful on purpose: the column only
+// advances when a *heading* group comes along, so headless groups — a
+// summary before the first heading, or a top-level block dropped after a
+// nested section — don't consume a column slot and instead stay in the
+// column of whatever section precedes them. Create a fresh one per render.
+export function makeAlternateByHeadingClassifier() {
+  let column = 'primary';
+  let seenHeading = false;
+  return (group) => {
+    if (group.heading) {
+      if (seenHeading) column = column === 'primary' ? 'secondary' : 'primary';
+      seenHeading = true;
+    }
+    return column;
+  };
 }

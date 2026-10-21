@@ -1,10 +1,7 @@
 /* "sidebar-right": mirrors "sidebar" (skills/education in a narrow, tinted
-   rail) but the rail sits on the right instead of the left. Reuses
-   sidebar's .r-sidebar/.r-main rules (templates/layouts/sidebar/style.css,
-   always bundled — see templateRegistry.js) unscoped by layout id, since
-   those classnames only ever appear in the DOM when one of these two
-   layouts renders them; only the two-column grid order differs, so that's
-   all this file needs to own. */
+   rail) but the rail sits on the right instead of the left. The rail's own
+   styling (.r-sidebar/.r-main) comes from @resume/sidebarPanel.css (imported
+   by index.jsx); this file only owns the grid. */
 .r-body-sidebar-right {
   display: grid;
   grid-template-columns: 1fr 220px;

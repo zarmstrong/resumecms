@@ -1,5 +1,6 @@
 import { groupBlocksIntoColumns } from '@resume/blockColumns.js';
 import { classifySkillsEducationAuto, sidebarTextStyle } from '@resume/sidebarPanel.js';
+import '@resume/sidebarPanel.css';
 import './style.css';
 
 // Mirrors "sidebar" — same grouping heuristic and rail styling (shared via

@@ -76,7 +76,11 @@ matching the folder name, lowercase kebab-case:
 `templates/layouts/<id>/`:
 - `template.json` — `{ label, description, author }`, plus an optional
   `skillsDisplay` (currently only `"chips"` is a real option — renders each
-  skill as its own pill instead of one label + comma list).
+  skill as its own pill instead of one label + comma list) and an optional
+  `columns: true` for a layout that honors a heading's "Column placement"
+  setting (see "Splitting blocks into columns" below) — the editor lists
+  these layouts next to that field, so set it or the hint will say your
+  layout ignores the setting.
 - `index.jsx` — **optional**. Only needed for a layout that changes the DOM
   *structure* below the header (like `sidebar`, which splits blocks into a
   side rail and a main column). Default-exports:
@@ -102,22 +106,26 @@ matching the folder name, lowercase kebab-case:
 A layout that arranges blocks into two columns (like `sidebar`,
 `sidebar-right`, or `split-columns`) should use the shared
 `groupBlocksIntoColumns(blocks, classifyAuto)` helper
-(`@resume/blockColumns.js`) instead of inventing its own grouping — it
-keeps a heading and its section together as one unit — both blocks
-explicitly nested under it (via `parentId`) and, since most resumes predate
-nesting, any unnested top-level blocks that simply follow it up to the next
-heading — and honors a heading's own `data.column` override
+(`@resume/blockColumns.js`) instead of inventing its own grouping, and set
+`"columns": true` in its `template.json`. The helper keeps a heading and
+its section together as one unit — the blocks explicitly nested under it
+(via `parentId`) or, for a heading with no nested children (most resumes
+predate nesting), the unnested top-level blocks that simply follow it up to
+the next heading — and honors a heading's own `data.column` override
 (`'primary' | 'secondary'`, set from the editor's heading form) before
 falling back to your `classifyAuto(group, index)` for anything left
-unpinned:
+unpinned. A top-level block that follows a heading *with* nested children
+was deliberately placed after that section in the editor, so it becomes a
+headless group of its own:
 
 ```jsx
 import { groupBlocksIntoColumns } from '@resume/blockColumns.js';
 
 function classifyAuto(group, index) {
   // group: { heading: Block | null, blocks: Block[] } — blocks is the
-  // heading plus its nested children and any unnested blocks that follow
-  // it up to the next heading, or a single unnested block.
+  // heading plus its nested children (or, for a heading with none, the
+  // unnested blocks that follow it up to the next heading), or one or more
+  // consecutive headless top-level blocks.
   return index % 2 === 0 ? 'primary' : 'secondary';
 }
 
@@ -132,10 +140,15 @@ export default function MyTwoColumnLayout({ blocks, renderBlock }) {
 }
 ```
 
-`sidebar` and `sidebar-right` share a skills/education auto-classify
-heuristic and rail text-contrast handling via `@resume/sidebarPanel.js` —
-reuse it if you're contributing another rail-style layout rather than
-reimplementing it.
+For a layout that alternates sections between two equal columns, reuse
+`makeAlternateByHeadingClassifier()` from the same module (what
+`split-columns` uses): it only advances on heading groups, so a headless
+group stays in the column of the section before it instead of taking a
+slot. `sidebar` and `sidebar-right` share a skills/education auto-classify
+heuristic and rail text-contrast handling via `@resume/sidebarPanel.js`,
+plus the rail's `.r-sidebar`/`.r-main` CSS via `@resume/sidebarPanel.css` —
+import both if you're contributing another rail-style layout rather than
+reimplementing them.
 
 Both `@resume/*` imports work from anywhere under `templates/` via a Vite
 alias to `client/src/resume/` — no fragile relative paths.

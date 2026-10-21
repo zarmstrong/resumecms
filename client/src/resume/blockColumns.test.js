@@ -1,18 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupBlocksIntoColumns } from './blockColumns.js';
+import { groupBlocksIntoColumns, makeAlternateByHeadingClassifier } from './blockColumns.js';
+import { classifySkillsEducationAuto } from './sidebarPanel.js';
 
 const block = (id, type = 'experience', parentId = null, data = {}) => ({ id, type, parentId, data });
 const ids = (arr) => arr.map((b) => b.id);
-
-// Mirrors the sidebar layout's real heuristic: a heading's section goes to
-// the secondary column only if every non-heading child is skills_group or
-// education.
-const SIDEBAR_AUTO_TYPES = new Set(['skills_group', 'education']);
-function sidebarClassify(group) {
-  const items = group.blocks.filter((b) => b.type !== 'heading');
-  return items.length > 0 && items.every((b) => SIDEBAR_AUTO_TYPES.has(b.type)) ? 'secondary' : 'primary';
-}
+// The real sidebar/sidebar-right heuristic, so these tests fail if it drifts.
+const sidebarClassify = classifySkillsEducationAuto;
 
 test('groups a heading with its nested children and classifies by type', () => {
   const blocks = [
@@ -49,7 +43,7 @@ test('consecutive headless top-level blocks join one group, like unnested conten
   assert.deepEqual(secondary, []);
 });
 
-test('unnested blocks immediately following a heading stay in its group (most resumes predate nesting)', () => {
+test('unnested blocks following a heading with no nested children stay in its group (pre-nesting resumes)', () => {
   const blocks = [
     block('h1', 'heading'),
     block('skills', 'skills_group'),
@@ -62,35 +56,58 @@ test('unnested blocks immediately following a heading stay in its group (most re
   assert.deepEqual(ids(primary), ['h2', 'exp']);
 });
 
-test('a block whose parentId references a missing/non-top-level heading still renders as its own group', () => {
-  const blocks = [block('h1', 'heading'), block('orphan', 'experience', 'missing-heading')];
-  const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);
-  assert.deepEqual(ids(primary), ['h1', 'orphan']);
-  assert.deepEqual(secondary, []);
-});
-
-test('classifyAuto is called for every group, including overridden ones, so a stateful classifier stays in sync', () => {
+test('a top-level block after a heading that has nested children is NOT folded into that section', () => {
+  // Editor semantics: dropping on a heading's edge places the block "after
+  // the whole section" (blockDrag.js), distinct from nesting it. The Skills
+  // rail section must stay a rail section and the custom block must stay out.
   const blocks = [
     block('h1', 'heading'),
-    block('h2', 'heading', null, { column: 'secondary' }),
-    block('h3', 'heading'),
+    block('skills', 'skills_group', 'h1'),
+    block('note', 'custom'),
+    block('h2', 'heading'),
+    block('exp', 'experience', 'h2'),
   ];
-  // Mirrors split-columns' real classifier: alternates only once a
-  // *previous* heading has already been seen, so the first heading stays
-  // 'primary' unless overridden.
-  const seen = [];
-  let column = 'primary';
-  let seenHeading = false;
-  const alternating = (group) => {
-    seen.push(group.heading.id);
-    if (seenHeading) column = column === 'primary' ? 'secondary' : 'primary';
-    seenHeading = true;
-    return column;
-  };
-  const { primary, secondary } = groupBlocksIntoColumns(blocks, alternating);
-  assert.deepEqual(seen, ['h1', 'h2', 'h3']);
-  assert.deepEqual(ids(primary), ['h1', 'h3']);
-  assert.deepEqual(ids(secondary), ['h2']);
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);
+  assert.deepEqual(ids(secondary), ['h1', 'skills']);
+  assert.deepEqual(ids(primary), ['note', 'h2', 'exp']);
+});
+
+test('a heading pinned to a column does not drag a following top-level block with it', () => {
+  const blocks = [
+    block('h1', 'heading', null, { column: 'secondary' }),
+    block('skills', 'skills_group', 'h1'),
+    block('note', 'custom'),
+  ];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);
+  assert.deepEqual(ids(secondary), ['h1', 'skills']);
+  assert.deepEqual(ids(primary), ['note']);
+});
+
+test('a summary after a nested section becomes its own group rather than joining the section', () => {
+  const blocks = [
+    block('h1', 'heading'),
+    block('edu', 'education', 'h1'),
+    block('summary', 'summary'),
+  ];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);
+  assert.deepEqual(ids(secondary), ['h1', 'edu']);
+  assert.deepEqual(ids(primary), ['summary']);
+});
+
+test('children whose heading was filtered out render in place, not at the end', () => {
+  // public.js drops a hidden heading but keeps its visible children, so the
+  // layout sees them mid-array with a parentId nothing matches.
+  const blocks = [
+    block('h1', 'heading'),
+    block('exp', 'experience', 'h1'),
+    block('proj1', 'custom', 'hidden-heading'),
+    block('proj2', 'custom', 'hidden-heading'),
+    block('h2', 'heading'),
+    block('edu', 'education', 'h2'),
+  ];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);
+  assert.deepEqual(ids(primary), ['h1', 'exp', 'proj1', 'proj2']);
+  assert.deepEqual(ids(secondary), ['h2', 'edu']);
 });
 
 test('orphaned children keep their original relative order across multiple missing parents', () => {
@@ -128,4 +145,45 @@ test('grouping does not depend on children being positionally adjacent to their 
   const { primary, secondary } = groupBlocksIntoColumns(blocks, sidebarClassify);
   assert.deepEqual(ids(secondary), ['h1', 'skills']);
   assert.deepEqual(ids(primary), ['h2', 'exp']);
+});
+
+// ---- split-columns' alternating classifier ---------------------------------
+
+test('alternating classifier is called for every group, including overridden ones, so it stays in sync', () => {
+  const blocks = [
+    block('h1', 'heading'),
+    block('h2', 'heading', null, { column: 'secondary' }),
+    block('h3', 'heading'),
+  ];
+  const seen = [];
+  const inner = makeAlternateByHeadingClassifier();
+  const alternating = (group, index) => {
+    seen.push(group.heading.id);
+    return inner(group, index);
+  };
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, alternating);
+  assert.deepEqual(seen, ['h1', 'h2', 'h3']);
+  assert.deepEqual(ids(primary), ['h1', 'h3']);
+  assert.deepEqual(ids(secondary), ['h2']);
+});
+
+test('alternating classifier keeps a leading headless group with the first section', () => {
+  const blocks = [block('summary', 'summary'), block('h1', 'heading'), block('h2', 'heading')];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, makeAlternateByHeadingClassifier());
+  assert.deepEqual(ids(primary), ['summary', 'h1']);
+  assert.deepEqual(ids(secondary), ['h2']);
+});
+
+test('alternating classifier keeps a block placed after a nested section in that section\'s column', () => {
+  const blocks = [
+    block('h1', 'heading'),
+    block('exp', 'experience', 'h1'),
+    block('h2', 'heading'),
+    block('edu', 'education', 'h2'),
+    block('note', 'custom'),
+    block('h3', 'heading'),
+  ];
+  const { primary, secondary } = groupBlocksIntoColumns(blocks, makeAlternateByHeadingClassifier());
+  assert.deepEqual(ids(primary), ['h1', 'exp', 'h3']);
+  assert.deepEqual(ids(secondary), ['h2', 'edu', 'note']);
 });
