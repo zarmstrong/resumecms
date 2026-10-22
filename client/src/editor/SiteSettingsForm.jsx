@@ -90,7 +90,7 @@ const OPTIONAL_COLOR_FIELDS = [
   {
     key: 'sidebarBackground',
     label: 'Sidebar background',
-    hint: 'Only used by the Sidebar body layout — overrides its automatic accent-tinted background',
+    hint: 'Only used by the Sidebar and Sidebar (Right) body layouts — overrides their automatic accent-tinted background',
     preview: () => '#eef2ea',
   },
 ];

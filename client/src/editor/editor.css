@@ -285,6 +285,11 @@
   flex: 0 0 90px;
 }
 
+.ed-field-hint {
+  font-size: 11px;
+  color: var(--slate-light);
+}
+
 .ed-checkbox-field {
   flex-direction: row;
   align-items: center;

@@ -1,0 +1,16 @@
+/* "sidebar-right": mirrors "sidebar" (skills/education in a narrow, tinted
+   rail) but the rail sits on the right instead of the left. The rail's own
+   styling (.r-sidebar/.r-main) comes from @resume/sidebarPanel.css (imported
+   by index.jsx); this file only owns the grid. */
+.r-body-sidebar-right {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 8px 32px;
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .r-body-sidebar-right {
+    grid-template-columns: 1fr;
+  }
+}

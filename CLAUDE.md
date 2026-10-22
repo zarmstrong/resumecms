@@ -122,16 +122,23 @@ destination. Rows remain stationary during dragging, and moving a heading
 moves its children too. Only the dragged block's `parentId` changes.
 
 Layout templates that want to react to nesting (e.g. put a heading's whole
-group in a side column) can group `blocks` by `parentId` themselves — see
-`templates/layouts/sidebar/index.jsx`'s `splitBlocksForSidebar`, which
-currently infers grouping from block-type adjacency and could be simplified
-to use `parentId` directly now that it's explicit.
+group in a side column) use the shared `groupBlocksIntoColumns()` helper
+(`client/src/resume/blockColumns.js`), which groups a heading with whatever
+is nested under it via `parentId` and sorts each group into one of two
+columns. A heading can pin its own section to a column via `data.column`
+(`'primary' | 'secondary'`, editable in the editor's heading form); anything
+else falls to the layout's `classifyAuto(group, index)`. Three layouts use
+this today: `sidebar` and `sidebar-right` (a skills/education rail, left or
+right — see `client/src/resume/sidebarPanel.js` for their shared
+heuristic + rail text-contrast handling) and `split-columns` (two even
+columns, alternating by section).
 
 ### Pluggable header/layout templates
 
 Templates live at the repo root under `templates/headers/<id>/` and
 `templates/layouts/<id>/`, each with a `template.json`
-(`label`/`description`/`author`, layouts also allow `skillsDisplay`).
+(`label`/`description`/`author`, layouts also allow `skillsDisplay` and
+`columns: true` for layouts that honor a heading's column placement).
 Headers require an `index.jsx` component; layouts' `index.jsx` is optional
 (a layout with none is pure CSS — its `style.css` renders through the
 default flat block list; see `templateRegistry.js`'s comment on
@@ -165,16 +172,22 @@ site settings (colors, fonts, sizes, pill styles — `siteColors.js`) into
 CSS custom properties, resolves the header template and layout template
 from `templateRegistry.js`, and renders blocks via `BLOCK_RENDERERS`
 (`blockRenderers.jsx`) — a layout component receives already-resolved
-`blocks`/`renderBlock`/`colors` and decides arrangement (e.g.
-`templates/layouts/sidebar/index.jsx` regroups blocks under headings into a
-side rail vs. main column based on block type). `mode="preview"` (editor
+`blocks`/`renderBlock`/`colors` and decides arrangement (e.g. the
+`sidebar`/`sidebar-right`/`split-columns` layouts split blocks into two
+columns via `groupBlocksIntoColumns()`, see "Block nesting" above).
+`mode="preview"` (editor
 only) renders every block regardless of visibility flags and dims hidden
 ones instead of omitting them.
 
-Bullet-level visibility (`experience` blocks) is filtered server-side in
-`public.js`, independently of block-level visibility, and bullets can nest
-one level deep — both the visibility filter and the print/PDF path need to
-recurse into `children`.
+Block- and bullet-level visibility are applied server-side in
+`server/src/publicBlocks.js` (called from `routes/public.js`). A block
+hidden in the requested mode is not dropped: it's sent as a content-free
+placeholder (`hidden: true`, only id/type/parentId plus a heading's
+`data.column`) so column layouts group and classify exactly the list the
+editor preview sees, and `ResumeView.renderBlock` returns `null` for it.
+Bullet-level visibility (`experience` blocks) is independent of block-level
+visibility, and bullets can nest one level deep — both the visibility
+filter and the print/PDF path need to recurse into `children`.
 
 ### PDF generation
 

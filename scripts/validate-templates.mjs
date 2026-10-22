@@ -64,7 +64,11 @@ for (const id of layoutIds) {
   const dir = path.join(TEMPLATES_DIR, 'layouts', id);
   const label = `templates/layouts/${id}`;
   checkId(id, label);
-  checkMeta(readJson(path.join(dir, 'template.json'), label), label, ['skillsDisplay']);
+  const meta = readJson(path.join(dir, 'template.json'), label);
+  checkMeta(meta, label, ['skillsDisplay', 'columns']);
+  if (meta && 'columns' in meta && typeof meta.columns !== 'boolean') {
+    errors.push(`${label}: "columns" must be a boolean`);
+  }
 }
 
 // ---- presets: template.json referencing an existing header + layout ---

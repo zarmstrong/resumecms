@@ -1,0 +1,6 @@
+{
+  "label": "Split Columns",
+  "description": "Sections flow into two roughly equal-width columns instead of one, alternating left/right by default and overridable per section.",
+  "author": "resumecms",
+  "columns": true
+}

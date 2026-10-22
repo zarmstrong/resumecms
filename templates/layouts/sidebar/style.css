@@ -1,40 +1,13 @@
-/* "sidebar": skills/education move into a narrow, tinted side rail; the
-   rest of the sections stay in the wider main column. See index.jsx for how
-   blocks are assigned. */
+/* "sidebar": skills/education move into a narrow, tinted side rail on the
+   left; the rest of the sections stay in the wider main column. See
+   index.jsx for how blocks are assigned. The rail's own styling
+   (.r-sidebar/.r-main) comes from @resume/sidebarPanel.css (imported
+   by index.jsx); this file only owns the grid. */
 .r-body-sidebar {
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: 8px 32px;
   align-items: start;
-}
-
-.r-sidebar {
-  background: var(--panel-alt, #f4f1ea); /* fallback for browsers without color-mix() */
-  background: var(--r-sidebar-bg, color-mix(in srgb, var(--r-accent, #2f6f4e) 12%, var(--r-bg, #ffffff)));
-  border-radius: var(--radius);
-  padding: 18px;
-  min-width: 0;
-}
-
-.r-main {
-  min-width: 0;
-}
-
-.r-sidebar .r-block:first-child .r-heading {
-  margin-top: var(--r-block-space-above, 0);
-}
-
-/* The sidebar is too narrow for the two-column skills grid and the
-   title/dates flex row used elsewhere — stack both instead. */
-.r-sidebar .r-skills-row {
-  grid-template-columns: 1fr;
-  gap: 2px;
-}
-
-.r-sidebar .r-experience-top {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
 }
 
 @media (max-width: 700px) {

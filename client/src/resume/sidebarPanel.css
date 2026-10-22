@@ -1,0 +1,36 @@
+/* Rail styling shared by every layout that renders a tinted .r-sidebar
+   next to an .r-main column (templates/layouts/sidebar and sidebar-right).
+   Lives next to sidebarPanel.js, which those layouts already import for
+   the matching auto-placement heuristic and rail text-contrast handling, so
+   a rail layout imports both halves from @resume/ instead of depending on
+   another template folder's style.css happening to be bundled. (The JS file
+   can't import this itself: it also runs under node:test, which can't load
+   CSS.) Each layout's own style.css only owns its grid. */
+.r-sidebar {
+  background: var(--panel-alt, #f4f1ea); /* fallback for browsers without color-mix() */
+  background: var(--r-sidebar-bg, color-mix(in srgb, var(--r-accent, #2f6f4e) 12%, var(--r-bg, #ffffff)));
+  border-radius: var(--radius);
+  padding: 18px;
+  min-width: 0;
+}
+
+.r-main {
+  min-width: 0;
+}
+
+.r-sidebar .r-block:first-child .r-heading {
+  margin-top: var(--r-block-space-above, 0);
+}
+
+/* The sidebar is too narrow for the two-column skills grid and the
+   title/dates flex row used elsewhere — stack both instead. */
+.r-sidebar .r-skills-row {
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+
+.r-sidebar .r-experience-top {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
