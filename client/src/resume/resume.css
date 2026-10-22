@@ -786,6 +786,75 @@
   }
 }
 
+/* Narrow screens (phones): every header is a flex row of an identity block
+   and a side block (actions, contact list) that refuses to shrink, so at
+   phone widths the name/title get crushed to a few characters per line.
+   Stack the two instead, left-align what was right-aligned, and let long
+   emails/URLs break. Screen-only: the PDF renders under print media at a
+   desktop-width viewport, so this never applies there. */
+@media screen and (max-width: 640px) {
+  .r-page {
+    padding: 28px 16px 56px;
+  }
+
+  .r-mode-web {
+    margin: 0 auto;
+    border-radius: 0;
+  }
+
+  .r-header,
+  .r-header-banner-top,
+  .r-header-identity-right {
+    flex-direction: column;
+  }
+
+  .r-header-identity-right {
+    margin-left: 0;
+  }
+
+  .r-header-main-right {
+    text-align: left;
+  }
+
+  .r-header-side {
+    align-items: flex-start;
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .r-contact-end {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .r-contact-labeled {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .r-contact-label {
+    text-align: left;
+  }
+
+  .r-contact,
+  .r-contact-value {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  /* The 130px skills label column and the title/dates row both fight for
+     a ~300px page the same way — stack them too. */
+  .r-skills-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .r-experience-top {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
 /* Print + PDF output */
 @media print {
   .r-header-actions {
