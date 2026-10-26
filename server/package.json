@@ -16,7 +16,7 @@
     "express-rate-limit": "^8.7.1",
     "morgan": "^1.12.1",
     "otplib": "^13.5.0",
-    "puppeteer": "^25.14.0",
+    "puppeteer": "^25.16.0",
     "qrcode": "^1.5.4"
   },
   "overrides": {
