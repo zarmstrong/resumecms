@@ -118,6 +118,7 @@ the server.
 | `RESUMECMS_SESSION_SECRET` | yes | Random string used to sign session cookies. |
 | `PORT` | no | Server port. Defaults to `4000`. |
 | `RESUMECMS_DATA_DIR` | no | Where the SQLite file lives. Defaults to `/data`. |
+| `RESUMECMS_TRUST_PROXY` | behind a reverse proxy | Express `trust proxy` value: the proxy's IP/subnet (e.g. `172.18.0.1`, `loopback`) or a hop count. Unset trusts no proxy. See the login rate-limiting notes below. |
 | `RESUMECMS_CAPTCHA_PROVIDER` | no | `turnstile` or `recaptcha` to require a captcha on login. Unset disables it. |
 | `RESUMECMS_TURNSTILE_SITE_KEY` / `RESUMECMS_TURNSTILE_SECRET_KEY` | if using Turnstile | From the [Cloudflare Turnstile dashboard](https://dash.cloudflare.com/?to=/:account/turnstile). |
 | `RESUMECMS_RECAPTCHA_SITE_KEY` / `RESUMECMS_RECAPTCHA_SECRET_KEY` | if using reCAPTCHA | From the [Google reCAPTCHA admin console](https://www.google.com/recaptcha/admin) (v2 "I'm not a robot" checkbox type). |
@@ -166,11 +167,15 @@ form loads the provider's widget dynamically and the server verifies the
 token server-side on every attempt. Leaving it unset disables the captcha
 entirely; rate limiting alone still applies either way.
 
-If you run this behind a reverse proxy, set
-Express's `trust proxy` setting so rate limiting keys on the real client
-IP instead of the proxy's — but only if you actually control that proxy,
-since trusting `X-Forwarded-For` blindly lets a client spoof its way
-around the limit.
+If you run this behind a reverse proxy, set `RESUMECMS_TRUST_PROXY` so
+rate limiting (and the access log) keys on the real client IP instead of
+the proxy's — otherwise every visitor shares one rate-limit bucket. Set it
+to the proxy's address as the container sees it (with Docker port
+publishing that's usually the bridge gateway, e.g. `172.18.0.1`; the
+`ip` field in the access log shows it), or to Express's named subnets like
+`loopback` / `uniquelocal`, or a hop count like `1`. Only trust a proxy
+you actually control: trusting `X-Forwarded-For` from anyone lets a client
+spoof its way around the limit, which is why `true` is refused.
 
 ### Two-factor authentication (TOTP)
 
