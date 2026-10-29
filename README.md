@@ -177,11 +177,14 @@ publishing that's usually the bridge gateway, e.g. `172.18.0.1`; the
 
 Only trust a proxy you actually control: whatever you trust can set
 `X-Forwarded-For` to anything, letting a client spoof its way around the
-limit. That's why `true` and catch-all subnets like `0.0.0.0/0` are
-refused. Two caveats:
+limit. That's why `true`, and any value that would trust arbitrary
+internet addresses (like `0.0.0.0/0` or `::ffff:0:0/96`), is refused at
+startup. Two caveats:
 
 - **Hop counts** (e.g. `1`) trust whatever connects directly, so they're
-  only safe if the app port can't be reached except through the proxy.
+  only safe if the app port can't be reached except through the proxy,
+  and the count must match the real number of proxies — a larger one
+  trusts client-supplied entries too.
   The compose file publishes `4000:4000` on all interfaces, so with it as
   shipped, someone who connects straight to port 4000 can fake their IP.
 - **The Docker gateway address** is also the source of anything Docker's

@@ -27,10 +27,33 @@ test('"true" is rejected as spoofable', () => {
   assert.throws(() => parseTrustProxy('True'), /RESUMECMS_TRUST_PROXY/);
 });
 
-test('catch-all subnets are rejected as spoofable', () => {
-  for (const raw of ['0.0.0.0/0', '::/0', 'loopback, 0.0.0.0/0', '0.0.0.0/0.0.0.0']) {
-    assert.throws(() => parseTrustProxy(raw), /matches every address/, raw);
+test('a hop count mixed into an address list is rejected', () => {
+  assert.throws(() => parseTrustProxy('1, loopback'), /mixes a hop count/);
+});
+
+test('subnet names are lowercased for proxy-addr', () => {
+  assert.equal(parseTrustProxy('Loopback, UniqueLocal'), 'loopback, uniquelocal');
+});
+
+test('applyTrustProxy rejects settings that trust arbitrary addresses', () => {
+  for (const raw of ['::ffff:0:0/96', '0.0.0.0/1, 128.0.0.0/1', '::/1, 8000::/1']) {
+    assert.throws(() => applyTrustProxy(express(), raw), /trusts arbitrary addresses/, raw);
   }
+});
+
+test('applyTrustProxy accepts real proxy ranges and named subnets', () => {
+  for (const raw of ['172.18.0.1', 'LOOPBACK', 'loopback, uniquelocal', '173.245.48.0/20', '::FFFF:AC12:1']) {
+    assert.doesNotThrow(() => applyTrustProxy(express(), raw), raw);
+  }
+});
+
+test('applyTrustProxy leaves trust proxy off when unset, and accepts hop counts', () => {
+  const off = express();
+  applyTrustProxy(off, undefined);
+  assert.equal(off.get('trust proxy'), false);
+  const hops = express();
+  applyTrustProxy(hops, '1');
+  assert.equal(hops.get('trust proxy'), 1);
 });
 
 test('applyTrustProxy sets the value on the app', () => {
@@ -40,5 +63,7 @@ test('applyTrustProxy sets the value on the app', () => {
 });
 
 test('applyTrustProxy names the variable when Express rejects the value', () => {
-  assert.throws(() => applyTrustProxy(express(), 'yes'), /RESUMECMS_TRUST_PROXY value "yes"/);
+  assert.throws(() => applyTrustProxy(express(), ' yes '), /RESUMECMS_TRUST_PROXY value "yes"/);
+  // Express itself refuses /0 ranges; make sure that still surfaces with our name on it.
+  assert.throws(() => applyTrustProxy(express(), '0.0.0.0/0'), /RESUMECMS_TRUST_PROXY value "0.0.0.0\/0"/);
 });
