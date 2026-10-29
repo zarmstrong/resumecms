@@ -118,6 +118,7 @@ the server.
 | `RESUMECMS_SESSION_SECRET` | yes | Random string used to sign session cookies. |
 | `PORT` | no | Server port. Defaults to `4000`. |
 | `RESUMECMS_DATA_DIR` | no | Where the SQLite file lives. Defaults to `/data`. |
+| `RESUMECMS_TRUST_PROXY` | behind a reverse proxy | Express `trust proxy` value: the proxy's IP/subnet (e.g. `172.18.0.1`, `loopback`), or a hop count if the app port is only reachable through the proxy. Unset trusts no proxy. See the login rate-limiting notes below. |
 | `RESUMECMS_CAPTCHA_PROVIDER` | no | `turnstile` or `recaptcha` to require a captcha on login. Unset disables it. |
 | `RESUMECMS_TURNSTILE_SITE_KEY` / `RESUMECMS_TURNSTILE_SECRET_KEY` | if using Turnstile | From the [Cloudflare Turnstile dashboard](https://dash.cloudflare.com/?to=/:account/turnstile). |
 | `RESUMECMS_RECAPTCHA_SITE_KEY` / `RESUMECMS_RECAPTCHA_SECRET_KEY` | if using reCAPTCHA | From the [Google reCAPTCHA admin console](https://www.google.com/recaptcha/admin) (v2 "I'm not a robot" checkbox type). |
@@ -166,11 +167,34 @@ form loads the provider's widget dynamically and the server verifies the
 token server-side on every attempt. Leaving it unset disables the captcha
 entirely; rate limiting alone still applies either way.
 
-If you run this behind a reverse proxy, set
-Express's `trust proxy` setting so rate limiting keys on the real client
-IP instead of the proxy's — but only if you actually control that proxy,
-since trusting `X-Forwarded-For` blindly lets a client spoof its way
-around the limit.
+If you run this behind a reverse proxy, set `RESUMECMS_TRUST_PROXY` so
+rate limiting (and the access log) keys on the real client IP instead of
+the proxy's — otherwise every visitor shares one rate-limit bucket. Set it
+to the proxy's address as the container sees it (with Docker port
+publishing that's usually the bridge gateway, e.g. `172.18.0.1`; the
+`ip` field in the access log shows it), or to Express's named subnets like
+`loopback` / `uniquelocal`.
+
+Only trust a proxy you actually control: whatever you trust can set
+`X-Forwarded-For` to anything, letting a client spoof its way around the
+limit. The value is trusted exactly as written — the server doesn't judge
+whether a range is too broad, so list only your proxy's own address or
+subnet. It does refuse `true` (which trusts everyone) and fails startup
+with an error naming the variable if Express can't parse the value. Two
+caveats:
+
+- **Hop counts** (e.g. `1`) trust whatever connects directly, so they're
+  only safe if the app port can't be reached except through the proxy,
+  and the count must match the real number of proxies — a larger one
+  trusts client-supplied entries too.
+  The compose file publishes `4000:4000` on all interfaces, so with it as
+  shipped, someone who connects straight to port 4000 can fake their IP.
+- **The Docker gateway address** is also the source of anything Docker's
+  userland proxy forwards — IPv6 clients, and processes on the host
+  itself — so those can spoof the header too. It can also change if the
+  compose network is recreated, which silently puts everyone back in one
+  bucket. To close both, publish the port on loopback only
+  (`'127.0.0.1:4000:4000'`) so only a proxy on the same host can reach it.
 
 ### Two-factor authentication (TOTP)
 
