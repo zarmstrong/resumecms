@@ -758,6 +758,18 @@
   white-space: nowrap;
 }
 
+/* A block's spaceAbove/spaceBelow preset (padding on its wrapper, see
+   blockWrapperStyle in blockStyle.js) is meant to be the whole gap on that
+   side, so the neighbor's facing margin is dropped instead of stacking on
+   top of it. Both set: the two presets add, since both were asked for. */
+.r-block:has(+ .r-block-space-above-set) {
+  --r-block-space-below: 0px;
+}
+
+.r-block-space-below-set + .r-block {
+  --r-block-space-above: 0px;
+}
+
 /* Editor preview: dim blocks that are hidden from both web + print */
 .r-block-dimmed {
   opacity: 0.35;
