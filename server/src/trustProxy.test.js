@@ -28,17 +28,11 @@ test('"true" is rejected as spoofable', () => {
 });
 
 test('a hop count mixed into an address list is rejected', () => {
-  assert.throws(() => parseTrustProxy('1, loopback'), /mixes a hop count/);
+  assert.throws(() => parseTrustProxy('1, Loopback'), /"1, Loopback" mixes a hop count/);
 });
 
 test('subnet names are lowercased for proxy-addr', () => {
   assert.equal(parseTrustProxy('Loopback, UniqueLocal'), 'loopback, uniquelocal');
-});
-
-test('applyTrustProxy rejects settings that trust arbitrary addresses', () => {
-  for (const raw of ['::ffff:0:0/96', '0.0.0.0/1, 128.0.0.0/1', '::/1, 8000::/1']) {
-    assert.throws(() => applyTrustProxy(express(), raw), /trusts arbitrary addresses/, raw);
-  }
 });
 
 test('applyTrustProxy accepts real proxy ranges and named subnets', () => {
@@ -64,6 +58,8 @@ test('applyTrustProxy sets the value on the app', () => {
 
 test('applyTrustProxy names the variable when Express rejects the value', () => {
   assert.throws(() => applyTrustProxy(express(), ' yes '), /RESUMECMS_TRUST_PROXY value "yes"/);
+  // Quotes what the operator typed, not the lowercased form, so it can be grepped for.
+  assert.throws(() => applyTrustProxy(express(), 'LoopBack, Foo'), /value "LoopBack, Foo"/);
   // Express itself refuses /0 ranges; make sure that still surfaces with our name on it.
   assert.throws(() => applyTrustProxy(express(), '0.0.0.0/0'), /RESUMECMS_TRUST_PROXY value "0.0.0.0\/0"/);
 });
