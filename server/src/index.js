@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { getSetting } from './db.js'; // also ensures schema + seed run on boot
 import { accessLogger } from './logger.js';
 import { renderResumePdf } from './pdfRenderer.js';
-import { parseTrustProxy } from './trustProxy.js';
+import { applyTrustProxy } from './trustProxy.js';
 
 import authRoutes from './routes/auth.js';
 import blockRoutes from './routes/blocks.js';
@@ -23,7 +23,7 @@ const SESSION_SECRET = process.env.RESUMECMS_SESSION_SECRET || 'dev-secret-chang
 // Behind a reverse proxy every request arrives from the proxy's IP, so the
 // login rate limiter would lump all clients into one bucket. Set before any
 // middleware so req.ip (logger, rate limiter, captcha) sees the real client.
-app.set('trust proxy', parseTrustProxy(process.env.RESUMECMS_TRUST_PROXY));
+applyTrustProxy(app, process.env.RESUMECMS_TRUST_PROXY);
 
 app.use(accessLogger);
 app.use(express.json({ limit: '2mb' }));
