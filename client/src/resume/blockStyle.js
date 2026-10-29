@@ -3,6 +3,8 @@
 // already a freeform JSON blob and unset fields change nothing.
 
 export const BLOCK_SPACING_CSS = {
+  none: '0px',
+  xsmall: '6px',
   small: '12px',
   medium: '24px',
   large: '40px',
@@ -11,6 +13,8 @@ export const BLOCK_SPACING_CSS = {
 
 export const BLOCK_SPACING_OPTIONS = [
   { value: '', label: 'Default' },
+  { value: 'none', label: 'None' },
+  { value: 'xsmall', label: 'Extra small' },
   { value: 'small', label: 'Small' },
   { value: 'medium', label: 'Medium' },
   { value: 'large', label: 'Large' },
@@ -31,6 +35,12 @@ export function normalizeBlockStyle(data) {
 // it actually shows — padding never collapses — while the paired var reset
 // (forced to 0) stops this block's own default margin from *also* adding on
 // top of that padding, which would otherwise double-count it.
+//
+// The *neighbor's* facing margin would still add on top of the padding,
+// though — so a "small" 12px above an experience entry came out as the
+// previous block's 18px plus 12px, bigger than leaving it on Default. The
+// classes from blockWrapperClassName let resume.css zero that neighbor's
+// margin too, so the preset is the whole gap on that side.
 export function blockWrapperStyle(data) {
   const style = normalizeBlockStyle(data);
   const wrapperStyle = {};
@@ -46,7 +56,12 @@ export function blockWrapperStyle(data) {
 }
 
 export function blockWrapperClassName(data) {
-  return normalizeBlockStyle(data).highlight ? ' r-block-highlight' : '';
+  const style = normalizeBlockStyle(data);
+  let className = '';
+  if (style.highlight) className += ' r-block-highlight';
+  if (BLOCK_SPACING_CSS[style.spaceAbove]) className += ' r-block-space-above-set';
+  if (BLOCK_SPACING_CSS[style.spaceBelow]) className += ' r-block-space-below-set';
+  return className;
 }
 
 // Section headings default to a small "eyebrow" size (see .r-heading in
