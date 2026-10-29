@@ -7,6 +7,7 @@ test('unset, empty, or "false" disables trust proxy', () => {
   assert.equal(parseTrustProxy(''), false);
   assert.equal(parseTrustProxy('  '), false);
   assert.equal(parseTrustProxy('false'), false);
+  assert.equal(parseTrustProxy('FALSE'), false);
 });
 
 test('an integer is a hop count', () => {
@@ -21,4 +22,6 @@ test('addresses and subnet names pass through as a string', () => {
 
 test('"true" is rejected as spoofable', () => {
   assert.throws(() => parseTrustProxy('true'), /RESUMECMS_TRUST_PROXY/);
+  assert.throws(() => parseTrustProxy('TRUE'), /RESUMECMS_TRUST_PROXY/);
+  assert.throws(() => parseTrustProxy('True'), /RESUMECMS_TRUST_PROXY/);
 });

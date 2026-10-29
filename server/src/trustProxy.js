@@ -7,8 +7,9 @@
 // anyone dodge the login rate limit by sending a fake header.
 export function parseTrustProxy(raw) {
   const value = (raw ?? '').trim();
-  if (value === '' || value === 'false') return false;
-  if (value === 'true') {
+  const lower = value.toLowerCase();
+  if (lower === '' || lower === 'false') return false;
+  if (lower === 'true') {
     throw new Error(
       'RESUMECMS_TRUST_PROXY=true would trust any client-supplied X-Forwarded-For header; ' +
         "set it to your proxy's address (e.g. 172.18.0.1 or loopback) or a hop count instead"
