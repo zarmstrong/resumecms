@@ -9,6 +9,8 @@ import { EducationForm } from './blockForms/EducationForm.jsx';
 import { CustomForm } from './blockForms/CustomForm.jsx';
 import { VisibilityToggle } from './VisibilityToggle.jsx';
 import { BlockStyleForm } from './BlockStyleForm.jsx';
+import { AiRewritePanel } from './AiRewritePanel.jsx';
+import { AI_REWRITABLE_TYPES } from './aiReview.js';
 
 const FORM_COMPONENTS = {
   heading: HeadingForm,
@@ -44,7 +46,7 @@ function summarize(block) {
   }
 }
 
-export function SortableBlockRow({ block, nested, drop, nestTarget, moving, onChangeData, onChangeVisibility, onDelete }) {
+export function SortableBlockRow({ block, nested, drop, nestTarget, moving, ai, onChangeData, onChangeVisibility, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const { attributes, listeners, setNodeRef: setDragRef, setActivatorNodeRef, isDragging } = useDraggable({ id: block.id });
   const { setNodeRef: setDropRef } = useDroppable({ id: block.id });
@@ -93,6 +95,7 @@ export function SortableBlockRow({ block, nested, drop, nestTarget, moving, onCh
           {FormComponent && (
             <FormComponent data={block.data} onChange={(newData) => onChangeData(block.id, newData)} />
           )}
+          {ai?.available && AI_REWRITABLE_TYPES.has(block.type) && <AiRewritePanel block={block} ai={ai} />}
           <BlockStyleForm data={block.data} onChange={(newData) => onChangeData(block.id, newData)} />
         </div>
       )}

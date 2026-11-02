@@ -883,3 +883,128 @@
 }
 .ed-block-row-nested > .ed-drop-nested { left: 0; }
 .ed-block-row-nested > .ed-drop-indicator:not(.ed-drop-nested) { left: -34px; }
+
+/* ---- AI rewrites ------------------------------------------------------- */
+.ed-ai-panel {
+  margin-top: 12px;
+}
+
+.ed-ai-panel-open {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px;
+  background: var(--paper);
+}
+
+.ed-ai-presets,
+.ed-ai-actions,
+.ed-ai-key-row,
+.ed-ai-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ed-ai-settings-actions {
+  justify-content: flex-end;
+}
+
+.ed-ai-review {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.ed-ai-explanation {
+  margin: 0;
+  font-size: 13px;
+  color: var(--slate);
+  font-style: italic;
+}
+
+.ed-ai-review-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.ed-ai-review-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--slate-light);
+}
+
+.ed-diff {
+  white-space: pre-wrap;
+}
+
+.ed-diff-add {
+  background: var(--signal-dim);
+  color: var(--signal);
+  text-decoration: none;
+}
+
+.ed-diff-del {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.ed-ai-bullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ed-ai-bullet {
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.ed-ai-bullet-sub {
+  padding-left: 20px;
+}
+
+.ed-ai-badge {
+  display: inline-block;
+  font-size: 10px;
+  text-transform: uppercase;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 4px;
+  margin-right: 6px;
+  color: var(--slate);
+  vertical-align: 1px;
+}
+
+.ed-ai-badge-added {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.ed-ai-badge-removed,
+.ed-ai-badge-hidden {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.ed-ai-preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ed-ai-preview-banner span {
+  flex: 1;
+  color: var(--signal);
+}

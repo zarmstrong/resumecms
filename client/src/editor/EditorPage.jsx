@@ -6,8 +6,9 @@ import { HeaderEditorForm } from './HeaderEditorForm.jsx';
 import { SiteSettingsForm } from './SiteSettingsForm.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
 import { ResumeView } from '../resume/ResumeView.jsx';
-import { defaultDataForType } from './blockDefaults.js';
+import { BLOCK_TYPE_LABELS, defaultDataForType } from './blockDefaults.js';
 import { createBlockReorderItems } from './blockDrag.js';
+import { isProposalStale } from './aiReview.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -53,10 +54,15 @@ export function EditorPage({ onLogout }) {
   const [publishState, setPublishState] = useState('idle'); // idle | publishing | published
   const [leftWidth, setLeftWidth] = useState(loadLeftPaneWidth);
   const [resizingPane, setResizingPane] = useState(false);
+  const [aiSettings, setAiSettings] = useState(null);
+  // At most one AI rewrite in flight or under review at a time:
+  // { blockId, instruction, status: 'loading' | 'ready' | 'error', proposal, error }
+  const [aiState, setAiState] = useState(null);
 
   const debounceTimers = useRef({});
   const columnsRef = useRef(null);
   const reorderRequestIdRef = useRef(0);
+  const aiRequestIdRef = useRef(0);
   // Tracks the in-progress width during a drag so handleUp can persist the
   // final value directly — avoids a synchronous localStorage write on every
   // pointermove (one per pixel dragged), which was making the resize feel
@@ -131,6 +137,12 @@ export function EditorPage({ onLogout }) {
       setUsername(credentials.username);
       setLoading(false);
     });
+    // Kept out of the Promise.all above: the editor must still load if this
+    // fails — AI rewrites just stay hidden.
+    api
+      .getAiSettings()
+      .then(({ ai }) => setAiSettings(ai))
+      .catch((err) => console.error('Failed to load AI settings', err));
   }, []);
 
   function flashSaved() {
@@ -153,6 +165,7 @@ export function EditorPage({ onLogout }) {
 
   async function handleDiscard() {
     const draft = await api.discardDraft();
+    clearAiProposal();
     setHeader(draft.header);
     setSite(draft.site);
     setBlocks(draft.blocks);
@@ -245,9 +258,54 @@ export function EditorPage({ onLogout }) {
     setBlocks((prev) =>
       prev.filter((b) => b.id !== id).map((b) => (b.parentId === id ? { ...b, parentId: null } : b))
     );
+    if (aiState?.blockId === id) clearAiProposal();
     await api.deleteBlock(id);
     setIsDirty(true);
   }
+
+  // An AI rewrite is only a proposal held here until accepted: the preview
+  // pane renders it in place of the block's real data, and nothing reaches
+  // the server until handleAiAccept saves it like any other block edit.
+  function clearAiProposal() {
+    aiRequestIdRef.current++;
+    setAiState(null);
+  }
+
+  async function handleAiRequest(blockId, instruction) {
+    const block = blocks.find((b) => b.id === blockId);
+    if (!block) return;
+    // A newer request (or a discard) supersedes any response still in flight.
+    const requestId = ++aiRequestIdRef.current;
+    setAiState({ blockId, instruction, status: 'loading', proposal: null, error: null });
+    try {
+      const { proposal } = await api.aiRewrite(blockId, block.data, instruction);
+      if (aiRequestIdRef.current !== requestId) return;
+      setAiState({ blockId, instruction, status: 'ready', proposal, error: null });
+    } catch (err) {
+      if (aiRequestIdRef.current !== requestId) return;
+      setAiState({ blockId, instruction, status: 'error', proposal: null, error: err.message });
+    }
+  }
+
+  function handleAiAccept() {
+    const proposal = aiState?.proposal;
+    const block = proposal && blocks.find((b) => b.id === proposal.blockId);
+    if (!block) return clearAiProposal();
+    if (
+      isProposalStale(proposal, block.data) &&
+      !window.confirm("You've edited this block since the rewrite was generated. Replace your edits with the rewrite?")
+    ) {
+      return;
+    }
+    handleBlockDataChange(block.id, proposal.proposedData);
+    clearAiProposal();
+  }
+
+  const aiProposal = aiState?.status === 'ready' ? aiState.proposal : null;
+  const aiProposalBlock = aiProposal && blocks.find((b) => b.id === aiProposal.blockId);
+  const previewBlocks = aiProposal
+    ? blocks.map((b) => (b.id === aiProposal.blockId ? { ...b, data: aiProposal.proposedData } : b))
+    : blocks;
 
   async function handleLogout() {
     await api.logout();
@@ -325,6 +383,13 @@ export function EditorPage({ onLogout }) {
               onChangeData={handleBlockDataChange}
               onChangeVisibility={handleVisibilityChange}
               onDelete={handleDelete}
+              ai={{
+                available: Boolean(aiSettings?.available),
+                state: aiState,
+                onRequest: handleAiRequest,
+                onAccept: handleAiAccept,
+                onReject: clearAiProposal,
+              }}
             />
             <AddBlockMenu onAdd={handleAdd} />
           </section>
@@ -344,9 +409,29 @@ export function EditorPage({ onLogout }) {
         />
 
         <div className="ed-right-pane">
-          <div className="ed-preview-label">Draft preview — dimmed blocks are hidden from web and/or print</div>
+          {aiProposalBlock ? (
+            <div className="ed-preview-label ed-ai-preview-banner">
+              <span>
+                Previewing AI rewrite of {BLOCK_TYPE_LABELS[aiProposalBlock.type] || 'block'} (outlined) — not saved yet
+              </span>
+              <button type="button" className="ed-btn ed-btn-ghost" onClick={clearAiProposal}>
+                Discard
+              </button>
+              <button type="button" className="ed-btn ed-btn-primary" onClick={handleAiAccept}>
+                Accept
+              </button>
+            </div>
+          ) : (
+            <div className="ed-preview-label">Draft preview — dimmed blocks are hidden from web and/or print</div>
+          )}
           <div className="ed-preview-frame">
-            <ResumeView header={header} site={site} blocks={blocks} mode="preview" />
+            <ResumeView
+              header={header}
+              site={site}
+              blocks={previewBlocks}
+              mode="preview"
+              highlightBlockId={aiProposal?.blockId}
+            />
           </div>
         </div>
       </div>
@@ -355,6 +440,7 @@ export function EditorPage({ onLogout }) {
         <SettingsModal
           username={username}
           onUsernameChange={setUsername}
+          onAiSettingsChange={setAiSettings}
           onClose={() => setSettingsOpen(false)}
         />
       )}

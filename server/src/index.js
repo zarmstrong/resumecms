@@ -7,6 +7,7 @@ import { getSetting } from './db.js'; // also ensures schema + seed run on boot
 import { accessLogger } from './logger.js';
 import { renderResumePdf } from './pdfRenderer.js';
 
+import aiRoutes from './routes/ai.js';
 import authRoutes from './routes/auth.js';
 import blockRoutes from './routes/blocks.js';
 import publicRoutes from './routes/public.js';
@@ -32,7 +33,7 @@ app.use(
 );
 
 // NOTE: mount order matters here. Express matches app.use() by path prefix,
-// so more specific routes ('/api/public', '/api/auth/totp') must be
+// so more specific routes ('/api/public', '/api/auth/totp', '/api/ai') must be
 // registered before the broader '/api' mount below — otherwise those
 // requests would first hit blockRoutes' unconditional requireAuth
 // middleware (which runs for anything under '/api' regardless of whether a
@@ -41,6 +42,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/auth/totp', totpRoutes); // /api/auth/totp/status, /setup, /confirm, /disable (auth-gated)
 app.use('/api/public', publicRoutes); // /api/public/resume
 app.use('/api/public', pdfRoutes); // /api/public/resume.pdf
+app.use('/api/ai', aiRoutes); // /api/ai/settings, /api/ai/rewrite (auth-gated)
 app.use('/api', blockRoutes); // /api/header, /api/site, /api/blocks... (auth-gated)
 app.use('/api', publishRoutes); // /api/publish, /api/publish/status, /api/discard-draft (auth-gated)
 

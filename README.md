@@ -146,6 +146,9 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `PUT /api/blocks/:id` | update `data`, `visibleWeb`, `visiblePrint`, and/or `parentId` |
 | `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted) |
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
+| `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
+| `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
+| `POST /api/ai/rewrite` | `{ blockId, data, instruction }` → `{ proposal }` for review; saves nothing |
 | `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag |
 | `GET /api/public/resume.pdf` | public, generates and streams a PDF |
 
@@ -192,6 +195,46 @@ sqlite3 /path/to/your/data-dir/resume.sqlite3 "DELETE FROM settings WHERE key='t
 ```
 
 This immediately disables the code requirement on next login.
+
+### AI rewrites
+
+Optional and off by default. In Account Settings → AI Rewrites, pick
+Claude (Anthropic) or ChatGPT (OpenAI), paste an API key, and enable it.
+Each rewritable block (headings, summary, skills rows, experience entries,
+custom blocks) then gets a "Rewrite with AI" button. You give it an
+instruction, or pick a preset such as *Tighten* or *Quantify impact*, and
+review the result before anything is saved. The review shows a word-level
+diff in the block and the rewritten block, outlined, in the live preview.
+**Accept** saves it as an ordinary draft edit; it still isn't public until
+you Publish.
+
+- Only the block's prose is sent and can change. Dates, URLs,
+  company/institution names, visibility flags, and block styling are
+  always kept from the original. Education blocks aren't rewritable.
+  Your header and contact details are never sent.
+- Bullets hidden from web or print **are** sent along with the rest of
+  their block, so the AI can rewrite them too. The rewrite panel says how
+  many hidden bullets a block has before you send it. Don't rely on
+  hiding a bullet to keep its text away from the provider.
+- The AI is told not to invent facts. Where a number would help, it
+  inserts a placeholder like `[X%]` for you to fill in.
+- **Let AI add, remove, or merge bullets** (off by default) controls
+  experience bullets. When it's off, the AI may only reword bullets in
+  place. When it's on, the AI can restructure them, and each resulting
+  bullet keeps the web/print visibility of the original it most
+  resembles. New bullets start visible everywhere, and the review marks
+  added, removed, and hidden bullets.
+- The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
+  the same panel. Rewrites are rate-limited to 30 per 10 minutes.
+- **Timeout** (default 60 seconds, 20–120) is how long a rewrite may take,
+  including one automatic retry, before the server gives up on the
+  provider. If you run behind a reverse proxy, keep it below the proxy's
+  read timeout so you get the real error instead of the proxy's.
+
+API keys are stored in plain text in the same SQLite database, like the
+TOTP secret, so anyone with a copy of your data directory has them. The
+API never sends a key back to the browser, only its last four
+characters. Adding or removing a key requires your current password.
 
 ## What's intentionally out of scope (v1)
 
