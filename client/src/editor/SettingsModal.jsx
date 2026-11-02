@@ -16,20 +16,26 @@ export function SettingsModal({ username, onUsernameChange, onAiSettingsChange, 
 
   // The AI section has its own Save button; the modal's Save only covers
   // username/password, so don't let it (or Close) silently drop AI edits.
+  function confirmDiscardAi() {
+    return !aiDirty || window.confirm('You have unsaved AI settings. Close without saving them?');
+  }
+
   function closeModal() {
-    if (aiDirty && !window.confirm('You have unsaved AI settings. Close without saving them?')) return;
-    onClose();
+    if (confirmDiscardAi()) onClose();
   }
 
   async function handleSave() {
     setError(null);
+    // Ask before saving, not after: once the credentials change, the form's
+    // current password is stale, so staying open would make a second Save fail.
+    if (!confirmDiscardAi()) return;
 
     const trimmedUsername = newUsername.trim();
     const changingPassword = newPassword.length > 0 || confirmPassword.length > 0;
     const changingUsername = trimmedUsername !== username;
 
     if (!changingPassword && !changingUsername) {
-      closeModal();
+      onClose();
       return;
     }
     if (!currentPassword) {
@@ -49,7 +55,7 @@ export function SettingsModal({ username, onUsernameChange, onAiSettingsChange, 
         newPassword: changingPassword ? newPassword : undefined,
       });
       onUsernameChange(result.username);
-      closeModal();
+      onClose();
     } catch (err) {
       setError(err.message);
     } finally {
