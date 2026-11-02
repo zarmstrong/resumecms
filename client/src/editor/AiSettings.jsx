@@ -31,7 +31,10 @@ export function AiSettings({ onChange, onDirtyChange }) {
   }
 
   useEffect(() => {
-    api.getAiSettings().then(({ ai: loaded }) => load(loaded));
+    api
+      .getAiSettings()
+      .then(({ ai: loaded }) => load(loaded))
+      .catch((err) => setError(`Couldn't load AI settings: ${err.message}`));
   }, []);
 
   const dirty = Boolean(
@@ -47,7 +50,7 @@ export function AiSettings({ onChange, onDirtyChange }) {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
 
-  if (!form) return null;
+  if (!form) return error ? <div className="ed-login-error">{error}</div> : null;
 
   const keyInfo = ai.keys[form.provider];
   const changingKey = newKey.trim() !== '' || removeKey;

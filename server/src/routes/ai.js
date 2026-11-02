@@ -59,11 +59,10 @@ router.put('/settings', settingsLimiter, (req, res) => {
 // Returns a proposal only; nothing is written. The editor saves an accepted
 // proposal through PUT /api/blocks/:id like any other edit.
 router.post('/rewrite', rewriteLimiter, async (req, res) => {
-  const { blockId, data, instruction } = req.body || {};
+  const { blockId, data } = req.body || {};
+  const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
   if (typeof blockId !== 'string') return res.status(400).json({ error: 'blockId is required' });
-  if (typeof instruction !== 'string' || !instruction.trim()) {
-    return res.status(400).json({ error: 'Tell the AI what to change.' });
-  }
+  if (!instruction) return res.status(400).json({ error: 'Tell the AI what to change.' });
   if (instruction.length > MAX_INSTRUCTION_LENGTH) {
     return res.status(400).json({ error: `Instructions are limited to ${MAX_INSTRUCTION_LENGTH} characters.` });
   }
@@ -82,7 +81,7 @@ router.post('/rewrite', rewriteLimiter, async (req, res) => {
   // falls back to the saved one.
   const baseData = hasRewritableShape(block.type, data) ? data : block.data;
   try {
-    const proposal = await rewriteBlock({ type: block.type, data: baseData, instruction: instruction.trim(), settings });
+    const proposal = await rewriteBlock({ type: block.type, data: baseData, instruction, settings });
     res.json({ proposal: { blockId, baseData, ...proposal } });
   } catch (err) {
     if (err instanceof AiError) return res.status(err.status).json({ error: err.message });
