@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AiSettingsError, applyAiSettingsUpdate, publicAiSettings } from './aiSettings.js';
+import { AiSettingsError, applyAiSettingsUpdate, normalizeAiSettings, publicAiSettings } from './aiSettings.js';
 
 test('public settings never include the API key itself', () => {
   const pub = publicAiSettings({ enabled: true, provider: 'anthropic', apiKeys: { anthropic: 'sk-ant-abcdefghijkl1234' } });
@@ -56,4 +56,15 @@ test('rejects bad input', () => {
   assert.throws(() => applyAiSettingsUpdate({}, { models: { anthropic: 'has spaces' } }), AiSettingsError);
   assert.throws(() => applyAiSettingsUpdate({}, { apiKeys: { anthropic: 'has space' } }), AiSettingsError);
   assert.throws(() => applyAiSettingsUpdate({}, { allowBulletRestructure: 1 }), AiSettingsError);
+});
+
+test('inherited object names are not providers', () => {
+  const base = normalizeAiSettings({});
+  for (const id of ['constructor', 'toString', '__proto__']) {
+    assert.throws(() => applyAiSettingsUpdate(base, { provider: id }), AiSettingsError);
+    assert.throws(() => applyAiSettingsUpdate(base, { removeKeys: [id] }), AiSettingsError);
+  }
+  assert.throws(() => applyAiSettingsUpdate(base, JSON.parse('{"models":{"__proto__":"x"}}')), AiSettingsError);
+  assert.throws(() => applyAiSettingsUpdate(base, { apiKeys: { constructor: 'sk-abcdefghijkl' } }), AiSettingsError);
+  assert.equal(normalizeAiSettings({ provider: 'constructor' }).provider, 'anthropic');
 });

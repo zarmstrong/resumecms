@@ -23,6 +23,10 @@ export class AiSettingsError extends Error {
   }
 }
 
+// Own-property check, so inherited names like `constructor` or `__proto__`
+// don't pass as providers.
+export const isAiProvider = (id) => typeof id === 'string' && Object.hasOwn(AI_PROVIDERS, id);
+
 export function normalizeAiSettings(stored) {
   const s = stored || {};
   const models = {};
@@ -31,7 +35,7 @@ export function normalizeAiSettings(stored) {
   }
   return {
     enabled: s.enabled === true,
-    provider: AI_PROVIDERS[s.provider] ? s.provider : 'anthropic',
+    provider: isAiProvider(s.provider) ? s.provider : 'anthropic',
     models,
     allowBulletRestructure: s.allowBulletRestructure === true,
     apiKeys: { ...(s.apiKeys || {}) },
@@ -81,13 +85,13 @@ export function applyAiSettingsUpdate(stored, body) {
     next.allowBulletRestructure = b.allowBulletRestructure;
   }
   if (b.provider !== undefined) {
-    if (!AI_PROVIDERS[b.provider]) throw new AiSettingsError('Unknown AI provider');
+    if (!isAiProvider(b.provider)) throw new AiSettingsError('Unknown AI provider');
     next.provider = b.provider;
   }
   if (b.models !== undefined) {
     if (!b.models || typeof b.models !== 'object') throw new AiSettingsError('models must be an object');
     for (const [id, model] of Object.entries(b.models)) {
-      if (!AI_PROVIDERS[id]) throw new AiSettingsError(`Unknown AI provider: ${id}`);
+      if (!isAiProvider(id)) throw new AiSettingsError(`Unknown AI provider: ${id}`);
       const trimmed = typeof model === 'string' ? model.trim() : '';
       // Blank resets to the provider's default rather than saving nothing.
       if (trimmed === '') next.models[id] = AI_PROVIDERS[id].defaultModel;
@@ -98,7 +102,7 @@ export function applyAiSettingsUpdate(stored, body) {
   if (b.apiKeys !== undefined) {
     if (!b.apiKeys || typeof b.apiKeys !== 'object') throw new AiSettingsError('apiKeys must be an object');
     for (const [id, key] of Object.entries(b.apiKeys)) {
-      if (!AI_PROVIDERS[id]) throw new AiSettingsError(`Unknown AI provider: ${id}`);
+      if (!isAiProvider(id)) throw new AiSettingsError(`Unknown AI provider: ${id}`);
       const trimmed = typeof key === 'string' ? key.trim() : '';
       // A blank field means "keep the current key", so the form can always
       // send it without having to know the key it can't see.
@@ -113,7 +117,7 @@ export function applyAiSettingsUpdate(stored, body) {
   if (b.removeKeys !== undefined) {
     if (!Array.isArray(b.removeKeys)) throw new AiSettingsError('removeKeys must be an array');
     for (const id of b.removeKeys) {
-      if (!AI_PROVIDERS[id]) throw new AiSettingsError(`Unknown AI provider: ${id}`);
+      if (!isAiProvider(id)) throw new AiSettingsError(`Unknown AI provider: ${id}`);
       if (next.apiKeys[id]) {
         delete next.apiKeys[id];
         keysChanged = true;

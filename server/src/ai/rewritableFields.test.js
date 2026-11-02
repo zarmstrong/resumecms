@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RewriteShapeError, mergeRewrite, outputSchema, rewriteInput, textSimilarity } from './rewritableFields.js';
+import { RewriteShapeError, hasRewritableShape, mergeRewrite, outputSchema, rewriteInput, textSimilarity } from './rewritableFields.js';
 
 const bullet = (text, flags = {}, children = []) => ({ text, visibleWeb: true, visiblePrint: true, children, ...flags });
 
@@ -165,4 +165,51 @@ test('output schemas satisfy strict structured-output rules', () => {
 test('textSimilarity ignores case and punctuation', () => {
   assert.equal(textSimilarity('Led the team.', 'led THE team'), 1);
   assert.equal(textSimilarity('alpha', 'beta'), 0);
+});
+
+test('textSimilarity handles non-Latin and accented text', () => {
+  // Russian with no ASCII letters used to tokenize to nothing, which made
+  // every pair of bullets look identical. 0.3 is the match threshold.
+  assert.ok(textSimilarity('Управлял командой', 'Снизил расходы на треть') < 0.3);
+  assert.ok(textSimilarity('Управлял командой из пяти', 'Управлял командой') >= 0.3);
+  assert.ok(textSimilarity('売上を向上させた', '新しい採用制度を作った') < 0.3);
+  assert.ok(textSimilarity('売上を向上させた', '売上を大幅に向上させた') >= 0.3);
+  assert.equal(textSimilarity('Amélioré la qualité', 'Ameliore la qualite'), 1);
+});
+
+test('restructure mode matches non-Latin bullets by content, not position', () => {
+  const data = {
+    bullets: [bullet('Управлял командой из пяти инженеров'), bullet('Снизил расходы на треть', { visiblePrint: false })],
+  };
+  const rewrite = {
+    tagline: '',
+    bullets: [
+      { text: 'Снизил расходы на треть за год', children: [] },
+      { text: 'Управлял командой из пяти инженеров', children: [] },
+    ],
+  };
+  const { data: merged } = mergeRewrite('experience', data, rewrite, { allowBulletRestructure: true });
+  assert.equal(merged.bullets[0].visiblePrint, false);
+  assert.equal(merged.bullets[1].visiblePrint, true);
+});
+
+test('rewriting a legacy custom item drops its old body field', () => {
+  const data = { title: 'Talks', items: [{ heading: 'Conf', body: 'Spoke about things.' }] };
+  const rewrite = { title: 'Talks', items: [{ heading: 'Conf', body: 'Spoke about deploys.' }] };
+  const { data: merged } = mergeRewrite('custom', data, rewrite);
+  assert.deepEqual(merged.items[0], { heading: 'Conf', bodyType: 'text', text: 'Spoke about deploys.' });
+});
+
+test('hasRewritableShape rejects data the merge code would crash on', () => {
+  assert.equal(hasRewritableShape('experience', experience), true);
+  assert.equal(hasRewritableShape('experience', { bullets: ['legacy string'] }), true);
+  assert.equal(hasRewritableShape('experience', {}), true);
+  assert.equal(hasRewritableShape('experience', { bullets: 'x' }), false);
+  assert.equal(hasRewritableShape('experience', { bullets: [null] }), false);
+  assert.equal(hasRewritableShape('experience', { bullets: [{ text: 'a', children: 'x' }] }), false);
+  assert.equal(hasRewritableShape('custom', { items: [{ heading: 'h' }] }), true);
+  assert.equal(hasRewritableShape('custom', { items: {} }), false);
+  assert.equal(hasRewritableShape('custom', { items: ['text'] }), false);
+  assert.equal(hasRewritableShape('summary', null), false);
+  assert.equal(hasRewritableShape('summary', []), false);
 });

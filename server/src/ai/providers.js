@@ -89,7 +89,6 @@ const PROVIDER_CALLS = { anthropic: callAnthropic, openai: callOpenAI };
 // Sends one structured-output request to the configured provider and
 // returns the parsed JSON object.
 export function callProvider({ provider, ...request }) {
-  const call = PROVIDER_CALLS[provider];
-  if (!call) throw new AiError(400, `Unknown AI provider: ${provider}`);
-  return call(request);
+  if (!Object.hasOwn(PROVIDER_CALLS, provider)) throw new AiError(400, `Unknown AI provider: ${provider}`);
+  return PROVIDER_CALLS[provider](request);
 }

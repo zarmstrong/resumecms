@@ -32,9 +32,29 @@ export function normalizeBullet(bullet, depth = 0) {
 const CUSTOM_BODY_FIELD = { text: 'text', list: 'items', tags: 'items', link: 'label' };
 
 // Legacy custom items were saved as `{ heading, body }` with no bodyType.
+// `body` is dropped so a rewritten item doesn't keep a stale second copy.
 function normalizeCustomItem(item) {
   if (item.bodyType) return item;
-  return { ...item, bodyType: 'text', text: item.body };
+  const { body, ...rest } = item;
+  return { ...rest, bodyType: 'text', text: body };
+}
+
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const isBulletList = (list, depth = 0) =>
+  list === undefined ||
+  (Array.isArray(list) &&
+    list.every(
+      (b) => typeof b === 'string' || (isPlainObject(b) && (depth >= MAX_BULLET_DEPTH || isBulletList(b.children, depth + 1)))
+    ));
+
+// Whether `data` has the shape rewriteInput and mergeRewrite expect for its
+// type. The rewrite route checks the client's copy of a block with this
+// before trusting it over the saved one.
+export function hasRewritableShape(type, data) {
+  if (!isPlainObject(data)) return false;
+  if (type === 'experience') return isBulletList(data.bullets);
+  if (type === 'custom') return data.items === undefined || (Array.isArray(data.items) && data.items.every(isPlainObject));
+  return true;
 }
 
 // Splits a block's data into what the model may rewrite (`editable`) and
@@ -126,7 +146,18 @@ function requireArray(value, field) {
   return value;
 }
 
-const tokens = (text) => new Set(String(text).toLowerCase().match(/[a-z0-9]+/g) || []);
+// Words are runs of letters/digits in any script, with accents folded.
+// Chinese and Japanese don't put spaces between words, so each of their
+// characters counts as its own token instead of a whole sentence being one.
+const tokens = (text) =>
+  new Set(
+    String(text)
+      .normalize('NFKD')
+      .replace(/\p{M}/gu, '')
+      .toLowerCase()
+      .replace(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu, ' $& ')
+      .match(/[\p{L}\p{N}]+/gu) || []
+  );
 
 // Jaccard similarity over word sets — good enough to recognize "the same
 // bullet, reworded" without pulling in a dependency.

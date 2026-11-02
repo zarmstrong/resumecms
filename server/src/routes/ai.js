@@ -6,6 +6,7 @@ import { verifyPassword } from '../passwords.js';
 import { applyAiSettingsUpdate, normalizeAiSettings, publicAiSettings } from '../ai/aiSettings.js';
 import { AiError } from '../ai/providers.js';
 import { MAX_INSTRUCTION_LENGTH, rewriteBlock } from '../ai/rewrite.js';
+import { hasRewritableShape } from '../ai/rewritableFields.js';
 
 const router = Router();
 
@@ -77,8 +78,9 @@ router.post('/rewrite', rewriteLimiter, async (req, res) => {
   const block = rowToBlock(row);
   // The editor autosaves on a debounce, so the client's copy can be a few
   // hundred ms ahead of the DB. Rewrite what the user is actually looking
-  // at; the type always comes from the DB.
-  const baseData = data && typeof data === 'object' && !Array.isArray(data) ? data : block.data;
+  // at; the type always comes from the DB, and a malformed client copy
+  // falls back to the saved one.
+  const baseData = hasRewritableShape(block.type, data) ? data : block.data;
   try {
     const proposal = await rewriteBlock({ type: block.type, data: baseData, instruction: instruction.trim(), settings });
     res.json({ proposal: { blockId, baseData, ...proposal } });
