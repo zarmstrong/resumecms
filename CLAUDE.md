@@ -84,8 +84,8 @@ When adding a new draft-mutating route, call `touchDraft()` from it, or the
 
 ### Route mount order matters
 
-`server/src/index.js` mounts `/api/auth`, `/api/auth/totp`, and
-`/api/public` *before* the catch-all `/api` mount for `blockRoutes`/
+`server/src/index.js` mounts `/api/auth`, `/api/auth/totp`,
+`/api/public`, and `/api/ai` *before* the catch-all `/api` mount for `blockRoutes`/
 `publishRoutes`. Express matches `app.use()` by path prefix, so a more
 specific route registered after the broad `/api` mount would first hit
 `blockRoutes`' unconditional `requireAuth` and get rejected. Keep
