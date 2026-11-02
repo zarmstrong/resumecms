@@ -1,16 +1,25 @@
 import { useState } from 'react';
 import { api } from '../api.js';
 import { TotpSettings } from './TotpSettings.jsx';
+import { AiSettings } from './AiSettings.jsx';
 
 // No backdrop onClick and no Escape-key handler by design: the user must
 // explicitly hit Save or Close to dismiss this modal.
-export function SettingsModal({ username, onUsernameChange, onClose }) {
+export function SettingsModal({ username, onUsernameChange, onAiSettingsChange, onClose }) {
   const [newUsername, setNewUsername] = useState(username || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [aiDirty, setAiDirty] = useState(false);
+
+  // The AI section has its own Save button; the modal's Save only covers
+  // username/password, so don't let it (or Close) silently drop AI edits.
+  function closeModal() {
+    if (aiDirty && !window.confirm('You have unsaved AI settings. Close without saving them?')) return;
+    onClose();
+  }
 
   async function handleSave() {
     setError(null);
@@ -20,7 +29,7 @@ export function SettingsModal({ username, onUsernameChange, onClose }) {
     const changingUsername = trimmedUsername !== username;
 
     if (!changingPassword && !changingUsername) {
-      onClose();
+      closeModal();
       return;
     }
     if (!currentPassword) {
@@ -40,7 +49,7 @@ export function SettingsModal({ username, onUsernameChange, onClose }) {
         newPassword: changingPassword ? newPassword : undefined,
       });
       onUsernameChange(result.username);
-      onClose();
+      closeModal();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -110,8 +119,13 @@ export function SettingsModal({ username, onUsernameChange, onClose }) {
             <TotpSettings />
           </section>
 
+          <section className="ed-modal-section">
+            <h3>AI Rewrites</h3>
+            <AiSettings onChange={onAiSettingsChange} onDirtyChange={setAiDirty} />
+          </section>
+
           <div className="ed-modal-actions">
-            <button type="button" className="ed-btn ed-btn-ghost" onClick={onClose} disabled={busy}>
+            <button type="button" className="ed-btn ed-btn-ghost" onClick={closeModal} disabled={busy}>
               Close
             </button>
             <button type="button" className="ed-btn ed-btn-primary" onClick={handleSave} disabled={busy}>

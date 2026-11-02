@@ -775,6 +775,12 @@
   opacity: 0.35;
 }
 
+/* Editor preview: the block an unsaved AI rewrite is being previewed for */
+.r-block-ai-preview {
+  outline: 2px dashed #2f6f4e;
+  outline-offset: 4px;
+}
+
 /* Optional per-block "highlight" customization — a tinted, rounded box
    around the block, using the same color-mix technique as the sidebar. */
 .r-block-highlight {

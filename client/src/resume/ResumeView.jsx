@@ -30,7 +30,9 @@ import './resume.css';
 // mode: 'web' | 'print' | 'preview'
 // 'preview' is used inside the editor and shows every block regardless of
 // visibility flags, dimming the ones that are hidden from web/print.
-export function ResumeView({ header, site, blocks, mode = 'web' }) {
+// `highlightBlockId` (preview only) outlines one block — the editor uses it
+// to mark a block it's showing an unsaved AI rewrite for.
+export function ResumeView({ header, site, blocks, mode = 'web', highlightBlockId = null }) {
   const isPreview = mode === 'preview';
   const colors = normalizeSiteColors(site);
   const pillPad = PILL_PADDING_CSS[normalizePillPadding(site)];
@@ -108,11 +110,12 @@ export function ResumeView({ header, site, blocks, mode = 'web' }) {
     if (block.hidden) return null;
 
     const dimmed = isPreview && !(block.visibleWeb && block.visiblePrint);
+    const highlighted = isPreview && highlightBlockId === block.id;
 
     return (
       <div
         key={block.id}
-        className={`r-block${dimmed ? ' r-block-dimmed' : ''}${blockWrapperClassName(block.data)}`}
+        className={`r-block${dimmed ? ' r-block-dimmed' : ''}${highlighted ? ' r-block-ai-preview' : ''}${blockWrapperClassName(block.data)}`}
         data-block-type={block.type}
         style={style ? { ...blockWrapperStyle(block.data), ...style } : blockWrapperStyle(block.data)}
       >

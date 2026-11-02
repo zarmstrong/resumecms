@@ -189,6 +189,32 @@ Bullet-level visibility (`experience` blocks) is independent of block-level
 visibility, and bullets can nest one level deep — both the visibility
 filter and the print/PDF path need to recurse into `children`.
 
+### AI rewrites
+
+`POST /api/ai/rewrite` (`server/src/routes/ai.js`) never writes anything. It
+returns a proposal: the block's data with only allowlisted prose fields
+replaced, via `mergeRewrite()` in `server/src/ai/rewritableFields.js`.
+`EditorPage` holds that proposal, swaps it into the `blocks` it passes to
+`ResumeView` (outlined via `highlightBlockId`), and on Accept saves it through
+the normal `PUT /api/blocks/:id` path, so `touchDraft()` and publish work
+unchanged.
+
+`REWRITABLE_TYPES` there is an explicit allowlist like `NESTABLE_TYPES`, mirrored
+client-side as `AI_REWRITABLE_TYPES` in `client/src/editor/aiReview.js`. A new
+block type needs an entry in `rewriteInput`/`outputSchema`/`mergeRewrite` before
+it can be added there.
+
+Output schemas must stay valid for both providers' strict structured-output
+modes. That means `additionalProperties: false` and every property in
+`required` on every object, and no recursion (the two bullet levels are
+spelled out explicitly). A test in `rewritableFields.test.js` checks this.
+
+Provider settings (including API keys, in plain text) live in the `ai` settings
+row (`server/src/ai/aiSettings.js`), not env vars. `publicAiSettings()` is the
+only shape that may leave the server. Provider calls go through the official
+`@anthropic-ai/sdk` and `openai` packages in `server/src/ai/providers.js`.
+`rewriteBlock()` takes an injectable `callModel`, so tests never hit a real API.
+
 ### PDF generation
 
 `server/src/pdfRenderer.js` drives headless Chromium (Puppeteer) to render

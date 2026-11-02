@@ -7,6 +7,7 @@ import { getSetting } from './db.js'; // also ensures schema + seed run on boot
 import { accessLogger } from './logger.js';
 import { renderResumePdf } from './pdfRenderer.js';
 
+import aiRoutes from './routes/ai.js';
 import authRoutes from './routes/auth.js';
 import blockRoutes from './routes/blocks.js';
 import publicRoutes from './routes/public.js';
@@ -43,6 +44,7 @@ app.use('/api/public', publicRoutes); // /api/public/resume
 app.use('/api/public', pdfRoutes); // /api/public/resume.pdf
 app.use('/api', blockRoutes); // /api/header, /api/site, /api/blocks... (auth-gated)
 app.use('/api', publishRoutes); // /api/publish, /api/publish/status, /api/discard-draft (auth-gated)
+app.use('/api/ai', aiRoutes); // /api/ai/settings, /api/ai/rewrite (auth-gated)
 
 // An /api/* request that reached here matched none of the routes above —
 // 404 it explicitly rather than letting it fall through to the SPA

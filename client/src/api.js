@@ -52,6 +52,13 @@ export const api = {
   // children immediately follow it) — see BlockList.jsx's flat-order model.
   reorderBlocks: (items) => request('/blocks/reorder', { method: 'POST', body: JSON.stringify({ items }) }),
 
+  getAiSettings: () => request('/ai/settings'),
+  updateAiSettings: (payload) => request('/ai/settings', { method: 'PUT', body: JSON.stringify(payload) }),
+  // Returns a proposal only — nothing is saved until it's accepted and sent
+  // through updateBlock like any other edit.
+  aiRewrite: (blockId, data, instruction) =>
+    request('/ai/rewrite', { method: 'POST', body: JSON.stringify({ blockId, data, instruction }) }),
+
   getPublicResume: (mode) => request(`/public/resume?mode=${mode}`),
 
   publish: () => request('/publish', { method: 'POST' }),
