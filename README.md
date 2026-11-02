@@ -179,9 +179,10 @@ Only trust a proxy you actually control: whatever you trust can set
 `X-Forwarded-For` to anything, letting a client spoof its way around the
 limit. The value is trusted exactly as written — the server doesn't judge
 whether a range is too broad, so list only your proxy's own address or
-subnet. It does refuse `true` (which trusts everyone) and fails startup
-with an error naming the variable if Express can't parse the value. Two
-caveats:
+subnet. Startup fails, with an error naming the variable, if the value
+is `true` (which trusts everyone), mixes a hop count into an address list
+(e.g. `1, loopback` — Express would read the `1` as the address
+`0.0.0.1`), or is anything else Express can't parse. Two caveats:
 
 - **Hop counts** (e.g. `1`) trust whatever connects directly, so they're
   only safe if the app port can't be reached except through the proxy,
