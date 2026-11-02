@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bulletChange, changedFields, hiddenBulletCount, isProposalStale, wordDiff } from './aiReview.js';
+import { AI_PRESETS, bulletChange, changedFields, hiddenBulletCount, isProposalStale, presetsFor, wordDiff } from './aiReview.js';
 
 const join = (runs, keep) => runs.filter((r) => keep.includes(r.type)).map((r) => r.text).join('');
 
@@ -34,6 +34,19 @@ test('changedFields reads each custom item from its body-type field', () => {
   const before = { title: 'T', items: [{ heading: 'h', bodyType: 'link', label: 'View', url: 'u' }] };
   const after = { title: 'T', items: [{ heading: 'h', bodyType: 'link', label: 'See it', url: 'u' }] };
   assert.deepEqual(changedFields('custom', before, after), [{ label: 'Item 1', before: 'View', after: 'See it' }]);
+});
+
+test('changedFields includes an experience description written from nothing', () => {
+  const fields = changedFields('experience', { tagline: 't' }, { tagline: 't', description: 'New blurb.' });
+  assert.deepEqual(fields, [{ label: 'Description', before: '', after: 'New blurb.' }]);
+});
+
+test('presetsFor offers to write or rewrite an experience description', () => {
+  const last = (presets) => presets[presets.length - 1].label;
+  assert.equal(last(presetsFor('experience', {})), 'Write description');
+  assert.equal(last(presetsFor('experience', { description: '  ' })), 'Write description');
+  assert.equal(last(presetsFor('experience', { description: 'Led things.' })), 'Rewrite description');
+  assert.equal(presetsFor('summary', { text: 'x' }), AI_PRESETS);
 });
 
 test('bulletChange labels added, reworded, and unchanged bullets', () => {

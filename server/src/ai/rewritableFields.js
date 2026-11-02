@@ -70,6 +70,7 @@ export function rewriteInput(type, data = {}) {
       return {
         editable: {
           tagline: data.tagline || '',
+          description: data.description || '',
           bullets: (data.bullets || []).map((b) => {
             const bullet = normalizeBullet(b);
             return { text: bullet.text, children: bullet.children.map((c) => ({ text: c.text })) };
@@ -120,7 +121,7 @@ function editableSchema(type) {
     case 'skills_group':
       return obj({ category: str, items: str });
     case 'experience':
-      return obj({ tagline: str, bullets: { type: 'array', items: bulletSchema } });
+      return obj({ tagline: str, description: str, bullets: { type: 'array', items: bulletSchema } });
     case 'custom':
       return obj({ title: str, items: { type: 'array', items: obj({ heading: str, body: str }) } });
     default:
@@ -289,7 +290,12 @@ export function mergeRewrite(type, data = {}, rewrite, { allowBulletRestructure 
         ? restructureBullets(originals, proposed)
         : rewordBullets(originals, proposed);
       return {
-        data: { ...data, tagline: requireString(rewrite.tagline, 'tagline'), bullets },
+        data: {
+          ...data,
+          tagline: requireString(rewrite.tagline, 'tagline'),
+          description: requireString(rewrite.description, 'description'),
+          bullets,
+        },
         bulletReview: { items: review, removed },
       };
     }

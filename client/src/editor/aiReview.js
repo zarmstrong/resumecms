@@ -14,6 +14,24 @@ export const AI_PRESETS = [
   { label: 'Fix grammar', instruction: 'Fix grammar, spelling, and punctuation only. Change nothing else.' },
 ];
 
+// Presets that only make sense for one block type, shown after AI_PRESETS.
+// The experience one writes a description when there isn't one yet, and
+// rewrites it otherwise.
+export function presetsFor(type, data = {}) {
+  if (type !== 'experience') return AI_PRESETS;
+  const preset = data.description?.trim()
+    ? {
+        label: 'Rewrite description',
+        instruction: 'Rewrite only the description so it reads clearly and confidently. Leave the tagline and bullets unchanged.',
+      }
+    : {
+        label: 'Write description',
+        instruction:
+          'Write a short description of this role (two or three sentences) summarizing its scope and focus, based only on the details already here. Leave the tagline and bullets unchanged.',
+      };
+  return [...AI_PRESETS, preset];
+}
+
 // Splits into words with their trailing whitespace attached, so joining the
 // parts reproduces the original text exactly. Keeping spaces out of their
 // own tokens stops them from anchoring matches, which would otherwise
@@ -85,6 +103,7 @@ export function changedFields(type, before = {}, after = {}) {
       break;
     case 'experience':
       add('Tagline', before.tagline, after.tagline);
+      add('Description', before.description, after.description);
       break;
     case 'custom': {
       add('Section title', before.title, after.title);
