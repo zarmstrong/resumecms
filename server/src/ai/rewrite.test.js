@@ -64,7 +64,7 @@ test('the experience prompt explains the optional description', () => {
   const { system } = buildPrompt('experience', input, 'x');
   assert.match(system, /"description" is an optional short blurb/);
   assert.match(system, /too thin .* leave it empty/);
-  assert.match(system, /"hidden": true .* Never carry their content into the description/);
+  assert.match(system, /"hidden": true .* Never carry their content into the tagline or description/);
   assert.doesNotMatch(buildPrompt('summary', rewriteInput('summary', {}), 'x').system, /"description"/);
 });
 

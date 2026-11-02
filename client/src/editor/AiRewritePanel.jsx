@@ -117,7 +117,8 @@ export function AiRewritePanel({ block, ai }) {
       {hiddenCount > 0 && (
         <p className="ed-field-hint">
           {hiddenCount === 1 ? 'One bullet here is' : `${hiddenCount} bullets here are`} hidden from web or print. Hidden
-          bullets are sent to the AI too.
+          bullets are sent to the AI too. It's told to keep them out of the tagline and description, which always
+          show, but check the review before accepting.
         </p>
       )}
       <div className="ed-ai-actions">
