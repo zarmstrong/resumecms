@@ -60,7 +60,9 @@ test('the bullet rule in the prompt follows the restructure setting', () => {
 
 test('the experience prompt explains the optional description', () => {
   const input = rewriteInput('experience', { bullets: ['a'] });
-  assert.match(buildPrompt('experience', input, 'x').system, /"description" is an optional short blurb/);
+  const { system } = buildPrompt('experience', input, 'x');
+  assert.match(system, /"description" is an optional short blurb/);
+  assert.match(system, /too thin .* leave it empty/);
   assert.doesNotMatch(buildPrompt('summary', rewriteInput('summary', {}), 'x').system, /"description"/);
 });
 

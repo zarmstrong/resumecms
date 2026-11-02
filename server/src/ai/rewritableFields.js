@@ -30,6 +30,7 @@ export function normalizeBullet(bullet, depth = 0) {
 // type (see client/src/editor/blockForms/CustomForm.jsx). The model only
 // ever sees one generic `body` per item; this maps it back.
 const CUSTOM_BODY_FIELD = { text: 'text', list: 'items', tags: 'items', link: 'label' };
+const bodyField = (item) => CUSTOM_BODY_FIELD[item.bodyType] || 'text';
 
 // Legacy custom items were saved as `{ heading, body }` with no bodyType.
 // `body` is dropped so a rewritten item doesn't keep a stale second copy.
@@ -91,7 +92,7 @@ export function rewriteInput(type, data = {}) {
           title: data.title || '',
           items: items.map((item) => ({
             heading: item.heading || '',
-            body: item[CUSTOM_BODY_FIELD[item.bodyType] || 'text'] || '',
+            body: item[bodyField(item)] || '',
           })),
         },
         context: { itemBodyTypes: items.map((item) => item.bodyType || 'text') },
@@ -140,6 +141,14 @@ export class RewriteShapeError extends Error {}
 function requireString(value, field) {
   if (typeof value !== 'string') throw new RewriteShapeError(`AI response is missing "${field}"`);
   return value.trim();
+}
+
+// A field the model left alone keeps its stored value exactly. Otherwise the
+// trim above would show stray whitespace as a change, and a field the block
+// never had would be saved as an empty string.
+function rewritten(original, value, field) {
+  const next = requireString(value, field);
+  return next === String(original ?? '').trim() ? original : next;
 }
 
 function requireArray(value, field) {
@@ -274,13 +283,13 @@ export function mergeRewrite(type, data = {}, rewrite, { allowBulletRestructure 
   switch (type) {
     case 'heading':
     case 'summary':
-      return { data: { ...data, text: requireString(rewrite.text, 'text') } };
+      return { data: { ...data, text: rewritten(data.text, rewrite.text, 'text') } };
     case 'skills_group':
       return {
         data: {
           ...data,
-          category: requireString(rewrite.category, 'category'),
-          items: requireString(rewrite.items, 'items'),
+          category: rewritten(data.category, rewrite.category, 'category'),
+          items: rewritten(data.items, rewrite.items, 'items'),
         },
       };
     case 'experience': {
@@ -292,8 +301,8 @@ export function mergeRewrite(type, data = {}, rewrite, { allowBulletRestructure 
       return {
         data: {
           ...data,
-          tagline: requireString(rewrite.tagline, 'tagline'),
-          description: requireString(rewrite.description, 'description'),
+          tagline: rewritten(data.tagline, rewrite.tagline, 'tagline'),
+          description: rewritten(data.description, rewrite.description, 'description'),
           bullets,
         },
         bulletReview: { items: review, removed },
@@ -308,11 +317,11 @@ export function mergeRewrite(type, data = {}, rewrite, { allowBulletRestructure 
       return {
         data: {
           ...data,
-          title: requireString(rewrite.title, 'title'),
+          title: rewritten(data.title, rewrite.title, 'title'),
           items: originals.map((item, i) => ({
             ...item,
-            heading: requireString(proposed[i]?.heading, 'items.heading'),
-            [CUSTOM_BODY_FIELD[item.bodyType] || 'text']: requireString(proposed[i]?.body, 'items.body'),
+            heading: rewritten(item.heading, proposed[i]?.heading, 'items.heading'),
+            [bodyField(item)]: rewritten(item[bodyField(item)], proposed[i]?.body, 'items.body'),
           })),
         },
       };

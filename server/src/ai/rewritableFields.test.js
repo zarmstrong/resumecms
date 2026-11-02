@@ -85,6 +85,15 @@ test('an experience rewrite missing the description is rejected', () => {
   assert.throws(() => mergeRewrite('experience', { bullets: [] }, rewrite), RewriteShapeError);
 });
 
+test('a field the model left alone keeps its stored value exactly', () => {
+  const data = { tagline: 'Makes anvils.\n', bullets: [] };
+  const rewrite = { tagline: 'Makes anvils.', description: '', bullets: [] };
+  const { data: merged } = mergeRewrite('experience', data, rewrite);
+  assert.equal(merged.tagline, 'Makes anvils.\n');
+  // A description the block never had isn't saved as an empty string.
+  assert.equal(merged.description, undefined);
+});
+
 test('reword mode rejects a changed bullet count', () => {
   const rewrite = { tagline: '', description: '', bullets: [{ text: 'Only one now', children: [] }] };
   assert.throws(() => mergeRewrite('experience', experience, rewrite), RewriteShapeError);
