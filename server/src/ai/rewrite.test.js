@@ -58,6 +58,14 @@ test('the bullet rule in the prompt follows the restructure setting', () => {
   assert.match(buildPrompt('experience', input, 'x', { allowBulletRestructure: true }).system, /may add, remove, merge/);
 });
 
+test('the experience prompt explains the optional description', () => {
+  const input = rewriteInput('experience', { bullets: ['a'] });
+  const { system } = buildPrompt('experience', input, 'x');
+  assert.match(system, /"description" is an optional short blurb/);
+  assert.match(system, /too thin .* leave it empty/);
+  assert.doesNotMatch(buildPrompt('summary', rewriteInput('summary', {}), 'x').system, /"description"/);
+});
+
 test('read-only context is sent separately from the editable section', () => {
   const input = rewriteInput('experience', { company: 'Acme', bullets: [] });
   const { user } = buildPrompt('experience', input, 'x');

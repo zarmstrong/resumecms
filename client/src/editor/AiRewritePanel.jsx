@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AI_PRESETS, bulletChange, changedFields, hiddenBulletCount, isProposalStale, wordDiff } from './aiReview.js';
+import { bulletChange, changedFields, hiddenBulletCount, isProposalStale, presetsFor, wordDiff } from './aiReview.js';
 
 function DiffText({ before, after }) {
   return (
@@ -90,7 +90,7 @@ export function AiRewritePanel({ block, ai }) {
   return (
     <div className="ed-ai-panel ed-ai-panel-open">
       <div className="ed-ai-presets">
-        {AI_PRESETS.map((preset) => (
+        {presetsFor(block.type, block.data).map((preset) => (
           <button
             key={preset.label}
             type="button"

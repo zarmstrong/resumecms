@@ -22,6 +22,7 @@ test('rewriteInput separates editable prose from read-only facts', () => {
   const { editable, context } = rewriteInput('experience', experience);
   assert.deepEqual(editable, {
     tagline: 'Makes anvils.',
+    description: '',
     bullets: [
       { text: 'Built the deploy pipeline for all services', children: [{ text: 'Cut deploy time in half' }] },
       { text: 'Ran on-call rotation for the platform team', children: [] },
@@ -48,6 +49,7 @@ test('merge only touches allowlisted fields, even if the model returns others', 
 test('reword mode keeps each bullet\'s visibility by position', () => {
   const rewrite = {
     tagline: 'Makes very good anvils.',
+    description: '',
     bullets: [
       { text: 'Designed the deploy pipeline', children: [{ text: 'Halved deploy time' }] },
       { text: 'Led on-call', children: [] },
@@ -64,14 +66,43 @@ test('reword mode keeps each bullet\'s visibility by position', () => {
   assert.equal(bulletReview.items.find((i) => i.after === 'Led on-call').wasHidden, true);
 });
 
+test('an experience description can be written where there was none', () => {
+  const rewrite = {
+    tagline: 'Makes anvils.',
+    description: ' Owned deploys and on-call for the platform team. ',
+    bullets: [
+      { text: 'Built the deploy pipeline for all services', children: [{ text: 'Cut deploy time in half' }] },
+      { text: 'Ran on-call rotation for the platform team', children: [] },
+    ],
+  };
+  const { data } = mergeRewrite('experience', experience, rewrite);
+  assert.equal(data.description, 'Owned deploys and on-call for the platform team.');
+  assert.equal(data.tagline, 'Makes anvils.');
+});
+
+test('an experience rewrite missing the description is rejected', () => {
+  const rewrite = { tagline: 'Makes anvils.', bullets: [] };
+  assert.throws(() => mergeRewrite('experience', { bullets: [] }, rewrite), RewriteShapeError);
+});
+
+test('a field the model left alone keeps its stored value exactly', () => {
+  const data = { tagline: 'Makes anvils.\n', bullets: [] };
+  const rewrite = { tagline: 'Makes anvils.', description: '', bullets: [] };
+  const { data: merged } = mergeRewrite('experience', data, rewrite);
+  assert.equal(merged.tagline, 'Makes anvils.\n');
+  // A description the block never had isn't saved as an empty string.
+  assert.equal(merged.description, undefined);
+});
+
 test('reword mode rejects a changed bullet count', () => {
-  const rewrite = { tagline: '', bullets: [{ text: 'Only one now', children: [] }] };
+  const rewrite = { tagline: '', description: '', bullets: [{ text: 'Only one now', children: [] }] };
   assert.throws(() => mergeRewrite('experience', experience, rewrite), RewriteShapeError);
 });
 
 test('reword mode rejects a changed sub-bullet count', () => {
   const rewrite = {
     tagline: '',
+    description: '',
     bullets: [
       { text: 'a', children: [] },
       { text: 'b', children: [] },
@@ -83,6 +114,7 @@ test('reword mode rejects a changed sub-bullet count', () => {
 test('restructure mode carries visibility to the most similar original', () => {
   const rewrite = {
     tagline: 'Makes anvils.',
+    description: '',
     bullets: [
       { text: 'Ran the on-call rotation for the platform team', children: [] },
       { text: 'Built the deploy pipeline for all services, cutting deploy time in half', children: [] },
@@ -105,6 +137,7 @@ test('restructure mode never matches one original to two proposals', () => {
   const originals = { bullets: [bullet('Built the deploy pipeline', { visibleWeb: false })] };
   const rewrite = {
     tagline: '',
+    description: '',
     bullets: [
       { text: 'Built the deploy pipeline', children: [] },
       { text: 'Built the deploy pipeline again', children: [] },
@@ -183,6 +216,7 @@ test('restructure mode matches non-Latin bullets by content, not position', () =
   };
   const rewrite = {
     tagline: '',
+    description: '',
     bullets: [
       { text: 'Снизил расходы на треть за год', children: [] },
       { text: 'Управлял командой из пяти инженеров', children: [] },

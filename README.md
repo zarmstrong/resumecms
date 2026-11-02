@@ -218,6 +218,10 @@ you Publish.
   hiding a bullet to keep its text away from the provider.
 - The AI is told not to invent facts. Where a number would help, it
   inserts a placeholder like `[X%]` for you to fill in.
+- Experience entries also get a *Write description* preset, which drafts
+  the optional description from the entry's own tagline and bullets. If the
+  entry already has a description, the preset is *Rewrite description*. An
+  empty description stays empty unless you ask for one.
 - **Let AI add, remove, or merge bullets** (off by default) controls
   experience bullets. When it's off, the AI may only reword bullets in
   place. When it's on, the AI can restructure them, and each resulting
