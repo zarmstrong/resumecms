@@ -14,6 +14,11 @@ export const AI_PROVIDERS = {
 };
 
 const MODEL_PATTERN = /^[A-Za-z0-9._:/-]{1,100}$/;
+
+// How long one rewrite may take before the server gives up on the provider,
+// retries included. The floor leaves room for a slow model; the ceiling stops
+// a hung request from tying up the editor (and a reverse proxy) for minutes.
+export const AI_TIMEOUT_SECONDS = { min: 20, max: 120, default: 60 };
 const MAX_KEY_LENGTH = 500;
 
 export class AiSettingsError extends Error {
@@ -25,6 +30,9 @@ export class AiSettingsError extends Error {
 
 // Own-property check, so inherited names like `constructor` or `__proto__`
 // don't pass as providers.
+const isValidTimeout = (n) =>
+  Number.isInteger(n) && n >= AI_TIMEOUT_SECONDS.min && n <= AI_TIMEOUT_SECONDS.max;
+
 export const isAiProvider = (id) => typeof id === 'string' && Object.hasOwn(AI_PROVIDERS, id);
 
 export function normalizeAiSettings(stored) {
@@ -38,6 +46,7 @@ export function normalizeAiSettings(stored) {
     provider: isAiProvider(s.provider) ? s.provider : 'anthropic',
     models,
     allowBulletRestructure: s.allowBulletRestructure === true,
+    timeoutSeconds: isValidTimeout(s.timeoutSeconds) ? s.timeoutSeconds : AI_TIMEOUT_SECONDS.default,
     apiKeys: { ...(s.apiKeys || {}) },
   };
 }
@@ -58,6 +67,8 @@ export function publicAiSettings(stored) {
     provider: s.provider,
     models: s.models,
     allowBulletRestructure: s.allowBulletRestructure,
+    timeoutSeconds: s.timeoutSeconds,
+    timeoutRange: { min: AI_TIMEOUT_SECONDS.min, max: AI_TIMEOUT_SECONDS.max },
     keys,
     providers: Object.fromEntries(Object.entries(AI_PROVIDERS).map(([id, p]) => [id, { label: p.label }])),
     // What the editor actually needs to decide whether to show Rewrite.
@@ -83,6 +94,14 @@ export function applyAiSettingsUpdate(stored, body) {
       throw new AiSettingsError('allowBulletRestructure must be a boolean');
     }
     next.allowBulletRestructure = b.allowBulletRestructure;
+  }
+  if (b.timeoutSeconds !== undefined) {
+    if (!isValidTimeout(b.timeoutSeconds)) {
+      throw new AiSettingsError(
+        `The timeout must be a whole number of seconds from ${AI_TIMEOUT_SECONDS.min} to ${AI_TIMEOUT_SECONDS.max}`
+      );
+    }
+    next.timeoutSeconds = b.timeoutSeconds;
   }
   if (b.provider !== undefined) {
     if (!isAiProvider(b.provider)) throw new AiSettingsError('Unknown AI provider');

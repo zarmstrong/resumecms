@@ -10,7 +10,6 @@ export class AiError extends Error {
   }
 }
 
-const TIMEOUT_MS = 120_000;
 const MAX_OUTPUT_TOKENS = 16000;
 
 // Models that accept the server-side `fallbacks: "default"` parameter, which
@@ -18,6 +17,16 @@ const MAX_OUTPUT_TOKENS = 16000;
 // model instead of failing outright. Other models (including any older one
 // typed into settings) are called without it — they'd reject the parameter.
 const ANTHROPIC_FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-sonnet-5-5']);
+
+// `timeoutSeconds` bounds the whole call: the SDK's own timeout covers one
+// attempt, and the abort signal stops a retry from running past the limit.
+function requestLimits(timeoutSeconds) {
+  const ms = timeoutSeconds * 1000;
+  return { clientOptions: { timeout: ms, maxRetries: 1 }, requestOptions: { signal: AbortSignal.timeout(ms) } };
+}
+
+const timeoutError = (timeoutSeconds) =>
+  new AiError(504, `The AI didn't respond within ${timeoutSeconds} seconds. Try again, or raise the timeout in Account Settings.`);
 
 function parseJson(text) {
   try {
@@ -27,8 +36,9 @@ function parseJson(text) {
   }
 }
 
-async function callAnthropic({ apiKey, model, system, user, schema }) {
-  const client = new Anthropic({ apiKey, timeout: TIMEOUT_MS, maxRetries: 1 });
+async function callAnthropic({ apiKey, model, system, user, schema, timeoutSeconds }) {
+  const { clientOptions, requestOptions } = requestLimits(timeoutSeconds);
+  const client = new Anthropic({ apiKey, ...clientOptions });
   const params = {
     model,
     max_tokens: MAX_OUTPUT_TOKENS,
@@ -39,13 +49,18 @@ async function callAnthropic({ apiKey, model, system, user, schema }) {
   let response;
   try {
     response = ANTHROPIC_FALLBACK_MODELS.has(model)
-      ? await client.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
-      : await client.messages.create(params);
+      ? await client.beta.messages.create(
+          { ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' },
+          requestOptions
+        )
+      : await client.messages.create(params, requestOptions);
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) throw new AiError(400, 'Anthropic rejected the API key. Check it in Account Settings.');
     if (err instanceof Anthropic.NotFoundError) throw new AiError(400, `Anthropic doesn't recognize the model "${model}".`);
     if (err instanceof Anthropic.RateLimitError) throw new AiError(429, 'Anthropic rate limit reached. Wait a moment and try again.');
-    if (err instanceof Anthropic.APIConnectionTimeoutError) throw new AiError(504, 'The AI took too long to respond. Try again.');
+    if (err instanceof Anthropic.APIConnectionTimeoutError || err instanceof Anthropic.APIUserAbortError) {
+      throw timeoutError(timeoutSeconds);
+    }
     if (err instanceof Anthropic.APIError) throw new AiError(502, `Anthropic API error${err.status ? ` (${err.status})` : ''}: ${err.message}`);
     throw err;
   }
@@ -56,24 +71,30 @@ async function callAnthropic({ apiKey, model, system, user, schema }) {
   return parseJson(text);
 }
 
-async function callOpenAI({ apiKey, model, system, user, schema }) {
-  const client = new OpenAI({ apiKey, timeout: TIMEOUT_MS, maxRetries: 1 });
+async function callOpenAI({ apiKey, model, system, user, schema, timeoutSeconds }) {
+  const { clientOptions, requestOptions } = requestLimits(timeoutSeconds);
+  const client = new OpenAI({ apiKey, ...clientOptions });
   let completion;
   try {
-    completion = await client.chat.completions.create({
-      model,
-      max_completion_tokens: MAX_OUTPUT_TOKENS,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      response_format: { type: 'json_schema', json_schema: { name: 'resume_rewrite', strict: true, schema } },
-    });
+    completion = await client.chat.completions.create(
+      {
+        model,
+        max_completion_tokens: MAX_OUTPUT_TOKENS,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        response_format: { type: 'json_schema', json_schema: { name: 'resume_rewrite', strict: true, schema } },
+      },
+      requestOptions
+    );
   } catch (err) {
     if (err instanceof OpenAI.AuthenticationError) throw new AiError(400, 'OpenAI rejected the API key. Check it in Account Settings.');
     if (err instanceof OpenAI.NotFoundError) throw new AiError(400, `OpenAI doesn't recognize the model "${model}".`);
     if (err instanceof OpenAI.RateLimitError) throw new AiError(429, 'OpenAI rate limit reached. Wait a moment and try again.');
-    if (err instanceof OpenAI.APIConnectionTimeoutError) throw new AiError(504, 'The AI took too long to respond. Try again.');
+    if (err instanceof OpenAI.APIConnectionTimeoutError || err instanceof OpenAI.APIUserAbortError) {
+      throw timeoutError(timeoutSeconds);
+    }
     if (err instanceof OpenAI.APIError) throw new AiError(502, `OpenAI API error${err.status ? ` (${err.status})` : ''}: ${err.message}`);
     throw err;
   }

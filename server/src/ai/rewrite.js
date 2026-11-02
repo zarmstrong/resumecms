@@ -72,6 +72,7 @@ export async function rewriteBlock({ type, data, instruction, settings, callMode
     system,
     user,
     schema: outputSchema(type),
+    timeoutSeconds: settings.timeoutSeconds,
   });
 
   try {

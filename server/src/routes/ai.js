@@ -11,13 +11,16 @@ import { hasRewritableShape } from '../ai/rewritableFields.js';
 const router = Router();
 
 // Same idea as auth.js's credentialsLimiter: adding or removing an API key
-// needs the current password, so failed attempts are capped.
+// needs the current password, so failed attempts are capped. Only a wrong
+// password (401) counts — a mistyped timeout or model name shouldn't lock
+// the owner out of settings.
 const settingsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
+  requestWasSuccessful: (req, res) => res.statusCode !== 401,
   message: { error: 'Too many attempts. Please try again later.' },
 });
 

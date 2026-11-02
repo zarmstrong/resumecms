@@ -146,8 +146,8 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `PUT /api/blocks/:id` | update `data`, `visibleWeb`, `visiblePrint`, and/or `parentId` |
 | `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted) |
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
-| `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, and per-provider `{ hasKey, hint }` — never the key itself |
-| `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
+| `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
+| `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction }` → `{ proposal }` for review; saves nothing |
 | `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag |
 | `GET /api/public/resume.pdf` | public, generates and streams a PDF |
@@ -222,6 +222,10 @@ you Publish.
   added, removed, and hidden bullets.
 - The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
   the same panel. Rewrites are rate-limited to 30 per 10 minutes.
+- **Timeout** (default 60 seconds, 20–120) is how long a rewrite may take,
+  including one automatic retry, before the server gives up on the
+  provider. If you run behind a reverse proxy, keep it below the proxy's
+  read timeout so you get the real error instead of the proxy's.
 
 API keys are stored in plain text in the same SQLite database, like the
 TOTP secret, so anyone with a copy of your data directory has them. The

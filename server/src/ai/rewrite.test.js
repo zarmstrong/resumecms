@@ -23,6 +23,7 @@ test('passes the configured provider, key, and model to the model call', async (
   assert.equal(request.provider, 'openai');
   assert.equal(request.apiKey, 'sk-test');
   assert.equal(request.model, 'test-model');
+  assert.equal(request.timeoutSeconds, 60);
   assert.match(request.user, /Make it punchier/);
   assert.deepEqual(result.proposedData, { text: 'I ship things.' });
   assert.equal(result.explanation, 'Tightened it.');

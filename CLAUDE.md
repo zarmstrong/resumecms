@@ -214,6 +214,9 @@ row (`server/src/ai/aiSettings.js`), not env vars. `publicAiSettings()` is the
 only shape that may leave the server. Provider calls go through the official
 `@anthropic-ai/sdk` and `openai` packages in `server/src/ai/providers.js`.
 `rewriteBlock()` takes an injectable `callModel`, so tests never hit a real API.
+`timeoutSeconds` (20–120, default 60) bounds each provider call, retries
+included: the SDK `timeout` covers one attempt and an `AbortSignal.timeout`
+caps the total.
 
 ### PDF generation
 

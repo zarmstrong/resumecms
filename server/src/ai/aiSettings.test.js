@@ -21,6 +21,17 @@ test('defaults: disabled, Claude, bullet restructuring off', () => {
   assert.equal(pub.provider, 'anthropic');
   assert.equal(pub.allowBulletRestructure, false);
   assert.equal(pub.models.anthropic, 'claude-opus-5-5');
+  assert.equal(pub.timeoutSeconds, 60);
+});
+
+test('timeout accepts whole seconds from 20 to 120 only', () => {
+  assert.equal(applyAiSettingsUpdate({}, { timeoutSeconds: 20 }).settings.timeoutSeconds, 20);
+  assert.equal(applyAiSettingsUpdate({}, { timeoutSeconds: 120 }).settings.timeoutSeconds, 120);
+  for (const bad of [19, 121, 30.5, '60', null, 0]) {
+    assert.throws(() => applyAiSettingsUpdate({}, { timeoutSeconds: bad }), AiSettingsError);
+  }
+  // A bad stored value (hand-edited DB) falls back to the default.
+  assert.equal(normalizeAiSettings({ timeoutSeconds: 5 }).timeoutSeconds, 60);
 });
 
 test('a blank key keeps the stored one and does not count as a key change', () => {

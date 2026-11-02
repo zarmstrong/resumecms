@@ -24,6 +24,8 @@ export function AiSettings({ onChange, onDirtyChange }) {
       provider: next.provider,
       models: { ...next.models },
       allowBulletRestructure: next.allowBulletRestructure,
+      // Kept as the input's string so a half-typed value doesn't jump around.
+      timeoutSeconds: String(next.timeoutSeconds),
     });
     setNewKey('');
     setRemoveKey(false);
@@ -44,6 +46,7 @@ export function AiSettings({ onChange, onDirtyChange }) {
         form.enabled !== ai.enabled ||
         form.provider !== ai.provider ||
         form.allowBulletRestructure !== ai.allowBulletRestructure ||
+        Number(form.timeoutSeconds) !== ai.timeoutSeconds ||
         Object.keys(ai.models).some((id) => (form.models[id] || '').trim() !== ai.models[id]))
   );
   useEffect(() => {
@@ -77,6 +80,7 @@ export function AiSettings({ onChange, onDirtyChange }) {
     try {
       const { ai: next } = await api.updateAiSettings({
         ...form,
+        timeoutSeconds: Number(form.timeoutSeconds),
         apiKeys: newKey.trim() ? { [form.provider]: newKey } : undefined,
         removeKeys: removeKey ? [form.provider] : undefined,
         currentPassword: changingKey ? currentPassword : undefined,
@@ -174,6 +178,23 @@ export function AiSettings({ onChange, onDirtyChange }) {
         Off: the AI only rewords existing bullets. On: it can restructure them; each bullet keeps the web/print
         visibility of the original it most resembles, and new bullets start visible everywhere.
       </span>
+
+      <div className="ed-field">
+        <label htmlFor="ed-ai-timeout">Timeout (seconds)</label>
+        <input
+          id="ed-ai-timeout"
+          type="number"
+          className="ed-input"
+          min={ai.timeoutRange.min}
+          max={ai.timeoutRange.max}
+          step={1}
+          value={form.timeoutSeconds}
+          onChange={(e) => patch({ timeoutSeconds: e.target.value })}
+        />
+        <span className="ed-field-hint">
+          How long to wait for the AI before giving up, from {ai.timeoutRange.min} to {ai.timeoutRange.max} seconds.
+        </span>
+      </div>
 
       {changingKey && (
         <div className="ed-field">
