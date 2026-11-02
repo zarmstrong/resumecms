@@ -229,7 +229,8 @@ you Publish.
   place. When it's on, the AI can restructure them, and each resulting
   bullet keeps the web/print visibility of the original it most
   resembles. New bullets start visible everywhere, and the review marks
-  added, removed, and hidden bullets.
+  added, removed, and hidden bullets. The AI is told not to merge a hidden
+  bullet's content into a visible one.
 - The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
   the same panel. Rewrites are rate-limited to 30 per 10 minutes.
 - **Timeout** (default 60 seconds, 20–120) is how long a rewrite may take,

@@ -56,6 +56,7 @@ test('the bullet rule in the prompt follows the restructure setting', () => {
   const input = rewriteInput('experience', { bullets: ['a'] });
   assert.match(buildPrompt('experience', input, 'x').system, /exactly the same number of bullets/);
   assert.match(buildPrompt('experience', input, 'x', { allowBulletRestructure: true }).system, /may add, remove, merge/);
+  assert.match(buildPrompt('experience', input, 'x', { allowBulletRestructure: true }).system, /Never merge or move content from a bullet marked "hidden"/);
 });
 
 test('the experience prompt explains the optional description', () => {

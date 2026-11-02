@@ -13,7 +13,7 @@ const TYPE_LABELS = {
 
 function bulletRule(allowBulletRestructure) {
   return allowBulletRestructure
-    ? 'You may add, remove, merge, split, or reorder bullets when that serves the instruction. Bullets nest at most one level (a bullet may have sub-bullets; sub-bullets have none).'
+    ? 'You may add, remove, merge, split, or reorder bullets when that serves the instruction. Bullets nest at most one level (a bullet may have sub-bullets; sub-bullets have none). Never merge or move content from a bullet marked "hidden": true into one that is not, since that bullet is shown publicly.'
     : 'Return exactly the same number of bullets, with the same number of sub-bullets under each, in the same order. Reword them in place; do not add, remove, merge, or reorder them.';
 }
 
