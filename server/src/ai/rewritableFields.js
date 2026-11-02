@@ -58,6 +58,18 @@ export function hasRewritableShape(type, data) {
   return true;
 }
 
+// A bullet as the model sees it. Bullets hidden in either mode (a sub-bullet
+// is hidden with its parent) are marked, because the description has no
+// visibility flags of its own and always shows, so the prompt keeps their
+// content out of it. The output schema has no `hidden`, so nothing the
+// model returns can change visibility.
+function editableBullet(bullet, parentHidden = false, depth = 0) {
+  const hidden = parentHidden || !(bullet.visibleWeb && bullet.visiblePrint);
+  const out = { text: bullet.text, ...(hidden ? { hidden: true } : {}) };
+  if (depth < MAX_BULLET_DEPTH) out.children = bullet.children.map((c) => editableBullet(c, hidden, depth + 1));
+  return out;
+}
+
 // Splits a block's data into what the model may rewrite (`editable`) and
 // what it should only read for context (`context`).
 export function rewriteInput(type, data = {}) {
@@ -72,10 +84,7 @@ export function rewriteInput(type, data = {}) {
         editable: {
           tagline: data.tagline || '',
           description: data.description || '',
-          bullets: (data.bullets || []).map((b) => {
-            const bullet = normalizeBullet(b);
-            return { text: bullet.text, children: bullet.children.map((c) => ({ text: c.text })) };
-          }),
+          bullets: (data.bullets || []).map((b) => editableBullet(normalizeBullet(b))),
         },
         context: {
           jobTitle: data.jobTitle || '',

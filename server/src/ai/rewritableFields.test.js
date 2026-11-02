@@ -25,11 +25,24 @@ test('rewriteInput separates editable prose from read-only facts', () => {
     description: '',
     bullets: [
       { text: 'Built the deploy pipeline for all services', children: [{ text: 'Cut deploy time in half' }] },
-      { text: 'Ran on-call rotation for the platform team', children: [] },
+      { text: 'Ran on-call rotation for the platform team', hidden: true, children: [] },
     ],
   });
   assert.equal(context.company, 'Acme');
   assert.ok(!('companyUrl' in context));
+});
+
+test('rewriteInput marks bullets hidden in either mode, with their sub-bullets', () => {
+  const { editable } = rewriteInput('experience', {
+    bullets: [
+      bullet('Visible', {}, [bullet('Visible child'), bullet('Web-hidden child', { visibleWeb: false })]),
+      bullet('Print-hidden', { visiblePrint: false }, [bullet('Child of hidden')]),
+    ],
+  });
+  assert.deepEqual(editable.bullets, [
+    { text: 'Visible', children: [{ text: 'Visible child' }, { text: 'Web-hidden child', hidden: true }] },
+    { text: 'Print-hidden', hidden: true, children: [{ text: 'Child of hidden', hidden: true }] },
+  ]);
 });
 
 test('rewriteInput normalizes legacy string bullets', () => {

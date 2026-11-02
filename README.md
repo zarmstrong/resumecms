@@ -221,7 +221,9 @@ you Publish.
 - Experience entries also get a *Write description* preset, which drafts
   the optional description from the entry's own tagline and bullets. If the
   entry already has a description, the preset is *Rewrite description*. An
-  empty description stays empty unless you ask for one.
+  empty description stays empty unless you ask for one. The description has
+  no visibility toggle and always shows, so the AI is told not to use
+  anything from hidden bullets in it. Check the review before accepting.
 - **Let AI add, remove, or merge bullets** (off by default) controls
   experience bullets. When it's off, the AI may only reword bullets in
   place. When it's on, the AI can restructure them, and each resulting

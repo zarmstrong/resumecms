@@ -29,6 +29,9 @@ export function buildPrompt(type, { editable, context }, instruction, { allowBul
     rules.push(
       '"description" is an optional short blurb about the role, shown above the bullets. If it is empty, leave it empty unless the instruction asks for one. When writing one, keep it to two or three sentences and draw only on the context, tagline, and bullets. If the tagline and bullets are too thin to say anything beyond the job title and company, leave it empty and say so in "explanation".'
     );
+    rules.push(
+      'Bullets marked "hidden": true are hidden from the published resume, but the description always shows. Never carry their content into the description. Rewrite those bullets themselves as usual.'
+    );
     rules.push(bulletRule(allowBulletRestructure));
   }
   if (type === 'custom') {
