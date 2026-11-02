@@ -212,6 +212,10 @@ you Publish.
   company/institution names, visibility flags, and block styling are
   always kept from the original. Education blocks aren't rewritable.
   Your header and contact details are never sent.
+- Bullets hidden from web or print **are** sent along with the rest of
+  their block, so the AI can rewrite them too. The rewrite panel says how
+  many hidden bullets a block has before you send it. Don't rely on
+  hiding a bullet to keep its text away from the provider.
 - The AI is told not to invent facts. Where a number would help, it
   inserts a placeholder like `[X%]` for you to fill in.
 - **Let AI add, remove, or merge bullets** (off by default) controls

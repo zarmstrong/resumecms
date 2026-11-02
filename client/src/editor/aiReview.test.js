@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bulletChange, changedFields, isProposalStale, wordDiff } from './aiReview.js';
+import { bulletChange, changedFields, hiddenBulletCount, isProposalStale, wordDiff } from './aiReview.js';
 
 const join = (runs, keep) => runs.filter((r) => keep.includes(r.type)).map((r) => r.text).join('');
 
@@ -46,4 +46,17 @@ test('isProposalStale detects edits made after the proposal', () => {
   const proposal = { baseData: { text: 'a' } };
   assert.equal(isProposalStale(proposal, { text: 'a' }), false);
   assert.equal(isProposalStale(proposal, { text: 'ab' }), true);
+});
+
+test('hiddenBulletCount counts bullets hidden from web or print, sub-bullets included', () => {
+  const data = {
+    bullets: [
+      'legacy string bullet',
+      { text: 'a', visibleWeb: true, visiblePrint: false, children: [{ text: 'b', visibleWeb: false, visiblePrint: true }] },
+      { text: 'c', visibleWeb: true, visiblePrint: true, children: [{ text: 'd', visibleWeb: true, visiblePrint: true }] },
+    ],
+  };
+  assert.equal(hiddenBulletCount('experience', data), 2);
+  assert.equal(hiddenBulletCount('experience', {}), 0);
+  assert.equal(hiddenBulletCount('summary', data), 0);
 });

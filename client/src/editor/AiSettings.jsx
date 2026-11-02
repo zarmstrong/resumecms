@@ -47,7 +47,11 @@ export function AiSettings({ onChange, onDirtyChange }) {
         form.provider !== ai.provider ||
         form.allowBulletRestructure !== ai.allowBulletRestructure ||
         Number(form.timeoutSeconds) !== ai.timeoutSeconds ||
-        Object.keys(ai.models).some((id) => (form.models[id] || '').trim() !== ai.models[id]))
+        // A blank model saves as the provider's default, so it only counts
+        // as a change when the stored model isn't already the default.
+        Object.keys(ai.models).some(
+          (id) => ((form.models[id] || '').trim() || ai.providers[id].defaultModel) !== ai.models[id]
+        ))
   );
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -126,7 +130,7 @@ export function AiSettings({ onChange, onDirtyChange }) {
           className="ed-input"
           value={form.models[form.provider] || ''}
           onChange={(e) => patch({ models: { ...form.models, [form.provider]: e.target.value } })}
-          placeholder="Leave blank for the default"
+          placeholder={`Leave blank for the default (${ai.providers[form.provider].defaultModel})`}
         />
       </div>
 
@@ -162,7 +166,7 @@ export function AiSettings({ onChange, onDirtyChange }) {
         )}
         <span className="ed-field-hint">
           Stored in this site's database and never shown again. The selected blocks' text is sent to the provider
-          when you rewrite; your header and contact details are not.
+          when you rewrite, including bullets hidden from web or print; your header and contact details are not.
         </span>
       </div>
 

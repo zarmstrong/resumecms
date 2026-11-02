@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AI_PRESETS, bulletChange, changedFields, isProposalStale, wordDiff } from './aiReview.js';
+import { AI_PRESETS, bulletChange, changedFields, hiddenBulletCount, isProposalStale, wordDiff } from './aiReview.js';
 
 function DiffText({ before, after }) {
   return (
@@ -75,6 +75,7 @@ export function AiRewritePanel({ block, ai }) {
   const proposal = state?.status === 'ready' ? state.proposal : null;
   const fields = proposal ? changedFields(block.type, proposal.baseData, proposal.proposedData) : [];
   const stale = proposal && isProposalStale(proposal, block.data);
+  const hiddenCount = hiddenBulletCount(block.type, block.data);
   const unchanged = proposal && fields.length === 0 && !proposal.bulletReview?.items.some((i) => bulletChange(i) !== 'unchanged') && !proposal.bulletReview?.removed.length;
 
   function request() {
@@ -113,6 +114,12 @@ export function AiRewritePanel({ block, ai }) {
         maxLength={2000}
         disabled={loading}
       />
+      {hiddenCount > 0 && (
+        <p className="ed-field-hint">
+          {hiddenCount === 1 ? 'One bullet here is' : `${hiddenCount} bullets here are`} hidden from web or print. Hidden
+          bullets are sent to the AI too.
+        </p>
+      )}
       <div className="ed-ai-actions">
         <button type="button" className="ed-btn ed-btn-primary" onClick={request} disabled={loading || !instruction.trim()}>
           {loading ? 'Rewriting…' : proposal ? 'Try again' : 'Rewrite'}

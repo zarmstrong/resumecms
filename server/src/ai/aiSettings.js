@@ -70,7 +70,9 @@ export function publicAiSettings(stored) {
     timeoutSeconds: s.timeoutSeconds,
     timeoutRange: { min: AI_TIMEOUT_SECONDS.min, max: AI_TIMEOUT_SECONDS.max },
     keys,
-    providers: Object.fromEntries(Object.entries(AI_PROVIDERS).map(([id, p]) => [id, { label: p.label }])),
+    providers: Object.fromEntries(
+      Object.entries(AI_PROVIDERS).map(([id, p]) => [id, { label: p.label, defaultModel: p.defaultModel }])
+    ),
     // What the editor actually needs to decide whether to show Rewrite.
     available: s.enabled && Boolean(s.apiKeys[s.provider]),
   };
