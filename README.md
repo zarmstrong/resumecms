@@ -231,7 +231,11 @@ you Publish.
   bullet keeps the web/print visibility of the original it most
   resembles. New bullets start visible everywhere, and the review marks
   added, removed, and hidden bullets. The AI is told not to merge a hidden
-  bullet's content into a visible one.
+  bullet's content into a visible one. "Visibility of the original" means
+  where it actually showed: a sub-bullet of a hidden bullet was never shown,
+  so it stays hidden even if the AI promotes it to a top-level bullet, and
+  it keeps those hidden flags as its own afterwards (un-hiding the parent
+  later won't un-hide it).
 - The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
   the same panel. Rewrites are rate-limited to 30 per 10 minutes.
 - **Timeout** (default 60 seconds, 20–120) is how long a rewrite may take,
