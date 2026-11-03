@@ -13,7 +13,7 @@ const TYPE_LABELS = {
 
 function bulletRule(allowBulletRestructure) {
   return allowBulletRestructure
-    ? 'You may add, remove, merge, split, or reorder bullets when that serves the instruction. Bullets nest at most one level (a bullet may have sub-bullets; sub-bullets have none).'
+    ? 'You may add, remove, merge, split, or reorder bullets when that serves the instruction. Bullets nest at most one level (a bullet may have sub-bullets; sub-bullets have none). Never merge or move content from a bullet marked "hidden": true into one that is not, since that bullet is shown publicly.'
     : 'Return exactly the same number of bullets, with the same number of sub-bullets under each, in the same order. Reword them in place; do not add, remove, merge, or reorder them.';
 }
 
@@ -28,6 +28,9 @@ export function buildPrompt(type, { editable, context }, instruction, { allowBul
   if (type === 'experience') {
     rules.push(
       '"description" is an optional short blurb about the role, shown above the bullets. If it is empty, leave it empty unless the instruction asks for one. When writing one, keep it to two or three sentences and draw only on the context, tagline, and bullets. If the tagline and bullets are too thin to say anything beyond the job title and company, leave it empty and say so in "explanation".'
+    );
+    rules.push(
+      'Bullets marked "hidden": true are hidden from the web page, the PDF, or both, but the tagline and description always show on both. Never carry their content into the tagline or description. Rewrite those bullets themselves as usual.'
     );
     rules.push(bulletRule(allowBulletRestructure));
   }

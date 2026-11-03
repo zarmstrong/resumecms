@@ -25,11 +25,24 @@ test('rewriteInput separates editable prose from read-only facts', () => {
     description: '',
     bullets: [
       { text: 'Built the deploy pipeline for all services', children: [{ text: 'Cut deploy time in half' }] },
-      { text: 'Ran on-call rotation for the platform team', children: [] },
+      { text: 'Ran on-call rotation for the platform team', hidden: true, children: [] },
     ],
   });
   assert.equal(context.company, 'Acme');
   assert.ok(!('companyUrl' in context));
+});
+
+test('rewriteInput marks bullets hidden in either mode, with their sub-bullets', () => {
+  const { editable } = rewriteInput('experience', {
+    bullets: [
+      bullet('Visible', {}, [bullet('Visible child'), bullet('Web-hidden child', { visibleWeb: false })]),
+      bullet('Print-hidden', { visiblePrint: false }, [bullet('Child of hidden')]),
+    ],
+  });
+  assert.deepEqual(editable.bullets, [
+    { text: 'Visible', children: [{ text: 'Visible child' }, { text: 'Web-hidden child', hidden: true }] },
+    { text: 'Print-hidden', hidden: true, children: [{ text: 'Child of hidden', hidden: true }] },
+  ]);
 });
 
 test('rewriteInput normalizes legacy string bullets', () => {
@@ -131,6 +144,34 @@ test('restructure mode carries visibility to the most similar original', () => {
   assert.equal(bulletReview.items[2].before, null);
   // The sub-bullet was merged into its parent, so it's reported as removed.
   assert.deepEqual(bulletReview.removed, [{ depth: 1, before: 'Cut deploy time in half', wasHidden: false }]);
+});
+
+test('restructure mode keeps a promoted sub-bullet of a hidden bullet hidden', () => {
+  const originals = {
+    bullets: [bullet('Confidential client engagement', { visiblePrint: false }, [bullet('Migrated their billing system')])],
+  };
+  const rewrite = {
+    tagline: '',
+    description: '',
+    bullets: [
+      { text: 'Confidential client engagement', children: [] },
+      { text: 'Migrated their billing system', children: [] },
+    ],
+  };
+  const { data, bulletReview } = mergeRewrite('experience', originals, rewrite, { allowBulletRestructure: true });
+  // Never shown in print before (its parent wasn't), so not shown now.
+  assert.equal(data.bullets[1].visiblePrint, false);
+  assert.equal(data.bullets[1].visibleWeb, true);
+  assert.equal(bulletReview.items[1].wasHidden, true);
+});
+
+test('reword mode flags a sub-bullet of a hidden bullet in the review, keeping its own flags', () => {
+  const originals = { bullets: [bullet('Parent', { visibleWeb: false }, [bullet('Child')])] };
+  const rewrite = { tagline: '', description: '', bullets: [{ text: 'Parent!', children: [{ text: 'Child!' }] }] };
+  const { data, bulletReview } = mergeRewrite('experience', originals, rewrite);
+  assert.equal(data.bullets[0].children[0].visibleWeb, true);
+  assert.equal(bulletReview.items[1].wasHidden, true);
+  assert.equal(bulletReview.items[1].visibleWeb, false);
 });
 
 test('restructure mode never matches one original to two proposals', () => {

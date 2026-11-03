@@ -326,13 +326,21 @@ you Publish.
 - Experience entries also get a *Write description* preset, which drafts
   the optional description from the entry's own tagline and bullets. If the
   entry already has a description, the preset is *Rewrite description*. An
-  empty description stays empty unless you ask for one.
+  empty description stays empty unless you ask for one. The description has
+  no visibility toggle and always shows, so the AI is told not to use
+  anything from hidden bullets in it (or in the tagline, for the same
+  reason). Check the review before accepting.
 - **Let AI add, remove, or merge bullets** (off by default) controls
   experience bullets. When it's off, the AI may only reword bullets in
   place. When it's on, the AI can restructure them, and each resulting
   bullet keeps the web/print visibility of the original it most
   resembles. New bullets start visible everywhere, and the review marks
-  added, removed, and hidden bullets.
+  added, removed, and hidden bullets. The AI is told not to merge a hidden
+  bullet's content into a visible one. "Visibility of the original" means
+  where it actually showed: a sub-bullet of a hidden bullet was never shown,
+  so it stays hidden even if the AI promotes it to a top-level bullet, and
+  it keeps those hidden flags as its own afterwards (un-hiding the parent
+  later won't un-hide it).
 - The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
   the same panel. Rewrites are rate-limited to 30 per 10 minutes.
 - **Timeout** (default 60 seconds, 20–120) is how long a rewrite may take,

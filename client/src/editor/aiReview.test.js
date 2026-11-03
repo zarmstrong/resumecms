@@ -73,3 +73,10 @@ test('hiddenBulletCount counts bullets hidden from web or print, sub-bullets inc
   assert.equal(hiddenBulletCount('experience', {}), 0);
   assert.equal(hiddenBulletCount('summary', data), 0);
 });
+
+test('hiddenBulletCount counts a hidden bullet\'s sub-bullets as hidden too', () => {
+  const data = {
+    bullets: [{ text: 'a', visibleWeb: false, visiblePrint: true, children: [{ text: 'b' }, { text: 'c', visibleWeb: true, visiblePrint: true }] }],
+  };
+  assert.equal(hiddenBulletCount('experience', data), 3);
+});

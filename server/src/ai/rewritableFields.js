@@ -58,6 +58,30 @@ export function hasRewritableShape(type, data) {
   return true;
 }
 
+// Where a bullet actually shows: a sub-bullet is only shown in a mode where
+// its parent is too (publicBlocks.js drops a hidden bullet's children with
+// it), whatever its own flags say.
+function shownFlags(bullet, parentShown = null) {
+  return {
+    visibleWeb: bullet.visibleWeb && (parentShown ? parentShown.visibleWeb : true),
+    visiblePrint: bullet.visiblePrint && (parentShown ? parentShown.visiblePrint : true),
+  };
+}
+
+const isHidden = (flags) => !(flags.visibleWeb && flags.visiblePrint);
+
+// A bullet as the model sees it. Bullets that don't show in both modes are
+// marked, because the tagline and description have no visibility flags of
+// their own and always show, so the prompt keeps their content out of them.
+// The output schema has no `hidden`, so nothing the model returns can change
+// visibility.
+function editableBullet(bullet, parentShown = null, depth = 0) {
+  const shown = shownFlags(bullet, parentShown);
+  const out = { text: bullet.text, ...(isHidden(shown) ? { hidden: true } : {}) };
+  if (depth < MAX_BULLET_DEPTH) out.children = bullet.children.map((c) => editableBullet(c, shown, depth + 1));
+  return out;
+}
+
 // Splits a block's data into what the model may rewrite (`editable`) and
 // what it should only read for context (`context`).
 export function rewriteInput(type, data = {}) {
@@ -72,10 +96,7 @@ export function rewriteInput(type, data = {}) {
         editable: {
           tagline: data.tagline || '',
           description: data.description || '',
-          bullets: (data.bullets || []).map((b) => {
-            const bullet = normalizeBullet(b);
-            return { text: bullet.text, children: bullet.children.map((c) => ({ text: c.text })) };
-          }),
+          bullets: (data.bullets || []).map((b) => editableBullet(normalizeBullet(b))),
         },
         context: {
           jobTitle: data.jobTitle || '',
@@ -184,10 +205,13 @@ export function textSimilarity(a, b) {
 // original one, and starts out visible everywhere.
 const MATCH_THRESHOLD = 0.3;
 
-function flatten(bullets, depth = 0, out = []) {
+// `shown` is the bullet's effective visibility (see shownFlags). Only
+// meaningful for originals; proposed bullets have no flags.
+function flatten(bullets, depth = 0, out = [], parentShown = null) {
   for (const bullet of bullets) {
-    out.push({ bullet, depth });
-    if (bullet.children) flatten(bullet.children, depth + 1, out);
+    const shown = shownFlags(bullet, parentShown);
+    out.push({ bullet, depth, shown });
+    if (bullet.children) flatten(bullet.children, depth + 1, out, shown);
   }
   return out;
 }
@@ -200,8 +224,6 @@ function proposedBullets(raw) {
     })),
   }));
 }
-
-const isHidden = (b) => !(b.visibleWeb && b.visiblePrint);
 
 // Reword-only mode: the structure must come back exactly as it went out, so
 // each bullet keeps its own visibility flags by position.
@@ -222,7 +244,8 @@ function rewordBullets(originals, proposed) {
       text: proposed[i].text,
       children: o.children.map((c, j) => {
         const after = proposed[i].children[j].text;
-        review.push({ depth: 1, before: c.text, after, wasHidden: isHidden(c), visibleWeb: c.visibleWeb, visiblePrint: c.visiblePrint });
+        const shown = shownFlags(c, o);
+        review.push({ depth: 1, before: c.text, after, wasHidden: isHidden(shown), ...shown });
         return { ...c, text: after };
       }),
     };
@@ -231,9 +254,12 @@ function rewordBullets(originals, proposed) {
 }
 
 // Restructure mode: bullets may be added, removed, merged, or reordered, so
-// each proposed bullet inherits the visibility flags of the most similar
-// unused original (best pairs claimed first). Unmatched proposals are new
-// and visible everywhere; unmatched originals are reported as removed.
+// each proposed bullet inherits the effective visibility of the most similar
+// unused original (best pairs claimed first). Effective, not its own flags:
+// a visible sub-bullet of a hidden bullet was never shown, and must not
+// become shown just because the model promoted it to the top level.
+// Unmatched proposals are new and visible everywhere; unmatched originals
+// are reported as removed.
 export function restructureBullets(originals, proposed) {
   const from = flatten(originals);
   const to = flatten(proposed);
@@ -258,10 +284,10 @@ export function restructureBullets(originals, proposed) {
   function build(list, depth) {
     return list.map((p) => {
       const ti = index++;
-      const match = matchOf.has(ti) ? from[matchOf.get(ti)].bullet : null;
-      const visibleWeb = match ? match.visibleWeb : true;
-      const visiblePrint = match ? match.visiblePrint : true;
-      review.push({ depth, before: match ? match.text : null, after: p.text, wasHidden: match ? isHidden(match) : false, visibleWeb, visiblePrint });
+      const match = matchOf.has(ti) ? from[matchOf.get(ti)] : null;
+      const visibleWeb = match ? match.shown.visibleWeb : true;
+      const visiblePrint = match ? match.shown.visiblePrint : true;
+      review.push({ depth, before: match ? match.bullet.text : null, after: p.text, wasHidden: match ? isHidden(match.shown) : false, visibleWeb, visiblePrint });
       const bullet = { text: p.text, visibleWeb, visiblePrint, children: [] };
       if (p.children) bullet.children = build(p.children, depth + 1);
       return bullet;
@@ -270,7 +296,7 @@ export function restructureBullets(originals, proposed) {
   const bullets = build(proposed, 0);
   const removed = from
     .filter((_, fi) => !usedFrom.has(fi))
-    .map(({ bullet, depth }) => ({ depth, before: bullet.text, wasHidden: isHidden(bullet) }));
+    .map(({ bullet, depth, shown }) => ({ depth, before: bullet.text, wasHidden: isHidden(shown) }));
   return { bullets, review, removed };
 }
 

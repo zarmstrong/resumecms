@@ -122,17 +122,19 @@ export function changedFields(type, before = {}, after = {}) {
 }
 
 // How many of an experience block's bullets (sub-bullets included) are
-// hidden from web or print. Their text is sent to the AI along with the
-// rest, so the panel says so before the user sends anything.
+// hidden from web or print. A sub-bullet of a hidden bullet is hidden with
+// it, matching what the server marks as hidden for the AI (rewritableFields.js).
+// Their text is sent to the AI along with the rest, so the panel says so
+// before the user sends anything.
 export function hiddenBulletCount(type, data = {}) {
   if (type !== 'experience') return 0;
-  const count = (bullets) =>
+  const count = (bullets, parentHidden) =>
     (Array.isArray(bullets) ? bullets : []).reduce((n, b) => {
-      if (!b || typeof b !== 'object') return n;
-      const hidden = b.visibleWeb === false || b.visiblePrint === false;
-      return n + (hidden ? 1 : 0) + count(b.children);
+      if (!b || typeof b !== 'object') return n + (parentHidden ? 1 : 0);
+      const hidden = parentHidden || b.visibleWeb === false || b.visiblePrint === false;
+      return n + (hidden ? 1 : 0) + count(b.children, hidden);
     }, 0);
-  return count(data.bullets);
+  return count(data.bullets, false);
 }
 
 // What happened to one bullet in the server's bulletReview, for its label.
