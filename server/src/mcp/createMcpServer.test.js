@@ -80,10 +80,10 @@ function fakeStore() {
       blocks.push(b);
       return { ...b };
     },
-    updateBlock: (id, patch) => {
-      calls.push(['updateBlock', id, patch]);
+    updateBlock: (id, patch, { mergeData = false } = {}) => {
+      calls.push(['updateBlock', id, patch, { mergeData }]);
       const b = find(id);
-      if (patch.data !== undefined) b.data = patch.mergeData ? mergeShallow(b.data, patch.data, 'data') : patch.data;
+      if (patch.data !== undefined) b.data = mergeData ? mergeShallow(b.data, patch.data, 'data') : patch.data;
       if (patch.visibleWeb !== undefined) b.visibleWeb = patch.visibleWeb;
       if (patch.visiblePrint !== undefined) b.visiblePrint = patch.visiblePrint;
       if (Object.hasOwn(patch, 'parentId')) b.parentId = patch.parentId;
@@ -166,11 +166,11 @@ test('block round trip: create, read, merge-update, replace, visibility, parent,
   let out = (await call('update_block', { id: x.id, data: { jobTitle: 'Lead', company: null, bullets: ['two'] } })).json.block;
   assert.deepEqual(out.data, { jobTitle: 'Lead', bullets: ['two'] });
   // the store received the patch flagged for merging and no parentId key
-  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { data: { jobTitle: 'Lead', company: null, bullets: ['two'] }, mergeData: true }]);
+  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { data: { jobTitle: 'Lead', company: null, bullets: ['two'] } }, { mergeData: true }]);
 
   out = (await call('update_block', { id: x.id, data: { jobTitle: 'Only' }, replaceData: true })).json.block;
   assert.deepEqual(out.data, { jobTitle: 'Only' });
-  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { data: { jobTitle: 'Only' } }]);
+  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { data: { jobTitle: 'Only' } }, { mergeData: false }]);
 
   // replaceData without data, or no fields at all, is a 400 — not a silent
   // no-op that still marks the draft dirty
@@ -185,14 +185,14 @@ test('block round trip: create, read, merge-update, replace, visibility, parent,
 
   out = (await call('update_block', { id: x.id, visibleWeb: false })).json.block;
   assert.equal(out.visibleWeb, false);
-  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { visibleWeb: false }]);
+  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { visibleWeb: false }, { mergeData: true }]);
 
   // parentId null is forwarded as an explicit null; omitted is not sent
   out = (await call('update_block', { id: x.id, parentId: null })).json.block;
   assert.equal(out.parentId, null);
-  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { parentId: null }]);
+  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { parentId: null }, { mergeData: true }]);
   await call('update_block', { id: x.id, parentId: h.id });
-  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { parentId: h.id }]);
+  assert.deepEqual(store.calls.at(-1), ['updateBlock', x.id, { parentId: h.id }, { mergeData: true }]);
 
   assert.deepEqual((await call('delete_block', { id: noData.id })).json, { ok: true });
   assert.deepEqual(store.calls.at(-1), ['deleteBlock', noData.id]);

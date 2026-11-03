@@ -43,12 +43,17 @@ export function createMcpAuth(rawToken, { log = console } = {}) {
 
     // The token is the only thing standing between the network and full
     // editor access, so every rejected attempt is worth a log line: a burst
-    // of them is how a leaked or guessed token would first show up.
+    // of them is how a leaked or guessed token would first show up. `ip` is
+    // the peer address, which behind a reverse proxy is the proxy's (Express
+    // only unwraps it when `trust proxy` is set), so the X-Forwarded-For
+    // header is recorded as received, too — unverified, but it's what lets
+    // an attack behind nginx/Traefik be attributed or filtered.
     log.warn(
       JSON.stringify({
         time: new Date().toISOString(),
         event: 'mcp_auth_failed',
         ip: req.ip ?? req.socket?.remoteAddress ?? null,
+        forwardedFor: req.headers?.['x-forwarded-for'] ?? null,
         reason: candidate ? 'wrong token' : 'no bearer token',
       })
     );

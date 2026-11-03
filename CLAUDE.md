@@ -265,10 +265,12 @@ Two tools deliberately differ from REST: `update_block` *merges* `data`
 keys (with `replaceData: true` for REST's replace semantics), and
 `move_block` turns a single-block move into the full `reorderBlocks()` list
 via the pure `mcp/moveBlock.js`. The merge itself lives in the store
-(`mergeShallow`, behind `updateBlock`'s `mergeData: true` and
-`setHeader`/`setSite`'s `{ merge: true }`), as does input validation
-(non-object bodies, unknown block types → 400), so the tools stay one-call
-wrappers and both front doors validate alike. `mcp/blockSchemas.js` is hand-written
+(`mergeShallow`, behind `updateBlock`'s `{ mergeData: true }` option and
+`setHeader`/`setSite`'s `{ merge: true }` — options, not patch keys, so a
+REST body can't switch them on), as does input validation (non-object
+bodies, unknown block types → 400; a `null` `data` means "unchanged" on
+update and "empty" on create), so the tools stay one-call wrappers and
+both front doors validate alike. `mcp/blockSchemas.js` is hand-written
 documentation of the client-side data shapes (block forms, header, site
 settings) for the `get_block_schemas` tool — update it when a form's fields
 or option values change. SDK imports are confined to `routes/mcp.js`,
@@ -286,8 +288,14 @@ already-rendered file at `PDF_PATH` (exported from `pdfRenderer.js`,
 `<RESUMECMS_DATA_DIR>/resume.pdf`), it doesn't render on demand. Both go
 through the store's single PDF queue (`withPdfLock`), so two renders never
 run at once and a slow first-boot render can't overwrite a newer publish;
-keep any new PDF-writing code on that queue. `publish()` writes the
-snapshot first; a failed render leaves the site published and throws a 500
+keep any new PDF-writing code on that queue. Each render is bounded by the
+store's `pdfTimeoutMs` (default 90 s, `DEFAULT_PDF_TIMEOUT_MS`) so a hung
+Chromium releases the queue instead of blocking every later publish, and
+the file is written to `resume.pdf.tmp` and renamed into place so a
+download overlapping a publish never reads a partial file. `publish()`
+takes the snapshot synchronously at call time — before queuing the render
+— so edits and discards from either front door are strictly ordered
+against it; a failed render leaves the site published and throws a 500
 that says so (the REST route passes that message through, and the editor
 shows it). The `pdf_meta` setting records which snapshot the file on disk
 was rendered from, and `getPublishStatus()` reports `pdfStale: true` until

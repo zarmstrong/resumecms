@@ -56,16 +56,18 @@ test('401 on a missing, malformed, wrong, or wrong-length header', () => {
 test('logs each failed attempt, with the client address and reason', () => {
   const warned = [];
   const mw = createMcpAuth(TOKEN, { log: { error() {}, warn: (m) => warned.push(JSON.parse(m)) } });
-  const req = { headers: { authorization: 'Bearer nope' }, ip: '203.0.113.9' };
+  // Behind a reverse proxy req.ip is the proxy's address, so the forwarded
+  // header is logged as received alongside it.
+  const req = { headers: { authorization: 'Bearer nope', 'x-forwarded-for': '198.51.100.7, 10.0.0.1' }, ip: '203.0.113.9' };
   const res = { set() { return this; }, status() { return this; }, json() { return this; } };
   mw(req, res, () => assert.fail('must not pass'));
   mw({ headers: {}, ip: '203.0.113.9' }, res, () => assert.fail('must not pass'));
   mw({ headers: { authorization: `Bearer ${TOKEN}` }, ip: '203.0.113.9' }, res, () => {});
   assert.deepEqual(
-    warned.map(({ event, ip, reason }) => [event, ip, reason]),
+    warned.map(({ event, ip, forwardedFor, reason }) => [event, ip, forwardedFor, reason]),
     [
-      ['mcp_auth_failed', '203.0.113.9', 'wrong token'],
-      ['mcp_auth_failed', '203.0.113.9', 'no bearer token'],
+      ['mcp_auth_failed', '203.0.113.9', '198.51.100.7, 10.0.0.1', 'wrong token'],
+      ['mcp_auth_failed', '203.0.113.9', null, 'no bearer token'],
     ]
   );
 });

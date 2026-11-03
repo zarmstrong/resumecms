@@ -166,7 +166,6 @@ const TOOLS = [
       const patch = {};
       if (args.data !== undefined) {
         patch.data = args.data;
-        if (!args.replaceData) patch.mergeData = true;
       } else if (args.replaceData) {
         throw httpError(400, 'replaceData: true requires data (send data: {} to clear the block)');
       }
@@ -176,7 +175,7 @@ const TOOLS = [
       if (Object.keys(patch).length === 0) {
         throw httpError(400, 'Nothing to update: send at least one of data, visibleWeb, visiblePrint, or parentId');
       }
-      return { block: store.updateBlock(args.id, patch) };
+      return { block: store.updateBlock(args.id, patch, { mergeData: !args.replaceData }) };
     },
   },
   {

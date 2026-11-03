@@ -54,7 +54,21 @@ export function mergeShallow(base, patch, label) {
   return out;
 }
 
-export function createResumeStore({ db, renderPdf, pdfPath }) {
+// Upper bound on one PDF render. Every render runs on the single PDF
+// queue below, so a Chromium that never settles would otherwise block
+// every later publish (and the boot render) until a restart.
+export const DEFAULT_PDF_TIMEOUT_MS = 90_000;
+
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+    timer.unref?.(); // a pending render must not keep the process alive on shutdown
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAULT_PDF_TIMEOUT_MS }) {
   const { getSetting, setSetting, touchDraft } = createSettings(db);
 
   function lookupParentRow(parentId) {
@@ -177,7 +191,7 @@ export function createResumeStore({ db, renderPdf, pdfPath }) {
     const { type, data, parentId = null } = assertObject(input ?? {}, 'block');
     if (!type) throw httpError(400, 'type is required');
     if (!BLOCK_TYPES.includes(type)) throw httpError(400, `unknown block type: ${type}`);
-    if (data !== undefined) assertObject(data, 'data');
+    if (data != null) assertObject(data, 'data'); // null/undefined → empty, as before
     assertValidParent(parentId, type);
     const now = new Date().toISOString();
     const id = randomUUID();
@@ -189,21 +203,23 @@ export function createResumeStore({ db, renderPdf, pdfPath }) {
     return getBlock(id);
   }
 
-  // `patch` may carry `data` (replaced whole, unless `mergeData: true`
-  // shallow-merges it into the existing data — see mergeShallow),
-  // `visibleWeb`, `visiblePrint`, and `parentId`. A `parentId` key that's
-  // *present* (even as null) re-parents the block; an absent key leaves it
-  // alone — hence the hasOwn check rather than a `?? existing` default.
-  function updateBlock(id, patch = {}) {
+  // `patch` may carry `data`, `visibleWeb`, `visiblePrint`, and `parentId`.
+  // `data` replaces the stored object whole; a null (or absent) `data`
+  // leaves it unchanged, like the other fields. The `mergeData` option —
+  // not part of the patch, so a REST body can't switch it on — makes it a
+  // shallow merge instead (see mergeShallow); the MCP update_block tool
+  // uses that. A `parentId` key that's *present* (even as null) re-parents
+  // the block; an absent key leaves it alone — hence the hasOwn check
+  // rather than a `?? existing` default.
+  function updateBlock(id, patch = {}, { mergeData = false } = {}) {
     patch = assertObject(patch ?? {}, 'patch'); // null/undefined → nothing to change
     const existing = db.prepare('SELECT * FROM blocks WHERE id = ?').get(id);
     if (!existing) throw httpError(404, 'Block not found');
 
     let { data } = patch;
     const { visibleWeb, visiblePrint } = patch;
-    if (data !== undefined) {
-      data = patch.mergeData ? mergeShallow(JSON.parse(existing.data), data, 'data') : assertObject(data, 'data');
-    }
+    if (data == null) data = undefined;
+    else data = mergeData ? mergeShallow(JSON.parse(existing.data), data, 'data') : assertObject(data, 'data');
     const parentIdProvided = Object.hasOwn(patch, 'parentId');
     const parentId = parentIdProvided ? patch.parentId : undefined;
     if (parentIdProvided) assertValidParent(parentId, existing.type);
@@ -337,30 +353,54 @@ export function createResumeStore({ db, renderPdf, pdfPath }) {
     return result;
   }
 
+  // Bounded by pdfTimeoutMs so a Chromium that never settles releases the
+  // queue; a render that finishes after its timeout is simply dropped
+  // (nothing below the race ever sees its result).
+  function renderPdfBounded() {
+    return withTimeout(Promise.resolve().then(renderPdf), pdfTimeoutMs, `PDF render timed out after ${pdfTimeoutMs} ms`);
+  }
+
+  // Write to a sibling temp file and rename it into place, so a download
+  // overlapping a publish never reads a half-written PDF and a crash
+  // mid-write can't leave a truncated file that looks valid.
+  function writePdf(buffer) {
+    const tmp = `${pdfPath}.tmp`;
+    fs.writeFileSync(tmp, buffer);
+    fs.renameSync(tmp, pdfPath);
+  }
+
+  // The snapshot is taken synchronously, before anything is queued, so a
+  // publish reflects the draft exactly as it was when it was called: any
+  // edit or discard that follows (from either front door) is ordered after
+  // it, and nothing can slip in between the status check and the snapshot.
+  // Only the render waits for the PDF queue.
+  //
   // The snapshot is written first, so the public site reflects the draft
   // even if the PDF render then fails (a dev box without Chromium can still
   // publish). The error says so — a caller shouldn't retry a publish that
   // already took effect — and getPublishStatus() reports pdfStale until a
   // later publish renders successfully.
   function publish() {
+    const previous = getSetting('published_resume');
+    if (!getSetting('pdf_meta')) {
+      // First publish since pdf_meta was introduced: pin the file on disk
+      // to the snapshot it belongs to, so a failed render below is
+      // detected as stale rather than assumed current.
+      setSetting('pdf_meta', { renderedFor: previous?.publishedAt ?? null });
+    }
+    const publishedAt = new Date().toISOString();
+    setSetting('published_resume', { ...currentDraft(), publishedAt });
     return withPdfLock(async () => {
-      const previous = getSetting('published_resume');
-      if (!getSetting('pdf_meta')) {
-        // First publish since pdf_meta was introduced: pin the file on disk
-        // to the snapshot it belongs to, so a failed render below is
-        // detected as stale rather than assumed current.
-        setSetting('pdf_meta', { renderedFor: previous?.publishedAt ?? null });
-      }
-      const publishedAt = new Date().toISOString();
-      setSetting('published_resume', { ...currentDraft(), publishedAt });
       try {
-        const pdfBuffer = await renderPdf();
-        fs.writeFileSync(pdfPath, pdfBuffer);
+        writePdf(await renderPdfBounded());
       } catch (cause) {
         const err = httpError(500, 'Published, but the PDF render failed — the site is updated, the PDF is not');
         err.cause = cause;
         throw err;
       }
+      // The render read whatever snapshot was current while it ran, which
+      // is this one or a newer one; a newer publish is queued behind us and
+      // will record itself when its own render lands.
       setSetting('pdf_meta', { renderedFor: publishedAt });
       return { publishedAt };
     });
@@ -374,7 +414,7 @@ export function createResumeStore({ db, renderPdf, pdfPath }) {
   function ensurePdf() {
     return withPdfLock(async () => {
       if (fs.existsSync(pdfPath)) return { rendered: false };
-      fs.writeFileSync(pdfPath, await renderPdf());
+      writePdf(await renderPdfBounded());
       setSetting('pdf_meta', { renderedFor: getSetting('published_resume')?.publishedAt ?? null });
       return { rendered: true };
     });

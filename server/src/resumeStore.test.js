@@ -11,7 +11,7 @@ import { createResumeStore, NESTABLE_TYPES } from './resumeStore.js';
 // guard for the logic that used to live inline in routes/blocks.js and
 // routes/publish.js. Nothing here touches db.js or RESUMECMS_DATA_DIR.
 
-function makeStore({ renderPdf } = {}) {
+function makeStore({ renderPdf, pdfTimeoutMs } = {}) {
   const db = new Database(':memory:');
   ensureSchema(db);
   const pdfPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'resumecms-store-')), 'resume.pdf');
@@ -19,6 +19,7 @@ function makeStore({ renderPdf } = {}) {
   const store = createResumeStore({
     db,
     pdfPath,
+    pdfTimeoutMs,
     renderPdf:
       renderPdf ||
       (async () => {
@@ -68,6 +69,12 @@ test('createBlock validates type and parent', () => {
   for (const type of NESTABLE_TYPES) assert.equal(store.createBlock({ type, parentId: h.id }).parentId, h.id);
 });
 
+test('createBlock treats a null data as empty', () => {
+  const { store } = makeStore();
+  assert.deepEqual(store.createBlock({ type: 'summary', data: null }).data, {});
+  assert.throws(() => store.createBlock({ type: 'summary', data: 'x' }), (e) => e.status === 400);
+});
+
 test('getBlock throws 404 for unknown ids', () => {
   const { store } = makeStore();
   assert.throws(() => store.getBlock('missing'), (e) => e.status === 404 && e.message === 'Block not found');
@@ -103,19 +110,25 @@ test('updateBlock replaces data, toggles visibility, and distinguishes omitted f
   assert.throws(() => store.updateBlock(h1.id, { parentId: h2.id }), (e) => e.status === 400);
 });
 
-test('updateBlock with mergeData merges keys, deletes on null, and validates its input', () => {
+test('updateBlock with the mergeData option merges keys, deletes on null, and validates its input', () => {
   const { store, setting } = makeStore();
   const x = store.createBlock({ type: 'experience', data: { jobTitle: 'Dev', company: 'Co', bullets: ['one'] } });
-  const merged = store.updateBlock(x.id, { data: { jobTitle: 'Lead', company: null, bullets: ['two'] }, mergeData: true });
+  const merged = store.updateBlock(x.id, { data: { jobTitle: 'Lead', company: null, bullets: ['two'] } }, { mergeData: true });
   assert.deepEqual(merged.data, { jobTitle: 'Lead', bullets: ['two'] });
-  assert.deepEqual(store.updateBlock(x.id, { data: { only: true } }).data, { only: true }, 'without mergeData, data is replaced');
-  const fail = (patch, re) => assert.throws(() => store.updateBlock(x.id, patch), (e) => e.status === 400 && re.test(e.message));
-  assert.deepEqual(store.updateBlock(x.id, null).data, { only: true }, 'a null patch changes nothing');
-  fail('x', /patch must be an object/);
-  fail(['x'], /patch must be an object/);
-  fail({ data: 'x' }, /data must be an object/);
-  fail({ data: ['x'], mergeData: true }, /data must be an object/);
-  assert.deepEqual(store.getBlock(x.id).data, { only: true });
+  assert.deepEqual(store.updateBlock(x.id, { data: { only: true } }).data, { only: true }, 'without the option, data is replaced');
+  // The option is not part of the patch: a REST body can't turn merging on.
+  assert.deepEqual(store.updateBlock(x.id, { data: { other: 1 }, mergeData: true }).data, { other: 1 });
+  // A null data (what an older client sends to leave it alone) is ignored.
+  assert.deepEqual(store.updateBlock(x.id, { data: null, visibleWeb: false }).data, { other: 1 });
+  assert.equal(store.getBlock(x.id).visibleWeb, false);
+  const fail = (patch, opts, re) =>
+    assert.throws(() => store.updateBlock(x.id, patch, opts), (e) => e.status === 400 && re.test(e.message));
+  assert.deepEqual(store.updateBlock(x.id, null).data, { other: 1 }, 'a null patch changes nothing');
+  fail('x', undefined, /patch must be an object/);
+  fail(['x'], undefined, /patch must be an object/);
+  fail({ data: 'x' }, undefined, /data must be an object/);
+  fail({ data: ['x'] }, { mergeData: true }, /data must be an object/);
+  assert.deepEqual(store.getBlock(x.id).data, { other: 1 });
   assert.ok(setting('draft_meta').lastEditedAt);
 });
 
@@ -321,6 +334,59 @@ test('ensurePdf queues behind an in-flight publish and never overwrites its outp
   assert.deepEqual(second, { rendered: false });
   assert.equal(calls.renderPdf, 1);
   assert.equal(fs.readFileSync(pdfPath2, 'utf8'), '%PDF-fake');
+});
+
+test('publish snapshots the draft at call time, before waiting for the PDF queue', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { store, setting } = makeStore({ renderPdf: async () => { await gate; return Buffer.from('x'); } });
+  store.setHeader({ name: 'First' });
+  const first = store.publish(); // render blocks on the gate
+  await new Promise((r) => setTimeout(r, 2)); // isDirty compares ms timestamps
+  store.setHeader({ name: 'Second' }); // an edit that lands while it renders
+  assert.deepEqual(setting('published_resume').header, { name: 'First' });
+  assert.equal(store.getPublishStatus().isDirty, true);
+  const second = store.publish(); // queued behind the first
+  assert.deepEqual(setting('published_resume').header, { name: 'Second' });
+  release();
+  const [a, b] = await Promise.all([first, second]);
+  assert.ok(a.publishedAt < b.publishedAt || a.publishedAt === b.publishedAt);
+  assert.deepEqual(store.getPublishStatus(), { publishedAt: b.publishedAt, isDirty: false, pdfStale: false });
+});
+
+test('a hung render times out and releases the queue for later publishes', async () => {
+  let hang = true;
+  const { store, pdfPath, setting } = makeStore({
+    pdfTimeoutMs: 20,
+    renderPdf: () => (hang ? new Promise(() => {}) : Promise.resolve(Buffer.from('ok'))),
+  });
+  store.setHeader({ name: 'A' });
+  await assert.rejects(
+    store.publish(),
+    (e) => e.status === 500 && /PDF render failed/.test(e.message) && /timed out after 20 ms/.test(e.cause.message)
+  );
+  assert.deepEqual(setting('published_resume').header, { name: 'A' });
+  assert.equal(store.getPublishStatus().pdfStale, true);
+  hang = false;
+  const { publishedAt } = await store.publish();
+  assert.equal(fs.readFileSync(pdfPath, 'utf8'), 'ok');
+  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false });
+});
+
+test('the PDF is written atomically: the old file stays intact until the new one is complete', async () => {
+  const { store, pdfPath } = makeStore({
+    renderPdf: async () => {
+      // While a render is in flight the previously published file is still
+      // whole, and no partial file is served from the real path.
+      assert.equal(fs.existsSync(pdfPath) ? fs.readFileSync(pdfPath, 'utf8') : null, fs.existsSync(pdfPath) ? '%PDF-first' : null);
+      return Buffer.from(fs.existsSync(pdfPath) ? '%PDF-second' : '%PDF-first');
+    },
+  });
+  await store.publish();
+  assert.equal(fs.readFileSync(pdfPath, 'utf8'), '%PDF-first');
+  await store.publish();
+  assert.equal(fs.readFileSync(pdfPath, 'utf8'), '%PDF-second');
+  assert.equal(fs.existsSync(`${pdfPath}.tmp`), false, 'the temp file is renamed away');
 });
 
 test('discardDraft restores the published snapshot and 409s when nothing is published', async () => {

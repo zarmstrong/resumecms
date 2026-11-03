@@ -151,6 +151,13 @@ export function EditorPage({ onLogout }) {
       .catch((err) => console.error('Failed to load AI settings', err));
   }, []);
 
+  // Any edit or discard supersedes the message from the last publish; the
+  // lasting state (an out-of-date PDF) is carried by pdfStale instead.
+  function markDirty() {
+    setIsDirty(true);
+    setPublishError(null);
+  }
+
   function flashSaved() {
     setSaveState('saved');
     setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1200);
@@ -189,11 +196,12 @@ export function EditorPage({ onLogout }) {
     setSite(draft.site);
     setBlocks(draft.blocks);
     setIsDirty(false);
+    setPublishError(null);
   }
 
   function handleHeaderChange(newHeader) {
     setHeader(newHeader);
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     clearTimeout(debounceTimers.current.__header);
     debounceTimers.current.__header = setTimeout(async () => {
@@ -204,7 +212,7 @@ export function EditorPage({ onLogout }) {
 
   function handleBlockDataChange(id, newData) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, data: newData } : b)));
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     clearTimeout(debounceTimers.current[id]);
     debounceTimers.current[id] = setTimeout(async () => {
@@ -215,7 +223,7 @@ export function EditorPage({ onLogout }) {
 
   function handleSiteChange(newSite) {
     setSite(newSite);
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     clearTimeout(debounceTimers.current.__site);
     debounceTimers.current.__site = setTimeout(async () => {
@@ -226,7 +234,7 @@ export function EditorPage({ onLogout }) {
 
   async function handleVisibilityChange(id, patch) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     await api.updateBlock(id, patch);
     flashSaved();
@@ -235,7 +243,7 @@ export function EditorPage({ onLogout }) {
   async function handleReorder(reordered) {
     // Show the projected drop immediately, then reconcile with the saved order.
     setBlocks(reordered);
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     // A second drag can fire before the first request's response lands;
     // only apply a response if it's still the most recent request, so an
@@ -265,7 +273,7 @@ export function EditorPage({ onLogout }) {
   async function handleAdd(type) {
     const { block } = await api.createBlock(type, defaultDataForType(type));
     setBlocks((prev) => [...prev, block]);
-    setIsDirty(true);
+    markDirty();
   }
 
   async function handleDelete(id) {
@@ -279,7 +287,7 @@ export function EditorPage({ onLogout }) {
     );
     if (aiState?.blockId === id) clearAiProposal();
     await api.deleteBlock(id);
-    setIsDirty(true);
+    markDirty();
   }
 
   // An AI rewrite is only a proposal held here until accepted: the preview

@@ -144,7 +144,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
 | `POST /api/blocks` | create a block: `{ type, data, parentId? }` (`type` must be one of the built-in types) |
-| `PUT /api/blocks/:id` | update `data`, `visibleWeb`, `visiblePrint`, and/or `parentId` |
+| `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`, `visiblePrint`, and/or `parentId` |
 | `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted) |
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
@@ -210,14 +210,18 @@ limiter keyed on the client IP would let a stranger lock you out from
 behind a shared proxy — which is why the token must be long and random; a
 shorter one is logged and ignored. The token is read once at startup and
 never logged. Every rejected attempt (`"event":"mcp_auth_failed"`, with the
-client address) and every tool call (`"event":"mcp_tool"`, with the tool
-name, outcome and duration) is written to the same JSON log as requests,
-so `docker compose logs | grep mcp_` shows exactly what a client did with
-the token. To revoke a token, change `RESUMECMS_MCP_TOKEN` and restart
+peer address as `ip` and the `X-Forwarded-For` header as received as
+`forwardedFor` — behind a reverse proxy `ip` is the proxy's own address, so
+`forwardedFor` is the one to filter on) and every tool call
+(`"event":"mcp_tool"`, with the tool name, outcome and duration) is written
+to the same JSON log as requests, so `docker compose logs | grep mcp_`
+shows exactly what a client did with the token. To revoke a token, change `RESUMECMS_MCP_TOKEN` and restart
 the container. If a client reports an OAuth or discovery error against
 `/mcp`, the token is wrong (the server answers 401, and some clients then go
 looking for an OAuth server that doesn't exist). `publish` runs Chromium, so
-keep any proxy read timeout above the time a render takes.
+keep any proxy read timeout above the time a render takes (a render is
+given up on after 90 seconds, which leaves the site published and the PDF
+marked out of date).
 
 To poke at it by hand (MCP requires both `Accept` types):
 

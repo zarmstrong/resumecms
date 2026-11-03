@@ -67,14 +67,13 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Stateless mode has no sessions to resume or delete; the SDK would hold a
-// GET open as an SSE stream, so answer these explicitly instead.
-function methodNotAllowed(req, res) {
+// Every other method on the endpoint is a 405. Stateless mode has no
+// sessions to resume (GET) or delete (DELETE) — the SDK would otherwise hold
+// a GET open as an SSE stream — and nothing else is meaningful either.
+router.all('/', (req, res) => {
   res.set('Allow', 'POST').status(405).json(METHOD_NOT_ALLOWED);
-}
-router.get('/', methodNotAllowed);
-router.delete('/', methodNotAllowed);
-router.all('/', methodNotAllowed);
+});
+// Sub-paths don't exist; answer here rather than letting them reach the SPA.
 router.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
