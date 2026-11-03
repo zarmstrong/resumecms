@@ -1,11 +1,9 @@
 import { Router } from 'express';
 import fs from 'node:fs';
-import path from 'node:path';
 import { getSetting } from '../db.js';
+import { PDF_PATH } from '../pdfRenderer.js';
 
 const router = Router();
-const DATA_DIR = process.env.RESUMECMS_DATA_DIR || '/data';
-export const PDF_PATH = path.join(DATA_DIR, 'resume.pdf');
 
 router.get('/resume.pdf', (req, res) => {
   if (!fs.existsSync(PDF_PATH)) {

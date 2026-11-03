@@ -122,6 +122,7 @@ the server.
 | `RESUMECMS_CAPTCHA_PROVIDER` | no | `turnstile` or `recaptcha` to require a captcha on login. Unset disables it. |
 | `RESUMECMS_TURNSTILE_SITE_KEY` / `RESUMECMS_TURNSTILE_SECRET_KEY` | if using Turnstile | From the [Cloudflare Turnstile dashboard](https://dash.cloudflare.com/?to=/:account/turnstile). |
 | `RESUMECMS_RECAPTCHA_SITE_KEY` / `RESUMECMS_RECAPTCHA_SECRET_KEY` | if using reCAPTCHA | From the [Google reCAPTCHA admin console](https://www.google.com/recaptcha/admin) (v2 "I'm not a robot" checkbox type). |
+| `RESUMECMS_MCP_TOKEN` | no | Enables the [MCP server](#mcp-server) at `POST /mcp`; the bearer token MCP clients must send. Unset disables the endpoint. Must be at least 32 characters (`openssl rand -hex 32`). |
 
 Generate a strong `RESUMECMS_SESSION_SECRET` with e.g. `openssl rand -hex 32`.
 
@@ -143,15 +144,94 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET/PUT /api/header` | header/contact fields |
 | `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
-| `POST /api/blocks` | create a block: `{ type, data, parentId? }` |
-| `PUT /api/blocks/:id` | update `data`, `visibleWeb`, `visiblePrint`, and/or `parentId` |
-| `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted) |
+| `POST /api/blocks` | create a block: `{ type, data, parentId? }` (`type` must be one of the built-in types; `data`'s documented keys are type-checked, e.g. `bullets` must be an array) |
+| `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`/`visiblePrint` (booleans), and/or `parentId` |
+| `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted); 404 for an unknown id |
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction }` → `{ proposal }` for review; saves nothing |
 | `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag |
 | `GET /api/public/resume.pdf` | public, generates and streams a PDF |
+| `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
+
+## MCP server
+
+The server can expose the editor's capabilities as [MCP](https://modelcontextprotocol.io)
+tools, so Claude Code, Claude Desktop, or any other MCP client can read and
+edit your resume conversationally ("tighten the bullets on my last job and
+publish"). It's off by default: set `RESUMECMS_MCP_TOKEN` to a random string
+of at least 32 characters and restart, and `POST /mcp` comes alive. The
+endpoint speaks Streamable HTTP in stateless mode (one JSON response per
+request, no SSE, nothing for a reverse proxy to buffer), and every request
+must carry `Authorization: Bearer <token>`.
+
+Connect from Claude Code:
+
+```bash
+claude mcp add --transport http resumecms https://your-host/mcp \
+  --header 'Authorization: Bearer ${RESUMECMS_MCP_TOKEN}'
+```
+
+(`${VAR}` is expanded by Claude Code when it loads the config, so keep the
+single quotes; `--scope user` makes it available in every project.) Other
+clients take the equivalent JSON:
+
+```json
+{ "type": "http", "url": "https://your-host/mcp", "headers": { "Authorization": "Bearer <token>" } }
+```
+
+Everything the tools write goes to the **draft**, exactly like the editor;
+nothing is visible on the public site or PDF until `publish` is called.
+
+| Tool | What it does |
+|---|---|
+| `get_block_schemas` | documents each block type's `data` shape plus the header and site-settings objects (`type` narrows it to one block type); the documented block keys are type-checked on write, so a wrong-kind value (`bullets` as a string) is a 400 |
+| `get_draft` | the whole draft in one call: `{ header, site, blocks }` in display order, hidden blocks included |
+| `list_blocks`, `get_block` | draft blocks in display order / one block by id |
+| `create_block` | `{ type, data?, parentId? }` — appended to the end of its sibling group |
+| `update_block` | `{ id, data?, replaceData?, visibleWeb?, visiblePrint?, parentId? }` — `data` is **merged** key by key (a `null` value removes a key, so a literal `null` can't be stored this way; arrays such as `bullets` are replaced whole); `replaceData: true` replaces the object, matching `PUT /api/blocks/:id` |
+| `move_block` | `{ id, parentId?, beforeId? \| afterId? \| index? }` — repositions one block (a heading brings its children); omit `parentId` to stay put, `null` promotes to top level |
+| `delete_block` | deletes a block; a heading's children are promoted, not deleted |
+| `reorder_blocks` | `{ items: [{ id, parentId? }] }` — the complete order, every block once; an omitted `parentId` means top level |
+| `get_header`, `update_header` | read / merge keys into the header (`links` is replaced whole) |
+| `get_site_settings`, `update_site_settings` | read / merge keys into site settings (`colors` merges one level deep) |
+| `get_publish_status` | `{ publishedAt, isDirty, pdfStale }` — `pdfStale` means the PDF on disk wasn't rendered from the current published snapshot (a publish whose PDF render failed); the next successful `publish` clears it |
+| `publish` | snapshot the draft to the public site and re-render the PDF (takes a few seconds) |
+| `discard_draft` | restore the draft from the last published snapshot |
+| `get_published_resume` | the published snapshot as the site (`mode: "web"`) or PDF (`"print"`) sees it |
+
+Tool errors carry the same status the REST API would return, e.g.
+`[404] Block not found`.
+
+Security notes: the token grants full editor access (everything but
+changing the login and 2FA), so treat it like the password and only expose
+`/mcp` over HTTPS. There's no login-style rate limiting on `/mcp` — a
+limiter keyed on the client IP would let a stranger lock you out from
+behind a shared proxy — which is why the token must be long and random; a
+shorter one is logged and ignored. The token is read once at startup and
+never logged. Every rejected attempt (`"event":"mcp_auth_failed"`, with the
+client address as `ip` — the real client once `RESUMECMS_TRUST_PROXY` is
+set, otherwise your proxy's own address — plus the `X-Forwarded-For`
+header as received as `forwardedFor`) and every tool call
+(`"event":"mcp_tool"`, with the tool name, outcome and duration) is written
+to the same JSON log as requests, so `docker compose logs | grep mcp_`
+shows exactly what a client did with the token. To revoke a token, change `RESUMECMS_MCP_TOKEN` and restart
+the container. If a client reports an OAuth or discovery error against
+`/mcp`, the token is wrong (the server answers 401, and some clients then go
+looking for an OAuth server that doesn't exist). `publish` runs Chromium, so
+keep any proxy read timeout above the time a render takes (a render is
+given up on after 90 seconds, which leaves the site published and the PDF
+marked out of date).
+
+To poke at it by hand (MCP requires both `Accept` types):
+
+```bash
+curl -s -X POST https://your-host/mcp \
+  -H "Authorization: Bearer $RESUMECMS_MCP_TOKEN" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
 
 ## Logging and security
 

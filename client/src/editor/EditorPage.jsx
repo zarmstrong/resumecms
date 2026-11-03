@@ -52,6 +52,11 @@ export function EditorPage({ onLogout }) {
   const [publishedAt, setPublishedAt] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
   const [publishState, setPublishState] = useState('idle'); // idle | publishing | published
+  const [publishError, setPublishError] = useState(null);
+  // True when the PDF on disk wasn't rendered from the current published
+  // snapshot (a publish whose PDF render failed) — see the server's
+  // getPublishStatus().
+  const [pdfStale, setPdfStale] = useState(false);
   const [leftWidth, setLeftWidth] = useState(loadLeftPaneWidth);
   const [resizingPane, setResizingPane] = useState(false);
   const [aiSettings, setAiSettings] = useState(null);
@@ -134,6 +139,7 @@ export function EditorPage({ onLogout }) {
       setBlocks(b.blocks);
       setPublishedAt(status.publishedAt);
       setIsDirty(status.isDirty);
+      setPdfStale(!!status.pdfStale);
       setUsername(credentials.username);
       setLoading(false);
     });
@@ -145,6 +151,17 @@ export function EditorPage({ onLogout }) {
       .catch((err) => console.error('Failed to load AI settings', err));
   }, []);
 
+  // Any edit or discard supersedes the message from the last publish; the
+  // lasting state (an out-of-date PDF) is carried by pdfStale instead.
+  // Counts edits so a publish can tell whether anything changed while it
+  // was in flight (see handlePublish).
+  const editSeq = useRef(0);
+  function markDirty() {
+    editSeq.current += 1;
+    setIsDirty(true);
+    setPublishError(null);
+  }
+
   function flashSaved() {
     setSaveState('saved');
     setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1200);
@@ -152,14 +169,40 @@ export function EditorPage({ onLogout }) {
 
   async function handlePublish() {
     setPublishState('publishing');
+    setPublishError(null);
+    const editsBefore = editSeq.current;
     try {
       const { publishedAt: newPublishedAt } = await api.publish();
       setPublishedAt(newPublishedAt);
-      setIsDirty(false);
+      setPdfStale(false);
+      // The server snapshots the draft when the publish request arrives, so
+      // an edit made while the PDF rendered is still unpublished: ask the
+      // server rather than assuming, and count local edits too in case a
+      // debounced save is still on its way.
+      let stillDirty = editSeq.current !== editsBefore;
+      try {
+        const status = await api.publishStatus();
+        stillDirty = stillDirty || status.isDirty;
+        setPdfStale(!!status.pdfStale);
+      } catch {
+        // keep the local answer
+      }
+      setIsDirty(stillDirty);
       setPublishState('published');
       setTimeout(() => setPublishState((s) => (s === 'published' ? 'idle' : s)), 1500);
-    } catch {
+    } catch (err) {
       setPublishState('idle');
+      setPublishError(err.message || 'Publish failed');
+      // The snapshot may have gone live even though the PDF render failed,
+      // so don't guess — ask the server what state it's actually in.
+      try {
+        const status = await api.publishStatus();
+        setPublishedAt(status.publishedAt);
+        setIsDirty(status.isDirty);
+        setPdfStale(!!status.pdfStale);
+      } catch {
+        // leave the indicator as it was
+      }
     }
   }
 
@@ -170,44 +213,42 @@ export function EditorPage({ onLogout }) {
     setSite(draft.site);
     setBlocks(draft.blocks);
     setIsDirty(false);
+    setPublishError(null);
   }
 
   function handleHeaderChange(newHeader) {
     setHeader(newHeader);
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     clearTimeout(debounceTimers.current.__header);
-    debounceTimers.current.__header = setTimeout(async () => {
-      await api.putHeader(newHeader);
-      flashSaved();
+    debounceTimers.current.__header = setTimeout(() => {
+      api.putHeader(newHeader).then(flashSaved, saveFailed);
     }, SAVE_DEBOUNCE_MS);
   }
 
   function handleBlockDataChange(id, newData) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, data: newData } : b)));
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     clearTimeout(debounceTimers.current[id]);
-    debounceTimers.current[id] = setTimeout(async () => {
-      await api.updateBlock(id, { data: newData });
-      flashSaved();
+    debounceTimers.current[id] = setTimeout(() => {
+      api.updateBlock(id, { data: newData }).then(flashSaved, saveFailed);
     }, SAVE_DEBOUNCE_MS);
   }
 
   function handleSiteChange(newSite) {
     setSite(newSite);
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     clearTimeout(debounceTimers.current.__site);
-    debounceTimers.current.__site = setTimeout(async () => {
-      await api.putSite(newSite);
-      flashSaved();
+    debounceTimers.current.__site = setTimeout(() => {
+      api.putSite(newSite).then(flashSaved, saveFailed);
     }, SAVE_DEBOUNCE_MS);
   }
 
   async function handleVisibilityChange(id, patch) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     await api.updateBlock(id, patch);
     flashSaved();
@@ -216,7 +257,7 @@ export function EditorPage({ onLogout }) {
   async function handleReorder(reordered) {
     // Show the projected drop immediately, then reconcile with the saved order.
     setBlocks(reordered);
-    setIsDirty(true);
+    markDirty();
     setSaveState('saving');
     // A second drag can fire before the first request's response lands;
     // only apply a response if it's still the most recent request, so an
@@ -246,7 +287,7 @@ export function EditorPage({ onLogout }) {
   async function handleAdd(type) {
     const { block } = await api.createBlock(type, defaultDataForType(type));
     setBlocks((prev) => [...prev, block]);
-    setIsDirty(true);
+    markDirty();
   }
 
   async function handleDelete(id) {
@@ -259,8 +300,37 @@ export function EditorPage({ onLogout }) {
       prev.filter((b) => b.id !== id).map((b) => (b.parentId === id ? { ...b, parentId: null } : b))
     );
     if (aiState?.blockId === id) clearAiProposal();
-    await api.deleteBlock(id);
-    setIsDirty(true);
+    try {
+      await api.deleteBlock(id);
+    } catch (err) {
+      // Already gone (deleted from another session or an MCP client): the
+      // optimistic removal above is the right end state, and whoever
+      // deleted it already marked the draft.
+      if (err.status === 404) return;
+      // Anything else means the block still exists on the server: put the
+      // list back the way the server has it rather than leave them apart.
+      await resyncBlocks();
+      throw err;
+    }
+    markDirty();
+  }
+
+  // Re-reads the draft's blocks after a save that may have failed, so the
+  // preview matches what's actually stored.
+  async function resyncBlocks() {
+    try {
+      const { blocks: fresh } = await api.getBlocks();
+      setBlocks(fresh);
+    } catch {
+      // keep the local copy; a reload sorts it out
+    }
+  }
+
+  // A debounced save failing (e.g. the server refusing the data) would
+  // otherwise leave "Saving…" up forever while the edit is silently lost.
+  function saveFailed(err) {
+    setSaveState('idle');
+    setPublishError(err.message || 'Save failed');
   }
 
   // An AI rewrite is only a proposal held here until accepted: the preview
@@ -322,6 +392,13 @@ export function EditorPage({ onLogout }) {
           {saveState === 'saving' && 'Saving…'}
           {saveState === 'saved' && 'Saved'}
           {saveState === 'idle' && (isDirty ? 'Unpublished changes' : `Published ${timeAgo(publishedAt) || 'never'}`)}
+          {publishError && <span className="ed-topbar-warning"> · {publishError}</span>}
+          {!publishError && pdfStale && (
+            <span className="ed-topbar-warning" title="The last publish updated the site but its PDF render failed. Publish again to re-render it.">
+              {' '}
+              · PDF out of date
+            </span>
+          )}
         </div>
         <div className="ed-topbar-actions">
           {isDirty && (
