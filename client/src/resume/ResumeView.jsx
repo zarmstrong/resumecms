@@ -25,6 +25,7 @@ import {
   getLayoutTemplate,
 } from './templateRegistry.js';
 import { blockWrapperStyle, blockWrapperClassName } from './blockStyle.js';
+import { pdfUrl } from './pdfUrl.js';
 import './resume.css';
 
 // mode: 'web' | 'print' | 'preview'
@@ -32,7 +33,9 @@ import './resume.css';
 // visibility flags, dimming the ones that are hidden from web/print.
 // `highlightBlockId` (preview only) outlines one block — the editor uses it
 // to mark a block it's showing an unsaved AI rewrite for.
-export function ResumeView({ header, site, blocks, mode = 'web', highlightBlockId = null }) {
+// `pdfVersion` (web only) identifies the PDF on disk, from the public API;
+// it cache-busts the PDF link (see pdfUrl.js).
+export function ResumeView({ header, site, blocks, mode = 'web', highlightBlockId = null, pdfVersion = null }) {
   const isPreview = mode === 'preview';
   const colors = normalizeSiteColors(site);
   const pillPad = PILL_PADDING_CSS[normalizePillPadding(site)];
@@ -130,7 +133,7 @@ export function ResumeView({ header, site, blocks, mode = 'web', highlightBlockI
         header={header}
         showActions={mode === 'web'}
         onPrint={() => window.print()}
-        pdfHref={mode === 'web' ? '/api/public/resume.pdf' : null}
+        pdfHref={mode === 'web' ? pdfUrl(pdfVersion) : null}
         template={normalizeTemplate(site)}
       />
       {LayoutComponent ? (

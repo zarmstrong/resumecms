@@ -112,7 +112,7 @@ const TOOLS = [
     config: {
       title: 'Get publish status',
       description:
-        'Returns { publishedAt, isDirty, pdfStale }. isDirty is true when the draft has changes that are not yet published; pdfStale is true when the PDF on disk was not rendered from the current published snapshot (a publish whose PDF render failed) — a successful publish fixes it.',
+        'Returns { publishedAt, isDirty, pdfStale, pdfVersion }. isDirty is true when the draft has changes that are not yet published; pdfStale is true when the PDF on disk was not rendered from the current published snapshot (a publish whose PDF render failed) — a successful publish fixes it. pdfVersion identifies the PDF file currently on disk (null if none).',
       annotations: readOnly,
     },
     run: (store) => store.getPublishStatus(),

@@ -6,6 +6,7 @@ import { HeaderEditorForm } from './HeaderEditorForm.jsx';
 import { SiteSettingsForm } from './SiteSettingsForm.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
 import { ResumeView } from '../resume/ResumeView.jsx';
+import { pdfUrl } from '../resume/pdfUrl.js';
 import { BLOCK_TYPE_LABELS, defaultDataForType } from './blockDefaults.js';
 import { createBlockReorderItems } from './blockDrag.js';
 import { isProposalStale } from './aiReview.js';
@@ -50,6 +51,7 @@ export function EditorPage({ onLogout }) {
   const [username, setUsername] = useState('');
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved
   const [publishedAt, setPublishedAt] = useState(null);
+  const [pdfVersion, setPdfVersion] = useState(null); // cache-busts the Download PDF link, see pdfUrl.js
   const [isDirty, setIsDirty] = useState(false);
   const [publishState, setPublishState] = useState('idle'); // idle | publishing | published
   const [publishError, setPublishError] = useState(null);
@@ -138,6 +140,7 @@ export function EditorPage({ onLogout }) {
       setSite(s.site);
       setBlocks(b.blocks);
       setPublishedAt(status.publishedAt);
+      setPdfVersion(status.pdfVersion ?? null);
       setIsDirty(status.isDirty);
       setPdfStale(!!status.pdfStale);
       setUsername(credentials.username);
@@ -172,8 +175,9 @@ export function EditorPage({ onLogout }) {
     setPublishError(null);
     const editsBefore = editSeq.current;
     try {
-      const { publishedAt: newPublishedAt } = await api.publish();
+      const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion } = await api.publish();
       setPublishedAt(newPublishedAt);
+      setPdfVersion(newPdfVersion ?? null);
       setPdfStale(false);
       // The server snapshots the draft when the publish request arrives, so
       // an edit made while the PDF rendered is still unpublished: ask the
@@ -184,6 +188,7 @@ export function EditorPage({ onLogout }) {
         const status = await api.publishStatus();
         stillDirty = stillDirty || status.isDirty;
         setPdfStale(!!status.pdfStale);
+        setPdfVersion(status.pdfVersion ?? null);
       } catch {
         // keep the local answer
       }
@@ -198,6 +203,7 @@ export function EditorPage({ onLogout }) {
       try {
         const status = await api.publishStatus();
         setPublishedAt(status.publishedAt);
+        setPdfVersion(status.pdfVersion ?? null);
         setIsDirty(status.isDirty);
         setPdfStale(!!status.pdfStale);
       } catch {
@@ -414,7 +420,7 @@ export function EditorPage({ onLogout }) {
           <a className="ed-btn ed-btn-ghost" href="/" target="_blank" rel="noreferrer">
             View public site
           </a>
-          <a className="ed-btn ed-btn-ghost" href="/api/public/resume.pdf">
+          <a className="ed-btn ed-btn-ghost" href={pdfUrl(pdfVersion)}>
             Download PDF
           </a>
           <button className="ed-btn ed-btn-ghost" onClick={() => setSettingsOpen(true)}>

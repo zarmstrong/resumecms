@@ -37,5 +37,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // dist/.vite/manifest.json lists every hashed chunk/stylesheet/asset
+    // Vite emitted. The server reads it to decide which files are safe to
+    // serve as immutable (server/src/cacheHeaders.js); without it nothing
+    // is, so keep this on.
+    manifest: true,
   },
 });

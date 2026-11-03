@@ -81,9 +81,11 @@ store in `handle()` from `routes/sendError.js`, sync or async). The public site 
 PDF (`server/src/routes/public.js`, `server/src/routes/pdf.js`) never read the draft tables —
 they read the `published_resume` setting, a full snapshot written only by
 `POST /api/publish` (`server/src/routes/publish.js`). `GET
-/api/publish/status` compares `draft_meta.lastEditedAt` against
-`published_resume.publishedAt` to report whether there are unpublished
-changes; `POST /api/discard-draft` overwrites the draft tables from the
+/api/publish/status` reports unpublished changes when
+`draft_meta.lastEditedAt` is set and not older than
+`published_resume.publishedAt` — `publish()` clears it when it takes its
+snapshot, so an edit in the same millisecond as a publish still counts;
+`POST /api/discard-draft` overwrites the draft tables from the
 last published snapshot. On first boot after this split was introduced,
 whatever was in the draft tables becomes the initial published snapshot
 (see the migration block at the bottom of `db.js`) so existing installs
@@ -311,6 +313,31 @@ that says so (the REST route passes that message through, and the editor
 shows it). The `pdf_meta` setting records which snapshot the file on disk
 was rendered from, and `getPublishStatus()` reports `pdfStale: true` until
 a later render catches up — the editor shows "PDF out of date" for it.
+
+### Cache headers
+
+Every public response carries an explicit `Cache-Control` from
+`server/src/cacheHeaders.js`: `no-cache` for `/api/public/resume` and the
+HTML shell, `private, no-cache` for the PDF, `immutable` for the hashed
+files Vite's build manifest lists (`build.manifest` in
+`client/vite.config.js` → `dist/.vite/manifest.json`, re-read whenever its
+mtime changes so a rebuild under a running dev server is picked up; a file
+merely copied from `public/` is never in it, so it's revalidated).
+The client is mounted by `server/src/clientStatic.js`, which also owns the
+SPA fallback — and 404s any path whose last segment has a file extension,
+so a bundle from an older build never comes back as HTML. That means SPA
+routes must not contain a dot. Express's defaults (`public, max-age=0`,
+or nothing) merely say "revalidate", and a CDN caching by file extension
+was turning that into hours of stale PDF after a publish. Keep any new
+public route on one of those constants, set before any early return so
+error responses carry it too. Don't drop the `pdfVersion` (the PDF file's
+mtime plus size, from the store's `pdfVersion()`) that
+`getPublishedResume()`, `getPublishStatus()` and `publish()` return:
+`client/src/resume/pdfUrl.js` appends it to the PDF link so each render
+is a fresh URL even for caches that ignore headers. It's keyed on the
+file, not `publishedAt`, because a publish whose render failed must not
+advertise a new URL for the old file; the store's temp-file-plus-rename
+write means it only moves once a render is complete.
 
 ### Auth
 

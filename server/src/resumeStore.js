@@ -155,12 +155,18 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     };
   }
 
+  // publish() clears lastEditedAt when it takes its snapshot, so any value
+  // present was set by an edit that came after — hence `>=`, not `>`: an
+  // edit landing in the same millisecond as the publish timestamp is still
+  // an unpublished edit. (The comparison itself is kept for installs whose
+  // last publish predates the clearing; their lastEditedAt is older than
+  // publishedAt and compares as clean.)
   function isDirty() {
     const draftMeta = getSetting('draft_meta');
     const published = getSetting('published_resume');
     if (!draftMeta?.lastEditedAt) return false;
     if (!published?.publishedAt) return true;
-    return draftMeta.lastEditedAt > published.publishedAt;
+    return draftMeta.lastEditedAt >= published.publishedAt;
   }
 
   // ---- header / site -------------------------------------------------------
@@ -390,9 +396,30 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     return meta.renderedFor !== published.publishedAt || !fs.existsSync(pdfPath);
   }
 
+  // Identifies the PDF currently on disk (mtime plus size, so even a
+  // filesystem with coarse timestamps tells two renders apart), or null if
+  // there is none. The client appends it to the PDF URL as `?v=` so every
+  // render yields a URL no cache has seen before (see routes/pdf.js and
+  // client/src/resume/pdfUrl.js). It deliberately tracks the file, not the
+  // snapshot's publishedAt: a publish whose render failed would otherwise
+  // advertise a new URL for the old file.
+  function pdfVersion() {
+    try {
+      const stat = fs.statSync(pdfPath);
+      return `${Math.floor(stat.mtimeMs)}-${stat.size}`;
+    } catch {
+      return null;
+    }
+  }
+
   function getPublishStatus() {
     const published = getSetting('published_resume');
-    return { publishedAt: published?.publishedAt ?? null, isDirty: isDirty(), pdfStale: pdfStale(published) };
+    return {
+      publishedAt: published?.publishedAt ?? null,
+      isDirty: isDirty(),
+      pdfStale: pdfStale(published),
+      pdfVersion: pdfVersion(),
+    };
   }
 
   // Everything that writes the PDF file goes through this one queue, so two
@@ -450,6 +477,9 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     }
     const publishedAt = new Date().toISOString();
     setSetting('published_resume', { ...currentDraft(), publishedAt });
+    // Everything edited so far is in the snapshot; whatever touchDraft()
+    // records from here on is a new, unpublished edit (see isDirty).
+    setSetting('draft_meta', { lastEditedAt: null });
     return withPdfLock(async () => {
       try {
         writePdf(await renderPdfBounded());
@@ -462,7 +492,7 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
       // is this one or a newer one; a newer publish is queued behind us and
       // will record itself when its own render lands.
       setSetting('pdf_meta', { renderedFor: publishedAt });
-      return { publishedAt };
+      return { publishedAt, pdfVersion: pdfVersion() };
     });
   }
 
@@ -534,6 +564,10 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
       header: published.header,
       site: published.site,
       blocks: blocksForMode(published.blocks, resolvedMode),
+      publishedAt: published.publishedAt ?? null,
+      // Which PDF file is on disk right now; the client appends it to the
+      // PDF link so each render is a URL no cache has seen.
+      pdfVersion: pdfVersion(),
     };
   }
 
