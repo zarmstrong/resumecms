@@ -347,19 +347,22 @@ export function EditorPage({ onLogout }) {
     setAiState(null);
   }
 
-  async function handleAiRequest(blockId, instruction) {
+  // `tense` is what a custom block's rewrite is sent with; `pickedTense` is
+  // the user's own pick in the panel, or null when the picker was left on the
+  // setting's default, so a reopened panel restores only a real pick.
+  async function handleAiRequest(blockId, instruction, tense, pickedTense = null) {
     const block = blocks.find((b) => b.id === blockId);
     if (!block) return;
     // A newer request (or a discard) supersedes any response still in flight.
     const requestId = ++aiRequestIdRef.current;
-    setAiState({ blockId, instruction, status: 'loading', proposal: null, error: null });
+    setAiState({ blockId, instruction, tense, pickedTense, status: 'loading', proposal: null, error: null });
     try {
-      const { proposal } = await api.aiRewrite(blockId, block.data, instruction);
+      const { proposal } = await api.aiRewrite(blockId, block.data, instruction, tense);
       if (aiRequestIdRef.current !== requestId) return;
-      setAiState({ blockId, instruction, status: 'ready', proposal, error: null });
+      setAiState({ blockId, instruction, tense, pickedTense, status: 'ready', proposal, error: null });
     } catch (err) {
       if (aiRequestIdRef.current !== requestId) return;
-      setAiState({ blockId, instruction, status: 'error', proposal: null, error: err.message });
+      setAiState({ blockId, instruction, tense, pickedTense, status: 'error', proposal: null, error: err.message });
     }
   }
 
@@ -468,6 +471,11 @@ export function EditorPage({ onLogout }) {
               onDelete={handleDelete}
               ai={{
                 available: Boolean(aiSettings?.available),
+                // The custom-block tense picker's block types, options, and
+                // starting value all come from the server's settings.
+                pickedTenseTypes: aiSettings?.pickedTenseTypes,
+                pickedTenses: aiSettings?.pickedTenses,
+                pickedTenseDefault: aiSettings?.pickedTenseDefault,
                 state: aiState,
                 onRequest: handleAiRequest,
                 onAccept: handleAiAccept,

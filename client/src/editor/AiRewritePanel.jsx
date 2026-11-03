@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { bulletChange, changedFields, hiddenBulletCount, isProposalStale, presetsFor, wordDiff } from './aiReview.js';
+import {
+  bulletChange,
+  changedFields,
+  hiddenBulletCount,
+  isProposalStale,
+  pickerTense,
+  presetsFor,
+  tenseChangeNote,
+  wordDiff,
+} from './aiReview.js';
 
 function DiffText({ before, after }) {
   return (
@@ -60,6 +69,19 @@ export function AiRewritePanel({ block, ai }) {
   const state = ai.state?.blockId === block.id ? ai.state : null;
   const [open, setOpen] = useState(Boolean(state));
   const [instruction, setInstruction] = useState(state?.instruction || '');
+  // Custom blocks pick a tense per rewrite (pickerTense). Without the options
+  // from the server there's no picker, and no tense is sent, so the server
+  // applies its default.
+  const picksTense = Boolean(ai.pickedTenseTypes?.includes(block.type) && Object.keys(ai.pickedTenses ?? {}).length);
+  // A pick is local to this panel and lasts as long as it stays mounted and
+  // open, through Accept or a Discard from the preview banner, so later
+  // rewrites keep it. This panel's own Cancel and Discard buttons close it and
+  // clear the pick. Collapsing the block row unmounts the panel; on remount the
+  // pick comes back only if it was sent with AI state still held for this
+  // block (loading, error, or a proposal), and is otherwise dropped. A picker
+  // left on the default keeps following the setting.
+  const [pickedTense, setPickedTense] = useState(state?.pickedTense ?? null);
+  const tense = pickerTense(pickedTense, ai.pickedTenseDefault, ai.pickedTenses);
 
   if (!open) {
     return (
@@ -76,14 +98,17 @@ export function AiRewritePanel({ block, ai }) {
   const fields = proposal ? changedFields(block.type, proposal.baseData, proposal.proposedData) : [];
   const stale = proposal && isProposalStale(proposal, block.data);
   const hiddenCount = hiddenBulletCount(block.type, block.data);
+  const tenseNote = picksTense && proposal ? tenseChangeNote(state.tense, tense, ai.pickedTenses) : null;
   const unchanged = proposal && fields.length === 0 && !proposal.bulletReview?.items.some((i) => bulletChange(i) !== 'unchanged') && !proposal.bulletReview?.removed.length;
 
   function request() {
-    if (instruction.trim()) ai.onRequest(block.id, instruction.trim());
+    if (!instruction.trim()) return;
+    ai.onRequest(block.id, instruction.trim(), picksTense ? tense : undefined, picksTense ? pickedTense : null);
   }
 
   function close() {
     if (state) ai.onReject();
+    setPickedTense(null);
     setOpen(false);
   }
 
@@ -122,6 +147,22 @@ export function AiRewritePanel({ block, ai }) {
         </p>
       )}
       <div className="ed-ai-actions">
+        {picksTense && (
+          <select
+            className="ed-input ed-ai-tense"
+            aria-label="Tense for this rewrite"
+            title="Tense for this rewrite. A tense named in the instruction wins."
+            value={tense}
+            onChange={(e) => setPickedTense(e.target.value)}
+            disabled={loading}
+          >
+            {Object.entries(ai.pickedTenses).map(([id, { label }]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        )}
         <button type="button" className="ed-btn ed-btn-primary" onClick={request} disabled={loading || !instruction.trim()}>
           {loading ? 'Rewriting…' : proposal ? 'Try again' : 'Rewrite'}
         </button>
@@ -136,6 +177,7 @@ export function AiRewritePanel({ block, ai }) {
         <div className="ed-ai-review">
           {proposal.explanation && <p className="ed-ai-explanation">{proposal.explanation}</p>}
           {unchanged && <p className="ed-field-hint">The AI suggested no changes.</p>}
+          {tenseNote && <p className="ed-field-hint">{tenseNote}</p>}
           {fields.map((f) => (
             <div key={f.label} className="ed-ai-review-section">
               <div className="ed-ai-review-label">{f.label}</div>

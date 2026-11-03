@@ -20,6 +20,10 @@ test('defaults: disabled, Claude, bullet restructuring off', () => {
   assert.equal(pub.enabled, false);
   assert.equal(pub.provider, 'anthropic');
   assert.equal(pub.allowBulletRestructure, false);
+  assert.equal(pub.tense, 'auto');
+  // In display order, each with the label the editor shows.
+  assert.deepEqual(Object.keys(pub.tenses), ['auto', 'past', 'present', 'byRole']);
+  for (const { label } of Object.values(pub.tenses)) assert.equal(typeof label, 'string');
   assert.equal(pub.models.anthropic, 'claude-opus-5-5');
   assert.equal(pub.timeoutSeconds, 60);
 });
@@ -32,6 +36,30 @@ test('timeout accepts whole seconds from 20 to 120 only', () => {
   }
   // A bad stored value (hand-edited DB) falls back to the default.
   assert.equal(normalizeAiSettings({ timeoutSeconds: 5 }).timeoutSeconds, 60);
+});
+
+test('the custom-block tense picker gets its options and default from the setting', () => {
+  assert.deepEqual(Object.keys(publicAiSettings({}).pickedTenses), ['auto', 'past', 'present']);
+  assert.deepEqual(publicAiSettings({}).pickedTenseTypes, ['custom']);
+  const defaults = { auto: 'auto', past: 'past', present: 'present', byRole: 'auto' };
+  for (const [tense, expected] of Object.entries(defaults)) {
+    assert.equal(publicAiSettings({ tense }).pickedTenseDefault, expected, tense);
+    assert.ok(Object.hasOwn(publicAiSettings({}).pickedTenses, expected));
+  }
+});
+
+test('tense accepts only the known values and a bad stored value falls back to auto', () => {
+  for (const tense of ['auto', 'past', 'present', 'byRole']) {
+    assert.equal(applyAiSettingsUpdate({}, { tense }).settings.tense, tense);
+  }
+  for (const bad of ['future', 'Past', 1, null, '', true, 'constructor', '__proto__']) {
+    assert.throws(() => applyAiSettingsUpdate({}, { tense: bad }), AiSettingsError, JSON.stringify(bad));
+  }
+  // Omitting it keeps the stored value.
+  assert.equal(applyAiSettingsUpdate({ tense: 'past' }, { enabled: true }).settings.tense, 'past');
+  assert.equal(normalizeAiSettings({ tense: 'bogus' }).tense, 'auto');
+  assert.equal(normalizeAiSettings({ tense: 'toString' }).tense, 'auto');
+  assert.equal(normalizeAiSettings({}).tense, 'auto');
 });
 
 test('a blank key keeps the stored one and does not count as a key change', () => {

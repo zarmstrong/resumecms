@@ -248,7 +248,15 @@ unchanged.
 `REWRITABLE_TYPES` there is an explicit allowlist like `NESTABLE_TYPES`, mirrored
 client-side as `AI_REWRITABLE_TYPES` in `client/src/editor/aiReview.js`. A new
 block type needs an entry in `rewriteInput`/`outputSchema`/`mergeRewrite` before
-it can be added there.
+it can be added there. Tense policy lives in `server/src/ai/tense.js`:
+`TENSE_TYPES` lists the types the AI `tense` setting applies to (experience
+only), and `PICKED_TENSE_TYPES` the ones that pick a tense per rewrite in the
+editor instead (custom only), next to the options and `roleTense` (which End
+dates `byRole` reads as current). The editor's picker gets that list, its
+options, and its default from `publicAiSettings()`, so nothing about it is
+mirrored client-side. The README and the `AiSettings.jsx` hint both describe
+this in prose (the hint more briefly), so update both with it. The prompt's
+wording for each tense stays in `rewrite.js` (`TENSE_RULES`).
 
 Output schemas must stay valid for both providers' strict structured-output
 modes. That means `additionalProperties: false` and every property in

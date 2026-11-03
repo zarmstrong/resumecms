@@ -14,6 +14,28 @@ export const AI_PRESETS = [
   { label: 'Fix grammar', instruction: 'Fix grammar, spelling, and punctuation only. Change nothing else.' },
 ];
 
+// The tense a custom block's picker shows: the pick made in this panel, or
+// else the tense setting's default, so changing the setting still moves an
+// untouched picker, or else the first option. All come from the server
+// (publicAiSettings): `options` is its `pickedTenses` (id → { label }). A
+// pick or default that isn't among the options (settings reloaded since) is
+// skipped, so the select never shows a blank value or sends a stale id.
+export function pickerTense(picked, defaultTense, options) {
+  options ??= {};
+  const offered = (id) => typeof id === 'string' && Object.hasOwn(options, id);
+  if (offered(picked)) return picked;
+  if (offered(defaultTense)) return defaultTense;
+  return Object.keys(options)[0];
+}
+
+// A note for a proposal written with a different tense than the picker now
+// shows, or null. `options` is the settings' `pickedTenses` (id → { label }).
+export function tenseChangeNote(usedTense, currentTense, options) {
+  if (!usedTense || usedTense === currentTense) return null;
+  const label = (id) => options?.[id]?.label || id;
+  return `This rewrite used “${label(usedTense)}”. Try again to use “${label(currentTense)}”.`;
+}
+
 // Presets that only make sense for one block type, shown after AI_PRESETS.
 // The experience one writes a description when there isn't one yet, and
 // rewrites it otherwise.

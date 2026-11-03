@@ -1,5 +1,6 @@
 import { REWRITABLE_TYPES, RewriteShapeError, mergeRewrite, outputSchema, rewriteInput } from './rewritableFields.js';
 import { AiError, callProvider } from './providers.js';
+import { pickedTenseError, resolveTense } from './tense.js';
 
 export const MAX_INSTRUCTION_LENGTH = 2000;
 
@@ -17,7 +18,28 @@ function bulletRule(allowBulletRestructure) {
     : 'Return exactly the same number of bullets, with the same number of sub-bullets under each, in the same order. Reword them in place; do not add, remove, merge, or reorder them.';
 }
 
-export function buildPrompt(type, { editable, context }, instruction, { allowBulletRestructure = false } = {}) {
+// The scope comes first so it reads as part of the rule, not an
+// afterthought: it covers only text the instruction already changes, so it
+// never overrides "only make the changes the instruction asks for" (fixing
+// one typo doesn't retense the whole block), and an instruction that names a
+// tense ("Put this in the past tense") wins over the setting. Which tense,
+// if any, a request gets is tense.js's resolveTense. The past rule
+// leaves statements of who the person is alone, so a past-tense rewrite
+// doesn't say they stopped being an engineer. Present tense is spelled out
+// because resume bullets drop an implied "I", and "present tense" alone lets
+// a model switch between "Lead" and "Leads" from one rewrite to the next.
+const UNCONCERNED = 'Leave text the instruction does not concern as it is, whatever its tense.';
+export const TENSE_RULES = {
+  past: `In text you write or rewrite for the instruction, use the past tense for verbs about the person's work and accomplishments ("Led a team of five", not "Lead a team of five" or "Leading a team of five"), unless the instruction asks for a different tense. Statements of who the person is or what they know ("Engineer with ten years of experience", "Fluent in Spanish") stay as they are. ${UNCONCERNED}`,
+  present: `In text you write or rewrite for the instruction, use the present tense for verbs about the person's work and accomplishments, unless the instruction asks for a different tense. Bullets and other phrases without a subject drop the implied "I" ("Lead a team of five", not "Leads a team of five" or "Leading a team of five"); a full sentence keeps the original's subject ("She leads a team of five"). ${UNCONCERNED}`,
+};
+
+export function buildPrompt(
+  type,
+  { editable, context },
+  instruction,
+  { allowBulletRestructure = false, tense = null } = {}
+) {
   const rules = [
     'Only make the changes the instruction asks for, and keep the person\'s own voice.',
     'Never invent facts: no employers, job titles, dates, technologies, credentials, or numbers that are not in the input. Where a metric would strengthen a statement but none is given, insert a bracketed placeholder such as [X%] or [N users] for the person to fill in.',
@@ -25,6 +47,7 @@ export function buildPrompt(type, { editable, context }, instruction, { allowBul
     'Copy any field the instruction does not concern exactly as given.',
     'In "explanation", say in one or two sentences what you changed.',
   ];
+  if (Object.hasOwn(TENSE_RULES, tense ?? '')) rules.push(TENSE_RULES[tense]);
   if (type === 'experience') {
     rules.push(
       '"description" is an optional short blurb about the role, shown above the bullets. If it is empty, leave it empty unless the instruction asks for one. When writing one, keep it to two or three sentences and draw only on the context, tagline, and bullets. If the tagline and bullets are too thin to say anything beyond the job title and company, leave it empty and say so in "explanation".'
@@ -65,13 +88,19 @@ export function buildPrompt(type, { editable, context }, instruction, { allowBul
 // shows the proposal and, if accepted, saves it through the normal
 // PUT /api/blocks/:id path (which calls touchDraft()).
 //
-// `settings` is the normalized `ai` setting (aiSettings.js); `callModel` is
+// `settings` is the normalized `ai` setting (aiSettings.js); `tense` is the
+// tense picked in the editor for a custom block (tense.js's PICKED_TENSES,
+// or undefined for the setting's default), checked here as the one place a
+// bad one becomes a 400; `callModel` is
 // injectable so tests can stand in for the provider.
-export async function rewriteBlock({ type, data, instruction, settings, callModel = callProvider }) {
+export async function rewriteBlock({ type, data, instruction, settings, tense: picked, callModel = callProvider }) {
   if (!REWRITABLE_TYPES.has(type)) throw new AiError(400, `${type} blocks can't be rewritten with AI`);
+  const tenseError = pickedTenseError(picked, type);
+  if (tenseError) throw new AiError(400, tenseError);
   const { allowBulletRestructure } = settings;
+  const tense = resolveTense(settings.tense, type, data, picked);
   const input = rewriteInput(type, data);
-  const { system, user } = buildPrompt(type, input, instruction, { allowBulletRestructure });
+  const { system, user } = buildPrompt(type, input, instruction, { allowBulletRestructure, tense });
 
   const output = await callModel({
     provider: settings.provider,

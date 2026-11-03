@@ -24,6 +24,7 @@ export function AiSettings({ onChange, onDirtyChange }) {
       provider: next.provider,
       models: { ...next.models },
       allowBulletRestructure: next.allowBulletRestructure,
+      tense: next.tense,
       // Kept as the input's string so a half-typed value doesn't jump around.
       timeoutSeconds: String(next.timeoutSeconds),
     });
@@ -46,6 +47,7 @@ export function AiSettings({ onChange, onDirtyChange }) {
         form.enabled !== ai.enabled ||
         form.provider !== ai.provider ||
         form.allowBulletRestructure !== ai.allowBulletRestructure ||
+        form.tense !== ai.tense ||
         Number(form.timeoutSeconds) !== ai.timeoutSeconds ||
         // A blank model saves as the provider's default, so it only counts
         // as a change when the stored model isn't already the default.
@@ -182,6 +184,24 @@ export function AiSettings({ onChange, onDirtyChange }) {
         Off: the AI only rewords existing bullets. On: it can restructure them; each bullet keeps the web/print
         visibility of the original it most resembles, and new bullets start visible everywhere.
       </span>
+
+      <div className="ed-field">
+        <label htmlFor="ed-ai-tense">Verb tense</label>
+        <select id="ed-ai-tense" className="ed-input" value={form.tense} onChange={(e) => patch({ tense: e.target.value })}>
+          {Object.entries(ai.tenses).map(([id, { label }]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <span className="ed-field-hint">
+          For experience entries. "By role" uses present tense when the End date says the job is current
+          ("Present", "Dec 2023 – Current") and past tense when it's a date that's over ("Mar 2024"). Anything
+          else, like a blank End date, "TBD", or a date this month, gets no tense, as with "Let the AI decide".
+          Custom blocks pick a tense next to their Rewrite button, starting from Past or Present when chosen here.
+          A tense named in your instruction always wins.
+        </span>
+      </div>
 
       <div className="ed-field">
         <label htmlFor="ed-ai-timeout">Timeout (seconds)</label>
