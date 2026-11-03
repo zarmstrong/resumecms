@@ -52,7 +52,7 @@ const TOOLS = [
     config: {
       title: 'Describe block data shapes',
       description:
-        'Documents the `data` shape of each block type (and the header and site-settings objects). These shapes come from the editor UI; the server stores data as free-form JSON and does not enforce them, so follow them to keep the editor and templates rendering correctly.',
+        'Documents the `data` shape of each block type (and the header and site-settings objects). These shapes come from the editor UI. The server type-checks the documented block keys on write (a wrong kind of value, e.g. bullets as a string, is a 400) but not enum values or unknown keys, and stores the header and site settings as-is — so follow the shapes to keep the editor and templates rendering correctly.',
       inputSchema: {
         type: BLOCK_TYPE_ENUM.optional().describe('Return only this block type (omit for everything, including header and site).'),
       },

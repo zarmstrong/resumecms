@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { store } from '../store.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { sendError } from './sendError.js';
+import { handle } from './sendError.js';
 
 // Thin HTTP wrappers over the shared resume store (resumeStore.js), which
 // holds all the actual logic — nesting rules, positions, touchDraft() — so
@@ -11,14 +11,6 @@ const router = Router();
 
 // All routes below require an authenticated editor session.
 router.use(requireAuth);
-
-const handle = (fn) => (req, res) => {
-  try {
-    fn(req, res);
-  } catch (err) {
-    sendError(res, err);
-  }
-};
 
 router.get('/header', handle((req, res) => {
   res.json({ header: store.getHeader() });

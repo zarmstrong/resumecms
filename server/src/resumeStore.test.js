@@ -88,6 +88,34 @@ test('block data is type-checked on create and on the merged result of an update
   assert.equal(merged.data.company, 'Co');
 });
 
+test('data stored before the checks existed stays editable until it is fixed', () => {
+  const { store, db } = makeStore();
+  const x = store.createBlock({ type: 'experience', data: { jobTitle: 'Dev' } });
+  // Legacy row: a number where a string is expected.
+  db.prepare('UPDATE blocks SET data = ? WHERE id = ?').run(JSON.stringify({ jobTitle: 'Dev', startDate: 2019 }), x.id);
+  // The editor sends the whole object back — still accepted, even with a new wrong-kind key
+  assert.deepEqual(store.updateBlock(x.id, { data: { jobTitle: 'Lead', startDate: 2019 } }).data, { jobTitle: 'Lead', startDate: 2019 });
+  assert.equal(store.updateBlock(x.id, { data: { bullets: 'meh' } }, { mergeData: true }).data.bullets, 'meh');
+  // Once the data is valid again, the checks apply
+  store.updateBlock(x.id, { data: { jobTitle: 'Lead', startDate: '2019', bullets: [] } });
+  assert.throws(() => store.updateBlock(x.id, { data: { startDate: 2020 } }, { mergeData: true }), (e) => e.status === 400);
+});
+
+test('re-parenting closes the gap it leaves in the old sibling group', () => {
+  const { store } = makeStore();
+  const h = store.createBlock({ type: 'heading' });
+  const a = store.createBlock({ type: 'experience', parentId: h.id });
+  const b = store.createBlock({ type: 'experience', parentId: h.id });
+  const c = store.createBlock({ type: 'experience', parentId: h.id });
+  store.updateBlock(a.id, { parentId: null });
+  const pos = Object.fromEntries(store.listBlocks().map((blk) => [blk.id, [blk.parentId, blk.position]]));
+  assert.deepEqual(pos, { [h.id]: [null, 0], [b.id]: [h.id, 0], [c.id]: [h.id, 1], [a.id]: [null, 1] });
+  // and the other way: top-level → nested
+  store.updateBlock(h.id, { visibleWeb: false }); // unrelated patch, positions untouched
+  store.updateBlock(a.id, { parentId: h.id });
+  assert.deepEqual(store.listBlocks().map((blk) => [blk.id, blk.position]), [[h.id, 0], [b.id, 0], [c.id, 1], [a.id, 2]]);
+});
+
 test('createBlock treats a null data as empty', () => {
   const { store } = makeStore();
   assert.deepEqual(store.createBlock({ type: 'summary', data: null }).data, {});
@@ -392,7 +420,7 @@ test('a hung render times out and releases the queue for later publishes', async
     pdfTimeoutMs: 20,
     renderPdf: ({ signal }) => {
       if (!hang) return Promise.resolve(Buffer.from('ok'));
-      signal.addEventListener('abort', () => { aborted = true; });
+      signal.addEventListener('abort', () => { aborted = /abandoned/.test(signal.reason?.message); });
       return new Promise(() => {});
     },
   });
@@ -403,7 +431,8 @@ test('a hung render times out and releases the queue for later publishes', async
   );
   assert.deepEqual(setting('published_resume').header, { name: 'A' });
   assert.equal(store.getPublishStatus().pdfStale, true);
-  assert.equal(aborted, true, 'the renderer is told to stop');
+  assert.equal(aborted, true, 'the renderer is told to stop, and why');
+  assert.equal(fs.readdirSync(path.dirname(pdfPath)).length, 0, 'no temp file left behind');
   hang = false;
   const { publishedAt } = await store.publish();
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), 'ok');
@@ -423,7 +452,7 @@ test('the PDF is written atomically: the old file stays intact until the new one
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), '%PDF-first');
   await store.publish();
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), '%PDF-second');
-  assert.equal(fs.existsSync(`${pdfPath}.tmp`), false, 'the temp file is renamed away');
+  assert.deepEqual(fs.readdirSync(path.dirname(pdfPath)), ['resume.pdf'], 'the temp file is renamed away');
 });
 
 test('discardDraft restores the published snapshot and 409s when nothing is published', async () => {

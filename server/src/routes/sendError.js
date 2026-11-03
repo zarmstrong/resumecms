@@ -11,3 +11,14 @@ export function sendError(res, err) {
   console.error('Request failed:', err);
   return res.status(500).json({ error: 'Internal server error' });
 }
+
+// Wraps a route handler (sync or async) so anything it throws goes through
+// sendError instead of Express's default HTML error page. Every route over
+// the store should use it.
+export const handle = (fn) => async (req, res) => {
+  try {
+    await fn(req, res);
+  } catch (err) {
+    sendError(res, err);
+  }
+};

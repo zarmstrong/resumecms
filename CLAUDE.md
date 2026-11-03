@@ -76,7 +76,8 @@ whose mutating methods write the live "draft" tables directly and call
 `touchDraft()` (`server/src/settings.js`, re-exported from `db.js`) to bump
 `draft_meta.lastEditedAt`. The routes in `routes/blocks.js`,
 `routes/publish.js`, and `routes/public.js` are thin wrappers that map a
-store error's `.status` onto the response. The public site and
+store error's `.status` onto the response (wrap every handler over the
+store in `handle()` from `routes/sendError.js`, sync or async). The public site and
 PDF (`server/src/routes/public.js`, `server/src/routes/pdf.js`) never read the draft tables —
 they read the `published_resume` setting, a full snapshot written only by
 `POST /api/publish` (`server/src/routes/publish.js`). `GET
@@ -271,8 +272,9 @@ REST body can't switch them on), as does input validation (non-object
 bodies, unknown block types, unknown ids on delete → 400/404; a `null`
 `data` means "unchanged" on update and "empty" on create; a block's `data`
 is type-checked against `server/src/blockData.js` — loose zod schemas,
-unknown keys allowed, enums not enforced — on create and on the merged
-result of an update), so the tools stay one-call wrappers and both front
+unknown keys allowed, enums not enforced — on create, and on the merged
+result of an update *only if the stored data already passes*, so rows
+saved before the checks existed stay editable), so the tools stay one-call wrappers and both front
 doors validate alike. `httpError()` lives in `server/src/httpError.js`
 (re-exported from the store) and `DATA_DIR` in `server/src/dataDir.js`,
 shared by `db.js` and `pdfRenderer.js`. `mcp/blockSchemas.js` is hand-written

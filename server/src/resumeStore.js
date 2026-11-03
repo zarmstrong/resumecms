@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { httpError } from './httpError.js';
-import { assertBlockData } from './blockData.js';
+import { assertBlockData, isValidBlockData } from './blockData.js';
 import { createSettings } from './settings.js';
 import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
 import { promotedBlockPositions } from './blockDeletion.js';
@@ -65,8 +65,9 @@ function withTimeout(fn, ms, message) {
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
-      controller.abort();
-      reject(new Error(message));
+      const err = new Error(message);
+      controller.abort(err);
+      reject(err);
     }, ms);
     timer.unref?.(); // a pending render must not keep the process alive on shutdown
   });
@@ -120,6 +121,16 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
         ? db.prepare('SELECT COALESCE(MAX(position), -1) AS m FROM blocks WHERE parent_id IS NULL').get()
         : db.prepare('SELECT COALESCE(MAX(position), -1) AS m FROM blocks WHERE parent_id = ?').get(parentId);
     return row.m + 1;
+  }
+
+  // Renumbers one sibling group's positions to 0..n-1 in its current order.
+  function compactPositions(parentId) {
+    const siblings =
+      parentId == null
+        ? db.prepare('SELECT id FROM blocks WHERE parent_id IS NULL ORDER BY position ASC').all()
+        : db.prepare('SELECT id FROM blocks WHERE parent_id = ? ORDER BY position ASC').all(parentId);
+    const update = db.prepare('UPDATE blocks SET position = ? WHERE id = ?');
+    siblings.forEach((row, index) => update.run(index, row.id));
   }
 
   function orderedBlocks() {
@@ -226,34 +237,47 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     const { visibleWeb, visiblePrint } = patch;
     if (data == null) data = undefined;
     else {
-      data = mergeData ? mergeShallow(JSON.parse(existing.data), data, 'data') : assertObject(data, 'data');
-      assertBlockData(existing.type, data); // the merged/replaced result, i.e. what would be stored
+      const stored = JSON.parse(existing.data);
+      data = mergeData ? mergeShallow(stored, data, 'data') : assertObject(data, 'data');
+      // Type-check what would be stored — but only if what's stored now
+      // already passes: data saved before these checks existed may not,
+      // and the editor sends the whole object back on every keystroke, so
+      // refusing it would make such a block uneditable. Legacy data can
+      // still be fixed; it just isn't checked until it is.
+      if (isValidBlockData(existing.type, stored)) assertBlockData(existing.type, data);
     }
     const parentIdProvided = Object.hasOwn(patch, 'parentId');
     const parentId = parentIdProvided ? patch.parentId : undefined;
     if (parentIdProvided) assertValidParent(parentId, existing.type);
     const now = new Date().toISOString();
 
-    db.prepare(
-      `UPDATE blocks SET
-         data = COALESCE(?, data),
-         visible_web = COALESCE(?, visible_web),
-         visible_print = COALESCE(?, visible_print),
-         parent_id = ?,
-         position = ?,
-         updated_at = ?
-       WHERE id = ?`
-    ).run(
-      data !== undefined ? JSON.stringify(data) : null,
-      visibleWeb !== undefined ? (visibleWeb ? 1 : 0) : null,
-      visiblePrint !== undefined ? (visiblePrint ? 1 : 0) : null,
-      parentIdProvided ? parentId : existing.parent_id,
-      // Re-parenting drops the block at the end of its new sibling group;
-      // fine-grained ordering within a group happens via reorderBlocks.
-      parentIdProvided && parentId !== existing.parent_id ? nextPosition(parentId) : existing.position,
-      now,
-      id
-    );
+    const reparenting = parentIdProvided && parentId !== existing.parent_id;
+    const txn = db.transaction(() => {
+      db.prepare(
+        `UPDATE blocks SET
+           data = COALESCE(?, data),
+           visible_web = COALESCE(?, visible_web),
+           visible_print = COALESCE(?, visible_print),
+           parent_id = ?,
+           position = ?,
+           updated_at = ?
+         WHERE id = ?`
+      ).run(
+        data !== undefined ? JSON.stringify(data) : null,
+        visibleWeb !== undefined ? (visibleWeb ? 1 : 0) : null,
+        visiblePrint !== undefined ? (visiblePrint ? 1 : 0) : null,
+        parentIdProvided ? parentId : existing.parent_id,
+        // Re-parenting drops the block at the end of its new sibling group;
+        // fine-grained ordering within a group happens via reorderBlocks.
+        reparenting ? nextPosition(parentId) : existing.position,
+        now,
+        id
+      );
+      // Close the gap the block left in its old group, so positions stay
+      // dense (0..n-1) the way reorderBlocks and deleteBlock keep them.
+      if (reparenting) compactPositions(existing.parent_id);
+    });
+    txn();
     touchDraft();
     return getBlock(id);
   }
@@ -374,16 +398,21 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
   // queue doesn't start beside a wedged one; a result that arrives after
   // the timeout is dropped either way.
   function renderPdfBounded() {
-    return withTimeout(renderPdf, pdfTimeoutMs, `PDF render timed out after ${pdfTimeoutMs} ms`);
+    return withTimeout(renderPdf, pdfTimeoutMs, `PDF render timed out after ${pdfTimeoutMs} ms and was abandoned`);
   }
 
   // Write to a sibling temp file and rename it into place, so a download
   // overlapping a publish never reads a half-written PDF and a crash
   // mid-write can't leave a truncated file that looks valid.
   function writePdf(buffer) {
-    const tmp = `${pdfPath}.tmp`;
-    fs.writeFileSync(tmp, buffer);
-    fs.renameSync(tmp, pdfPath);
+    const tmp = `${pdfPath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      fs.writeFileSync(tmp, buffer);
+      fs.renameSync(tmp, pdfPath);
+    } catch (err) {
+      fs.rmSync(tmp, { force: true });
+      throw err;
+    }
   }
 
   // The snapshot is taken synchronously, before anything is queued, so a

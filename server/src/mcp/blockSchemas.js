@@ -2,8 +2,9 @@
 // the get_block_schemas MCP tool. These are the shapes the client
 // (client/src/editor/blockForms/*.jsx, HeaderEditorForm.jsx,
 // SiteSettingsForm.jsx) and the templates expect. The store type-checks a
-// block's documented `data` keys on write (server/src/blockData.js — keep
-// its keys in step with BLOCK_DATA_SCHEMAS; a test enforces that) but not
+// block's documented `data` keys on write via BLOCK_DATA_VALIDATORS in
+// server/src/blockData.js — its keys must match BLOCK_DATA_SCHEMAS below
+// (blockData.test.js enforces that), so change both together — but not
 // enum values or unknown keys; the header and site settings are stored
 // as-is. Keep this in step with the forms when fields or options change.
 

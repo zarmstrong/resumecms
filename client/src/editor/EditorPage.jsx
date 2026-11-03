@@ -221,9 +221,8 @@ export function EditorPage({ onLogout }) {
     markDirty();
     setSaveState('saving');
     clearTimeout(debounceTimers.current.__header);
-    debounceTimers.current.__header = setTimeout(async () => {
-      await api.putHeader(newHeader);
-      flashSaved();
+    debounceTimers.current.__header = setTimeout(() => {
+      api.putHeader(newHeader).then(flashSaved, saveFailed);
     }, SAVE_DEBOUNCE_MS);
   }
 
@@ -232,9 +231,8 @@ export function EditorPage({ onLogout }) {
     markDirty();
     setSaveState('saving');
     clearTimeout(debounceTimers.current[id]);
-    debounceTimers.current[id] = setTimeout(async () => {
-      await api.updateBlock(id, { data: newData });
-      flashSaved();
+    debounceTimers.current[id] = setTimeout(() => {
+      api.updateBlock(id, { data: newData }).then(flashSaved, saveFailed);
     }, SAVE_DEBOUNCE_MS);
   }
 
@@ -243,9 +241,8 @@ export function EditorPage({ onLogout }) {
     markDirty();
     setSaveState('saving');
     clearTimeout(debounceTimers.current.__site);
-    debounceTimers.current.__site = setTimeout(async () => {
-      await api.putSite(newSite);
-      flashSaved();
+    debounceTimers.current.__site = setTimeout(() => {
+      api.putSite(newSite).then(flashSaved, saveFailed);
     }, SAVE_DEBOUNCE_MS);
   }
 
@@ -307,10 +304,33 @@ export function EditorPage({ onLogout }) {
       await api.deleteBlock(id);
     } catch (err) {
       // Already gone (deleted from another session or an MCP client): the
-      // optimistic removal above is the right end state.
-      if (err.status !== 404) throw err;
+      // optimistic removal above is the right end state, and whoever
+      // deleted it already marked the draft.
+      if (err.status === 404) return;
+      // Anything else means the block still exists on the server: put the
+      // list back the way the server has it rather than leave them apart.
+      await resyncBlocks();
+      throw err;
     }
     markDirty();
+  }
+
+  // Re-reads the draft's blocks after a save that may have failed, so the
+  // preview matches what's actually stored.
+  async function resyncBlocks() {
+    try {
+      const { blocks: fresh } = await api.getBlocks();
+      setBlocks(fresh);
+    } catch {
+      // keep the local copy; a reload sorts it out
+    }
+  }
+
+  // A debounced save failing (e.g. the server refusing the data) would
+  // otherwise leave "Saving…" up forever while the edit is silently lost.
+  function saveFailed(err) {
+    setSaveState('idle');
+    setPublishError(err.message || 'Save failed');
   }
 
   // An AI rewrite is only a proposal held here until accepted: the preview

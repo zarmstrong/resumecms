@@ -59,6 +59,11 @@ export const BLOCK_DATA_VALIDATORS = {
   }),
 };
 
+// True if `data` passes the type's validator (false for an unknown type).
+export function isValidBlockData(type, data) {
+  return BLOCK_DATA_VALIDATORS[type]?.safeParse(data).success === true;
+}
+
 // Throws a 400 naming the first offending key (e.g. "data.bullets: Invalid
 // input: expected array, received string"); returns `data` otherwise.
 export function assertBlockData(type, data) {
