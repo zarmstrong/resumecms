@@ -453,7 +453,7 @@ test('publish snapshots the draft at call time, before waiting for the PDF queue
   release();
   const [a, b] = await Promise.all([first, second]);
   assert.ok(a.publishedAt < b.publishedAt || a.publishedAt === b.publishedAt);
-  assert.deepEqual(store.getPublishStatus(), { publishedAt: b.publishedAt, isDirty: false, pdfStale: false });
+  assert.deepEqual(store.getPublishStatus(), { publishedAt: b.publishedAt, isDirty: false, pdfStale: false, pdfVersion: b.pdfVersion });
 });
 
 test('a hung render times out and releases the queue for later publishes', async () => {
@@ -477,9 +477,9 @@ test('a hung render times out and releases the queue for later publishes', async
   assert.equal(aborted, true, 'the renderer is told to stop, and why');
   assert.equal(fs.readdirSync(path.dirname(pdfPath)).length, 0, 'no temp file left behind');
   hang = false;
-  const { publishedAt } = await store.publish();
+  const { publishedAt, pdfVersion } = await store.publish();
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), 'ok');
-  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false });
+  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion });
 });
 
 test('the PDF is written atomically: the old file stays intact until the new one is complete', async () => {
