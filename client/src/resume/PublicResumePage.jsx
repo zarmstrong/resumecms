@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { ResumeView } from './ResumeView.jsx';
 
+// A publish stamps the snapshot with publishedAt and a render changes
+// pdfVersion, so those two identify what's on screen. Only a snapshot
+// from before publishedAt existed (an install migrated from the pre-draft
+// days, never re-published) has to fall back to comparing the content.
+function sameResume(a, b) {
+  if (a.publishedAt || b.publishedAt) return a.publishedAt === b.publishedAt && a.pdfVersion === b.pdfVersion;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function PublicResumePage({ mode }) {
   const [state, setState] = useState({ loading: true, error: null, resume: null });
 
@@ -17,13 +26,9 @@ export function PublicResumePage({ mode }) {
         .getPublicResume(mode)
         .then((resume) => {
           if (cancelled || seq !== latest) return;
-          // Identical payload (the usual case for a refetch): keep the
-          // existing object so nothing re-renders.
-          setState((prev) =>
-            prev.resume && JSON.stringify(prev.resume) === JSON.stringify(resume)
-              ? prev
-              : { loading: false, error: null, resume }
-          );
+          // Same snapshot and PDF as what's on screen (the usual case for a
+          // refetch): keep the existing object so nothing re-renders.
+          setState((prev) => (prev.resume && sameResume(prev.resume, resume) ? prev : { loading: false, error: null, resume }));
         })
         .catch((err) => {
           if (cancelled || seq !== latest) return;
