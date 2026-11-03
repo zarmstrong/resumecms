@@ -32,7 +32,7 @@ test('bulletAt walks a path and returns null for anything missing', () => {
 });
 
 test('parsePath rejects ids that are not index paths', () => {
-  for (const bad of ['', 'a', '1.', '.0', '1..0', '-1', '1.5.x', 'DndDescribedBy-0', null, undefined, {}]) {
+  for (const bad of ['', 'a', '1.', '.0', '1..0', '-1', '1.5.x', 'DndDescribedBy-0', 1.5, -1, NaN, Infinity, null, undefined, {}]) {
     assert.equal(parsePath(bad), null, JSON.stringify(bad));
   }
 });

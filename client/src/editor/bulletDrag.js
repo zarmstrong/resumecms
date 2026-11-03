@@ -14,8 +14,10 @@ export function pathKey(path) {
 // Null for anything that isn't a dotted list of non-negative integers, so a
 // foreign dnd-kit id can't turn into [NaN] and silently no-op downstream.
 export function parsePath(key) {
-  if (typeof key !== 'string' && typeof key !== 'number') return null;
-  const path = String(key).split('.').map((part) => (/^\d+$/.test(part) ? Number(part) : NaN));
+  // A number is a single index; 1.5 must not be read as the path '1.5'.
+  if (typeof key === 'number') return Number.isInteger(key) && key >= 0 ? [key] : null;
+  if (typeof key !== 'string') return null;
+  const path = key.split('.').map((part) => (/^\d+$/.test(part) ? Number(part) : NaN));
   return path.every(Number.isInteger) ? path : null;
 }
 
