@@ -152,9 +152,9 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`/`visiblePrint` (booleans), and/or `parentId` |
 | `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted); 404 for an unknown id |
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
-| `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
-| `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
-| `POST /api/ai/rewrite` | `{ blockId, data, instruction }` → `{ proposal }` for review; saves nothing |
+| `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
+| `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
+| `POST /api/ai/rewrite` | `{ blockId, data, instruction, tense? }` → `{ proposal }` for review; saves nothing. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
 | `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
 | `GET /api/public/resume.pdf` | public, streams the last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
@@ -366,6 +366,45 @@ you Publish.
   so it stays hidden even if the AI promotes it to a top-level bullet, and
   it keeps those hidden flags as its own afterwards (un-hiding the parent
   later won't un-hide it).
+- **Verb tense** (default *Let the AI decide*) adds one line to the prompt
+  for experience entries, so rewrites stop drifting between "Led" and
+  "Lead". *Past tense* and *Present tense* always ask for that tense, and
+  *By role* picks per entry (below). In present tense, bullets drop the
+  implied "I" ("Lead a team", not "Leads a team"), and full sentences keep
+  their subject. In past tense, statements of who you are ("Engineer with
+  ten years of experience") stay as they are. The AI uses the tense in
+  whatever it writes or rewrites for your instruction, but leaves text the
+  instruction doesn't touch alone: fixing one typo won't retense the whole
+  entry. To convert an entry, ask for it, for example "Put this in the
+  past tense". A tense named in the instruction always overrides the
+  setting.
+- *By role* applies only to experience entries, and reads the End date, or
+  the end of it if you typed a range ("Dec 2023 – Present", "2019-2021",
+  "Jan 2020 to Dec 2023"). A spaced dash always starts a range, so "Mar –
+  2026" is read as 2026. A final period is ignored. Present tense when it
+  is a word like "Current", "Present", "Till date", or "Today", or a few
+  common non-English ones, possibly with a qualifier ("Present day") or a
+  note on the kind or length of the job, in brackets or after a comma,
+  "·", or "|" ("Present (contract)", "Present · 2 yrs"), or after a date
+  ("Jan 2022 to Present"). Past tense when it is a real calendar date from
+  1900 on that is over: a year, optionally with a month number or an
+  English, German, French, Spanish, Italian, or Portuguese month name
+  ("2024", "Mar 2024", "Mar-2024", "März 2024", "Mar '24", "03/2024",
+  "2024-03-31"). A date like "12/01/2024" that reads either way counts as
+  over only when both readings are. Anything else gets no tense
+  instruction rather than a guess: a blank End date, an open range ("Dec
+  2023 –"), a range that starts with a current word ("Present – 2021"), a
+  year, month, or day not over yet, counting the day after it too since
+  your day may differ from the server's ("2026" until 2 January 2027, "Dec
+  2027"), an impossible date ("2024-02-31"), an End date over 100
+  characters, or other text ("TBD", "Since 2021", "Spring 2024", "Present,
+  resigned"). Other blocks get none either.
+- Custom blocks, which can hold anything from awards to a current side
+  project, pick a tense for each rewrite in a menu next to their Rewrite
+  button: *Any tense*, *Past tense*, or *Present tense*. It starts at the
+  setting when that is *Past tense* or *Present tense*, and at *Any tense*
+  otherwise. Summaries, headings, and skills rows get no tense
+  instruction.
 - The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
   the same panel. Rewrites are rate-limited to 30 per 10 minutes.
 - **Timeout** (default 60 seconds, 20–120) is how long a rewrite may take,

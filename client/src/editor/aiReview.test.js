@@ -1,6 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_PRESETS, bulletChange, changedFields, hiddenBulletCount, isProposalStale, presetsFor, wordDiff } from './aiReview.js';
+import {
+  AI_PRESETS,
+  bulletChange,
+  changedFields,
+  hiddenBulletCount,
+  isProposalStale,
+  pickerTense,
+  presetsFor,
+  tenseChangeNote,
+  wordDiff,
+} from './aiReview.js';
+
+test('the tense picker shows the pick made in the panel, else the setting\'s default', () => {
+  const options = { auto: { label: 'Any tense' }, past: { label: 'Past tense' }, present: { label: 'Present tense' } };
+  assert.equal(pickerTense('present', 'past', options), 'present');
+  assert.equal(pickerTense('auto', 'past', options), 'auto');
+  assert.equal(pickerTense(null, 'past', options), 'past');
+  // Settings without a default: the server's first option, not a guess.
+  assert.equal(pickerTense(null, undefined, options), 'auto');
+  assert.equal(pickerTense(null, undefined, undefined), undefined);
+  assert.equal(pickerTense('past', 'past', null), undefined);
+  // A pick or default no longer offered (settings reloaded) is skipped.
+  const noPresent = { auto: options.auto, past: options.past };
+  assert.equal(pickerTense('present', 'past', noPresent), 'past');
+  assert.equal(pickerTense('present', 'gone', noPresent), 'auto');
+  assert.equal(pickerTense('toString', undefined, options), 'auto');
+});
+
+test('a proposal written with another tense than the picker shows gets a note', () => {
+  const options = { auto: { label: 'Any tense' }, past: { label: 'Past tense' }, present: { label: 'Present tense' } };
+  assert.equal(tenseChangeNote('present', 'past', options), 'This rewrite used “Present tense”. Try again to use “Past tense”.');
+  assert.equal(tenseChangeNote('past', 'past', options), null);
+  assert.equal(tenseChangeNote(undefined, 'past', options), null);
+  assert.equal(tenseChangeNote('present', 'future', options), 'This rewrite used “Present tense”. Try again to use “future”.');
+});
 
 const join = (runs, keep) => runs.filter((r) => keep.includes(r.type)).map((r) => r.text).join('');
 

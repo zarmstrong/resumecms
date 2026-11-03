@@ -376,6 +376,11 @@
   width: auto;
 }
 
+/* The AI panel's tense picker sits in a row of buttons. */
+.ed-ai-tense {
+  width: auto;
+}
+
 .ed-bullet-children {
   margin-left: 24px;
 }

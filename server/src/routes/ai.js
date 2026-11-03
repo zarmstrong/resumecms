@@ -62,7 +62,7 @@ router.put('/settings', settingsLimiter, (req, res) => {
 // Returns a proposal only; nothing is written. The editor saves an accepted
 // proposal through PUT /api/blocks/:id like any other edit.
 router.post('/rewrite', rewriteLimiter, async (req, res) => {
-  const { blockId, data } = req.body || {};
+  const { blockId, data, tense } = req.body || {};
   const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
   if (typeof blockId !== 'string') return res.status(400).json({ error: 'blockId is required' });
   if (!instruction) return res.status(400).json({ error: 'Tell the AI what to change.' });
@@ -84,7 +84,12 @@ router.post('/rewrite', rewriteLimiter, async (req, res) => {
   // falls back to the saved one.
   const baseData = hasRewritableShape(block.type, data) ? data : block.data;
   try {
-    const proposal = await rewriteBlock({ type: block.type, data: baseData, instruction, settings });
+    // `tense` is the editor's per-rewrite pick for a custom block;
+    // rewriteBlock turns a bad one into a 400 AiError. Being the one check,
+    // it comes after the 404 and 409 above, so a request with a bad tense for
+    // a missing block, or with AI not set up, gets those instead. The editor
+    // takes its options from the settings, so only another client sends one.
+    const proposal = await rewriteBlock({ type: block.type, data: baseData, instruction, settings, tense });
     res.json({ proposal: { blockId, baseData, ...proposal } });
   } catch (err) {
     if (err instanceof AiError) return res.status(err.status).json({ error: err.message });

@@ -8,6 +8,8 @@
 // copy of the SQLite file has them. They are write-only over the API —
 // publicAiSettings() is the only shape that ever leaves the server.
 
+import { AI_TENSES, DEFAULT_TENSE, PICKED_TENSES, PICKED_TENSE_TYPES, defaultPickedTense, isAiTense } from './tense.js';
+
 export const AI_PROVIDERS = {
   anthropic: { label: 'Claude (Anthropic)', defaultModel: 'claude-opus-5-5' },
   openai: { label: 'ChatGPT (OpenAI)', defaultModel: 'gpt-5.6' },
@@ -46,10 +48,14 @@ export function normalizeAiSettings(stored) {
     provider: isAiProvider(s.provider) ? s.provider : 'anthropic',
     models,
     allowBulletRestructure: s.allowBulletRestructure === true,
+    tense: isAiTense(s.tense) ? s.tense : DEFAULT_TENSE,
     timeoutSeconds: isValidTimeout(s.timeoutSeconds) ? s.timeoutSeconds : AI_TIMEOUT_SECONDS.default,
     apiKeys: { ...(s.apiKeys || {}) },
   };
 }
+
+// `{ id: { label } }` for each option, and nothing else an option might carry.
+const labelsOf = (options) => Object.fromEntries(Object.entries(options).map(([id, { label }]) => [id, { label }]));
 
 function keyHint(key) {
   return key.length > 8 ? `…${key.slice(-4)}` : '…';
@@ -67,6 +73,12 @@ export function publicAiSettings(stored) {
     provider: s.provider,
     models: s.models,
     allowBulletRestructure: s.allowBulletRestructure,
+    tense: s.tense,
+    // The tense options (tense.js) as the editor renders them.
+    tenses: labelsOf(AI_TENSES),
+    pickedTenses: labelsOf(PICKED_TENSES),
+    pickedTenseDefault: defaultPickedTense(s.tense),
+    pickedTenseTypes: [...PICKED_TENSE_TYPES],
     timeoutSeconds: s.timeoutSeconds,
     timeoutRange: { min: AI_TIMEOUT_SECONDS.min, max: AI_TIMEOUT_SECONDS.max },
     keys,
@@ -96,6 +108,10 @@ export function applyAiSettingsUpdate(stored, body) {
       throw new AiSettingsError('allowBulletRestructure must be a boolean');
     }
     next.allowBulletRestructure = b.allowBulletRestructure;
+  }
+  if (b.tense !== undefined) {
+    if (!isAiTense(b.tense)) throw new AiSettingsError(`tense must be one of ${Object.keys(AI_TENSES).join(', ')}`);
+    next.tense = b.tense;
   }
   if (b.timeoutSeconds !== undefined) {
     if (!isValidTimeout(b.timeoutSeconds)) {
