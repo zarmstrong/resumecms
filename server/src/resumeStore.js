@@ -155,12 +155,18 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     };
   }
 
+  // publish() clears lastEditedAt when it takes its snapshot, so any value
+  // present was set by an edit that came after — hence `>=`, not `>`: an
+  // edit landing in the same millisecond as the publish timestamp is still
+  // an unpublished edit. (The comparison itself is kept for installs whose
+  // last publish predates the clearing; their lastEditedAt is older than
+  // publishedAt and compares as clean.)
   function isDirty() {
     const draftMeta = getSetting('draft_meta');
     const published = getSetting('published_resume');
     if (!draftMeta?.lastEditedAt) return false;
     if (!published?.publishedAt) return true;
-    return draftMeta.lastEditedAt > published.publishedAt;
+    return draftMeta.lastEditedAt >= published.publishedAt;
   }
 
   // ---- header / site -------------------------------------------------------
@@ -471,6 +477,9 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     }
     const publishedAt = new Date().toISOString();
     setSetting('published_resume', { ...currentDraft(), publishedAt });
+    // Everything edited so far is in the snapshot; whatever touchDraft()
+    // records from here on is a new, unpublished edit (see isDirty).
+    setSetting('draft_meta', { lastEditedAt: null });
     return withPdfLock(async () => {
       try {
         writePdf(await renderPdfBounded());

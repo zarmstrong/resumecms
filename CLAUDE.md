@@ -81,9 +81,11 @@ store in `handle()` from `routes/sendError.js`, sync or async). The public site 
 PDF (`server/src/routes/public.js`, `server/src/routes/pdf.js`) never read the draft tables —
 they read the `published_resume` setting, a full snapshot written only by
 `POST /api/publish` (`server/src/routes/publish.js`). `GET
-/api/publish/status` compares `draft_meta.lastEditedAt` against
-`published_resume.publishedAt` to report whether there are unpublished
-changes; `POST /api/discard-draft` overwrites the draft tables from the
+/api/publish/status` reports unpublished changes when
+`draft_meta.lastEditedAt` is set and not older than
+`published_resume.publishedAt` — `publish()` clears it when it takes its
+snapshot, so an edit in the same millisecond as a publish still counts;
+`POST /api/discard-draft` overwrites the draft tables from the
 last published snapshot. On first boot after this split was introduced,
 whatever was in the draft tables becomes the initial published snapshot
 (see the migration block at the bottom of `db.js`) so existing installs

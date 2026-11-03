@@ -444,8 +444,7 @@ test('publish snapshots the draft at call time, before waiting for the PDF queue
   const { store, setting } = makeStore({ renderPdf: async () => { await gate; return Buffer.from('x'); } });
   store.setHeader({ name: 'First' });
   const first = store.publish(); // render blocks on the gate
-  await new Promise((r) => setTimeout(r, 2)); // isDirty compares ms timestamps
-  store.setHeader({ name: 'Second' }); // an edit that lands while it renders
+  store.setHeader({ name: 'Second' }); // an edit that lands while it renders, maybe in the same ms
   assert.deepEqual(setting('published_resume').header, { name: 'First' });
   assert.equal(store.getPublishStatus().isDirty, true);
   const second = store.publish(); // queued behind the first
@@ -511,6 +510,7 @@ test('discardDraft restores the published snapshot and 409s when nothing is publ
   store.setHeader({ name: 'Draft' });
   store.createBlock({ type: 'summary', data: { text: 'scratch' } });
   store.deleteBlock(a.id);
+  // Edits here can share a millisecond with publishedAt; they're still dirty.
   assert.equal(store.getPublishStatus().isDirty, true);
 
   const restored = store.discardDraft();
