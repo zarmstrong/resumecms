@@ -272,9 +272,10 @@ REST body can't switch them on), as does input validation (non-object
 bodies, unknown block types, unknown ids on delete → 400/404; a `null`
 `data` means "unchanged" on update and "empty" on create; a block's `data`
 is type-checked against `server/src/blockData.js` — loose zod schemas,
-unknown keys allowed, enums not enforced — on create, and on the merged
-result of an update *only if the stored data already passes*, so rows
-saved before the checks existed stay editable), so the tools stay one-call wrappers and both front
+unknown keys allowed, enums not enforced — on create and on the merged
+result of an update — or, when the stored data already fails, only on the
+keys the update changes, so rows saved before the checks existed stay
+editable; `visibleWeb`/`visiblePrint` must be booleans), so the tools stay one-call wrappers and both front
 doors validate alike. `httpError()` lives in `server/src/httpError.js`
 (re-exported from the store) and `DATA_DIR` in `server/src/dataDir.js`,
 shared by `db.js` and `pdfRenderer.js`. `mcp/blockSchemas.js` is hand-written

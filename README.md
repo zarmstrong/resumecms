@@ -144,7 +144,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
 | `POST /api/blocks` | create a block: `{ type, data, parentId? }` (`type` must be one of the built-in types; `data`'s documented keys are type-checked, e.g. `bullets` must be an array) |
-| `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`, `visiblePrint`, and/or `parentId` |
+| `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`/`visiblePrint` (booleans), and/or `parentId` |
 | `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted); 404 for an unknown id |
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |

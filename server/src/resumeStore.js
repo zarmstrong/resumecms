@@ -123,6 +123,15 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     return row.m + 1;
   }
 
+  // The subset of `next` whose values differ from `prev` (by JSON value).
+  function changedKeys(prev, next) {
+    const out = {};
+    for (const [key, value] of Object.entries(next)) {
+      if (JSON.stringify(prev[key]) !== JSON.stringify(value)) out[key] = value;
+    }
+    return out;
+  }
+
   // Renumbers one sibling group's positions to 0..n-1 in its current order.
   function compactPositions(parentId) {
     const siblings =
@@ -235,16 +244,21 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
 
     let { data } = patch;
     const { visibleWeb, visiblePrint } = patch;
+    for (const [key, value] of [['visibleWeb', visibleWeb], ['visiblePrint', visiblePrint]]) {
+      // Without this a string like "false" would be stored as visible.
+      if (value != null && typeof value !== 'boolean') throw httpError(400, `${key} must be a boolean`);
+    }
     if (data == null) data = undefined;
     else {
       const stored = JSON.parse(existing.data);
       data = mergeData ? mergeShallow(stored, data, 'data') : assertObject(data, 'data');
-      // Type-check what would be stored — but only if what's stored now
-      // already passes: data saved before these checks existed may not,
-      // and the editor sends the whole object back on every keystroke, so
-      // refusing it would make such a block uneditable. Legacy data can
-      // still be fixed; it just isn't checked until it is.
-      if (isValidBlockData(existing.type, stored)) assertBlockData(existing.type, data);
+      // Type-check what would be stored. Data saved before these checks
+      // existed may not pass as it is, and the editor sends the whole object
+      // back on every keystroke, so refusing it outright would make such a
+      // block uneditable: when the stored data is already invalid, only the
+      // keys this update actually changes are checked. Legacy keys stay
+      // until they're touched; nothing new gets in.
+      assertBlockData(existing.type, isValidBlockData(existing.type, stored) ? data : changedKeys(stored, data));
     }
     const parentIdProvided = Object.hasOwn(patch, 'parentId');
     const parentId = parentIdProvided ? patch.parentId : undefined;
@@ -264,8 +278,8 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
          WHERE id = ?`
       ).run(
         data !== undefined ? JSON.stringify(data) : null,
-        visibleWeb !== undefined ? (visibleWeb ? 1 : 0) : null,
-        visiblePrint !== undefined ? (visiblePrint ? 1 : 0) : null,
+        visibleWeb != null ? (visibleWeb ? 1 : 0) : null, // null → unchanged, like data
+        visiblePrint != null ? (visiblePrint ? 1 : 0) : null,
         parentIdProvided ? parentId : existing.parent_id,
         // Re-parenting drops the block at the end of its new sibling group;
         // fine-grained ordering within a group happens via reorderBlocks.

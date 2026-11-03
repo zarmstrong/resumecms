@@ -93,12 +93,27 @@ test('data stored before the checks existed stays editable until it is fixed', (
   const x = store.createBlock({ type: 'experience', data: { jobTitle: 'Dev' } });
   // Legacy row: a number where a string is expected.
   db.prepare('UPDATE blocks SET data = ? WHERE id = ?').run(JSON.stringify({ jobTitle: 'Dev', startDate: 2019 }), x.id);
-  // The editor sends the whole object back — still accepted, even with a new wrong-kind key
+  // The editor sends the whole object back, legacy key included — accepted
   assert.deepEqual(store.updateBlock(x.id, { data: { jobTitle: 'Lead', startDate: 2019 } }).data, { jobTitle: 'Lead', startDate: 2019 });
-  assert.equal(store.updateBlock(x.id, { data: { bullets: 'meh' } }, { mergeData: true }).data.bullets, 'meh');
-  // Once the data is valid again, the checks apply
+  // ...but a key this update changes is still checked, replace or merge
+  assert.throws(() => store.updateBlock(x.id, { data: { jobTitle: 'Lead', startDate: 2019, bullets: 'meh' } }), (e) => e.status === 400 && /data\.bullets/.test(e.message));
+  assert.throws(() => store.updateBlock(x.id, { data: { bullets: 'meh' } }, { mergeData: true }), (e) => e.status === 400);
+  assert.throws(() => store.updateBlock(x.id, { data: { startDate: 2020 } }, { mergeData: true }), (e) => e.status === 400, 'changing the legacy key to another bad value');
+  assert.deepEqual(store.getBlock(x.id).data, { jobTitle: 'Lead', startDate: 2019 }, 'nothing was written');
+  // Once the data is valid again, the whole object is checked as usual
   store.updateBlock(x.id, { data: { jobTitle: 'Lead', startDate: '2019', bullets: [] } });
   assert.throws(() => store.updateBlock(x.id, { data: { startDate: 2020 } }, { mergeData: true }), (e) => e.status === 400);
+});
+
+test('updateBlock rejects non-boolean visibility flags', () => {
+  const { store } = makeStore();
+  const x = store.createBlock({ type: 'summary' });
+  for (const bad of ['false', 0, 'yes', {}]) {
+    assert.throws(() => store.updateBlock(x.id, { visibleWeb: bad }), (e) => e.status === 400 && /visibleWeb must be a boolean/.test(e.message));
+    assert.throws(() => store.updateBlock(x.id, { visiblePrint: bad }), (e) => e.status === 400);
+  }
+  assert.equal(store.updateBlock(x.id, { visibleWeb: false, visiblePrint: null }).visibleWeb, false);
+  assert.equal(store.getBlock(x.id).visiblePrint, true, 'null leaves it unchanged');
 });
 
 test('re-parenting closes the gap it leaves in the old sibling group', () => {
