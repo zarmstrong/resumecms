@@ -285,18 +285,21 @@ test('header and site can merge instead of replace (colors one level deep)', () 
 
 test('publish snapshots the draft, writes the PDF, and clears isDirty', async () => {
   const { store, pdfPath, calls, setting } = makeStore();
-  assert.deepEqual(store.getPublishStatus(), { publishedAt: null, isDirty: false, pdfStale: false });
+  assert.deepEqual(store.getPublishStatus(), { publishedAt: null, isDirty: false, pdfStale: false, pdfVersion: null });
   store.setHeader({ name: 'Zed' });
   const h = store.createBlock({ type: 'heading', data: { text: 'H' } });
   const x = store.createBlock({ type: 'experience', data: { jobTitle: 'J' }, parentId: h.id });
   store.updateBlock(x.id, { visibleWeb: false });
   assert.equal(store.getPublishStatus().isDirty, true);
 
-  const { publishedAt } = await store.publish();
+  const { publishedAt, pdfVersion } = await store.publish();
   assert.ok(publishedAt);
   assert.equal(calls.renderPdf, 1);
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), '%PDF-fake');
-  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false });
+  assert.match(pdfVersion, /^\d+-9$/); // mtime-size of the 9-byte fake
+  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion });
+  assert.equal(store.getPublishedResume('web').pdfVersion, pdfVersion);
+  assert.equal(store.getPublishedResume('web').publishedAt, publishedAt);
   assert.deepEqual(setting('pdf_meta'), { renderedFor: publishedAt });
   const snap = setting('published_resume');
   assert.deepEqual(snap.header, { name: 'Zed' });
@@ -353,12 +356,37 @@ test('pdfStale tracks whether the PDF on disk matches the published snapshot', a
 
   // A later successful publish clears it; a missing file flags it again.
   ok = true;
-  const { publishedAt } = await store.publish();
-  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false });
+  const { publishedAt, pdfVersion } = await store.publish();
+  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion });
   fs.unlinkSync(pdfPath);
   assert.equal(store.getPublishStatus().pdfStale, true);
+  assert.equal(store.getPublishStatus().pdfVersion, null);
   await store.ensurePdf();
   assert.equal(store.getPublishStatus().pdfStale, false);
+  assert.ok(store.getPublishStatus().pdfVersion);
+});
+
+test('pdfVersion follows the file on disk, not the snapshot', async () => {
+  let body = 'short';
+  const { store, pdfPath } = makeStore({ renderPdf: async () => Buffer.from(body) });
+  assert.equal(store.getPublishedResume('web').pdfVersion, null);
+  const first = await store.publish();
+  assert.equal(store.getPublishedResume('web').pdfVersion, first.pdfVersion);
+  // A new render (different size here, so a coarse mtime can't mask it)
+  // is a new version; the public payload advertises it.
+  body = 'rather longer';
+  const second = await store.publish();
+  assert.notEqual(second.pdfVersion, first.pdfVersion);
+  assert.equal(store.getPublishedResume('web').pdfVersion, second.pdfVersion);
+  // A publish whose render fails keeps the old file and the old version
+  // even though publishedAt moved — the PDF link must not change.
+  const failing = makeStore({ renderPdf: async () => { throw new Error('no chromium'); } });
+  fs.writeFileSync(failing.pdfPath, 'old');
+  const before = failing.store.getPublishStatus().pdfVersion;
+  await assert.rejects(failing.store.publish());
+  assert.equal(failing.store.getPublishStatus().pdfVersion, before);
+  assert.notEqual(failing.store.getPublishStatus().publishedAt, null);
+  assert.ok(pdfPath);
 });
 
 test('concurrent publishes are serialized', async () => {

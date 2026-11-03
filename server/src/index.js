@@ -6,6 +6,7 @@ import { getSetting } from './db.js'; // also ensures schema + seed run on boot
 import { accessLogger } from './logger.js';
 import { store } from './store.js';
 import { applyTrustProxy } from './trustProxy.js';
+import { mountClient } from './clientStatic.js';
 
 import aiRoutes from './routes/ai.js';
 import authRoutes from './routes/auth.js';
@@ -69,13 +70,9 @@ app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Serve the built client (Vite output) for everything else, including
-// client-side routes like /editor and /print — the SPA router handles them.
-const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
-app.use(express.static(clientDist));
-app.get('/*splat', (req, res) => {
-  res.sendFile(path.join(clientDist, 'index.html'));
-});
+// Serve the built client (Vite output) for everything else — see
+// clientStatic.js for the SPA fallback and the cache policy.
+mountClient(app, path.join(__dirname, '..', '..', 'client', 'dist'));
 
 app.listen(PORT, () => {
   console.log(`resume server listening on port ${PORT}`);

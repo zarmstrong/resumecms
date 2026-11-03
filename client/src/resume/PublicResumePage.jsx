@@ -7,16 +7,53 @@ export function PublicResumePage({ mode }) {
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .getPublicResume(mode)
-      .then((resume) => {
-        if (!cancelled) setState({ loading: false, error: null, resume });
-      })
-      .catch((err) => {
-        if (!cancelled) setState({ loading: false, error: err.message, resume: null });
-      });
+    // Only the most recent request may update the page: a refetch can be
+    // triggered twice in a row (a bfcache restore fires both events below),
+    // and a slow older response must not overwrite a newer one.
+    let latest = 0;
+    const load = () => {
+      const seq = ++latest;
+      api
+        .getPublicResume(mode)
+        .then((resume) => {
+          if (cancelled || seq !== latest) return;
+          // Identical payload (the usual case for a refetch): keep the
+          // existing object so nothing re-renders.
+          setState((prev) =>
+            prev.resume && JSON.stringify(prev.resume) === JSON.stringify(resume)
+              ? prev
+              : { loading: false, error: null, resume }
+          );
+        })
+        .catch((err) => {
+          if (cancelled || seq !== latest) return;
+          // Keep whatever is on screen if a background refetch fails; only
+          // the initial load has nothing better to show than the error.
+          setState((prev) => (prev.resume ? prev : { loading: false, error: err.message, resume: null }));
+        });
+    };
+    load();
+
+    // A web tab left open across a Publish would otherwise keep showing
+    // what it fetched on mount: refetch when the browser restores the page
+    // from its back/forward cache or the tab comes back into view. Cheap,
+    // since an unchanged snapshot is a 304. The print route is rendered
+    // once by headless Chromium and never revisited, so it gets no
+    // listeners — a refetch mid-render could change what ends up in the PDF.
+    const onPageShow = (event) => {
+      if (event.persisted) load();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    if (mode === 'web') {
+      window.addEventListener('pageshow', onPageShow);
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
     return () => {
       cancelled = true;
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [mode]);
 
@@ -32,8 +69,8 @@ export function PublicResumePage({ mode }) {
     return <div style={{ padding: 40, fontFamily: 'var(--font-ui)' }}>Couldn't load resume: {state.error}</div>;
   }
 
-  const { header, site, blocks } = state.resume;
+  const { header, site, blocks, pdfVersion } = state.resume;
   if (site?.title) document.title = site.title;
 
-  return <ResumeView header={header} site={site} blocks={blocks} mode={mode} />;
+  return <ResumeView header={header} site={site} blocks={blocks} mode={mode} pdfVersion={pdfVersion} />;
 }

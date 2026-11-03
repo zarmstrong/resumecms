@@ -151,8 +151,8 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction }` → `{ proposal }` for review; saves nothing |
-| `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag |
-| `GET /api/public/resume.pdf` | public, generates and streams a PDF |
+| `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
+| `GET /api/public/resume.pdf` | public, streams the last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
 
 ## MCP server
@@ -196,7 +196,7 @@ nothing is visible on the public site or PDF until `publish` is called.
 | `reorder_blocks` | `{ items: [{ id, parentId? }] }` — the complete order, every block once; an omitted `parentId` means top level |
 | `get_header`, `update_header` | read / merge keys into the header (`links` is replaced whole) |
 | `get_site_settings`, `update_site_settings` | read / merge keys into site settings (`colors` merges one level deep) |
-| `get_publish_status` | `{ publishedAt, isDirty, pdfStale }` — `pdfStale` means the PDF on disk wasn't rendered from the current published snapshot (a publish whose PDF render failed); the next successful `publish` clears it |
+| `get_publish_status` | `{ publishedAt, isDirty, pdfStale, pdfVersion }` — `pdfVersion` identifies the PDF file on disk (null if none); `pdfStale` means the PDF on disk wasn't rendered from the current published snapshot (a publish whose PDF render failed); the next successful `publish` clears it |
 | `publish` | snapshot the draft to the public site and re-render the PDF (takes a few seconds) |
 | `discard_draft` | restore the draft from the last published snapshot |
 | `get_published_resume` | the published snapshot as the site (`mode: "web"`) or PDF (`"print"`) sees it |
@@ -279,6 +279,27 @@ is `true` (which trusts everyone), mixes a hop count into an address list
   compose network is recreated, which silently puts everyone back in one
   bucket. To close both, publish the port on loopback only
   (`'127.0.0.1:4000:4000'`) so only a proxy on the same host can reach it.
+
+### Caching and CDNs
+
+The server states a cache policy on everything the public can fetch, so a
+Publish shows up on the next page load instead of whenever a cache feels
+like it. `/api/public/resume` and the HTML shell are sent with
+`Cache-Control: no-cache` (always revalidate; unchanged content is a cheap
+`304`), the PDF with `private, no-cache` (never stored by a shared cache),
+and the hashed bundles under `/assets/` as `immutable` for a year. The
+public page also refetches when it comes back into view, and the PDF link
+carries a `pdfVersion` (the rendered file's timestamp) as a query string so
+each render is a URL no cache has seen before.
+
+If you put a CDN in front of the app, let those headers through. Cloudflare
+in particular caches `.pdf`, `.js`, and `.css` by file extension and, with
+a zone-wide *Browser Cache TTL* set, used to overwrite the previous
+`max-age=0` with hours of caching — which is exactly how an old PDF kept
+appearing after a publish. `private` and `no-cache` are respected by
+default, but if your CDN has a "cache everything" or TTL-override rule, add
+a bypass for `/api/*`. No purge-on-publish is needed once the headers are
+respected.
 
 ### Two-factor authentication (TOTP)
 
