@@ -143,9 +143,9 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET/PUT /api/header` | header/contact fields |
 | `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
-| `POST /api/blocks` | create a block: `{ type, data, parentId? }` (`type` must be one of the built-in types) |
+| `POST /api/blocks` | create a block: `{ type, data, parentId? }` (`type` must be one of the built-in types; `data`'s documented keys are type-checked, e.g. `bullets` must be an array) |
 | `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`, `visiblePrint`, and/or `parentId` |
-| `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted) |
+| `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted); 404 for an unknown id |
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
@@ -185,7 +185,7 @@ nothing is visible on the public site or PDF until `publish` is called.
 
 | Tool | What it does |
 |---|---|
-| `get_block_schemas` | documents each block type's `data` shape plus the header and site-settings objects (`type` narrows it to one block type) |
+| `get_block_schemas` | documents each block type's `data` shape plus the header and site-settings objects (`type` narrows it to one block type); the documented block keys are type-checked on write, so a wrong-kind value (`bullets` as a string) is a 400 |
 | `get_draft` | the whole draft in one call: `{ header, site, blocks }` in display order, hidden blocks included |
 | `list_blocks`, `get_block` | draft blocks in display order / one block by id |
 | `create_block` | `{ type, data?, parentId? }` — appended to the end of its sibling group |

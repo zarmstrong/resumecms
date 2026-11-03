@@ -91,6 +91,7 @@ function fakeStore() {
     },
     deleteBlock: (id) => {
       calls.push(['deleteBlock', id]);
+      find(id); // 404
       const i = blocks.findIndex((x) => x.id === id);
       if (i >= 0) blocks.splice(i, 1);
       return { ok: true };
@@ -199,7 +200,6 @@ test('block round trip: create, read, merge-update, replace, visibility, parent,
   const gone = await call('delete_block', { id: 'nope' });
   assert.equal(gone.isError, true);
   assert.match(gone.text, /\[404\] Block not found/);
-  assert.ok(!store.calls.some((c) => c[0] === 'deleteBlock' && c[1] === 'nope'), 'unknown id must not reach the store');
 });
 
 test('move_block and reorder_blocks hand the store a complete order', async (t) => {

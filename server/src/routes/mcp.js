@@ -25,16 +25,18 @@ const router = Router();
 
 router.use(createMcpAuth(process.env.RESUMECMS_MCP_TOKEN));
 router.use(express.json({ limit: '2mb' }));
-// Body-parser failures would otherwise fall to Express's HTML error page;
-// an MCP client expects JSON-RPC.
+// Body-parser failures (malformed JSON, too large, unsupported charset or
+// encoding, aborted request, ...) would otherwise fall to Express's HTML
+// error page; an MCP client expects JSON-RPC. body-parser's errors all
+// carry a status, and 4xx ones are marked safe to expose (http-errors'
+// `expose`), so their own message can go back as-is.
 router.use((err, req, res, next) => {
-  if (err.type === 'entity.parse.failed') {
-    return res.status(400).json({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error: invalid JSON' }, id: null });
-  }
-  if (err.type === 'entity.too.large') {
-    return res.status(413).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Request body too large' }, id: null });
-  }
-  return next(err);
+  const status = err.status ?? err.statusCode;
+  if (!status) return next(err);
+  const parseError = err.type === 'entity.parse.failed';
+  const message = parseError ? 'Parse error: invalid JSON' : err.expose ? err.message : 'Internal server error';
+  const code = parseError ? -32700 : status < 500 ? -32600 : -32603;
+  res.status(status).json({ jsonrpc: '2.0', error: { code, message }, id: null });
 });
 
 const METHOD_NOT_ALLOWED = {

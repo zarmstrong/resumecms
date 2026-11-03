@@ -6,8 +6,8 @@ import { hashPassword } from './passwords.js';
 import { ensureSchema } from './schema.js';
 import { createSettings } from './settings.js';
 import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
+import { DATA_DIR } from './dataDir.js';
 
-const DATA_DIR = process.env.RESUMECMS_DATA_DIR || '/data';
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const DB_PATH = path.join(DATA_DIR, 'resume.sqlite3');

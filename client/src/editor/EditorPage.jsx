@@ -153,7 +153,11 @@ export function EditorPage({ onLogout }) {
 
   // Any edit or discard supersedes the message from the last publish; the
   // lasting state (an out-of-date PDF) is carried by pdfStale instead.
+  // Counts edits so a publish can tell whether anything changed while it
+  // was in flight (see handlePublish).
+  const editSeq = useRef(0);
   function markDirty() {
+    editSeq.current += 1;
     setIsDirty(true);
     setPublishError(null);
   }
@@ -166,11 +170,24 @@ export function EditorPage({ onLogout }) {
   async function handlePublish() {
     setPublishState('publishing');
     setPublishError(null);
+    const editsBefore = editSeq.current;
     try {
       const { publishedAt: newPublishedAt } = await api.publish();
       setPublishedAt(newPublishedAt);
-      setIsDirty(false);
       setPdfStale(false);
+      // The server snapshots the draft when the publish request arrives, so
+      // an edit made while the PDF rendered is still unpublished: ask the
+      // server rather than assuming, and count local edits too in case a
+      // debounced save is still on its way.
+      let stillDirty = editSeq.current !== editsBefore;
+      try {
+        const status = await api.publishStatus();
+        stillDirty = stillDirty || status.isDirty;
+        setPdfStale(!!status.pdfStale);
+      } catch {
+        // keep the local answer
+      }
+      setIsDirty(stillDirty);
       setPublishState('published');
       setTimeout(() => setPublishState((s) => (s === 'published' ? 'idle' : s)), 1500);
     } catch (err) {
@@ -286,7 +303,13 @@ export function EditorPage({ onLogout }) {
       prev.filter((b) => b.id !== id).map((b) => (b.parentId === id ? { ...b, parentId: null } : b))
     );
     if (aiState?.blockId === id) clearAiProposal();
-    await api.deleteBlock(id);
+    try {
+      await api.deleteBlock(id);
+    } catch (err) {
+      // Already gone (deleted from another session or an MCP client): the
+      // optimistic removal above is the right end state.
+      if (err.status !== 404) throw err;
+    }
     markDirty();
   }
 

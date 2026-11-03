@@ -17,7 +17,7 @@
 // the output is incomplete and the store's reorderBlocks() rejects it with
 // a 400 rather than this helper papering over it.
 
-import { httpError } from '../resumeStore.js';
+import { httpError } from '../httpError.js';
 
 export function moveBlockOrder(orderedBlocks, { id, parentId, beforeId, afterId, index } = {}) {
   const moving = orderedBlocks.find((b) => b.id === id);

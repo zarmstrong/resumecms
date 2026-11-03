@@ -1,7 +1,8 @@
 import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
-import { BLOCK_TYPES, httpError } from '../resumeStore.js';
+import { BLOCK_TYPES } from '../resumeStore.js';
+import { httpError } from '../httpError.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
 import { moveBlockOrder } from './moveBlock.js';
 
@@ -28,7 +29,7 @@ const { version } = createRequire(import.meta.url)('../../package.json');
 
 const INSTRUCTIONS = `resumecms edits a single-user resume site.
 
-Content model: the resume is an ordered list of blocks ({ id, type, position, parentId, visibleWeb, visiblePrint, data }). Types: heading, summary, skills_group, experience, education, custom. An experience, skills_group, education, or custom block may be nested one level under a heading via parentId; heading and summary are always top-level. Call get_block_schemas for each type's data shape — data is free-form JSON and the server does not validate it.
+Content model: the resume is an ordered list of blocks ({ id, type, position, parentId, visibleWeb, visiblePrint, data }). Types: heading, summary, skills_group, experience, education, custom. An experience, skills_group, education, or custom block may be nested one level under a heading via parentId; heading and summary are always top-level. Call get_block_schemas for each type's data shape — the server type-checks the documented keys (e.g. bullets must be an array) and rejects a mismatch with a 400, but doesn't check enum values or unknown keys.
 
 Draft vs published: every write tool changes the DRAFT only. Nothing is visible on the public site or PDF until you call publish. get_publish_status reports whether unpublished changes exist; discard_draft throws the draft away. Prefer reading with get_draft (everything at once) and editing with update_block (which merges data keys) and move_block (which handles ordering for you).`;
 
@@ -207,8 +208,7 @@ const TOOLS = [
       annotations: destructive,
     },
     run: (store, { id }) => {
-      store.getBlock(id); // 404 for an unknown id (the store itself is lenient)
-      return store.deleteBlock(id);
+      return store.deleteBlock(id); // 404 for an unknown id
     },
   },
   {

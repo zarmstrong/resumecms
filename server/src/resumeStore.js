@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { httpError } from './httpError.js';
+import { assertBlockData } from './blockData.js';
 import { createSettings } from './settings.js';
 import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
 import { promotedBlockPositions } from './blockDeletion.js';
@@ -23,14 +25,7 @@ export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education'
 
 export const BLOCK_TYPES = ['heading', 'summary', 'skills_group', 'experience', 'education', 'custom'];
 
-// Builds an error with an http-ish status. Shared with the MCP layer
-// (mcp/moveBlock.js) so every error that reaches a route or tool has the
-// same shape.
-export function httpError(status, message) {
-  const err = new Error(message);
-  err.status = status;
-  return err;
-}
+export { httpError };
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -48,6 +43,9 @@ export function mergeShallow(base, patch, label) {
   assertObject(patch, label);
   const out = isPlainObject(base) ? { ...base } : {};
   for (const [key, value] of Object.entries(patch)) {
+    // JSON.parse happily produces an own "__proto__" key; assigning it
+    // would swap the prototype of `out` rather than store a property.
+    if (key === '__proto__') continue;
     if (value === null) delete out[key];
     else out[key] = value;
   }
@@ -59,13 +57,21 @@ export function mergeShallow(base, patch, label) {
 // every later publish (and the boot render) until a restart.
 export const DEFAULT_PDF_TIMEOUT_MS = 90_000;
 
-function withTimeout(promise, ms, message) {
+// Runs `fn({ signal })` and gives up after `ms`: the signal is aborted (so
+// the renderer can tear down whatever is wedged) and the returned promise
+// rejects, whatever `fn` goes on to do.
+function withTimeout(fn, ms, message) {
+  const controller = new AbortController();
   let timer;
   const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), ms);
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(message));
+    }, ms);
     timer.unref?.(); // a pending render must not keep the process alive on shutdown
   });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  const work = Promise.resolve().then(() => fn({ signal: controller.signal }));
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
 }
 
 export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAULT_PDF_TIMEOUT_MS }) {
@@ -191,7 +197,7 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     const { type, data, parentId = null } = assertObject(input ?? {}, 'block');
     if (!type) throw httpError(400, 'type is required');
     if (!BLOCK_TYPES.includes(type)) throw httpError(400, `unknown block type: ${type}`);
-    if (data != null) assertObject(data, 'data'); // null/undefined → empty, as before
+    if (data != null) assertBlockData(type, assertObject(data, 'data')); // null/undefined → empty, as before
     assertValidParent(parentId, type);
     const now = new Date().toISOString();
     const id = randomUUID();
@@ -219,7 +225,10 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     let { data } = patch;
     const { visibleWeb, visiblePrint } = patch;
     if (data == null) data = undefined;
-    else data = mergeData ? mergeShallow(JSON.parse(existing.data), data, 'data') : assertObject(data, 'data');
+    else {
+      data = mergeData ? mergeShallow(JSON.parse(existing.data), data, 'data') : assertObject(data, 'data');
+      assertBlockData(existing.type, data); // the merged/replaced result, i.e. what would be stored
+    }
     const parentIdProvided = Object.hasOwn(patch, 'parentId');
     const parentId = parentIdProvided ? patch.parentId : undefined;
     if (parentIdProvided) assertValidParent(parentId, existing.type);
@@ -249,10 +258,8 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
     return getBlock(id);
   }
 
-  // Deleting an unknown id is not an error (the editor deletes
-  // optimistically and may race a refresh) — but it isn't an edit either,
-  // so it doesn't mark the draft dirty. Callers that want a 404 check with
-  // getBlock() first.
+  // An unknown id is a 404 from both front doors (the editor deletes
+  // optimistically and treats a 404 as "already gone").
   function deleteBlock(id) {
     const txn = db.transaction(() => {
       // Promote children in place to match the editor's optimistic deletion.
@@ -267,7 +274,8 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
       }
       return db.prepare('DELETE FROM blocks WHERE id = ?').run(id).changes;
     });
-    if (txn() > 0) touchDraft();
+    if (txn() === 0) throw httpError(404, 'Block not found');
+    touchDraft();
     return { ok: true };
   }
 
@@ -304,8 +312,15 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
       throw httpError(400, `items must keep block ${splitId}'s section contiguous, directly after its heading`);
     }
 
+    // Validate each parent as this request leaves it, not as the table has
+    // it now: the heading's own parent_id is the one `items` assigns.
+    const assignedParent = new Map(items.map(({ id, parentId }) => [id, parentId ?? null]));
+    const lookup = (pid) => {
+      const row = rowById.get(pid);
+      return row && { ...row, parent_id: assignedParent.get(pid) };
+    };
     for (const { id, parentId } of items) {
-      assertValidParent(parentId ?? null, typeById.get(id), (pid) => rowById.get(pid));
+      assertValidParent(parentId ?? null, typeById.get(id), lookup);
     }
 
     const update = db.prepare('UPDATE blocks SET parent_id = ?, position = ? WHERE id = ?');
@@ -354,10 +369,12 @@ export function createResumeStore({ db, renderPdf, pdfPath, pdfTimeoutMs = DEFAU
   }
 
   // Bounded by pdfTimeoutMs so a Chromium that never settles releases the
-  // queue; a render that finishes after its timeout is simply dropped
-  // (nothing below the race ever sees its result).
+  // queue. The renderer gets an AbortSignal and is expected to stop (close
+  // its page / reset the browser) when it fires, so the next render on the
+  // queue doesn't start beside a wedged one; a result that arrives after
+  // the timeout is dropped either way.
   function renderPdfBounded() {
-    return withTimeout(Promise.resolve().then(renderPdf), pdfTimeoutMs, `PDF render timed out after ${pdfTimeoutMs} ms`);
+    return withTimeout(renderPdf, pdfTimeoutMs, `PDF render timed out after ${pdfTimeoutMs} ms`);
   }
 
   // Write to a sibling temp file and rename it into place, so a download

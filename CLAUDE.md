@@ -268,12 +268,18 @@ via the pure `mcp/moveBlock.js`. The merge itself lives in the store
 (`mergeShallow`, behind `updateBlock`'s `{ mergeData: true }` option and
 `setHeader`/`setSite`'s `{ merge: true }` — options, not patch keys, so a
 REST body can't switch them on), as does input validation (non-object
-bodies, unknown block types → 400; a `null` `data` means "unchanged" on
-update and "empty" on create), so the tools stay one-call wrappers and
-both front doors validate alike. `mcp/blockSchemas.js` is hand-written
+bodies, unknown block types, unknown ids on delete → 400/404; a `null`
+`data` means "unchanged" on update and "empty" on create; a block's `data`
+is type-checked against `server/src/blockData.js` — loose zod schemas,
+unknown keys allowed, enums not enforced — on create and on the merged
+result of an update), so the tools stay one-call wrappers and both front
+doors validate alike. `httpError()` lives in `server/src/httpError.js`
+(re-exported from the store) and `DATA_DIR` in `server/src/dataDir.js`,
+shared by `db.js` and `pdfRenderer.js`. `mcp/blockSchemas.js` is hand-written
 documentation of the client-side data shapes (block forms, header, site
 settings) for the `get_block_schemas` tool — update it when a form's fields
-or option values change. SDK imports are confined to `routes/mcp.js`,
+or option values change, together with `blockData.js` (`blockData.test.js`
+fails if the two list different keys). SDK imports are confined to `routes/mcp.js`,
 `mcp/createMcpServer.js`, and its test, so a future move to the v2 SDK
 packages stays small.
 
@@ -290,7 +296,9 @@ through the store's single PDF queue (`withPdfLock`), so two renders never
 run at once and a slow first-boot render can't overwrite a newer publish;
 keep any new PDF-writing code on that queue. Each render is bounded by the
 store's `pdfTimeoutMs` (default 90 s, `DEFAULT_PDF_TIMEOUT_MS`) so a hung
-Chromium releases the queue instead of blocking every later publish, and
+Chromium releases the queue instead of blocking every later publish — the
+renderer gets an `AbortSignal` and, when it fires, closes the shared
+browser so the abandoned render stops and the next one starts fresh — and
 the file is written to `resume.pdf.tmp` and renamed into place so a
 download overlapping a publish never reads a partial file. `publish()`
 takes the snapshot synchronously at call time — before queuing the render

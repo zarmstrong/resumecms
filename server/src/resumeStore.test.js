@@ -69,6 +69,25 @@ test('createBlock validates type and parent', () => {
   for (const type of NESTABLE_TYPES) assert.equal(store.createBlock({ type, parentId: h.id }).parentId, h.id);
 });
 
+test('block data is type-checked on create and on the merged result of an update', () => {
+  const { store } = makeStore();
+  assert.throws(
+    () => store.createBlock({ type: 'experience', data: { bullets: 'not a list' } }),
+    (e) => e.status === 400 && /^data\.bullets: /.test(e.message)
+  );
+  const x = store.createBlock({ type: 'experience', data: { jobTitle: 'Dev', bullets: ['one'] } });
+  assert.throws(() => store.updateBlock(x.id, { data: { bullets: { text: 'x' } } }), (e) => e.status === 400);
+  assert.throws(() => store.updateBlock(x.id, { data: { jobTitle: 7 } }, { mergeData: true }), (e) => e.status === 400);
+  assert.deepEqual(store.getBlock(x.id).data, { jobTitle: 'Dev', bullets: ['one'] }, 'nothing was written');
+  // merging a wrong-typed key over a right-typed one is caught on the result
+  assert.deepEqual(store.updateBlock(x.id, { data: { bullets: [{ text: 'two', children: ['a'] }] } }, { mergeData: true }).data.bullets.length, 1);
+  // a __proto__ key is dropped rather than changing the merged object's prototype
+  const merged = store.updateBlock(x.id, { data: JSON.parse('{"__proto__":{"polluted":true},"company":"Co"}') }, { mergeData: true });
+  assert.equal(merged.data.polluted, undefined);
+  assert.equal(Object.getPrototypeOf(merged.data), Object.prototype);
+  assert.equal(merged.data.company, 'Co');
+});
+
 test('createBlock treats a null data as empty', () => {
   const { store } = makeStore();
   assert.deepEqual(store.createBlock({ type: 'summary', data: null }).data, {});
@@ -132,7 +151,7 @@ test('updateBlock with the mergeData option merges keys, deletes on null, and va
   assert.ok(setting('draft_meta').lastEditedAt);
 });
 
-test('deleteBlock promotes children in place and tolerates unknown ids', () => {
+test('deleteBlock promotes children in place and 404s on unknown ids', () => {
   const { store, setting } = makeStore();
   const s = store.createBlock({ type: 'summary' });
   const h = store.createBlock({ type: 'heading' });
@@ -146,10 +165,22 @@ test('deleteBlock promotes children in place and tolerates unknown ids', () => {
   assert.ok(after.every((blk) => blk.parentId === null));
   assert.deepEqual(after.map((blk) => blk.position), [0, 1, 2, 3]);
 
-  // an unknown id is tolerated but is not an edit: the draft stays as it was
+  // an unknown id is a 404 and not an edit: the draft stays as it was
   const before = setting('draft_meta').lastEditedAt;
-  assert.deepEqual(store.deleteBlock('missing'), { ok: true });
+  assert.throws(() => store.deleteBlock('missing'), (e) => e.status === 404);
   assert.equal(setting('draft_meta').lastEditedAt, before);
+});
+
+test('reorderBlocks validates parents as the request assigns them, not as stored', () => {
+  const { store, db } = makeStore();
+  const h = store.createBlock({ type: 'heading' });
+  const other = store.createBlock({ type: 'heading' });
+  const x = store.createBlock({ type: 'experience' });
+  // A heading that somehow got a parent (hand-edited SQLite) is un-nested
+  // and given a child in the same request: valid as the request leaves it.
+  db.prepare('UPDATE blocks SET parent_id = ? WHERE id = ?').run(other.id, h.id);
+  const out = store.reorderBlocks([{ id: other.id }, { id: h.id }, { id: x.id, parentId: h.id }]);
+  assert.deepEqual(out.map((b) => [b.id, b.parentId]), [[other.id, null], [h.id, null], [x.id, h.id]]);
 });
 
 test('reorderBlocks rewrites positions per group and rejects bad orders', () => {
@@ -356,9 +387,14 @@ test('publish snapshots the draft at call time, before waiting for the PDF queue
 
 test('a hung render times out and releases the queue for later publishes', async () => {
   let hang = true;
+  let aborted = false;
   const { store, pdfPath, setting } = makeStore({
     pdfTimeoutMs: 20,
-    renderPdf: () => (hang ? new Promise(() => {}) : Promise.resolve(Buffer.from('ok'))),
+    renderPdf: ({ signal }) => {
+      if (!hang) return Promise.resolve(Buffer.from('ok'));
+      signal.addEventListener('abort', () => { aborted = true; });
+      return new Promise(() => {});
+    },
   });
   store.setHeader({ name: 'A' });
   await assert.rejects(
@@ -367,6 +403,7 @@ test('a hung render times out and releases the queue for later publishes', async
   );
   assert.deepEqual(setting('published_resume').header, { name: 'A' });
   assert.equal(store.getPublishStatus().pdfStale, true);
+  assert.equal(aborted, true, 'the renderer is told to stop');
   hang = false;
   const { publishedAt } = await store.publish();
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), 'ok');

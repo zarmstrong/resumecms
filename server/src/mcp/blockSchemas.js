@@ -1,9 +1,11 @@
 // Documentation of the JSON shapes the editor reads and writes, served by
-// the get_block_schemas MCP tool. The server stores `data`, the header, and
-// the site settings as free-form JSON and never validates them — these are
-// the shapes the client (client/src/editor/blockForms/*.jsx,
-// HeaderEditorForm.jsx, SiteSettingsForm.jsx) and the templates expect.
-// Keep this in step with those forms when fields or options change.
+// the get_block_schemas MCP tool. These are the shapes the client
+// (client/src/editor/blockForms/*.jsx, HeaderEditorForm.jsx,
+// SiteSettingsForm.jsx) and the templates expect. The store type-checks a
+// block's documented `data` keys on write (server/src/blockData.js — keep
+// its keys in step with BLOCK_DATA_SCHEMAS; a test enforces that) but not
+// enum values or unknown keys; the header and site settings are stored
+// as-is. Keep this in step with the forms when fields or options change.
 
 const SPACING = ['', 'none', 'xsmall', 'small', 'medium', 'large', 'xlarge'];
 
