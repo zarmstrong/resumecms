@@ -1,17 +1,17 @@
 import express from 'express';
 import cookieSession from 'cookie-session';
 import path from 'node:path';
-import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getSetting } from './db.js'; // also ensures schema + seed run on boot
 import { accessLogger } from './logger.js';
-import { renderResumePdf } from './pdfRenderer.js';
+import { store } from './store.js';
 
 import aiRoutes from './routes/ai.js';
 import authRoutes from './routes/auth.js';
 import blockRoutes from './routes/blocks.js';
+import mcpRoutes from './routes/mcp.js';
 import publicRoutes from './routes/public.js';
-import pdfRoutes, { PDF_PATH } from './routes/pdf.js';
+import pdfRoutes from './routes/pdf.js';
 import publishRoutes from './routes/publish.js';
 import totpRoutes from './routes/totp.js';
 
@@ -21,6 +21,15 @@ const PORT = process.env.PORT || 4000;
 const SESSION_SECRET = process.env.RESUMECMS_SESSION_SECRET || 'dev-secret-change-me';
 
 app.use(accessLogger);
+
+// MCP endpoint (bearer-token gated, see routes/mcp.js). Mounted ahead of
+// express.json() and the session so an unauthenticated request is turned
+// away before any body is parsed; the router brings its own parser. It
+// lives outside /api so blockRoutes' session check never sees it, and it
+// must precede the static/SPA handlers below or they'd answer it with
+// index.html.
+app.use('/mcp', mcpRoutes);
+
 app.use(express.json({ limit: '2mb' }));
 app.use(
   cookieSession({
@@ -74,10 +83,8 @@ app.listen(PORT, () => {
   // A published snapshot can exist (seeded from pre-existing draft content
   // on first boot after this feature shipped) without a PDF file ever
   // having been generated for it yet — render one now so the download link
-  // isn't broken until someone happens to click Publish.
-  if (!fs.existsSync(PDF_PATH)) {
-    renderResumePdf()
-      .then((buffer) => fs.writeFileSync(PDF_PATH, buffer))
-      .catch((err) => console.error('Initial PDF generation failed:', err));
-  }
+  // isn't broken until someone happens to click Publish. The store queues
+  // this behind any publish that's already running, so the two can't race
+  // on the output file.
+  store.ensurePdf().catch((err) => console.error('Initial PDF generation failed:', err));
 });

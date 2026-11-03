@@ -11,10 +11,11 @@ visibleWeb, visiblePrint, data }`); built-in types are `heading`, `summary`,
 `skills_group`, `experience`, `education`, plus a freeform `custom` type.
 `experience`, `skills_group`, `education`, and `custom` blocks may each nest
 one level deep under a `heading` block via `parentId` — this is an explicit
-allowlist (`NESTABLE_TYPES` in `routes/blocks.js`), not "everything but
+allowlist (`NESTABLE_TYPES` in `resumeStore.js`), not "everything but
 heading/summary", so a new block type added later is top-level-only until
 deliberately added to it (see "Block nesting" below). The header
-(name/title/contact) is a separate singleton setting.
+(name/title/contact) is a separate singleton setting. Besides the editor,
+an MCP client can drive the same operations (see "MCP server" below).
 
 Three surfaces render from the same data/components: `/` (public), `/print`
 (used internally for PDF export), and `/editor` (password + optional TOTP
@@ -42,9 +43,12 @@ node scripts/validate-templates.mjs   # lints templates/**, no npm install neede
 
 There's no linter configured in either package. Both `server/` and `client/`
 have a small `node:test` suite (plain `*.test.js` files next to the code
-they cover, e.g. `blockDeletion.test.js`, `blockDrag.test.js`) for pure
-logic that doesn't need a live DB/HTTP server or a DOM — run them with `npm
-test` from the respective package. CI has three independent workflows,
+they cover, e.g. `blockDeletion.test.js`, `blockDrag.test.js`) for logic
+that doesn't need a live HTTP server or a DOM — run them with `npm test`
+from the respective package. No test imports `server/src/db.js` (importing
+it opens and seeds the real SQLite file); `resumeStore.test.js` instead
+builds the store over a `better-sqlite3` `:memory:` database via
+`ensureSchema()`, and the MCP tool tests inject a fake store. CI has three independent workflows,
 each scoped by path so it only runs when relevant:
 `.github/workflows/templates.yml` runs `scripts/validate-templates.mjs` and
 a client build when `templates/**`, `templateRegistry.js`, or the validator
@@ -66,8 +70,13 @@ fails unless you install Chromium yourself and set `PUPPETEER_EXECUTABLE_PATH`.
 ### Draft vs. published content
 
 The editor's writes (`PUT/POST/DELETE /api/blocks*`, `/api/header`,
-`/api/site`) mutate the live "draft" tables directly and call `touchDraft()`
-(`server/src/db.js`) to bump `draft_meta.lastEditedAt`. The public site and
+`/api/site`) and the MCP tools both go through the shared store
+(`server/src/resumeStore.js`, bound to the real DB in `server/src/store.js`),
+whose mutating methods write the live "draft" tables directly and call
+`touchDraft()` (`server/src/settings.js`, re-exported from `db.js`) to bump
+`draft_meta.lastEditedAt`. The routes in `routes/blocks.js`,
+`routes/publish.js`, and `routes/public.js` are thin wrappers that map a
+store error's `.status` onto the response. The public site and
 PDF (`server/src/routes/public.js`, `server/src/routes/pdf.js`) never read the draft tables —
 they read the `published_resume` setting, a full snapshot written only by
 `POST /api/publish` (`server/src/routes/publish.js`). `GET
@@ -79,8 +88,9 @@ whatever was in the draft tables becomes the initial published snapshot
 (see the migration block at the bottom of `db.js`) so existing installs
 don't go blank.
 
-When adding a new draft-mutating route, call `touchDraft()` from it, or the
-"unpublished changes" indicator will silently go stale.
+When adding a new draft-mutating operation, put it in the store and call
+`touchDraft()` there (not in a route or tool), or the "unpublished changes"
+indicator will silently go stale for one of the two front doors.
 
 ### Route mount order matters
 
@@ -90,7 +100,12 @@ When adding a new draft-mutating route, call `touchDraft()` from it, or the
 specific route registered after the broad `/api` mount would first hit
 `blockRoutes`' unconditional `requireAuth` and get rejected. Keep
 new auth-exempt or differently-gated route groups registered before the
-general `/api` mount, not after.
+general `/api` mount, not after. `/mcp` (`routes/mcp.js`) is mounted first
+of all, even ahead of the app-wide `express.json()` and the cookie session:
+its bearer check runs before its own body parser, so an unauthenticated
+request never gets 2 MB of JSON parsed on its behalf. Because of that the
+router answers every method and sub-path itself (405/404) — anything it let
+through would reach the SPA catch-all.
 
 ### Block nesting
 
@@ -98,18 +113,21 @@ A block's `parentId` (nullable, on the `blocks` table and in the API) points
 at a `heading` block's `id`; only `experience`, `skills_group`, `education`,
 and `custom` blocks can be nested, and only one level deep — a `heading`
 can't itself have a `parentId`, and `summary` can't have one at all. This is
-enforced server-side in `server/src/routes/blocks.js`'s `assertValidParent`,
-called from every route that can set `parentId` (`POST /blocks`, `PUT
-/blocks/:id`, `POST /blocks/reorder`). Deleting a heading promotes its
+enforced server-side in `server/src/resumeStore.js`'s `assertValidParent`,
+called from every store method that can set `parentId` (`createBlock`,
+`updateBlock`, `reorderBlocks` — i.e. `POST /blocks`, `PUT /blocks/:id`,
+`POST /blocks/reorder`, and the matching MCP tools). Deleting a heading promotes its
 children back to top-level rather than deleting them.
 
 `position` is only unique within a sibling group (all blocks sharing a
 `parentId`), not globally — so anything that needs the actual display order
-must call `orderBlocksHierarchically()` (`server/src/db.js`), which walks
+must call `orderBlocksHierarchically()` (`server/src/blockRows.js`,
+re-exported from `db.js`), which walks
 each heading's children (sorted by their own `position`) in right after it.
-Every place that hands a flat `blocks` array to a consumer — `GET /blocks`,
-`POST /blocks/reorder`'s response, and the `published_resume` snapshot built
-in `publish.js` — already runs it, so `client/src/editor/BlockList.jsx` and
+Every place that hands a flat `blocks` array to a consumer — the store's
+`listBlocks()`/`reorderBlocks()` (behind `GET /blocks`, `POST
+/blocks/reorder`, and the MCP tools) and the `published_resume` snapshot
+built by its `publish()` — already runs it, so `client/src/editor/BlockList.jsx` and
 `ResumeView.jsx` can both treat the array they receive as already in the
 right order; neither re-derives nesting from scratch.
 
@@ -218,14 +236,62 @@ only shape that may leave the server. Provider calls go through the official
 included: the SDK `timeout` covers one attempt and an `AbortSignal.timeout`
 caps the total.
 
+### MCP server
+
+`POST /mcp` (`server/src/routes/mcp.js`) exposes the store as MCP tools via
+`@modelcontextprotocol/sdk`'s Streamable HTTP transport in stateless mode:
+a fresh `McpServer` + transport per request, `enableJsonResponse: true` (no
+SSE), `req.body` handed to `handleRequest` because `express.json()` already
+parsed it, and explicit 405s for GET/DELETE (the SDK would otherwise hold a
+GET open as an SSE stream). It's gated by `middleware/mcpAuth.js`: a bearer
+token from `RESUMECMS_MCP_TOKEN`, compared via sha256 + `timingSafeEqual`;
+unset or shorter than 32 chars means the route 404s. There's deliberately
+no rate limiter (see the comment there); instead every failed auth attempt
+and every tool call is logged as a JSON line (`mcp_auth_failed` /
+`mcp_tool` events) so a leaked token leaves a trail.
+
+The tools live in `server/src/mcp/createMcpServer.js`: the definitions
+(names, descriptions, zod schemas) are a module-level `TOOLS` array built
+once, and the factory only registers them on a fresh `McpServer` — the SDK
+binds a server to exactly one transport, so per-request servers are
+unavoidable in stateless mode. It takes the store (and a logger) as
+parameters so `createMcpServer.test.js` can drive it over the SDK's
+`InMemoryTransport` against a fake. Results are JSON text only (no
+`structuredContent`, to avoid doubling payloads); store errors are rethrown
+as `[<status>] <message>` so the SDK's `isError` result keeps the status,
+and errors without a status (SQLite, JSON) are logged and surfaced as a
+generic `[500]` — the REST routes do the same via `routes/sendError.js`.
+Two tools deliberately differ from REST: `update_block` *merges* `data`
+keys (with `replaceData: true` for REST's replace semantics), and
+`move_block` turns a single-block move into the full `reorderBlocks()` list
+via the pure `mcp/moveBlock.js`. The merge itself lives in the store
+(`mergeShallow`, behind `updateBlock`'s `mergeData: true` and
+`setHeader`/`setSite`'s `{ merge: true }`), as does input validation
+(non-object bodies, unknown block types → 400), so the tools stay one-call
+wrappers and both front doors validate alike. `mcp/blockSchemas.js` is hand-written
+documentation of the client-side data shapes (block forms, header, site
+settings) for the `get_block_schemas` tool — update it when a form's fields
+or option values change. SDK imports are confined to `routes/mcp.js`,
+`mcp/createMcpServer.js`, and its test, so a future move to the v2 SDK
+packages stays small.
+
 ### PDF generation
 
 `server/src/pdfRenderer.js` drives headless Chromium (Puppeteer) to render
-the `/print` route and produce a PDF. It's invoked from three places: on
-first boot if no PDF exists yet, on every `POST /api/publish`, and nowhere
-else — `GET /api/public/resume.pdf` only ever serves the already-rendered
-file at `PDF_PATH` (`<RESUMECMS_DATA_DIR>/resume.pdf`), it doesn't render on
-demand.
+the `/print` route and produce a PDF. It's only ever invoked through the
+store: `publish()` (behind `POST /api/publish` and the MCP `publish` tool)
+and `ensurePdf()` (called from `index.js` on boot, renders only if no PDF
+exists yet) — `GET /api/public/resume.pdf` only ever serves the
+already-rendered file at `PDF_PATH` (exported from `pdfRenderer.js`,
+`<RESUMECMS_DATA_DIR>/resume.pdf`), it doesn't render on demand. Both go
+through the store's single PDF queue (`withPdfLock`), so two renders never
+run at once and a slow first-boot render can't overwrite a newer publish;
+keep any new PDF-writing code on that queue. `publish()` writes the
+snapshot first; a failed render leaves the site published and throws a 500
+that says so (the REST route passes that message through, and the editor
+shows it). The `pdf_meta` setting records which snapshot the file on disk
+was rendered from, and `getPublishStatus()` reports `pdfStale: true` until
+a later render catches up — the editor shows "PDF out of date" for it.
 
 ### Auth
 
@@ -234,7 +300,8 @@ Single username/password pair (seeded once from
 then only ever read from/written to the `settings` table — changing the env
 vars later does nothing) plus optional TOTP 2FA, both stored in SQLite, not
 config. `server/src/middleware/requireAuth.js` gates everything under
-`/api` except `/api/auth/*` and `/api/public/*`. Login is rate-limited
+`/api` except `/api/auth/*` and `/api/public/*`; `/mcp` is gated separately
+by its bearer token (see "MCP server"). Login is rate-limited
 (10 failed attempts / IP / 15 min) and optionally captcha-gated
 (`RESUMECMS_CAPTCHA_PROVIDER`); see README.md for the full auth/security
 notes, including manual TOTP recovery via direct SQLite access.

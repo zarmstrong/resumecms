@@ -52,6 +52,11 @@ export function EditorPage({ onLogout }) {
   const [publishedAt, setPublishedAt] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
   const [publishState, setPublishState] = useState('idle'); // idle | publishing | published
+  const [publishError, setPublishError] = useState(null);
+  // True when the PDF on disk wasn't rendered from the current published
+  // snapshot (a publish whose PDF render failed) — see the server's
+  // getPublishStatus().
+  const [pdfStale, setPdfStale] = useState(false);
   const [leftWidth, setLeftWidth] = useState(loadLeftPaneWidth);
   const [resizingPane, setResizingPane] = useState(false);
   const [aiSettings, setAiSettings] = useState(null);
@@ -134,6 +139,7 @@ export function EditorPage({ onLogout }) {
       setBlocks(b.blocks);
       setPublishedAt(status.publishedAt);
       setIsDirty(status.isDirty);
+      setPdfStale(!!status.pdfStale);
       setUsername(credentials.username);
       setLoading(false);
     });
@@ -152,14 +158,27 @@ export function EditorPage({ onLogout }) {
 
   async function handlePublish() {
     setPublishState('publishing');
+    setPublishError(null);
     try {
       const { publishedAt: newPublishedAt } = await api.publish();
       setPublishedAt(newPublishedAt);
       setIsDirty(false);
+      setPdfStale(false);
       setPublishState('published');
       setTimeout(() => setPublishState((s) => (s === 'published' ? 'idle' : s)), 1500);
-    } catch {
+    } catch (err) {
       setPublishState('idle');
+      setPublishError(err.message || 'Publish failed');
+      // The snapshot may have gone live even though the PDF render failed,
+      // so don't guess — ask the server what state it's actually in.
+      try {
+        const status = await api.publishStatus();
+        setPublishedAt(status.publishedAt);
+        setIsDirty(status.isDirty);
+        setPdfStale(!!status.pdfStale);
+      } catch {
+        // leave the indicator as it was
+      }
     }
   }
 
@@ -322,6 +341,13 @@ export function EditorPage({ onLogout }) {
           {saveState === 'saving' && 'Saving…'}
           {saveState === 'saved' && 'Saved'}
           {saveState === 'idle' && (isDirty ? 'Unpublished changes' : `Published ${timeAgo(publishedAt) || 'never'}`)}
+          {publishError && <span className="ed-topbar-warning"> · {publishError}</span>}
+          {!publishError && pdfStale && (
+            <span className="ed-topbar-warning" title="The last publish updated the site but its PDF render failed. Publish again to re-render it.">
+              {' '}
+              · PDF out of date
+            </span>
+          )}
         </div>
         <div className="ed-topbar-actions">
           {isDirty && (

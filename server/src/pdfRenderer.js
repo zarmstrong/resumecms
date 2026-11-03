@@ -1,4 +1,10 @@
+import path from 'node:path';
 import puppeteer from 'puppeteer';
+
+// Where the published PDF lives on disk. Written by the store's publish()
+// (and the first-boot render in index.js), served as-is by routes/pdf.js.
+const DATA_DIR = process.env.RESUMECMS_DATA_DIR || '/data';
+export const PDF_PATH = path.join(DATA_DIR, 'resume.pdf');
 
 let browserPromise = null;
 function getBrowser() {
