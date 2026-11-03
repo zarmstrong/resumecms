@@ -18,6 +18,10 @@ test('path keys round-trip through dnd-kit string ids', () => {
   assert.deepEqual(parsePath('1.0'), [1, 0]);
   assert.deepEqual(parsePath(pathKey([2])), [2]);
   assert.deepEqual(parsePath(3), [3]);
+  assert.deepEqual(parsePath(0), [0]);
+  assert.ok(Object.is(parsePath(-0)[0], 0));
+  assert.deepEqual(parsePath('0.0'), [0, 0]);
+  assert.deepEqual(parsePath(String(Number.MAX_SAFE_INTEGER)), [Number.MAX_SAFE_INTEGER]);
 });
 
 test('bulletAt walks a path and returns null for anything missing', () => {
@@ -32,7 +36,9 @@ test('bulletAt walks a path and returns null for anything missing', () => {
 });
 
 test('parsePath rejects ids that are not index paths', () => {
-  for (const bad of ['', 'a', '1.', '.0', '1..0', '-1', '1.5.x', 'DndDescribedBy-0', 1.5, -1, NaN, Infinity, null, undefined, {}]) {
+  const bads = ['', 'a', '1.', '.0', '1..0', '-1', '1.5.x', 'DndDescribedBy-0', '99999999999999999999', '1e3',
+    1.5, -1, NaN, Infinity, 1e21, Number.MAX_SAFE_INTEGER + 1, null, undefined, {}];
+  for (const bad of bads) {
     assert.equal(parsePath(bad), null, JSON.stringify(bad));
   }
 });

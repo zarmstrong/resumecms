@@ -15,10 +15,17 @@ export function pathKey(path) {
 // foreign dnd-kit id can't turn into [NaN] and silently no-op downstream.
 export function parsePath(key) {
   // A number is a single index; 1.5 must not be read as the path '1.5'.
-  if (typeof key === 'number') return Number.isInteger(key) && key >= 0 ? [key] : null;
+  // `+ 0` turns a -0 into 0 so the index never carries a sign.
+  if (typeof key === 'number') return isIndex(key) ? [key + 0] : null;
   if (typeof key !== 'string') return null;
   const path = key.split('.').map((part) => (/^\d+$/.test(part) ? Number(part) : NaN));
-  return path.every(Number.isInteger) ? path : null;
+  return path.every(isIndex) ? path : null;
+}
+
+// Only an exactly representable integer can be an array index that
+// round-trips through pathKey (1e21 would stringify as '1e+21').
+function isIndex(n) {
+  return Number.isSafeInteger(n) && n >= 0;
 }
 
 function childrenOf(bullet) {
