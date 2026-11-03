@@ -142,6 +142,31 @@ to top level. A highlighted heading or insertion line labels the projected
 destination. Rows remain stationary during dragging, and moving a heading
 moves its children too. Only the dragged block's `parentId` changes.
 
+Bullets inside an experience block have their own, simpler drag-and-drop
+inside the form (`client/src/editor/blockForms/ExperienceForm.jsx`, a nested
+`DndContext`), with the pure logic in `client/src/editor/bulletDrag.js`.
+Bullets have no ids, so they're addressed by index path (`[1, 0]`, key
+`'1.0'`). The rules:
+
+- A bullet only moves among its own siblings; sub-bullets travel with their
+  parent. Promote/demote by drag is deliberately not supported.
+- The hovered row is resolved to the sibling it belongs to (`dropTargetPath`:
+  a top-level bullet over someone's sub-bullet targets that sub-bullet's
+  parent), and before/after is judged against that sibling's whole group (row
+  plus sub-bullets), which is also where the indicator is drawn.
+- Only rows that stand for a legal sibling are candidates and the nearest one
+  wins, so gaps between rows and the space just past the last sibling resolve
+  to a position; a pointer outside the sibling list (for a sub-bullet, its
+  parent's group) cancels instead of snapping.
+- A drop is applied as `fromPath`/`toIndex` only if the bullets still match
+  the drag's starting snapshot; an edit that lands mid-drag cancels the drop
+  rather than moving whatever now sits at those indexes.
+- The handle's Up/Down arrow keys are the keyboard fallback, announced through
+  the form's live region.
+
+The new order is just `data.bullets`, saved through the normal `onChange`
+path.
+
 Layout templates that want to react to nesting (e.g. put a heading's whole
 group in a side column) use the shared `groupBlocksIntoColumns()` helper
 (`client/src/resume/blockColumns.js`), which groups a heading with whatever

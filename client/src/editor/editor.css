@@ -346,8 +346,16 @@
   height: auto;
 }
 
-.ed-bullet-row > .ed-icon-btn {
+.ed-bullet-row > .ed-icon-btn,
+.ed-bullet-row > .ed-drag-handle {
   align-self: flex-start;
+}
+
+/* Bullet rows stay stationary while one is dragged (see ExperienceForm).
+   The wrapper (row plus sub-bullets) anchors the shared .ed-drop-indicator,
+   so an "after" line sits below the whole group. */
+.ed-bullet {
+  position: relative;
 }
 
 .ed-link-item {
@@ -841,7 +849,8 @@
   font-size: 12px;
 }
 .ed-block-row { position: relative; }
-.ed-block-row-dragging { opacity: 0.35; }
+.ed-block-row-dragging,
+.ed-bullet-dragging { opacity: 0.35; }
 .ed-block-nest-target { background: var(--signal-dim); }
 .ed-block-nest-active { outline: 2px solid var(--signal); outline-offset: -2px; }
 .ed-drop-indicator {
