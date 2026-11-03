@@ -9,7 +9,11 @@ exact same components.
 ## What you get
 
 - **`/`** — your public resume page.
-- **`/editor`** — password-protected drag-and-drop editor.
+- **`/editor`** — password-protected drag-and-drop editor. Blocks drag to
+  reorder or nest; the bullet points inside an experience block drag too (a
+  bullet moves among its siblings, carrying its sub-bullets — dragging can't
+  turn a bullet into a sub-bullet or back), or move with the Up/Down arrow
+  keys on their drag handle.
 - **`/print`** — the print-styled version of the resume (used internally by
   the PDF export; you generally won't visit this directly).
 - **Download PDF** — server-generates a real PDF on demand via headless
