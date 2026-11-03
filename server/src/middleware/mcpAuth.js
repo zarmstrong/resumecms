@@ -4,8 +4,8 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 // RESUMECMS_MCP_TOKEN; when it's unset the endpoint answers 404 so an
 // unconfigured install doesn't advertise it. There's deliberately no rate
 // limiter here: one keyed on the client IP would, behind a reverse proxy
-// without `trust proxy`, let any stranger lock the real agent out for 15
-// minutes — so instead the token must be long enough that guessing is
+// without RESUMECMS_TRUST_PROXY set, let any stranger lock the real agent
+// out for 15 minutes — so instead the token must be long enough that guessing is
 // hopeless, and a short one is refused outright (treated as unset). Failed
 // attempts are logged instead, and every tool call is logged by
 // mcp/createMcpServer.js, so misuse of a leaked token leaves a trail.
@@ -44,10 +44,10 @@ export function createMcpAuth(rawToken, { log = console } = {}) {
     // The token is the only thing standing between the network and full
     // editor access, so every rejected attempt is worth a log line: a burst
     // of them is how a leaked or guessed token would first show up. `ip` is
-    // the peer address, which behind a reverse proxy is the proxy's (Express
-    // only unwraps it when `trust proxy` is set), so the X-Forwarded-For
-    // header is recorded as received, too — unverified, but it's what lets
-    // an attack behind nginx/Traefik be attributed or filtered.
+    // req.ip: the real client once RESUMECMS_TRUST_PROXY names the proxy,
+    // otherwise the proxy's own address — so the X-Forwarded-For header is
+    // recorded as received, too, unverified, as a fallback for attributing
+    // an attack on an install that hasn't set it.
     log.warn(
       JSON.stringify({
         time: new Date().toISOString(),
