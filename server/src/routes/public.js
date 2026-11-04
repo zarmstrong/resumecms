@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { store } from '../store.js';
-import { REVALIDATE } from '../cacheHeaders.js';
+import { REVALIDATE, RENDER } from '../cacheHeaders.js';
+import { RENDERED_RESUME_HEADER, renderTarget } from '../renderAccess.js';
 import { handle } from './sendError.js';
 
 const router = Router();
@@ -15,8 +16,14 @@ const router = Router();
 router.get('/resume', handle((req, res) => {
   // Always revalidate (see cacheHeaders.js), whatever happens below; the
   // ETag res.json adds still turns an unchanged snapshot into a 304.
-  res.set('Cache-Control', REVALIDATE);
-  res.json(store.getPublishedResume(req.query.mode));
+  // The PDF renderer's own page names the resume it's rendering (see
+  // renderAccess.js); that one may be private, so it's never cacheable.
+  const renderingId = renderTarget(req.headers.cookie);
+  res.set('Cache-Control', renderingId ? RENDER : REVALIDATE);
+  const resume = renderingId ? store.forResume(renderingId) : store;
+  const published = resume.getPublishedResume(req.query.mode);
+  if (renderingId) res.set(RENDERED_RESUME_HEADER, renderingId);
+  res.json(published);
 }));
 
 export default router;

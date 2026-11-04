@@ -66,7 +66,16 @@ router.put('/settings', settingsLimiter, (req, res) => {
 // (optional, see rewritableFields.js) narrows the rewrite to an experience
 // block's description, one of its bullets, or one custom item; rewriteBlock
 // rejects one that doesn't fit the block with a 400.
-router.post('/rewrite', rewriteLimiter, async (req, res) => {
+//
+// `storeFor(req)` picks the resume the block is looked up in, as in
+// routes/blocks.js: the default one at POST /api/ai/rewrite, the :resumeId
+// one at POST /api/resumes/:resumeId/ai/rewrite (routes/resumes.js). Both
+// share the one rate limiter, so the credit cap is per install.
+export function rewriteHandlers(storeFor) {
+  return [rewriteLimiter, (req, res) => rewrite(req, res, storeFor)];
+}
+
+async function rewrite(req, res, storeFor) {
   const { blockId, data, tense, target } = req.body || {};
   const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
   if (typeof blockId !== 'string') return res.status(400).json({ error: 'blockId is required' });
@@ -78,7 +87,7 @@ router.post('/rewrite', rewriteLimiter, async (req, res) => {
   // blocks query (a raw SELECT here would find another resume's block).
   let block;
   try {
-    block = store.getBlock(blockId);
+    block = storeFor(req).getBlock(blockId);
   } catch (err) {
     return sendError(res, err);
   }
@@ -114,6 +123,8 @@ router.post('/rewrite', rewriteLimiter, async (req, res) => {
     console.error('AI rewrite failed:', err);
     res.status(500).json({ error: 'AI rewrite failed unexpectedly.' });
   }
-});
+}
+
+router.post('/rewrite', ...rewriteHandlers(() => store));
 
 export default router;

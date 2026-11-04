@@ -1,0 +1,245 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Database from 'better-sqlite3';
+import { ensureSchema } from './schema.js';
+import { migrateToResumes } from './resumeMigration.js';
+import { pdfPathFor } from './pdfPaths.js';
+import { createResumeStore } from './resumeStore.js';
+
+// Creating, cloning, updating and deleting resumes (issue #53, phase 2a),
+// over a ':memory:' database like resumeStore.test.js.
+function makeStore({ renderPdf } = {}) {
+  const db = new Database(':memory:');
+  ensureSchema(db);
+  const defaultId = migrateToResumes(db);
+  const pdfDir = fs.mkdtempSync(path.join(os.tmpdir(), 'resumecms-resumes-'));
+  const rendered = [];
+  const store = createResumeStore({
+    db,
+    pdfDir,
+    renderPdf:
+      renderPdf ||
+      (async ({ resumeId }) => {
+        rendered.push(resumeId);
+        return Buffer.from('%PDF-fake');
+      }),
+  });
+  store.setHeader({ name: 'Zed', email: 'zed@example.com' });
+  store.setSite({ title: 'Zed', layout: 'sidebar' });
+  return { store, db, defaultId, pdfDir, rendered };
+}
+
+const statusOf = async (fn) => {
+  try {
+    await fn();
+  } catch (err) {
+    return err.status;
+  }
+  return null;
+};
+
+function addContent(scoped) {
+  const h = scoped.createBlock({ type: 'heading', data: { text: 'Experience' } });
+  const e = scoped.createBlock({ type: 'experience', parentId: h.id, data: { jobTitle: 'Dev', company: 'Acme' } });
+  const s = scoped.createBlock({ type: 'summary', data: { text: 'Hi' } });
+  return { h, e, s };
+}
+
+test('the migrated install lists one resume: the default, public', () => {
+  const { store, defaultId } = makeStore();
+  assert.deepEqual(
+    store.listResumes().map((r) => [r.id, r.slug, r.isDefault, r.isPublic, r.publishedAt]),
+    [[defaultId, 'main', true, true, null]]
+  );
+  assert.equal(store.getResume(defaultId).name, 'Main resume');
+});
+
+test('a blank resume starts private, unpublished, with the default header and look and no blocks', () => {
+  const { store, defaultId } = makeStore();
+  addContent(store);
+  const r = store.createResume({ name: 'Sales' });
+  assert.equal(r.slug, 'sales');
+  assert.equal(r.isDefault, false);
+  assert.equal(r.isPublic, false);
+  assert.equal(r.publishedAt, null);
+  assert.equal(r.isDirty, true);
+  const scoped = store.forResume(r.id);
+  assert.deepEqual(scoped.getHeader(), { name: 'Zed', email: 'zed@example.com' });
+  assert.deepEqual(scoped.getSite(), { title: 'Zed', layout: 'sidebar' });
+  assert.deepEqual(scoped.listBlocks(), []);
+  assert.equal(store.defaultResumeId(), defaultId);
+});
+
+test('slugs are derived from the name and made unique; an explicit one must be free and valid', async () => {
+  const { store } = makeStore();
+  assert.equal(store.createResume({ name: 'Sales — EMEA' }).slug, 'sales-emea');
+  assert.equal(store.createResume({ name: 'Sales — EMEA' }).slug, 'sales-emea-2');
+  assert.equal(store.createResume({ name: 'Anything', slug: 'sec' }).slug, 'sec');
+  assert.equal(await statusOf(() => store.createResume({ name: 'Again', slug: 'sec' })), 409);
+  assert.equal(await statusOf(() => store.createResume({ name: 'Again', slug: 'main' })), 409);
+  assert.equal(await statusOf(() => store.createResume({ name: 'Bad', slug: 'Not OK' })), 400);
+  assert.equal(await statusOf(() => store.createResume({ slug: 'no-name' })), 400);
+  assert.equal(await statusOf(() => store.createResume({ name: 'X', copyFrom: 'nope' })), 400);
+  assert.equal(await statusOf(() => store.createResume('Sales')), 400);
+  assert.equal(store.listResumes().length, 4);
+});
+
+test('a clone copies the draft with fresh block ids and nesting intact, and stays independent', () => {
+  const { store, defaultId } = makeStore();
+  const { h, e, s } = addContent(store);
+  store.updateBlock(s.id, { visibleWeb: false });
+  const clone = store.createResume({ name: 'Security', copyFrom: defaultId });
+  const scoped = store.forResume(clone.id);
+
+  const source = store.listBlocks();
+  const copy = scoped.listBlocks();
+  assert.deepEqual(
+    copy.map((b) => [b.type, b.data, b.visibleWeb, b.visiblePrint]),
+    source.map((b) => [b.type, b.data, b.visibleWeb, b.visiblePrint])
+  );
+  assert.equal(copy.filter((b) => [h.id, e.id, s.id].includes(b.id)).length, 0, 'no block id is shared');
+  const [copyHeading, copyExperience] = copy;
+  assert.equal(copyExperience.parentId, copyHeading.id);
+
+  // Editing or deleting through the clone leaves the source alone.
+  scoped.updateBlock(copyExperience.id, { data: { jobTitle: 'Lead', company: 'Acme' } });
+  scoped.deleteBlock(copyHeading.id);
+  assert.deepEqual(store.getBlock(e.id).data, { jobTitle: 'Dev', company: 'Acme' });
+  assert.equal(store.getBlock(e.id).parentId, h.id);
+  assert.deepEqual(store.listBlocks().map((b) => b.id), source.map((b) => b.id));
+});
+
+test('a clone of a non-default resume copies that one, never its published snapshot', async () => {
+  const { store } = makeStore();
+  const a = store.createResume({ name: 'A' });
+  store.forResume(a.id).setHeader({ name: 'Zed (A)' });
+  store.forResume(a.id).createBlock({ type: 'summary', data: { text: 'from A' } });
+  await store.forResume(a.id).publish();
+  const b = store.createResume({ name: 'B', copyFrom: a.id });
+  assert.deepEqual(store.forResume(b.id).getHeader(), { name: 'Zed (A)' });
+  assert.deepEqual(store.forResume(b.id).listBlocks().map((x) => x.data.text), ['from A']);
+  assert.equal(store.getResume(b.id).publishedAt, null);
+  assert.equal(store.forResume(b.id).getPdfFile(), null);
+});
+
+test('updateResume renames, changes the slug and toggles public, validating each', async () => {
+  const { store } = makeStore();
+  const r = store.createResume({ name: 'Sales' });
+  store.createResume({ name: 'Ops' });
+  const updated = store.updateResume(r.id, { name: ' Sales 2026 ', slug: 'sales-2026', isPublic: true });
+  assert.deepEqual([updated.name, updated.slug, updated.isPublic], ['Sales 2026', 'sales-2026', true]);
+  assert.equal(store.updateResume(r.id, { slug: 'sales-2026' }).slug, 'sales-2026', 'keeping its own slug is fine');
+  assert.equal(store.updateResume(r.id, { isPublic: false }).isPublic, false);
+
+  assert.equal(await statusOf(() => store.updateResume(r.id, { slug: 'ops' })), 409);
+  assert.equal(await statusOf(() => store.updateResume(r.id, { slug: 'Ops!' })), 400);
+  assert.equal(await statusOf(() => store.updateResume(r.id, { name: '' })), 400);
+  assert.equal(await statusOf(() => store.updateResume(r.id, { isPublic: 'yes' })), 400);
+  assert.equal(await statusOf(() => store.updateResume(r.id, { id: 'other' })), 400);
+  assert.equal(await statusOf(() => store.updateResume(r.id, null)), null, 'an empty patch changes nothing');
+  assert.equal(await statusOf(() => store.updateResume('nope', { name: 'x' })), 404);
+  assert.equal(store.getResume(r.id).slug, 'sales-2026');
+});
+
+test('only a published resume can become the default; it becomes public and the old one steps down', async () => {
+  const { store, defaultId } = makeStore();
+  const r = store.createResume({ name: 'Sales' });
+  store.forResume(r.id).setHeader({ name: 'Zed, Sales' });
+  assert.equal(await statusOf(() => store.updateResume(r.id, { isDefault: true })), 409);
+  assert.equal(store.defaultResumeId(), defaultId);
+
+  await store.forResume(r.id).publish();
+  const now = store.updateResume(r.id, { isDefault: true });
+  assert.deepEqual([now.isDefault, now.isPublic], [true, true]);
+  assert.equal(store.defaultResumeId(), r.id);
+  assert.equal(store.getResume(defaultId).isDefault, false);
+  assert.equal(store.getResume(defaultId).isPublic, true, 'the old default keeps its visibility');
+  // The default-bound operations (unprefixed routes, MCP) follow it.
+  assert.deepEqual(store.getHeader(), { name: 'Zed, Sales' });
+  assert.equal(store.getPublishedResume().header.name, 'Zed, Sales');
+
+  assert.equal(await statusOf(() => store.updateResume(r.id, { isDefault: false })), 409);
+  assert.equal(await statusOf(() => store.updateResume(r.id, { isPublic: false })), 409);
+  assert.equal(await statusOf(() => store.updateResume(defaultId, { isDefault: true, isPublic: false })), 409);
+  assert.equal(store.updateResume(r.id, { isDefault: true }).isDefault, true, 'already the default: a no-op');
+});
+
+test('publishing a non-default resume renders its own PDF', async () => {
+  const { store, rendered, pdfDir } = makeStore();
+  const r = store.createResume({ name: 'Sales' });
+  await store.forResume(r.id).publish();
+  assert.deepEqual(rendered, [r.id]);
+  assert.equal(store.forResume(r.id).getPdfFile().path, pdfPathFor(pdfDir, r.id));
+  assert.equal(store.getPdfFile(), null, 'the default still has none');
+});
+
+test('deleting a resume removes its blocks, settings and PDF; the default cannot be deleted', async () => {
+  const { store, db, defaultId, pdfDir } = makeStore();
+  const r = store.createResume({ name: 'Sales', copyFrom: defaultId });
+  addContent(store.forResume(r.id));
+  await store.forResume(r.id).publish();
+  assert.ok(fs.existsSync(pdfPathFor(pdfDir, r.id)));
+
+  assert.deepEqual(await store.deleteResume(r.id), { deleted: r.id });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM blocks WHERE resume_id = ?').get(r.id).n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM resume_settings WHERE resume_id = ?').get(r.id).n, 0);
+  assert.equal(fs.existsSync(pdfPathFor(pdfDir, r.id)), false);
+  assert.equal(await statusOf(() => store.forResume(r.id)), 404);
+  assert.equal(await statusOf(() => store.deleteResume(r.id)), 404);
+  assert.deepEqual(store.listResumes().map((x) => x.id), [defaultId]);
+
+  assert.equal(await statusOf(() => store.deleteResume(defaultId)), 409);
+  assert.equal(store.defaultResumeId(), defaultId);
+});
+
+test("deleting a resume doesn't wait for another resume's render", async () => {
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  const { store, pdfDir } = makeStore({
+    renderPdf: async () => {
+      await gate;
+      return Buffer.from('%PDF-slow');
+    },
+  });
+  const busy = store.createResume({ name: 'Busy' });
+  const doomed = store.createResume({ name: 'Doomed' });
+  fs.writeFileSync(pdfPathFor(pdfDir, doomed.id), '%PDF-old');
+  const publishing = store.forResume(busy.id).publish();
+  // Returns at once, PDF already gone, while the other render still holds the queue.
+  assert.deepEqual(store.deleteResume(doomed.id), { deleted: doomed.id });
+  assert.equal(fs.existsSync(pdfPathFor(pdfDir, doomed.id)), false);
+  release();
+  await publishing;
+  assert.ok(store.forResume(busy.id).getPdfFile());
+});
+
+for (const when of ['queued', 'running']) {
+  test(`a render ${when} when its resume is deleted writes nothing`, async () => {
+    let release;
+    let started;
+    const gate = new Promise((resolve) => (release = resolve));
+    const running = new Promise((resolve) => (started = resolve));
+    const rendered = [];
+    const { store, db, pdfDir } = makeStore({
+      renderPdf: async ({ resumeId }) => {
+        rendered.push(resumeId);
+        started();
+        await gate;
+        return Buffer.from('%PDF-late');
+      },
+    });
+    const r = store.createResume({ name: 'Sales' });
+    const publishing = store.forResume(r.id).publish();
+    if (when === 'running') await running;
+    const deleting = store.deleteResume(r.id);
+    release();
+    assert.equal(await statusOf(() => publishing), 404);
+    await deleting;
+    assert.deepEqual(rendered, when === 'running' ? [r.id] : []);
+    assert.equal(fs.existsSync(pdfPathFor(pdfDir, r.id)), false);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM resume_settings WHERE resume_id = ?').get(r.id).n, 0);
+  });
+}

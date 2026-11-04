@@ -19,6 +19,10 @@ export const REVALIDATE = 'no-cache';
 // storing it at all, `no-cache` makes the browser revalidate its copy.
 export const PDF = 'private, no-cache';
 
+// /api/public/resume as served to the PDF renderer (renderAccess.js): that
+// can be a private resume, so nothing may keep a copy of it.
+export const RENDER = 'private, no-store';
+
 // Vite's content-hashed bundles under /assets/: the name changes whenever
 // the content does, so these can be cached indefinitely.
 export const IMMUTABLE = 'public, max-age=31536000, immutable';

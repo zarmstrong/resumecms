@@ -4,6 +4,7 @@ import { httpError } from './httpError.js';
 import { assertBlockData, isValidBlockData } from './blockData.js';
 import { createResumeSettings } from './settings.js';
 import { pdfPathFor } from './pdfPaths.js';
+import { cloneBlockRows, slugify, uniqueSlug, validateName, validateSlug } from './resumeFields.js';
 import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
 import { promotedBlockPositions } from './blockDeletion.js';
 import { findSplitSectionId } from './blockReorder.js';
@@ -154,6 +155,173 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     return scopedStore(resumeId);
   }
 
+  function resumeRow(resumeId) {
+    if (typeof resumeId !== 'string') return undefined;
+    return db.prepare('SELECT * FROM resumes WHERE id = ?').get(resumeId);
+  }
+
+  function existingResumeRow(resumeId) {
+    const row = resumeRow(resumeId);
+    if (!row) throw httpError(404, 'Resume not found');
+    return row;
+  }
+
+  function slugTaken(slug, exceptId = null) {
+    return !!db.prepare('SELECT 1 FROM resumes WHERE slug = ? AND id IS NOT ?').get(slug, exceptId);
+  }
+
+  // The API shape of a resume: its own fields plus where its content stands
+  // (the same publish status the editor polls for the default one).
+  function toResume(row) {
+    const { publishedAt, isDirty, pdfStale } = scopedStore(row.id).getPublishStatus();
+    return {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      isDefault: row.is_default === 1,
+      isPublic: row.is_public === 1,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      publishedAt,
+      isDirty,
+      pdfStale,
+    };
+  }
+
+  function listResumes() {
+    return db.prepare('SELECT * FROM resumes ORDER BY is_default DESC, created_at ASC, name ASC').all().map(toResume);
+  }
+
+  function getResume(resumeId) {
+    return toResume(existingResumeRow(resumeId));
+  }
+
+  // A new resume, private and never published. With `copyFrom` (a resume
+  // id) it starts as a copy of that resume's draft: header, site settings
+  // and every block, with fresh block ids. Without it, it starts with the
+  // default resume's header and site settings (same person, same look) and
+  // no blocks. The published snapshot and PDF are never copied: the new
+  // resume has unpublished changes from the start. `slug` defaults to one
+  // derived from the name, made unique; an explicit one must be free.
+  function createResume(input = {}) {
+    const { name, slug, copyFrom } = assertObject(input ?? {}, 'resume');
+    const cleanName = validateName(name);
+    if (copyFrom != null && !resumeRow(copyFrom)) {
+      throw httpError(400, 'copyFrom does not reference an existing resume');
+    }
+    let cleanSlug;
+    if (slug == null) {
+      cleanSlug = uniqueSlug(slugify(cleanName), (s) => slugTaken(s));
+    } else {
+      cleanSlug = validateSlug(slug);
+      if (slugTaken(cleanSlug)) throw httpError(409, `The link name "${cleanSlug}" is already in use`);
+    }
+
+    const source = scopedStore(copyFrom ?? defaultResumeId());
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    db.transaction(() => {
+      db.prepare(
+        `INSERT INTO resumes (id, slug, name, is_default, is_public, created_at, updated_at)
+         VALUES (?, ?, ?, 0, 0, ?, ?)`
+      ).run(id, cleanSlug, cleanName, now, now);
+      const target = createResumeSettings(db, id);
+      const header = source.getHeader();
+      const site = source.getSite();
+      if (header) target.setSetting('header', header);
+      if (site) target.setSetting('site', site);
+      if (copyFrom != null) {
+        const rows = db.prepare('SELECT * FROM blocks WHERE resume_id = ?').all(copyFrom);
+        const insert = db.prepare(
+          `INSERT INTO blocks (id, resume_id, type, position, parent_id, visible_web, visible_print, data, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        for (const r of cloneBlockRows(rows, id, now)) {
+          insert.run(r.id, r.resume_id, r.type, r.position, r.parent_id, r.visible_web, r.visible_print, r.data, r.created_at, r.updated_at);
+        }
+      }
+      target.touchDraft();
+    })();
+    return getResume(id);
+  }
+
+  const RESUME_FIELDS = ['name', 'slug', 'isPublic', 'isDefault'];
+
+  // Renames, changes the slug, makes public/private, or makes this the
+  // default (moving the flag off the old one in the same transaction). The
+  // default is what `/` serves, so it's always public, and only a resume
+  // that has been published can take over: the public site reads the
+  // default's published snapshot, and an unpublished one would blank it.
+  // There's no un-defaulting; another resume takes the flag instead.
+  function updateResume(resumeId, patch = {}) {
+    const row = existingResumeRow(resumeId);
+    patch = assertObject(patch ?? {}, 'resume');
+    const unknown = Object.keys(patch).find((key) => !RESUME_FIELDS.includes(key));
+    if (unknown) throw httpError(400, `Unknown resume field: ${unknown}`);
+
+    const next = { name: row.name, slug: row.slug, isPublic: row.is_public === 1 };
+    if ('name' in patch) next.name = validateName(patch.name);
+    if ('slug' in patch) {
+      next.slug = validateSlug(patch.slug);
+      if (slugTaken(next.slug, resumeId)) throw httpError(409, `The link name "${next.slug}" is already in use`);
+    }
+    if ('isPublic' in patch) {
+      if (typeof patch.isPublic !== 'boolean') throw httpError(400, 'isPublic must be a boolean');
+      next.isPublic = patch.isPublic;
+    }
+    let makeDefault = false;
+    if ('isDefault' in patch) {
+      if (typeof patch.isDefault !== 'boolean') throw httpError(400, 'isDefault must be a boolean');
+      if (!patch.isDefault && row.is_default === 1) {
+        throw httpError(409, 'Make another resume the default instead');
+      }
+      makeDefault = patch.isDefault && row.is_default !== 1;
+    }
+    if (row.is_default === 1 || makeDefault) {
+      if (patch.isPublic === false) throw httpError(409, 'The default resume is always public');
+      next.isPublic = true;
+    }
+    if (makeDefault && !scopedStore(resumeId).getPublishStatus().publishedAt) {
+      throw httpError(409, 'Publish this resume before making it the default: the public site shows its published version');
+    }
+
+    db.transaction(() => {
+      if (makeDefault) db.prepare('UPDATE resumes SET is_default = 0 WHERE is_default = 1').run();
+      db.prepare(
+        `UPDATE resumes SET name = ?, slug = ?, is_public = ?, is_default = CASE WHEN ? THEN 1 ELSE is_default END,
+           updated_at = ? WHERE id = ?`
+      ).run(next.name, next.slug, next.isPublic ? 1 : 0, makeDefault ? 1 : 0, new Date().toISOString(), resumeId);
+    })();
+    return getResume(resumeId);
+  }
+
+  // Removes a resume with its blocks, settings and PDF. The default can't
+  // go (make another one the default first), so there's always one. The
+  // PDF goes straight away, not on the PDF queue (which could be busy with
+  // another resume's render for a while): a render of this one that's still
+  // queued or running checks the resume exists before writing anything (see
+  // stillExists), so none can put the file back afterwards. Failing to
+  // remove the file only leaves an unreachable file, so it's logged rather
+  // than failing a delete that has already happened.
+  function deleteResume(resumeId) {
+    const row = existingResumeRow(resumeId);
+    if (row.is_default === 1) {
+      throw httpError(409, "The default resume can't be deleted: make another resume the default first");
+    }
+    db.transaction(() => {
+      db.prepare('DELETE FROM blocks WHERE resume_id = ?').run(resumeId);
+      db.prepare('DELETE FROM resume_settings WHERE resume_id = ?').run(resumeId);
+      db.prepare('DELETE FROM resumes WHERE id = ?').run(resumeId);
+    })();
+    scopedStores.delete(resumeId);
+    try {
+      fs.rmSync(pdfPathFor(pdfDir, resumeId), { force: true });
+    } catch (err) {
+      console.error(`Could not remove the PDF of deleted resume ${resumeId}:`, err);
+    }
+    return { deleted: resumeId };
+  }
+
   // A resume's operations keep no state of their own (only its id and the
   // store's shared handles; the rest lives in SQLite and the PDF queue
   // above), so one instance per id is reused rather
@@ -194,13 +362,30 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     RESUME_METHODS.map((name) => [name, (...args) => scopedStore(defaultResumeId())[name](...args)])
   );
 
-  return { ...delegates, forResume, defaultResumeId, ensurePdfs };
+  return {
+    ...delegates,
+    forResume,
+    defaultResumeId,
+    ensurePdfs,
+    listResumes,
+    getResume,
+    createResume,
+    updateResume,
+    deleteResume,
+  };
 
   // ---- one resume ----------------------------------------------------------
 
   function createScopedStore(resumeId) {
     const { getSetting, setSetting, touchDraft } = createResumeSettings(db, resumeId);
     const pdfPath = pdfPathFor(pdfDir, resumeId);
+
+    // A render waits on the shared PDF queue, so its resume can be deleted
+    // before or while it runs (deleteResume). Checked on both sides of the
+    // render so a gone resume gets neither a PDF file nor a pdf_meta row.
+    function stillExists() {
+      return !!db.prepare('SELECT 1 FROM resumes WHERE id = ?').get(resumeId);
+    }
 
     function lookupParentRow(parentId) {
       return db.prepare('SELECT * FROM blocks WHERE id = ? AND resume_id = ?').get(parentId, resumeId);
@@ -598,13 +783,17 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
       // records from here on is a new, unpublished edit (see isDirty).
       setSetting('draft_meta', { lastEditedAt: null });
       return withPdfLock(async () => {
+        if (!stillExists()) throw httpError(404, 'Resume not found');
+        let pdf;
         try {
-          writePdf(await renderPdfBounded(resumeId));
+          pdf = await renderPdfBounded(resumeId);
         } catch (cause) {
           const err = httpError(500, 'Published, but the PDF render failed — the site is updated, the PDF is not');
           err.cause = cause;
           throw err;
         }
+        if (!stillExists()) throw httpError(404, 'Resume not found');
+        writePdf(pdf);
         // The render read whatever snapshot was current while it ran, which
         // is this one or a newer one; a newer publish is queued behind us and
         // will record itself when its own render lands.
@@ -620,8 +809,10 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     // so it can never overwrite a fresher render.
     function ensurePdf() {
       return withPdfLock(async () => {
-        if (fs.existsSync(pdfPath)) return { rendered: false };
-        writePdf(await renderPdfBounded(resumeId));
+        if (!stillExists() || fs.existsSync(pdfPath)) return { rendered: false };
+        const pdf = await renderPdfBounded(resumeId);
+        if (!stillExists()) return { rendered: false };
+        writePdf(pdf);
         setSetting('pdf_meta', { renderedFor: getSetting('published_resume')?.publishedAt ?? null });
         return { rendered: true };
       });

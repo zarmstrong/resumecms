@@ -116,6 +116,27 @@ edited, deleted, reordered or nested under through the wrong one. Any new
 carries every operation bound to whichever resume is the default at call
 time — that's what the unprefixed REST routes and MCP tools use.
 
+The store also manages the resumes themselves (`listResumes`,
+`createResume`, `updateResume`, `deleteResume`; pure validation and the
+block-copying in `resumeFields.js`). A new resume is private and
+unpublished; `copyFrom` clones another's draft with fresh block ids and
+remapped `parentId`s, and never its published snapshot or PDF. Only a
+published resume can become the default (the public site reads the
+default's snapshot), the default is always public, and it can't be
+deleted. `deleteResume` removes the PDF straight away rather than waiting
+on the PDF queue: a render of a resume deleted while it was queued or
+running writes neither a file nor a `pdf_meta` row (`stillExists()`,
+checked on both sides of the render in `publish`/`ensurePdf`).
+`routes/resumes.js` serves `/api/resumes` and mounts the same block and
+publish handlers under `/api/resumes/:resumeId/`: `routes/blocks.js` and
+`routes/publish.js` export factories taking `storeFor(req)`, and their
+default export is the unprefixed default-resume instance; `routes/ai.js`'s
+`rewriteHandlers(storeFor)` does the same for the AI rewrite (one shared
+rate limiter). Address a resume by the URL prefix, never a body field, so a
+client that prefixes its calls can't forget it on one of them. `resumes.is_public`
+is stored but doesn't gate anything yet; the public `/r/<slug>` pages and
+subdomain mapping that read it come next.
+
 `migrateToResumes()` (`server/src/resumeMigration.js`) turns an install
 from before variants into its default resume (slug `main`) on first boot:
 it attaches the blocks, moves the settings rows, and moves
@@ -130,7 +151,7 @@ warned about, never moved.
 ### Route mount order matters
 
 `server/src/index.js` mounts `/api/auth`, `/api/auth/totp`,
-`/api/public`, and `/api/ai` *before* the catch-all `/api` mount for `blockRoutes`/
+`/api/public`, `/api/ai` and `/api/resumes` *before* the catch-all `/api` mount for `blockRoutes`/
 `publishRoutes`. Express matches `app.use()` by path prefix, so a more
 specific route registered after the broad `/api` mount would first hit
 `blockRoutes`' unconditional `requireAuth` and get rejected. Keep
@@ -397,10 +418,16 @@ for every published resume, renders only if that resume has no PDF yet) —
 (the store's `getPdfFile()`), it doesn't render on demand. Each resume has
 its own file, `<RESUMECMS_DATA_DIR>/pdf/<resume id>.pdf` (`pdfPaths.js`,
 `pdfPathFor()`), keyed by id so a slug rename never orphans it; the
-renderer loads `/print?resume=<id>`. The client doesn't read that
-parameter yet, so `store.js` refuses to render any resume but the default
-(it would capture the default's content under another resume's name);
-lift that once `/print` honours it. All of them go through the store's
+renderer loads `/print` in a throwaway browser context holding a signed
+cookie for the resume id (`renderAccess.js`, key random per process), and
+`/api/public/resume` serves that resume's snapshot, public or not, to a
+request carrying a valid one (`Cache-Control: private, no-store`,
+`RENDER` in `cacheHeaders.js`), naming it in `X-ResumeCMS-Resume`; the
+renderer throws if the page wasn't served the resume it asked for, so a
+cookie that stops getting through fails renders instead of filing the
+default's content under another name. A cookie rather than a header because
+Puppeteer's extra headers go to every request, Google Fonts included. So
+the client needs no change to render any resume. Every render goes through the store's
 single PDF queue (`withPdfLock`, shared by every resume), so two renders
 never run at once and a slow first-boot render can't overwrite a newer
 publish; keep any new PDF-writing code on that queue. Each render is bounded by the
