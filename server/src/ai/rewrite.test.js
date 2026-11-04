@@ -152,6 +152,25 @@ test('a custom item rewrite carries the picked tense along with its target', asy
   assert.equal(result.proposedData.items[1], data.items[1]);
 });
 
+test('block data the rewrite code can\'t handle is a 400 before calling the model', async () => {
+  let called = false;
+  for (const data of [null, { bullets: [null] }, { bullets: [{ text: 'a', children: [null] }] }]) {
+    await assert.rejects(
+      rewriteBlock({
+        type: 'experience',
+        data,
+        instruction: 'x',
+        target: { kind: 'bullet', path: [0] },
+        settings: settings(),
+        callModel: async () => (called = true),
+      }),
+      (err) => err instanceof AiError && err.status === 400,
+      JSON.stringify(data)
+    );
+  }
+  assert.equal(called, false);
+});
+
 test('an invalid target is a 400 before calling the model', async () => {
   let called = false;
   await assert.rejects(

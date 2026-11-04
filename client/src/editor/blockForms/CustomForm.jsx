@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import { CUSTOM_BODY_TYPES, defaultCustomItem } from '../blockDefaults.js';
 import { targetKey } from '../aiReview.js';
-import { useCloseWhenEntryLeaves } from '../useCloseWhenEntryLeaves.js';
+import { useRowPanelOpen } from '../useRowPanelOpen.js';
 
 const DEFAULT_TAG_COLOR = '#2f6f4e';
 
@@ -96,12 +95,11 @@ function ItemBodyFields({ item, onChange }) {
 }
 
 // One item row. `aiPanel`/`aiEntry` are as in ExperienceForm's bullets: the
-// item's rewrite panel opens below its fields, and stays open while it has
-// a rewrite in flight or under review.
+// item's rewrite panel opens below its fields when it gets a rewrite, and
+// the ✨ button toggles it (useRowPanelOpen).
 function CustomItem({ item, index, setItem, setItemType, removeItem, aiPanel, aiEntry }) {
-  const [aiOpen, setAiOpen] = useState(false);
-  const aiShown = Boolean(aiPanel && (aiOpen || aiEntry));
-  useCloseWhenEntryLeaves(aiEntry, setAiOpen);
+  const [aiOpen, setAiOpen] = useRowPanelOpen(aiEntry);
+  const aiShown = Boolean(aiPanel && aiOpen);
   return (
     <div className="ed-custom-item">
       <div className="ed-field-row">

@@ -12,6 +12,7 @@ import {
   pickerTense,
   presetsFor,
   previewData,
+  previewedProposals,
   proposalKey,
   relocateTarget,
   targetKey,
@@ -192,7 +193,7 @@ test('applyProposal for the whole block returns the proposed data', () => {
 });
 
 test('previewData lays narrow proposals over a whole-block one, whatever order they came in', () => {
-  const description = { target: { kind: 'description' }, proposedData: { ...exp, description: 'New blurb' } };
+  const description = { target: { kind: 'description' }, baseData: exp, proposedData: { ...exp, description: 'New blurb' } };
   const block = { target: BLOCK_TARGET, proposedData: { ...exp, tagline: 'New tagline' } };
   const bullet = { target: { kind: 'bullet', path: [0] }, baseData: exp, proposedData: { ...exp, bullets: ['Legacy reworded', exp.bullets[1]] } };
   const data = previewData('experience', exp, [description, bullet, block]);
@@ -235,6 +236,30 @@ test('relocateTarget follows a bullet that moved, and keeps one edited in place'
   assert.equal(relocateTarget('experience', proposal, { bullets: [b('One'), b('Two')] }), null);
   // Ambiguous (two identical bullets): stays put.
   assert.equal(relocateTarget('experience', proposal, { bullets: [b('Three'), b('Three'), b('x')] }), proposal.target);
+});
+
+test('relocateTarget keeps a bullet edited in place, even when an identical bullet is elsewhere', () => {
+  const base = { bullets: [b('Managed team'), b('Shipped app'), b('Managed team')] };
+  const proposal = { target: { kind: 'bullet', path: [0] }, baseData: base };
+  const edited = { bullets: [b('Managed a team of five'), b('Shipped app'), b('Managed team')] };
+  // Not moved to [2]: [0] now holds text that was never in the block.
+  assert.equal(relocateTarget('experience', proposal, edited), proposal.target);
+  assert.equal(isProposalStale('experience', proposal, edited), true);
+  // A real move still relocates: [0] now holds another original bullet.
+  const dragged = { bullets: [b('Shipped app'), b('Managed team'), b('Other')] };
+  const single = { target: { kind: 'bullet', path: [0] }, baseData: { bullets: [b('Managed team'), b('Shipped app'), b('Other')] } };
+  assert.deepEqual(relocateTarget('experience', single, dragged), { kind: 'bullet', path: [1] });
+});
+
+test('previewedProposals leaves out any narrow proposal whose part was edited, and says why by omission only', () => {
+  const base = { description: 'Old', bullets: [b('One')] };
+  const description = { target: { kind: 'description' }, baseData: base, proposedData: { ...base, description: 'New' } };
+  const block = { target: BLOCK_TARGET, baseData: base, proposedData: { ...base, tagline: 'T' } };
+  const edited = { ...base, description: 'Typed since' };
+  assert.deepEqual(previewedProposals('experience', base, [description, block]), [block, description]);
+  // Edited description: its proposal drops out; the whole-block one stays.
+  assert.deepEqual(previewedProposals('experience', edited, [description, block]), [block]);
+  assert.equal(previewData('experience', edited, [description]).description, 'Typed since');
 });
 
 test('relocateTarget only matches a sub-bullet to sub-bullets', () => {

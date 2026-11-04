@@ -13,7 +13,7 @@ import {
   applyProposal,
   describeTarget,
   isProposalStale,
-  previewData,
+  previewedProposals,
   proposalKey,
   relocateTarget,
   targetSlice,
@@ -436,7 +436,9 @@ export function EditorPage({ onLogout }) {
       if (patch.status !== 'loading') delete aiRequestsRef.current[key];
       setAiProposals((prev) => ({
         ...prev,
-        [key]: { blockId, target, instruction, tense, pickedTense, proposal: null, error: null, ...patch },
+        // requestId tells a panel which request it's showing (see
+        // AiRewritePanel), since relocation can move another one under it.
+        [key]: { blockId, target, instruction, tense, pickedTense, requestId: id, proposal: null, error: null, ...patch },
       }));
     };
     settle({ status: 'loading' });
@@ -471,15 +473,28 @@ export function EditorPage({ onLogout }) {
   const readyProposals = Object.values(aiProposals)
     .filter((entry) => entry.status === 'ready')
     .map((entry) => entry.proposal);
-  const aiHighlightIds = new Set(readyProposals.map((p) => p.blockId));
-  const previewBlocks = readyProposals.length
+  // What the preview actually shows: a ready proposal can be left out (its
+  // part was edited since, or a restructuring rewrite moved positions; see
+  // previewedProposals), and the banner and outline only count these.
+  const previewedByBlock = new Map();
+  for (const b of blocks) {
+    const mine = readyProposals.filter((p) => p.blockId === b.id);
+    const shown = mine.length ? previewedProposals(b.type, b.data, mine) : [];
+    if (shown.length) previewedByBlock.set(b.id, shown);
+  }
+  const previewed = [...previewedByBlock.values()].flat();
+  const aiHighlightIds = new Set(previewedByBlock.keys());
+  const previewBlocks = previewed.length
     ? blocks.map((b) =>
-        aiHighlightIds.has(b.id) ? { ...b, data: previewData(b.type, b.data, readyProposals.filter((p) => p.blockId === b.id)) } : b
+        previewedByBlock.has(b.id)
+          ? { ...b, data: previewedByBlock.get(b.id).reduce((data, p) => applyProposal(b.type, data, p), b.data) }
+          : b
       )
     : blocks;
-  // With exactly one open rewrite, the banner can accept it directly.
-  const soleReadyKey = readyProposals.length === 1 ? proposalKey(readyProposals[0].blockId, readyProposals[0].target) : null;
-  const soleReadyBlock = soleReadyKey && blocks.find((b) => b.id === readyProposals[0].blockId);
+  // With exactly one rewrite in the preview, the banner can accept it directly.
+  const soleReadyKey = previewed.length === 1 ? proposalKey(previewed[0].blockId, previewed[0].target) : null;
+  const soleReadyBlock = soleReadyKey && blocks.find((b) => b.id === previewed[0].blockId);
+  const openRewriteCount = Object.keys(aiProposals).length;
 
   async function handleLogout() {
     await api.logout();
@@ -595,14 +610,14 @@ export function EditorPage({ onLogout }) {
         />
 
         <div className="ed-right-pane">
-          {readyProposals.length > 0 ? (
+          {previewed.length > 0 ? (
             <div className="ed-preview-label ed-ai-preview-banner">
               <span>
                 {soleReadyBlock
                   ? `Previewing AI rewrite of ${BLOCK_TYPE_LABELS[soleReadyBlock.type] || 'block'}${
-                      describeTarget(readyProposals[0].target) ? ` (${describeTarget(readyProposals[0].target)})` : ''
+                      describeTarget(previewed[0].target) ? ` (${describeTarget(previewed[0].target)})` : ''
                     }, outlined — not saved yet`
-                  : `Previewing ${readyProposals.length} AI rewrites (outlined) — not saved yet. Accept each in its block.`}
+                  : `Previewing ${previewed.length} AI rewrites (outlined) — not saved yet. Accept each in its block.`}
               </span>
               <button
                 type="button"
@@ -611,7 +626,7 @@ export function EditorPage({ onLogout }) {
                 // would otherwise turn up in the preview after "Discard all".
                 onClick={() => dropAiProposals(() => true)}
               >
-                {readyProposals.length === 1 ? 'Discard' : 'Discard all'}
+                {openRewriteCount === 1 ? 'Discard' : 'Discard all'}
               </button>
               {soleReadyKey && (
                 <button type="button" className="ed-btn ed-btn-primary" onClick={() => handleAiAccept(soleReadyKey)}>

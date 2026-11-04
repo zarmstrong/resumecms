@@ -356,9 +356,13 @@ parts of one block. The preview shows all of them together, each one is
 accepted or discarded in its own panel, and **Discard all** in the preview
 banner clears them. A rewrite only warns that it's out of date when the
 part it rewrites has changed since. An open rewrite follows its bullet or
-item when you drag it, or delete or add one above it. Once you edit that
-bullet or item, the rewrite stays in place with the warning and drops out
-of the preview until you accept or discard it.
+item when you drag it, or delete or add one above it. Once you edit the
+description, bullet, or item a rewrite is for, the rewrite stays open with
+the warning but drops out of the preview, and its panel says so. A bullet
+rewrite is also left out of the preview while a rewrite that may add,
+remove, or reorder that block's bullets is open. The ✨ button on a bullet
+or item collapses and reopens its panel; collapsing doesn't discard the
+rewrite.
 
 - Only the block's prose is sent and can change. Dates, URLs,
   company/institution names, visibility flags, and block styling are

@@ -6,7 +6,7 @@ import {
 import { MAX_BULLET_DEPTH, normalizeBullet } from '../../resume/bulletUtils.js';
 import { VisibilityToggle } from '../VisibilityToggle.jsx';
 import { targetKey } from '../aiReview.js';
-import { useCloseWhenEntryLeaves } from '../useCloseWhenEntryLeaves.js';
+import { useRowPanelOpen } from '../useRowPanelOpen.js';
 import {
   bulletAt, dropTargetPath, moveAtPath, moveBulletBy, parsePath, pathKey, projectBulletDrop, removeAtPath, updateAtPath,
 } from '../bulletDrag.js';
@@ -414,12 +414,11 @@ const BulletEditor = memo(function BulletEditor({
 }) {
   const depth = path.length - 1;
   const key = pathKey(path);
-  // The panel stays open while this bullet has a rewrite in flight or under
-  // review, even across collapsing and re-expanding the block.
-  const [aiOpen, setAiOpen] = useState(false);
+  // The panel opens when this bullet gets a rewrite (and on remount while it
+  // has one), and the ✨ button toggles it; see useRowPanelOpen.
   const aiEntry = aiEntries?.[targetKey({ kind: 'bullet', path })];
-  const aiShown = Boolean(aiPanel && (aiOpen || aiEntry));
-  useCloseWhenEntryLeaves(aiEntry, setAiOpen);
+  const [aiOpen, setAiOpen] = useRowPanelOpen(aiEntry);
+  const aiShown = Boolean(aiPanel && aiOpen);
   const { attributes, listeners, setNodeRef: setDragRef, setActivatorNodeRef } = useDraggable({ id: key });
   const { setNodeRef: setDropRef } = useDroppable({ id: key });
   function setNodeRef(node) {

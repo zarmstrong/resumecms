@@ -93,23 +93,33 @@ const sliceJson = (type, data, target) => JSON.stringify(targetSlice(type, data,
 
 // Bullet and item proposals are tied to a position, and positions shift
 // when bullets or items are dragged, deleted, or added above them. Returns
-// where the proposal applies now: its current target while the bullet or
-// item there is still the one it was made for (or was edited in place, so
-// can't be told apart from a different one), the one position elsewhere
-// that holds exactly the original content (it moved; a sub-bullet only
-// matches sub-bullets), or null when its position is gone and it can't be
-// found. Other targets never move.
+// where the proposal applies now:
+// - its current target while the bullet or item there is still the one it
+//   was made for, or was edited in place: the position holds text that
+//   wasn't anywhere in baseData, which a move or delete never leaves behind
+//   (they only shift other originals into it). It stays put, stale, rather
+//   than jumping to an identical bullet elsewhere;
+// - else the one position elsewhere that holds exactly the original content
+//   (it moved; a sub-bullet only matches sub-bullets);
+// - else null when its position is gone, or its current target.
+// Other targets never move.
 export function relocateTarget(type, proposal, currentData) {
   const { target } = proposal;
   if (target?.kind !== 'bullet' && target?.kind !== 'item') return target;
   const origin = originOf(proposal);
   const base = sliceJson(type, proposal.baseData, origin);
   const here = targetSlice(type, currentData, target);
-  if (here !== null && sliceJson(type, currentData, target) === base) return target;
+  const hereJson = sliceJson(type, currentData, target);
+  if (here !== null && hereJson === base) return target;
   const depth = (t) => (t.kind === 'bullet' ? t.path.length : 0);
-  const matches = positionsOf(currentData, target.kind).filter(
-    (t) => depth(t) === depth(origin) && sliceJson(type, currentData, t) === base
-  );
+  const sameDepth = (t) => depth(t) === depth(origin);
+  if (here !== null) {
+    const originals = positionsOf(proposal.baseData, target.kind)
+      .filter(sameDepth)
+      .map((t) => sliceJson(type, proposal.baseData, t));
+    if (!originals.includes(hereJson)) return target;
+  }
+  const matches = positionsOf(currentData, target.kind).filter((t) => sameDepth(t) && sliceJson(type, currentData, t) === base);
   if (matches.length === 1) return matches[0];
   return here === null ? null : target;
 }
@@ -158,15 +168,24 @@ export function applyProposal(type, currentData, proposal) {
 // is left out: it would otherwise show over a different bullet. Its panel
 // still offers it, with the out-of-date warning.
 export function previewData(type, data, proposals) {
+  return previewedProposals(type, data, proposals).reduce((current, proposal) => applyProposal(type, current, proposal), data);
+}
+
+// The proposals previewData lays over a block's data, in the order it
+// applies them. The banner counts these and the preview outlines their
+// blocks, so neither claims a rewrite the preview isn't showing.
+//
+// Whole-block proposals always show (they replace everything they own).
+// A narrower one (description, bullet, item) shows only while the part it
+// rewrites is unchanged in the real data since it was made: once edited,
+// it's left out, and its panel says so. A bullet or item proposal also
+// needs its position to still mean the same bullet or item, so it is left
+// out under a whole-block rewrite that was allowed to restructure bullets
+// (it may have added, removed, merged, or reordered them). A reword-only
+// block rewrite keeps every position, and a custom block rewrite can't
+// change its item count, so a bullet or item rewrite still shows over those.
+export function previewedProposals(type, data, proposals) {
   const isBlock = (p) => targetKey(p.target) === 'block';
-  const positional = (p) => p.target?.kind === 'bullet' || p.target?.kind === 'item';
-  // A positional proposal is laid over the data built so far only while its
-  // position still means the same bullet or item: unchanged in the real data
-  // since it was made, and not under a whole-block rewrite that was allowed
-  // to restructure bullets (it may have added, removed, merged, or
-  // reordered them, so positions no longer line up). A reword-only block
-  // rewrite keeps every position, and a custom block rewrite can't change
-  // its item count, so a bullet or item rewrite still shows over those.
   const blocks = proposals.filter(isBlock);
   const restructured = blocks.some((p) => p.allowBulletRestructure);
   // A top-level bullet rewrite that may restructure its sub-bullets makes
@@ -182,9 +201,10 @@ export function previewData(type, data, proposals) {
   const narrow = proposals.filter(
     (p) =>
       !isBlock(p) &&
-      !(positional(p) && (isProposalStale(type, p, data) || (p.target.kind === 'bullet' && restructured) || underRestructured(p)))
+      !isProposalStale(type, p, data) &&
+      !((p.target.kind === 'bullet' && restructured) || underRestructured(p))
   );
-  return [...blocks, ...narrow].reduce((current, proposal) => applyProposal(type, current, proposal), data);
+  return [...blocks, ...narrow];
 }
 
 export const AI_PRESETS = [

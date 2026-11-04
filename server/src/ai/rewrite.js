@@ -3,6 +3,7 @@ import {
   InvalidTargetError,
   REWRITABLE_TYPES,
   RewriteShapeError,
+  hasRewritableShape,
   mergeRewrite,
   normalizeTarget,
   outputSchema,
@@ -161,6 +162,13 @@ export async function rewriteBlock({ type, data, instruction, settings, tense: p
   if (!REWRITABLE_TYPES.has(type)) throw new AiError(400, `${type} blocks can't be rewritten with AI`);
   const tenseError = pickedTenseError(picked, type);
   if (tenseError) throw new AiError(400, tenseError);
+  // The route falls back to the saved copy when the client's is malformed,
+  // and a row saved before blockData.js's checks can be malformed too (a
+  // null bullet, say). The input and merge code would throw a TypeError on
+  // it, so refuse it here as a 400 instead of a generic 500.
+  if (!hasRewritableShape(type, data)) {
+    throw new AiError(400, "This block's data is in a shape the AI rewrite can't handle. Edit and save it, then try again.");
+  }
   let scope;
   try {
     scope = normalizeTarget(type, data, target);

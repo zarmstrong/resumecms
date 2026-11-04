@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BLOCK_TARGET,
   bulletChange,
@@ -8,6 +8,7 @@ import {
   isProposalStale,
   pickerTense,
   presetsFor,
+  previewedProposals,
   proposalKey,
   tenseChangeNote,
   wordDiff,
@@ -116,6 +117,19 @@ export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openPro
   const [pickedTense, setPickedTense] = useState(state?.pickedTense ?? null);
   const tense = pickerTense(pickedTense, ai.pickedTenseDefault, ai.pickedTenses);
   const open = controlled ? openProp : openState;
+  // Bullet and item rows are keyed by index, so when proposals follow their
+  // bullets to new positions (EditorPage's relocation), a mounted panel can
+  // start showing a different request than the one it was seeded from.
+  // Take that request's instruction and tense then, so "Try again" resends
+  // what produced the diff on screen. A request made from this panel already
+  // carries this panel's values, so syncing to it changes nothing.
+  const seenRequest = useRef(state?.requestId);
+  useEffect(() => {
+    if (!state?.requestId || state.requestId === seenRequest.current) return;
+    seenRequest.current = state.requestId;
+    setInstruction(state.instruction || '');
+    setPickedTense(state.pickedTense ?? null);
+  }, [state]);
 
   if (!open) {
     if (controlled) return null;
@@ -140,6 +154,13 @@ export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openPro
   const tenseNote = picksTense && proposal ? tenseChangeNote(state.tense, tense, ai.pickedTenses) : null;
   const unchanged = proposal && fields.length === 0 && !proposal.bulletReview?.items.some((i) => bulletChange(i) !== 'unchanged') && !proposal.bulletReview?.removed.length;
   const part = describeTarget(target);
+  // Whether the right-hand preview is showing this proposal (see
+  // previewedProposals); if not, the panel says so instead of leaving the
+  // user to wonder why the preview didn't change.
+  const blockReady = Object.values(ai.proposals || {})
+    .filter((e) => e.blockId === block.id && e.status === 'ready')
+    .map((e) => e.proposal);
+  const inPreview = proposal && previewedProposals(block.type, block.data, blockReady).includes(proposal);
 
   function request() {
     if (!instruction.trim()) return;
@@ -233,7 +254,13 @@ export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openPro
             <button type="button" className="ed-btn ed-btn-primary" onClick={() => ai.onAccept(key)}>
               Accept
             </button>
-            <span className="ed-field-hint">Previewed on the right. Accepting saves a draft change; publish to make it live.</span>
+            <span className="ed-field-hint">
+              {inPreview
+                ? 'Previewed on the right. Accepting saves a draft change; publish to make it live.'
+                : stale
+                  ? 'Not shown in the preview, since it has changed. Accepting saves a draft change; publish to make it live.'
+                  : 'Not shown in the preview while a rewrite that can add, remove, or reorder these bullets is open. Accepting applies it to the bullet here and saves a draft change.'}
+            </span>
           </div>
         </div>
       )}
