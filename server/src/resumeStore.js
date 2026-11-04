@@ -176,7 +176,10 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
   // mustn't hide the others, and the log has to say which one broke).
   async function ensurePdfs() {
     const ids = db
-      .prepare("SELECT resume_id FROM resume_settings WHERE key = 'published_resume'")
+      .prepare(
+        `SELECT s.resume_id FROM resume_settings s JOIN resumes r ON r.id = s.resume_id
+         WHERE s.key = 'published_resume'`
+      )
       .all()
       .map((row) => row.resume_id);
     const results = await Promise.allSettled(ids.map((id) => scopedStore(id).ensurePdf()));

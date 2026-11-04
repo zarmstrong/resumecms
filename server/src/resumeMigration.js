@@ -11,13 +11,13 @@ import { pdfPathFor } from './pdfPaths.js';
 // fresh install goes through here too: db.js seeds the legacy shape first
 // and this turns it into the first resume, so there's one path that ever
 // creates a default.
-//
-// A no-op once any resume exists. Takes the handle (not db.js) so
-// resumeMigration.test.js can run it against ':memory:'. Returns the
-// default resume's id, or null if it didn't run.
+
 export const DEFAULT_SLUG = 'main';
 export const DEFAULT_NAME = 'Main resume';
 
+// A no-op once any resume exists. Takes the handle (not db.js) so
+// resumeMigration.test.js can run it against ':memory:'. Returns the
+// default resume's id, or null if it didn't run.
 export function migrateToResumes(db, { pdfDir = null, legacyPdfPath = null } = {}) {
   if (db.prepare('SELECT 1 FROM resumes LIMIT 1').get()) return null;
 

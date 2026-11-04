@@ -1,6 +1,7 @@
 // Key/value settings helpers bound to a database handle. db.js binds them
-// to the real database and re-exports the result; resumeStore.js binds them
-// to whatever handle it's given, so tests can run it against ':memory:'.
+// to the real database and re-exports the result; resumeStore.js binds
+// createResumeSettings() to whatever handle it's given, so tests can run it
+// against ':memory:'.
 //
 // createSettings() is the global `settings` table (credentials, totp, ai).
 // createResumeSettings() is one resume's rows in `resume_settings` (header,

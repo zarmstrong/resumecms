@@ -679,3 +679,17 @@ test('ensurePdfs reports a failed render without hiding the others', async () =>
   assert.ok(store.forResume(fine).getPdfFile());
   assert.equal(store.forResume(broken).getPdfFile(), null);
 });
+
+test('the default-bound store carries every operation forResume() does', () => {
+  const { store, defaultId } = makeStore();
+  const scoped = Object.keys(store.forResume(defaultId)).sort();
+  const bound = Object.keys(store).filter((k) => !['forResume', 'defaultResumeId', 'ensurePdfs'].includes(k)).sort();
+  assert.deepEqual(bound, scoped);
+});
+
+test('ensurePdfs ignores published_resume rows of a resume that does not exist', async () => {
+  const { store, db, calls } = makeStore();
+  db.prepare("INSERT INTO resume_settings (resume_id, key, value) VALUES ('ghost', 'published_resume', '{}')").run();
+  assert.deepEqual(await store.ensurePdfs(), { rendered: 0, errors: [] });
+  assert.equal(calls.renderPdf, 0);
+});
