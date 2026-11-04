@@ -60,9 +60,12 @@ router.put('/settings', settingsLimiter, (req, res) => {
 });
 
 // Returns a proposal only; nothing is written. The editor saves an accepted
-// proposal through PUT /api/blocks/:id like any other edit.
+// proposal through PUT /api/blocks/:id like any other edit. `target`
+// (optional, see rewritableFields.js) narrows the rewrite to an experience
+// block's description, one of its bullets, or one custom item; rewriteBlock
+// rejects one that doesn't fit the block with a 400.
 router.post('/rewrite', rewriteLimiter, async (req, res) => {
-  const { blockId, data, tense } = req.body || {};
+  const { blockId, data, tense, target } = req.body || {};
   const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
   if (typeof blockId !== 'string') return res.status(400).json({ error: 'blockId is required' });
   if (!instruction) return res.status(400).json({ error: 'Tell the AI what to change.' });
@@ -81,15 +84,23 @@ router.post('/rewrite', rewriteLimiter, async (req, res) => {
   // The editor autosaves on a debounce, so the client's copy can be a few
   // hundred ms ahead of the DB. Rewrite what the user is actually looking
   // at; the type always comes from the DB, and a malformed client copy
-  // falls back to the saved one.
-  const baseData = hasRewritableShape(block.type, data) ? data : block.data;
+  // falls back to the saved one. A bullet or item target is an index into
+  // the copy the client sent, so it can't be moved onto the saved copy: a
+  // malformed copy with one is refused instead.
+  const clientCopyUsable = hasRewritableShape(block.type, data);
+  const positional = target?.kind === 'bullet' || target?.kind === 'item';
+  if (!clientCopyUsable && data !== undefined && positional) {
+    return res.status(400).json({ error: 'The block data sent with this rewrite is malformed. Reload and try again.' });
+  }
+  const baseData = clientCopyUsable ? data : block.data;
   try {
     // `tense` is the editor's per-rewrite pick for a custom block;
-    // rewriteBlock turns a bad one into a 400 AiError. Being the one check,
-    // it comes after the 404 and 409 above, so a request with a bad tense for
-    // a missing block, or with AI not set up, gets those instead. The editor
-    // takes its options from the settings, so only another client sends one.
-    const proposal = await rewriteBlock({ type: block.type, data: baseData, instruction, settings, tense });
+    // rewriteBlock turns a bad one (or a bad `target`) into a 400 AiError.
+    // Being the one check, it comes after the 404 and 409 above, so a request
+    // with a bad tense for a missing block, or with AI not set up, gets those
+    // instead. The editor takes its options from the settings, so only
+    // another client sends one.
+    const proposal = await rewriteBlock({ type: block.type, data: baseData, instruction, settings, tense, target });
     res.json({ proposal: { blockId, baseData, ...proposal } });
   } catch (err) {
     if (err instanceof AiError) return res.status(err.status).json({ error: err.message });

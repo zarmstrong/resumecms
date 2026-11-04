@@ -56,10 +56,11 @@ export const api = {
   updateAiSettings: (payload) => request('/ai/settings', { method: 'PUT', body: JSON.stringify(payload) }),
   // Returns a proposal only — nothing is saved until it's accepted and sent
   // through updateBlock like any other edit.
-  // `tense` is only sent for blocks with a tense picker (the settings' pickedTenseTypes);
-  // undefined drops out of the JSON.
-  aiRewrite: (blockId, data, instruction, tense) =>
-    request('/ai/rewrite', { method: 'POST', body: JSON.stringify({ blockId, data, instruction, tense }) }),
+  // `target` narrows the rewrite to part of the block (see aiReview.js).
+  // `tense` is only sent for blocks with a tense picker (the settings'
+  // pickedTenseTypes); undefined drops out of the JSON.
+  aiRewrite: (blockId, data, instruction, target, tense) =>
+    request('/ai/rewrite', { method: 'POST', body: JSON.stringify({ blockId, data, instruction, target, tense }) }),
 
   getPublicResume: (mode) => request(`/public/resume?mode=${mode}`),
 

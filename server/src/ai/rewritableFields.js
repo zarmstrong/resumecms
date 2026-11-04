@@ -48,6 +48,77 @@ const isBulletList = (list, depth = 0) =>
       (b) => typeof b === 'string' || (isPlainObject(b) && (depth >= MAX_BULLET_DEPTH || isBulletList(b.children, depth + 1)))
     ));
 
+// What part of a block a rewrite is aimed at. `block` (the default) is the
+// whole block, except that an experience block's description is left out:
+// it has its own `description` target, so asking for better bullets can
+// never reword it and vice versa. `bullet` is one experience bullet by index
+// path ([i] for a bullet and its sub-bullets, [i, j] for one sub-bullet);
+// `item` is one custom-section item. Only the target is editable; the rest
+// of the block goes to the model as read-only context.
+export const BLOCK_TARGET = Object.freeze({ kind: 'block' });
+
+// The request named a target that doesn't fit the block (wrong type, or a
+// bullet or item that isn't there). The route turns this into a 400.
+export class InvalidTargetError extends Error {}
+
+// A stable string per target, for keying proposals. Mirrored client-side in
+// client/src/editor/aiReview.js.
+export function targetKey(target) {
+  switch (target?.kind) {
+    case 'description':
+      return 'description';
+    case 'bullet':
+      return `bullet:${target.path.join('.')}`;
+    case 'item':
+      return `item:${target.index}`;
+    default:
+      return 'block';
+  }
+}
+
+const isIndex = (n) => Number.isInteger(n) && n >= 0;
+
+// Checks a request's target against the block it's for and returns a clean
+// copy (no stray keys). A missing target means the whole block.
+export function normalizeTarget(type, data = {}, target) {
+  if (target === undefined || target === null) return { ...BLOCK_TARGET };
+  if (!isPlainObject(target)) throw new InvalidTargetError('target must be an object');
+  switch (target.kind) {
+    case 'block':
+      return { ...BLOCK_TARGET };
+    case 'description':
+      if (type !== 'experience') throw new InvalidTargetError(`${type} blocks have no description to rewrite`);
+      return { kind: 'description' };
+    case 'bullet': {
+      if (type !== 'experience') throw new InvalidTargetError(`${type} blocks have no bullets to rewrite`);
+      const { path } = target;
+      if (!Array.isArray(path) || path.length < 1 || path.length > MAX_BULLET_DEPTH + 1 || !path.every(isIndex)) {
+        throw new InvalidTargetError('A bullet target needs a path of [bullet] or [bullet, sub-bullet] indexes');
+      }
+      const bullets = Array.isArray(data.bullets) ? data.bullets.map((b) => normalizeBullet(b)) : [];
+      const parent = bullets[path[0]];
+      if (!parent || (path.length === 2 && !parent.children[path[1]])) {
+        throw new InvalidTargetError('That bullet no longer exists. Reload and try again.');
+      }
+      return { kind: 'bullet', path: [...path] };
+    }
+    case 'item': {
+      if (type !== 'custom') throw new InvalidTargetError(`${type} blocks have no items to rewrite`);
+      const count = Array.isArray(data.items) ? data.items.length : 0;
+      if (!isIndex(target.index) || target.index >= count) {
+        throw new InvalidTargetError('That item no longer exists. Reload and try again.');
+      }
+      return { kind: 'item', index: target.index };
+    }
+    default:
+      throw new InvalidTargetError('Unknown rewrite target');
+  }
+}
+
+// Stands in for the targeted bullet or item in the context, so the model
+// sees where it sits without being handed a second, read-only copy of it.
+const TARGET_PLACEHOLDER = '[the part being rewritten]';
+
 // Whether `data` has the shape rewriteInput and mergeRewrite expect for its
 // type. The rewrite route checks the client's copy of a block with this
 // before trusting it over the saved one.
@@ -82,9 +153,46 @@ function editableBullet(bullet, parentShown = null, depth = 0) {
   return out;
 }
 
+function experienceInput(data, target) {
+  const facts = {
+    jobTitle: data.jobTitle || '',
+    company: data.company || '',
+    location: data.location || '',
+    startDate: data.startDate || '',
+    endDate: data.endDate || '',
+  };
+  const normalized = (data.bullets || []).map((b) => normalizeBullet(b));
+  const bullets = normalized.map((b) => editableBullet(b));
+  const tagline = data.tagline || '';
+  const description = data.description || '';
+  switch (target.kind) {
+    case 'description':
+      return { editable: { description }, context: { ...facts, tagline, bullets } };
+    case 'bullet': {
+      const [i, j] = target.path;
+      const placeholder = { text: TARGET_PLACEHOLDER };
+      const bullet =
+        j === undefined
+          ? bullets[i]
+          : editableBullet(normalized[i].children[j], shownFlags(normalized[i]), MAX_BULLET_DEPTH);
+      const others = bullets.map((b, k) => {
+        if (k !== i) return b;
+        if (j === undefined) return placeholder;
+        return { ...b, children: b.children.map((c, m) => (m === j ? placeholder : c)) };
+      });
+      return { editable: { bullet }, context: { ...facts, tagline, description, bullets: others } };
+    }
+    default:
+      return { editable: { tagline, bullets }, context: { ...facts, description } };
+  }
+}
+
+const customItemInput = (item) => ({ heading: item.heading || '', body: item[bodyField(item)] || '' });
+
 // Splits a block's data into what the model may rewrite (`editable`) and
-// what it should only read for context (`context`).
-export function rewriteInput(type, data = {}) {
+// what it should only read for context (`context`). `target` must already
+// be normalized (normalizeTarget).
+export function rewriteInput(type, data = {}, target = BLOCK_TARGET) {
   switch (type) {
     case 'heading':
     case 'summary':
@@ -92,22 +200,20 @@ export function rewriteInput(type, data = {}) {
     case 'skills_group':
       return { editable: { category: data.category || '', items: data.items || '' }, context: null };
     case 'experience':
-      return {
-        editable: {
-          tagline: data.tagline || '',
-          description: data.description || '',
-          bullets: (data.bullets || []).map((b) => editableBullet(normalizeBullet(b))),
-        },
-        context: {
-          jobTitle: data.jobTitle || '',
-          company: data.company || '',
-          location: data.location || '',
-          startDate: data.startDate || '',
-          endDate: data.endDate || '',
-        },
-      };
+      return experienceInput(data, target);
     case 'custom': {
       const items = (data.items || []).map(normalizeCustomItem);
+      if (target.kind === 'item') {
+        const item = items[target.index];
+        return {
+          editable: customItemInput(item),
+          context: {
+            title: data.title || '',
+            itemBodyType: item.bodyType || 'text',
+            items: items.map((it, k) => (k === target.index ? { heading: '', body: TARGET_PLACEHOLDER } : customItemInput(it))),
+          },
+        };
+      }
       return {
         editable: {
           title: data.title || '',
@@ -143,7 +249,7 @@ function editableSchema(type) {
     case 'skills_group':
       return obj({ category: str, items: str });
     case 'experience':
-      return obj({ tagline: str, description: str, bullets: { type: 'array', items: bulletSchema } });
+      return obj({ tagline: str, bullets: { type: 'array', items: bulletSchema } });
     case 'custom':
       return obj({ title: str, items: { type: 'array', items: obj({ heading: str, body: str }) } });
     default:
@@ -151,8 +257,22 @@ function editableSchema(type) {
   }
 }
 
-export function outputSchema(type) {
-  return obj({ explanation: str, rewrite: editableSchema(type) });
+function targetSchema(type, target) {
+  switch (target.kind) {
+    case 'description':
+      return obj({ description: str });
+    case 'bullet':
+      return obj({ bullet: target.path.length === 1 ? bulletSchema : obj({ text: str }) });
+    case 'item':
+      return obj({ heading: str, body: str });
+    default:
+      return editableSchema(type);
+  }
+}
+
+// `target` must already be normalized (normalizeTarget).
+export function outputSchema(type, target = BLOCK_TARGET) {
+  return obj({ explanation: str, rewrite: targetSchema(type, target) });
 }
 
 // The model returned something that can't be merged back (wrong shape, or a
@@ -216,13 +336,17 @@ function flatten(bullets, depth = 0, out = [], parentShown = null) {
   return out;
 }
 
-function proposedBullets(raw) {
-  return requireArray(raw, 'bullets').map((b) => ({
-    text: requireString(b?.text, 'bullets.text'),
-    children: requireArray(b?.children ?? [], 'bullets.children').map((c) => ({
-      text: requireString(c?.text, 'bullets.children.text'),
+function proposedBullet(b, field) {
+  return {
+    text: requireString(b?.text, `${field}.text`),
+    children: requireArray(b?.children ?? [], `${field}.children`).map((c) => ({
+      text: requireString(c?.text, `${field}.children.text`),
     })),
-  }));
+  };
+}
+
+function proposedBullets(raw) {
+  return requireArray(raw, 'bullets').map((b) => proposedBullet(b, 'bullets'));
 }
 
 // Reword-only mode: the structure must come back exactly as it went out, so
@@ -259,10 +383,12 @@ function rewordBullets(originals, proposed) {
 // a visible sub-bullet of a hidden bullet was never shown, and must not
 // become shown just because the model promoted it to the top level.
 // Unmatched proposals are new and visible everywhere; unmatched originals
-// are reported as removed.
-export function restructureBullets(originals, proposed) {
-  const from = flatten(originals);
-  const to = flatten(proposed);
+// are reported as removed. A single-bullet rewrite restructures only that
+// bullet's sub-bullets: `depth` 1 labels them as sub-bullets in the review,
+// and `parentShown` is the bullet's own visibility, which they inherit.
+export function restructureBullets(originals, proposed, { depth = 0, parentShown = null } = {}) {
+  const from = flatten(originals, depth, [], parentShown);
+  const to = flatten(proposed, depth);
   const pairs = [];
   to.forEach((t, ti) =>
     from.forEach((f, fi) => {
@@ -293,19 +419,89 @@ export function restructureBullets(originals, proposed) {
       return bullet;
     });
   }
-  const bullets = build(proposed, 0);
+  const bullets = build(proposed, depth);
   const removed = from
     .filter((_, fi) => !usedFrom.has(fi))
     .map(({ bullet, depth, shown }) => ({ depth, before: bullet.text, wasHidden: isHidden(shown) }));
   return { bullets, review, removed };
 }
 
+const reviewEntry = (depth, before, after, shown) => ({ depth, before, after, wasHidden: isHidden(shown), ...shown });
+
+// One experience bullet (path [i], with its sub-bullets) or one sub-bullet
+// ([i, j]). Every other entry of `data.bullets` is passed through as stored,
+// legacy string bullets included.
+function mergeBullet(data, rewrite, [i, j], allowBulletRestructure) {
+  const stored = data.bullets;
+  const parent = normalizeBullet(stored[i]);
+  const replace = (bullet) => ({ ...data, bullets: stored.map((b, k) => (k === i ? bullet : b)) });
+
+  if (j !== undefined) {
+    if (!isPlainObject(rewrite.bullet)) throw new RewriteShapeError('AI response is missing "bullet"');
+    const child = parent.children[j];
+    const text = rewritten(child.text, rewrite.bullet.text, 'bullet.text');
+    const children = parent.children.map((c, m) => (m === j ? { ...c, text } : c));
+    return {
+      data: replace({ ...parent, children }),
+      bulletReview: { items: [reviewEntry(1, child.text, text, shownFlags(child, parent))], removed: [] },
+    };
+  }
+
+  const proposed = proposedBullet(rewrite.bullet, 'bullet');
+  const text = rewritten(parent.text, proposed.text, 'bullet.text');
+  let children;
+  let review;
+  let removed = [];
+  if (allowBulletRestructure) {
+    ({ bullets: children, review, removed } = restructureBullets(parent.children, proposed.children, {
+      depth: 1,
+      parentShown: shownFlags(parent),
+    }));
+  } else {
+    if (proposed.children.length !== parent.children.length) {
+      throw new RewriteShapeError(
+        'The AI added or removed sub-bullets, but bullet restructuring is turned off. Try again, or enable it in Account Settings.'
+      );
+    }
+    review = [];
+    children = parent.children.map((c, m) => {
+      const after = rewritten(c.text, proposed.children[m].text, 'bullet.children.text');
+      review.push(reviewEntry(1, c.text, after, shownFlags(c, parent)));
+      return { ...c, text: after };
+    });
+  }
+  // The bullet itself always keeps its own visibility: it's the same bullet,
+  // however much the wording changed.
+  return {
+    data: replace({ ...parent, text, children }),
+    bulletReview: { items: [reviewEntry(0, parent.text, text, shownFlags(parent)), ...review], removed },
+  };
+}
+
+function mergeItem(data, rewrite, index) {
+  const item = normalizeCustomItem(data.items[index]);
+  const field = bodyField(item);
+  const next = {
+    ...item,
+    heading: rewritten(item.heading, rewrite.heading, 'heading'),
+    [field]: rewritten(item[field], rewrite.body, 'body'),
+  };
+  return { data: { ...data, items: data.items.map((it, k) => (k === index ? next : it)) } };
+}
+
 // Applies the model's `rewrite` object onto the block's original data,
-// touching only the allowlisted fields above. Returns the proposed data plus,
-// for experience blocks, a per-bullet review the editor shows before the
-// user accepts.
-export function mergeRewrite(type, data = {}, rewrite, { allowBulletRestructure = false } = {}) {
+// touching only the allowlisted fields above, and within those only the
+// target's: whatever else the model returns is ignored. Returns the proposed
+// data plus, for experience bullets, a per-bullet review the editor shows
+// before the user accepts.
+export function mergeRewrite(type, data = {}, rewrite, { allowBulletRestructure = false, target } = {}) {
   if (!rewrite || typeof rewrite !== 'object') throw new RewriteShapeError('AI response is missing "rewrite"');
+  const { kind, path, index } = normalizeTarget(type, data, target);
+  if (kind === 'description') {
+    return { data: { ...data, description: rewritten(data.description, rewrite.description, 'description') } };
+  }
+  if (kind === 'bullet') return mergeBullet(data, rewrite, path, allowBulletRestructure);
+  if (kind === 'item') return mergeItem(data, rewrite, index);
   switch (type) {
     case 'heading':
     case 'summary':
@@ -324,11 +520,12 @@ export function mergeRewrite(type, data = {}, rewrite, { allowBulletRestructure 
       const { bullets, review, removed } = allowBulletRestructure
         ? restructureBullets(originals, proposed)
         : rewordBullets(originals, proposed);
+      // `description` is never read from the model here; the spread copies it
+      // through exactly as stored (see BLOCK_TARGET).
       return {
         data: {
           ...data,
           tagline: rewritten(data.tagline, rewrite.tagline, 'tagline'),
-          description: rewritten(data.description, rewrite.description, 'description'),
           bullets,
         },
         bulletReview: { items: review, removed },

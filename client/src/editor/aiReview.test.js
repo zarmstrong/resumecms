@@ -2,12 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AI_PRESETS,
+  BLOCK_TARGET,
+  applyProposal,
   bulletChange,
   changedFields,
+  describeTarget,
   hiddenBulletCount,
   isProposalStale,
   pickerTense,
   presetsFor,
+  previewData,
+  proposalKey,
+  relocateTarget,
+  targetKey,
+  targetSlice,
   tenseChangeNote,
   wordDiff,
 } from './aiReview.js';
@@ -75,12 +83,235 @@ test('changedFields includes an experience description written from nothing', ()
   assert.deepEqual(fields, [{ label: 'Description', before: '', after: 'New blurb.' }]);
 });
 
-test('presetsFor offers to write or rewrite an experience description', () => {
-  const last = (presets) => presets[presets.length - 1].label;
-  assert.equal(last(presetsFor('experience', {})), 'Write description');
-  assert.equal(last(presetsFor('experience', { description: '  ' })), 'Write description');
-  assert.equal(last(presetsFor('experience', { description: 'Led things.' })), 'Rewrite description');
+test('presetsFor offers to write or rewrite an experience description, only on the description', () => {
+  const description = { kind: 'description' };
+  const labels = (presets) => presets.map((p) => p.label);
+  assert.deepEqual(labels(presetsFor('experience', {}, description)), ['Write description']);
+  assert.deepEqual(labels(presetsFor('experience', { description: '  ' }, description)), ['Write description']);
+  const rewrite = presetsFor('experience', { description: 'Led things.' }, description);
+  assert.equal(rewrite[rewrite.length - 1].label, 'Rewrite description');
+  assert.equal(rewrite.length, AI_PRESETS.length + 1);
+  assert.equal(presetsFor('experience', {}), AI_PRESETS);
+  assert.equal(presetsFor('experience', {}, { kind: 'bullet', path: [0] }), AI_PRESETS);
   assert.equal(presetsFor('summary', { text: 'x' }), AI_PRESETS);
+});
+
+const exp = {
+  tagline: 't',
+  description: 'Old blurb',
+  bullets: [
+    'Legacy bullet',
+    { text: 'Second', visibleWeb: true, visiblePrint: false, children: [{ text: 'Child', visibleWeb: true, visiblePrint: true, children: [] }] },
+  ],
+};
+
+test('targetKey and proposalKey match the server and tell targets apart', () => {
+  assert.equal(targetKey(undefined), 'block');
+  assert.equal(targetKey({ kind: 'description' }), 'description');
+  assert.equal(targetKey({ kind: 'bullet', path: [1, 0] }), 'bullet:1.0');
+  assert.equal(targetKey({ kind: 'item', index: 2 }), 'item:2');
+  assert.equal(proposalKey('b1', { kind: 'bullet', path: [1] }), 'b1:bullet:1');
+  assert.notEqual(proposalKey('b1', { kind: 'bullet', path: [1] }), proposalKey('b1', { kind: 'bullet', path: [1, 0] }));
+});
+
+test('describeTarget names the part being rewritten', () => {
+  assert.equal(describeTarget(BLOCK_TARGET), null);
+  assert.equal(describeTarget({ kind: 'description' }), 'description');
+  assert.equal(describeTarget({ kind: 'bullet', path: [1] }), 'bullet 2');
+  assert.equal(describeTarget({ kind: 'bullet', path: [1, 0] }), 'sub-bullet 2.1');
+  assert.equal(describeTarget({ kind: 'item', index: 0 }), 'item 1');
+});
+
+test('targetSlice returns the part a target owns', () => {
+  const { description, ...rest } = exp;
+  assert.deepEqual(targetSlice('experience', exp), rest);
+  const summary = { text: 'x' };
+  assert.equal(targetSlice('summary', summary), summary);
+  assert.equal(targetSlice('experience', exp, { kind: 'description' }), 'Old blurb');
+  assert.equal(targetSlice('experience', {}, { kind: 'description' }), '');
+  assert.equal(targetSlice('experience', exp, { kind: 'bullet', path: [0] }).text, 'Legacy bullet');
+  assert.equal(targetSlice('experience', exp, { kind: 'bullet', path: [1, 0] }).text, 'Child');
+  assert.equal(targetSlice('experience', exp, { kind: 'bullet', path: [5] }), null);
+  assert.deepEqual(targetSlice('custom', { items: [{ heading: 'h' }] }, { kind: 'item', index: 0 }), { heading: 'h' });
+});
+
+test('applyProposal writes only the description', () => {
+  const proposal = { target: { kind: 'description' }, proposedData: { ...exp, tagline: 'other', description: 'New blurb' } };
+  const current = { ...exp, tagline: 'edited since' };
+  assert.deepEqual(applyProposal('experience', current, proposal), { ...current, description: 'New blurb' });
+  const none = { target: { kind: 'description' }, proposedData: { bullets: [] } };
+  assert.equal(applyProposal('experience', current, none), current);
+});
+
+test('accepting a whole-block experience rewrite keeps the current description', () => {
+  const proposal = { target: BLOCK_TARGET, proposedData: { ...exp, tagline: 'New tagline' } };
+  // A description edited (or rewritten and accepted) since the proposal survives.
+  const edited = applyProposal('experience', { ...exp, description: 'Newer blurb' }, proposal);
+  assert.equal(edited.description, 'Newer blurb');
+  assert.equal(edited.tagline, 'New tagline');
+  // One written since a proposal made when there was none survives too.
+  const fromNothing = { target: BLOCK_TARGET, proposedData: { tagline: 'New tagline', bullets: [] } };
+  assert.equal(applyProposal('experience', { tagline: 't', description: 'Written since', bullets: [] }, fromNothing).description, 'Written since');
+  // And a block that still has none doesn't gain one.
+  const { description, ...noDescription } = exp;
+  assert.ok(!('description' in applyProposal('experience', noDescription, proposal)));
+});
+
+test('applyProposal writes only the targeted bullet, keeping the others as stored', () => {
+  const proposedData = {
+    ...exp,
+    description: 'ignored',
+    bullets: ['Legacy reworded', { ...exp.bullets[1], text: 'Second reworded', children: [{ ...exp.bullets[1].children[0], text: 'Child reworded' }] }],
+  };
+  const top = applyProposal('experience', exp, { target: { kind: 'bullet', path: [0] }, proposedData });
+  assert.equal(top.description, 'Old blurb');
+  assert.deepEqual(top.bullets[0], { text: 'Legacy reworded', visibleWeb: true, visiblePrint: true, children: [] });
+  assert.equal(top.bullets[1], exp.bullets[1]);
+
+  const sub = applyProposal('experience', exp, { target: { kind: 'bullet', path: [1, 0] }, proposedData });
+  assert.equal(sub.bullets[0], 'Legacy bullet');
+  assert.equal(sub.bullets[1].text, 'Second');
+  assert.equal(sub.bullets[1].visiblePrint, false);
+  assert.equal(sub.bullets[1].children[0].text, 'Child reworded');
+
+  const gone = { ...exp, bullets: ['Only one'] };
+  assert.equal(applyProposal('experience', gone, { target: { kind: 'bullet', path: [1, 0] }, proposedData }), gone);
+});
+
+test('applyProposal writes only the targeted custom item', () => {
+  const data = { title: 'T', items: [{ heading: 'a', text: 'x' }, { heading: 'b', text: 'y' }] };
+  const proposedData = { title: 'ignored', items: [{ heading: 'a', text: 'x' }, { heading: 'B', text: 'Y' }] };
+  const merged = applyProposal('custom', data, { target: { kind: 'item', index: 1 }, proposedData });
+  assert.deepEqual(merged, { title: 'T', items: [data.items[0], { heading: 'B', text: 'Y' }] });
+  assert.equal(applyProposal('custom', { items: [] }, { target: { kind: 'item', index: 1 }, proposedData }).items.length, 0);
+});
+
+test('applyProposal for the whole block returns the proposed data', () => {
+  const proposal = { target: BLOCK_TARGET, proposedData: { text: 'new' } };
+  assert.deepEqual(applyProposal('summary', { text: 'old' }, proposal), { text: 'new' });
+});
+
+test('previewData lays narrow proposals over a whole-block one, whatever order they came in', () => {
+  const description = { target: { kind: 'description' }, proposedData: { ...exp, description: 'New blurb' } };
+  const block = { target: BLOCK_TARGET, proposedData: { ...exp, tagline: 'New tagline' } };
+  const bullet = { target: { kind: 'bullet', path: [0] }, baseData: exp, proposedData: { ...exp, bullets: ['Legacy reworded', exp.bullets[1]] } };
+  const data = previewData('experience', exp, [description, bullet, block]);
+  assert.equal(data.tagline, 'New tagline');
+  assert.equal(data.description, 'New blurb');
+  assert.equal(data.bullets[0].text, 'Legacy reworded');
+  assert.equal(previewData('experience', exp, []), exp);
+});
+
+test('isProposalStale only looks at the part the proposal is for', () => {
+  const bullet = { target: { kind: 'bullet', path: [1] }, baseData: exp };
+  assert.equal(isProposalStale('experience', bullet, { ...exp, description: 'edited' }), false);
+  assert.equal(isProposalStale('experience', bullet, { ...exp, bullets: [exp.bullets[1], exp.bullets[0]] }), true);
+  const description = { target: { kind: 'description' }, baseData: exp };
+  assert.equal(isProposalStale('experience', description, { ...exp, bullets: [] }), false);
+  assert.equal(isProposalStale('experience', description, { ...exp, description: 'edited' }), true);
+  // Accepting a whole-block experience rewrite keeps the current
+  // description, so editing it since doesn't make the rewrite stale.
+  const block = { target: BLOCK_TARGET, baseData: exp };
+  assert.equal(isProposalStale('experience', block, { ...exp, description: 'edited' }), false);
+  assert.equal(isProposalStale('experience', block, { ...exp, tagline: 'edited' }), true);
+});
+
+const b = (text, children = []) => ({ text, visibleWeb: true, visiblePrint: true, children });
+
+test('relocateTarget follows a bullet that moved, and keeps one edited in place', () => {
+  const base = { bullets: [b('One'), b('Two', [b('Two-a')]), b('Three')] };
+  const proposal = { target: { kind: 'bullet', path: [2] }, baseData: base };
+  // Unchanged: same target object back.
+  assert.equal(relocateTarget('experience', proposal, base), proposal.target);
+  // Bullet 1 deleted: "Three" is now at [1].
+  assert.deepEqual(relocateTarget('experience', proposal, { bullets: [b('Two', [b('Two-a')]), b('Three')] }), { kind: 'bullet', path: [1] });
+  // Dragged to the top.
+  assert.deepEqual(relocateTarget('experience', proposal, { bullets: [b('Three'), b('One'), b('Two', [b('Two-a')])] }), { kind: 'bullet', path: [0] });
+  // Edited in place: stays, and is stale.
+  const edited = { bullets: [b('One'), b('Two', [b('Two-a')]), b('Three!')] };
+  assert.equal(relocateTarget('experience', proposal, edited), proposal.target);
+  assert.equal(isProposalStale('experience', proposal, edited), true);
+  // Deleted, and its position is gone: null.
+  assert.equal(relocateTarget('experience', proposal, { bullets: [b('One'), b('Two')] }), null);
+  // Ambiguous (two identical bullets): stays put.
+  assert.equal(relocateTarget('experience', proposal, { bullets: [b('Three'), b('Three'), b('x')] }), proposal.target);
+});
+
+test('relocateTarget only matches a sub-bullet to sub-bullets', () => {
+  const base = { bullets: [b('Parent', [b('Child')]), b('Other')] };
+  const proposal = { target: { kind: 'bullet', path: [0, 0] }, baseData: base };
+  // A top-level "Child" with no children has the same normalized shape, but isn't a match.
+  assert.equal(relocateTarget('experience', proposal, { bullets: [b('Child'), b('Other')] }), null);
+  assert.deepEqual(relocateTarget('experience', proposal, { bullets: [b('Other'), b('Parent', [b('Child')])] }), { kind: 'bullet', path: [1, 0] });
+});
+
+test('relocateTarget follows a moved custom item and leaves other targets alone', () => {
+  const base = { items: [{ heading: 'a' }, { heading: 'b' }] };
+  const proposal = { target: { kind: 'item', index: 1 }, baseData: base };
+  assert.deepEqual(relocateTarget('custom', proposal, { items: [{ heading: 'b' }] }), { kind: 'item', index: 0 });
+  const description = { target: { kind: 'description' }, baseData: exp };
+  assert.equal(relocateTarget('experience', description, {}), description.target);
+});
+
+test('a relocated proposal applies, diffs, and checks staleness from its original position', () => {
+  const base = { bullets: [b('One'), b('Two')] };
+  const proposedData = { bullets: [b('One'), b('Two, rewritten')] };
+  const moved = { target: { kind: 'bullet', path: [0] }, origin: { kind: 'bullet', path: [1] }, baseData: base, proposedData };
+  const current = { bullets: [b('Two'), b('One')] };
+  assert.equal(isProposalStale('experience', moved, current), false);
+  assert.deepEqual(applyProposal('experience', current, moved).bullets.map((x) => x.text), ['Two, rewritten', 'One']);
+});
+
+test('previewData leaves out a bullet proposal whose spot now holds a different bullet', () => {
+  const base = { bullets: [b('One'), b('Two')] };
+  const proposal = { target: { kind: 'bullet', path: [1] }, baseData: base, proposedData: { bullets: [b('One'), b('Two, rewritten')] } };
+  assert.equal(previewData('experience', base, [proposal]).bullets[1].text, 'Two, rewritten');
+  const replaced = { bullets: [b('One'), b('Something else')] };
+  assert.equal(previewData('experience', replaced, [proposal]), replaced);
+});
+
+test('previewData shows a bullet rewrite over a reword-only block rewrite, but not over a restructuring one', () => {
+  const base = { tagline: 't', bullets: [b('One'), b('Two')] };
+  const bullet = { target: { kind: 'bullet', path: [1] }, baseData: base, proposedData: { ...base, bullets: [b('One'), b('Two, rewritten')] } };
+  const reword = { target: BLOCK_TARGET, allowBulletRestructure: false, proposedData: { tagline: 'T', bullets: [b('One!'), b('Two!')] } };
+  const shown = previewData('experience', base, [reword, bullet]);
+  assert.deepEqual(shown.bullets.map((x) => x.text), ['One!', 'Two, rewritten']);
+  assert.equal(shown.tagline, 'T');
+  const restructure = { ...reword, allowBulletRestructure: true, proposedData: { tagline: 'T', bullets: [b('Two!'), b('One!')] } };
+  assert.deepEqual(previewData('experience', base, [bullet, restructure]).bullets.map((x) => x.text), ['Two!', 'One!']);
+});
+
+test('previewData leaves out a sub-bullet rewrite while its parent bullet has a restructuring rewrite open', () => {
+  const base = { bullets: [b('Parent', [b('A'), b('B')])] };
+  const parent = {
+    target: { kind: 'bullet', path: [0] },
+    allowBulletRestructure: true,
+    baseData: base,
+    proposedData: { bullets: [b('Parent!', [b('A and B merged')])] },
+  };
+  const child = { target: { kind: 'bullet', path: [0, 1] }, baseData: base, proposedData: { bullets: [b('Parent', [b('A'), b('B!')])] } };
+  assert.deepEqual(previewData('experience', base, [parent, child]).bullets[0].children.map((x) => x.text), ['A and B merged']);
+  // Reword-only, positions hold, so both show.
+  const reword = { ...parent, allowBulletRestructure: false, proposedData: { bullets: [b('Parent!', [b('A!'), b('B')])] } };
+  assert.deepEqual(previewData('experience', base, [reword, child]).bullets[0].children.map((x) => x.text), ['A!', 'B!']);
+});
+
+test('the helpers tolerate a block whose data is null', () => {
+  assert.equal(targetSlice('experience', null, { kind: 'description' }), '');
+  assert.equal(targetSlice('experience', null, { kind: 'bullet', path: [0] }), null);
+  const proposal = { target: { kind: 'description' }, baseData: null, proposedData: { description: 'New' } };
+  assert.equal(isProposalStale('experience', proposal, null), false);
+  assert.deepEqual(applyProposal('experience', null, proposal), { description: 'New' });
+  assert.equal(relocateTarget('experience', { target: { kind: 'bullet', path: [0] }, baseData: null }, null), null);
+});
+
+test('changedFields is scoped to the target', () => {
+  const after = { ...exp, tagline: 'changed', description: 'New blurb' };
+  assert.deepEqual(changedFields('experience', exp, after, { kind: 'description' }), [{ label: 'Description', before: 'Old blurb', after: 'New blurb' }]);
+  assert.deepEqual(changedFields('experience', exp, after, { kind: 'bullet', path: [0] }), []);
+  const before = { title: 'T', items: [{ heading: 'a', bodyType: 'tags', items: 'x, y' }] };
+  const next = { title: 'U', items: [{ heading: 'a', bodyType: 'tags', items: 'X, Y' }] };
+  assert.deepEqual(changedFields('custom', before, next, { kind: 'item', index: 0 }), [{ label: 'Item', before: 'x, y', after: 'X, Y' }]);
 });
 
 test('bulletChange labels added, reworded, and unchanged bullets', () => {
@@ -91,8 +322,8 @@ test('bulletChange labels added, reworded, and unchanged bullets', () => {
 
 test('isProposalStale detects edits made after the proposal', () => {
   const proposal = { baseData: { text: 'a' } };
-  assert.equal(isProposalStale(proposal, { text: 'a' }), false);
-  assert.equal(isProposalStale(proposal, { text: 'ab' }), true);
+  assert.equal(isProposalStale('summary', proposal, { text: 'a' }), false);
+  assert.equal(isProposalStale('summary', proposal, { text: 'ab' }), true);
 });
 
 test('hiddenBulletCount counts bullets hidden from web or print, sub-bullets included', () => {

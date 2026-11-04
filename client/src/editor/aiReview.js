@@ -1,7 +1,191 @@
 // Pure helpers behind the AI rewrite review panel (AiRewritePanel.jsx).
+import { normalizeBullet } from '../resume/bulletUtils.js';
+import { bulletAt, updateAtPath } from './bulletDrag.js';
 
 // Mirrors REWRITABLE_TYPES in server/src/ai/rewritableFields.js.
 export const AI_REWRITABLE_TYPES = new Set(['heading', 'summary', 'skills_group', 'experience', 'custom']);
+
+// What part of a block a rewrite is aimed at; see the server's
+// rewritableFields.js. `block` is the whole block (for an experience block,
+// everything but the description), `description` an experience block's
+// description, `bullet` one experience bullet by index path ([i] with its
+// sub-bullets, or [i, j]), `item` one custom-section item.
+export const BLOCK_TARGET = Object.freeze({ kind: 'block' });
+
+// Mirrors targetKey in server/src/ai/rewritableFields.js.
+export function targetKey(target) {
+  switch (target?.kind) {
+    case 'description':
+      return 'description';
+    case 'bullet':
+      return `bullet:${target.path.join('.')}`;
+    case 'item':
+      return `item:${target.index}`;
+    default:
+      return 'block';
+  }
+}
+
+// Proposals are held per block and target, so several can be open at once,
+// including several on one block.
+export function proposalKey(blockId, target) {
+  return `${blockId}:${targetKey(target)}`;
+}
+
+// For labels: "bullet 2", "sub-bullet 2.1", "item 3", or null for the block.
+export function describeTarget(target) {
+  switch (target?.kind) {
+    case 'description':
+      return 'description';
+    case 'bullet':
+      return target.path.length === 1 ? `bullet ${target.path[0] + 1}` : `sub-bullet ${target.path[0] + 1}.${target.path[1] + 1}`;
+    case 'item':
+      return `item ${target.index + 1}`;
+    default:
+      return null;
+  }
+}
+
+const normalizedBullets = (data) => (Array.isArray(data?.bullets) ? data.bullets.map((b) => normalizeBullet(b)) : []);
+
+// The whole block minus what a block target doesn't own: an experience
+// block's description has its own target, and the server copies it through
+// a block rewrite unchanged.
+function withoutDescription(type, data) {
+  if (type !== 'experience' || !data || !('description' in data)) return data;
+  const { description, ...rest } = data;
+  return rest;
+}
+
+// The part of `data` a target owns: for a block target, the whole data
+// (less an experience description).
+export function targetSlice(type, data, target = BLOCK_TARGET) {
+  data = data || {};
+  switch (target?.kind) {
+    case 'description':
+      return data.description || '';
+    case 'bullet':
+      return bulletAt(normalizedBullets(data), target.path);
+    case 'item':
+      return (Array.isArray(data.items) ? data.items[target.index] : null) ?? null;
+    default:
+      return withoutDescription(type, data);
+  }
+}
+
+// Where a proposal's text sits in its own baseData and proposedData. It
+// differs from `target` (where it applies now) once the editor has followed
+// a moved bullet or item to its new position; see relocateTarget.
+const originOf = (proposal) => proposal.origin || proposal.target;
+
+// Every position of one kind in `data`, for relocateTarget.
+function positionsOf(data, kind) {
+  if (kind === 'bullet') {
+    return normalizedBullets(data).flatMap((b, i) => [
+      { kind: 'bullet', path: [i] },
+      ...b.children.map((_, j) => ({ kind: 'bullet', path: [i, j] })),
+    ]);
+  }
+  return (Array.isArray(data?.items) ? data.items : []).map((_, index) => ({ kind: 'item', index }));
+}
+
+const sliceJson = (type, data, target) => JSON.stringify(targetSlice(type, data, target) ?? null);
+
+// Bullet and item proposals are tied to a position, and positions shift
+// when bullets or items are dragged, deleted, or added above them. Returns
+// where the proposal applies now: its current target while the bullet or
+// item there is still the one it was made for (or was edited in place, so
+// can't be told apart from a different one), the one position elsewhere
+// that holds exactly the original content (it moved; a sub-bullet only
+// matches sub-bullets), or null when its position is gone and it can't be
+// found. Other targets never move.
+export function relocateTarget(type, proposal, currentData) {
+  const { target } = proposal;
+  if (target?.kind !== 'bullet' && target?.kind !== 'item') return target;
+  const origin = originOf(proposal);
+  const base = sliceJson(type, proposal.baseData, origin);
+  const here = targetSlice(type, currentData, target);
+  if (here !== null && sliceJson(type, currentData, target) === base) return target;
+  const depth = (t) => (t.kind === 'bullet' ? t.path.length : 0);
+  const matches = positionsOf(currentData, target.kind).filter(
+    (t) => depth(t) === depth(origin) && sliceJson(type, currentData, t) === base
+  );
+  if (matches.length === 1) return matches[0];
+  return here === null ? null : target;
+}
+
+// `currentData` with the proposal's target replaced by what the proposal
+// says, and nothing else touched, so proposals for different parts of one
+// block can be accepted (or previewed) one after another. A bullet or item
+// that is no longer there leaves the data as it is.
+export function applyProposal(type, currentData, proposal) {
+  currentData = currentData || {};
+  const { target, proposedData } = proposal;
+  const origin = originOf(proposal);
+  switch (target?.kind) {
+    case 'description':
+      return proposedData.description === undefined ? currentData : { ...currentData, description: proposedData.description };
+    case 'bullet': {
+      const replacement = bulletAt(normalizedBullets(proposedData), origin.path);
+      if (!replacement || !bulletAt(normalizedBullets(currentData), target.path)) return currentData;
+      // updateAtPath spreads the bullets on the way down, so a legacy string
+      // bullet on the path is normalized first; every other entry is kept
+      // exactly as stored.
+      const [first] = target.path;
+      const bullets = currentData.bullets.map((b, i) => (i === first ? normalizeBullet(b) : b));
+      return { ...currentData, bullets: updateAtPath(bullets, target.path, () => replacement) };
+    }
+    case 'item': {
+      const replacement = proposedData.items?.[origin.index];
+      if (!replacement || !Array.isArray(currentData.items) || target.index >= currentData.items.length) return currentData;
+      return { ...currentData, items: currentData.items.map((item, i) => (i === target.index ? replacement : item)) };
+    }
+    default: {
+      // The proposal's description is just the old one copied through, so
+      // keep the current one: accepting mustn't undo a description edit (or
+      // an accepted description rewrite) made since.
+      if (type !== 'experience') return proposedData;
+      const next = withoutDescription(type, proposedData);
+      return currentData.description === undefined ? next : { ...next, description: currentData.description };
+    }
+  }
+}
+
+// The block data the preview shows with every one of its ready proposals
+// applied. Whole-block proposals go first, since they replace everything
+// they own; the narrower ones are then laid over them in the order given.
+// A bullet or item proposal whose spot no longer holds what it was made for
+// is left out: it would otherwise show over a different bullet. Its panel
+// still offers it, with the out-of-date warning.
+export function previewData(type, data, proposals) {
+  const isBlock = (p) => targetKey(p.target) === 'block';
+  const positional = (p) => p.target?.kind === 'bullet' || p.target?.kind === 'item';
+  // A positional proposal is laid over the data built so far only while its
+  // position still means the same bullet or item: unchanged in the real data
+  // since it was made, and not under a whole-block rewrite that was allowed
+  // to restructure bullets (it may have added, removed, merged, or
+  // reordered them, so positions no longer line up). A reword-only block
+  // rewrite keeps every position, and a custom block rewrite can't change
+  // its item count, so a bullet or item rewrite still shows over those.
+  const blocks = proposals.filter(isBlock);
+  const restructured = blocks.some((p) => p.allowBulletRestructure);
+  // A top-level bullet rewrite that may restructure its sub-bullets makes
+  // positions under it unreliable too, so a sub-bullet rewrite of the same
+  // bullet is left out while it is open.
+  const restructuredBullets = new Set(
+    proposals
+      .filter((p) => p.target?.kind === 'bullet' && p.target.path.length === 1 && p.allowBulletRestructure)
+      .map((p) => p.target.path[0])
+  );
+  const underRestructured = (p) =>
+    p.target.kind === 'bullet' && p.target.path.length === 2 && restructuredBullets.has(p.target.path[0]);
+  const narrow = proposals.filter(
+    (p) =>
+      !isBlock(p) &&
+      !(positional(p) && (isProposalStale(type, p, data) || (p.target.kind === 'bullet' && restructured) || underRestructured(p)))
+  );
+  return [...blocks, ...narrow].reduce((current, proposal) => applyProposal(type, current, proposal), data);
+}
 
 export const AI_PRESETS = [
   { label: 'Tighten', instruction: 'Make this more concise without losing any substance.' },
@@ -36,22 +220,22 @@ export function tenseChangeNote(usedTense, currentTense, options) {
   return `This rewrite used “${label(usedTense)}”. Try again to use “${label(currentTense)}”.`;
 }
 
-// Presets that only make sense for one block type, shown after AI_PRESETS.
-// The experience one writes a description when there isn't one yet, and
-// rewrites it otherwise.
-export function presetsFor(type, data = {}) {
-  if (type !== 'experience') return AI_PRESETS;
-  const preset = data.description?.trim()
-    ? {
-        label: 'Rewrite description',
-        instruction: 'Rewrite only the description so it reads clearly and confidently. Leave the tagline and bullets unchanged.',
-      }
-    : {
+// The presets for one rewrite. An experience description gets its own:
+// "Write description" when there isn't one yet (the general presets have
+// nothing to work on then), and "Rewrite description" after the general
+// ones otherwise.
+export function presetsFor(type, data = {}, target = BLOCK_TARGET) {
+  if (type !== 'experience' || target?.kind !== 'description') return AI_PRESETS;
+  if (!data.description?.trim()) {
+    return [
+      {
         label: 'Write description',
         instruction:
-          'Write a short description of this role (two or three sentences) summarizing its scope and focus, based only on the details already here. Leave the tagline and bullets unchanged.',
-      };
-  return [...AI_PRESETS, preset];
+          'Write a short description of this role (two or three sentences) summarizing its scope and focus, based only on the details already here.',
+      },
+    ];
+  }
+  return [...AI_PRESETS, { label: 'Rewrite description', instruction: 'Rewrite the description so it reads clearly and confidently.' }];
 }
 
 // Splits into words with their trailing whitespace attached, so joining the
@@ -104,14 +288,30 @@ function customBody(item) {
   return item[CUSTOM_BODY_FIELD[item.bodyType] || 'text'] || '';
 }
 
-// The non-bullet text fields an AI rewrite can change, as
+// The non-bullet text fields an AI rewrite of `target` can change, as
 // { label, before, after } — only the ones that actually changed. Bullets
 // are reviewed separately from the server's bulletReview.
-export function changedFields(type, before = {}, after = {}) {
+export function changedFields(type, before = {}, after = {}, target = BLOCK_TARGET) {
   const fields = [];
   const add = (label, b, a) => {
     if ((b || '') !== (a || '')) fields.push({ label, before: b || '', after: a || '' });
   };
+  switch (target?.kind) {
+    case 'description':
+      add('Description', before.description, after.description);
+      return fields;
+    case 'bullet':
+      return fields;
+    case 'item': {
+      const item = (before.items || [])[target.index] || {};
+      const next = (after.items || [])[target.index] || {};
+      add('Heading', item.heading, next.heading);
+      add('Item', customBody(item), customBody(next));
+      return fields;
+    }
+    default:
+      break;
+  }
   switch (type) {
     case 'heading':
       add('Heading', before.text, after.text);
@@ -165,8 +365,12 @@ export function bulletChange(item) {
   return item.before === item.after ? 'unchanged' : 'reworded';
 }
 
-// True when the block changed after the proposal was generated — accepting
-// would then silently overwrite those edits.
-export function isProposalStale(proposal, currentData) {
-  return JSON.stringify(proposal.baseData) !== JSON.stringify(currentData);
+// True when the part of the block the proposal is for changed after it was
+// generated — accepting would then silently overwrite those edits. Edits to
+// other parts don't count: accepting only writes the target. A bullet or
+// item is compared at its original position in baseData and its current
+// one in `currentData` (see relocateTarget); one that left its position
+// without being found elsewhere counts as changed.
+export function isProposalStale(type, proposal, currentData) {
+  return sliceJson(type, proposal.baseData, originOf(proposal)) !== sliceJson(type, currentData, proposal.target);
 }

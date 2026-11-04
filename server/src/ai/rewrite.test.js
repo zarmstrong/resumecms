@@ -36,6 +36,7 @@ test('passes the configured provider, key, and model to the model call', async (
   assert.deepEqual(result.proposedData, { text: 'I ship things.' });
   assert.equal(result.explanation, 'Tightened it.');
   assert.equal(result.bulletReview, null);
+  assert.deepEqual(result.target, { kind: 'block' });
 });
 
 test('an unmergeable model response becomes a 502 AiError', async () => {
@@ -67,13 +68,104 @@ test('the bullet rule in the prompt follows the restructure setting', () => {
   assert.match(buildPrompt('experience', input, 'x', { allowBulletRestructure: true }).system, /Never merge or move content from a bullet marked "hidden"/);
 });
 
-test('the experience prompt explains the optional description', () => {
-  const input = rewriteInput('experience', { bullets: ['a'] });
-  const { system } = buildPrompt('experience', input, 'x');
+test('only the description target explains how to write a description', () => {
+  const data = { bullets: ['a'] };
+  const target = { kind: 'description' };
+  const { system, user } = buildPrompt('experience', rewriteInput('experience', data, target), 'x', { target });
   assert.match(system, /"description" is an optional short blurb/);
   assert.match(system, /too thin .* leave it empty/);
-  assert.match(system, /"hidden": true .* Never carry their content into the tagline or description/);
+  assert.match(system, /"hidden": true .* Never carry their content into the description/);
+  assert.match(user, /Rewriting: only the description/);
+
+  const block = buildPrompt('experience', rewriteInput('experience', data), 'x');
+  assert.doesNotMatch(block.system, /optional short blurb/);
+  assert.match(block.system, /"description" in the context .* not part of this rewrite/);
+  assert.match(block.system, /"hidden": true .* Never carry their content into the tagline\./);
+  assert.doesNotMatch(block.user, /Rewriting:/);
   assert.doesNotMatch(buildPrompt('summary', rewriteInput('summary', {}), 'x').system, /"description"/);
+});
+
+test('a bullet prompt names the bullet and applies the sub-bullet rule', () => {
+  const data = { bullets: [{ text: 'a', children: [{ text: 'b' }] }, 'c'] };
+  const top = { kind: 'bullet', path: [0] };
+  const { system, user } = buildPrompt('experience', rewriteInput('experience', data, top), 'x', { target: top });
+  assert.match(user, /Rewriting: only bullet 1 \(with its sub-bullets\)/);
+  assert.match(user, /\[the part being rewritten\]/);
+  assert.match(system, /rewriting one bullet/);
+  assert.match(system, /same number of sub-bullets/);
+  assert.match(buildPrompt('experience', rewriteInput('experience', data, top), 'x', { target: top, allowBulletRestructure: true }).system, /may add, remove, merge, or split this bullet's sub-bullets/);
+
+  const sub = { kind: 'bullet', path: [0, 0] };
+  const subPrompt = buildPrompt('experience', rewriteInput('experience', data, sub), 'x', { target: sub });
+  assert.match(subPrompt.user, /Rewriting: only sub-bullet 1 of bullet 1/);
+  assert.doesNotMatch(subPrompt.system, /sub-bullets under this bullet/);
+});
+
+test('an item prompt names the item and its type', () => {
+  const data = { items: [{ heading: 'h', bodyType: 'list', items: 'a\nb' }] };
+  const target = { kind: 'item', index: 0 };
+  const { system, user } = buildPrompt('custom', rewriteInput('custom', data, target), 'x', { target });
+  assert.match(user, /Rewriting: only item 1/);
+  assert.match(user, /"itemBodyType": "list"/);
+  assert.match(system, /rewriting one item/);
+  assert.doesNotMatch(system, /same number of items/);
+});
+
+test('rewriteBlock passes the target through to the schema and the result', async () => {
+  let request;
+  const result = await rewriteBlock({
+    type: 'experience',
+    data: { description: 'Old', bullets: ['a'] },
+    instruction: 'x',
+    target: { kind: 'description', stray: true },
+    settings: settings(),
+    callModel: async (req) => {
+      request = req;
+      return { explanation: '', rewrite: { description: 'New' } };
+    },
+  });
+  assert.deepEqual(Object.keys(request.schema.properties.rewrite.properties), ['description']);
+  assert.deepEqual(result.target, { kind: 'description' });
+  assert.deepEqual(result.proposedData, { description: 'New', bullets: ['a'] });
+  assert.equal(result.bulletReview, null);
+});
+
+test('a custom item rewrite carries the picked tense along with its target', async () => {
+  let request;
+  const data = { title: 'Projects', items: [{ heading: 'A', bodyType: 'text', text: 'Builds things.' }, { heading: 'B', bodyType: 'text', text: 'x' }] };
+  const result = await rewriteBlock({
+    type: 'custom',
+    data,
+    instruction: 'Tighten',
+    tense: 'past',
+    target: { kind: 'item', index: 0 },
+    settings: settings(),
+    callModel: async (req) => {
+      request = req;
+      return { explanation: '', rewrite: { heading: 'A', body: 'Built things.' } };
+    },
+  });
+  assert.match(request.system, /use the past tense/);
+  assert.match(request.user, /Rewriting: only item 1/);
+  assert.deepEqual(Object.keys(request.schema.properties.rewrite.properties), ['heading', 'body']);
+  assert.equal(result.proposedData.items[0].text, 'Built things.');
+  assert.equal(result.proposedData.items[1], data.items[1]);
+});
+
+test('an invalid target is a 400 before calling the model', async () => {
+  let called = false;
+  await assert.rejects(
+    rewriteBlock({
+      type: 'experience',
+      data: { bullets: ['a'] },
+      instruction: 'x',
+      target: { kind: 'bullet', path: [3] },
+      settings: settings(),
+      callModel: async () => (called = true),
+    }),
+    (err) => err instanceof AiError && err.status === 400
+  );
+  assert.equal(called, false);
 });
 
 test('read-only context is sent separately from the editable section', () => {

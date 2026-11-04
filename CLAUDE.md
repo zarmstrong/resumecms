@@ -241,9 +241,33 @@ filter and the print/PDF path need to recurse into `children`.
 returns a proposal: the block's data with only allowlisted prose fields
 replaced, via `mergeRewrite()` in `server/src/ai/rewritableFields.js`.
 `EditorPage` holds that proposal, swaps it into the `blocks` it passes to
-`ResumeView` (outlined via `highlightBlockId`), and on Accept saves it through
+`ResumeView` (outlined via `highlightBlockIds`), and on Accept saves it through
 the normal `PUT /api/blocks/:id` path, so `touchDraft()` and publish work
 unchanged.
+
+A request's optional `target` narrows the rewrite: `block` (default),
+`description` (experience), `bullet` with an index `path` (`[i]` with its
+sub-bullets, or `[i, j]`; experience), or `item` with an `index` (custom).
+`normalizeTarget()` validates it against the block (`InvalidTargetError` → 400).
+`rewriteInput()`/`outputSchema()` put only the target's fields in the editable
+set and schema, with the rest of the block as context (a placeholder marks
+the target's spot). `mergeRewrite()` writes back only the target, whatever
+else the model returns. In particular, an experience `block` rewrite no longer
+includes the description and copies it through unchanged; only the
+`description` target can change it. The editor keys open proposals by
+`proposalKey(blockId, target)` (`client/src/editor/aiReview.js`), so several
+can be open at once, even on one block. `applyProposal()` writes just a
+proposal's target onto the block's current data, `previewData()` composes all
+of a block's proposals for the preview, and `isProposalStale()` only compares
+the target's slice. Bullet and item targets are positions, so an effect in
+`EditorPage` re-keys a ready proposal when its bullet or item moves
+(`relocateTarget()`, which looks for the one position holding exactly the
+original content), and drops it when its position is gone, or its block is.
+A re-keyed proposal keeps `origin`, its position in its own
+`baseData`/`proposedData`, which `applyProposal()`, `isProposalStale()`
+and the review diff read from. The helpers take the block type because an
+experience `block` target doesn't own the description: accepting one keeps
+the current description.
 
 `REWRITABLE_TYPES` there is an explicit allowlist like `NESTABLE_TYPES`, mirrored
 client-side as `AI_REWRITABLE_TYPES` in `client/src/editor/aiReview.js`. A new

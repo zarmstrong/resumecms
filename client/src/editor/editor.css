@@ -917,6 +917,27 @@
   background: var(--paper);
 }
 
+/* The description's panel sits right under its field, inside the form. */
+.ed-ai-panel-field {
+  margin-top: -4px;
+}
+
+/* A bullet's or custom item's panel opens below its row, lined up with the
+   text box rather than the drag handle. */
+.ed-ai-panel-inline {
+  margin: 4px 0 8px 28px;
+}
+
+.ed-custom-item > .ed-ai-panel-inline {
+  margin-left: 0;
+}
+
+/* The ✨ toggle on a bullet or item row while its panel is open. */
+.ed-icon-btn-active {
+  background: var(--signal-dim);
+  border-radius: var(--radius);
+}
+
 .ed-ai-presets,
 .ed-ai-actions,
 .ed-ai-key-row,

@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import {
+  BLOCK_TARGET,
   bulletChange,
   changedFields,
+  describeTarget,
   hiddenBulletCount,
   isProposalStale,
   pickerTense,
   presetsFor,
+  proposalKey,
   tenseChangeNote,
   wordDiff,
 } from './aiReview.js';
@@ -62,12 +65,42 @@ function BulletReview({ review }) {
   );
 }
 
-// Lives in an expanded block row. Requesting a rewrite and holding the
-// proposal happen in EditorPage (so the right-hand preview can show it);
-// this panel only collects the instruction and shows the review.
-export function AiRewritePanel({ block, ai }) {
-  const state = ai.state?.blockId === block.id ? ai.state : null;
-  const [open, setOpen] = useState(Boolean(state));
+// Where hidden bullets end up for each target, for the panel's note about
+// them (they're sent to the AI either way).
+function hiddenNote(target, count) {
+  const subject = count === 1 ? 'One bullet here is' : `${count} bullets here are`;
+  switch (target.kind) {
+    case 'description':
+      return `${subject} hidden from web or print. Hidden bullets are sent to the AI as context. It's told to keep them out of the description, which always shows, but check the review before accepting.`;
+    case 'bullet':
+      return `${subject} hidden from web or print. Hidden bullets are sent to the AI as context. It's told not to carry their content into this bullet unless it's hidden too, but check the review before accepting.`;
+    default:
+      return `${subject} hidden from web or print. Hidden bullets are sent to the AI too. It's told to keep them out of the tagline, which always shows, but check the review before accepting.`;
+  }
+}
+
+const PLACEHOLDERS = {
+  block: 'What should change? e.g. Tailor this toward platform engineering roles',
+  description: 'What should change? e.g. Focus on the platform work',
+  bullet: 'What should change? e.g. Lead with the result',
+  item: 'What should change? e.g. Make this more specific',
+};
+
+// Requesting a rewrite and holding the proposal happen in EditorPage (so
+// the right-hand preview can show it); this panel only collects the
+// instruction and shows the review. `target` (see aiReview.js) picks the
+// part of the block it rewrites.
+//
+// Uncontrolled (no `open` prop), it renders its own `label` button and
+// opens in place: the block-level panel and the description's. Controlled,
+// the caller owns the trigger and `open`, and `onClose` runs when the panel
+// is closed: a bullet or item row puts its button in the row and the panel
+// below it.
+export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openProp, onClose, label = '✨ Rewrite with AI', className = '' }) {
+  const key = proposalKey(block.id, target);
+  const state = ai.proposals?.[key] || null;
+  const controlled = openProp !== undefined;
+  const [openState, setOpenState] = useState(Boolean(state));
   const [instruction, setInstruction] = useState(state?.instruction || '');
   // Custom blocks pick a tense per rewrite (pickerTense). Without the options
   // from the server there's no picker, and no tense is sent, so the server
@@ -78,16 +111,18 @@ export function AiRewritePanel({ block, ai }) {
   // rewrites keep it. This panel's own Cancel and Discard buttons close it and
   // clear the pick. Collapsing the block row unmounts the panel; on remount the
   // pick comes back only if it was sent with AI state still held for this
-  // block (loading, error, or a proposal), and is otherwise dropped. A picker
-  // left on the default keeps following the setting.
+  // block and target (loading, error, or a proposal), and is otherwise
+  // dropped. A picker left on the default keeps following the setting.
   const [pickedTense, setPickedTense] = useState(state?.pickedTense ?? null);
   const tense = pickerTense(pickedTense, ai.pickedTenseDefault, ai.pickedTenses);
+  const open = controlled ? openProp : openState;
 
   if (!open) {
+    if (controlled) return null;
     return (
-      <div className="ed-ai-panel">
-        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setOpen(true)}>
-          ✨ Rewrite with AI
+      <div className={`ed-ai-panel ${className}`}>
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setOpenState(true)}>
+          {label}
         </button>
       </div>
     );
@@ -95,27 +130,34 @@ export function AiRewritePanel({ block, ai }) {
 
   const loading = state?.status === 'loading';
   const proposal = state?.status === 'ready' ? state.proposal : null;
-  const fields = proposal ? changedFields(block.type, proposal.baseData, proposal.proposedData) : [];
-  const stale = proposal && isProposalStale(proposal, block.data);
-  const hiddenCount = hiddenBulletCount(block.type, block.data);
+  // The diff reads the proposal's own data, so it uses the position the
+  // proposal was made at, not where the item has since moved to.
+  const fields = proposal
+    ? changedFields(block.type, proposal.baseData, proposal.proposedData, proposal.origin || proposal.target)
+    : [];
+  const stale = proposal && isProposalStale(block.type, proposal, block.data);
+  const hiddenCount = target.kind === 'item' ? 0 : hiddenBulletCount(block.type, block.data);
   const tenseNote = picksTense && proposal ? tenseChangeNote(state.tense, tense, ai.pickedTenses) : null;
   const unchanged = proposal && fields.length === 0 && !proposal.bulletReview?.items.some((i) => bulletChange(i) !== 'unchanged') && !proposal.bulletReview?.removed.length;
+  const part = describeTarget(target);
 
   function request() {
     if (!instruction.trim()) return;
-    ai.onRequest(block.id, instruction.trim(), picksTense ? tense : undefined, picksTense ? pickedTense : null);
+    ai.onRequest(block.id, target, instruction.trim(), picksTense ? tense : undefined, picksTense ? pickedTense : null);
   }
 
   function close() {
-    if (state) ai.onReject();
+    if (state) ai.onReject(key);
     setPickedTense(null);
-    setOpen(false);
+    if (controlled) onClose?.();
+    else setOpenState(false);
   }
 
   return (
-    <div className="ed-ai-panel ed-ai-panel-open">
+    <div className={`ed-ai-panel ed-ai-panel-open ${className}`}>
+      {part && <div className="ed-ai-review-label">Rewrite {part} with AI</div>}
       <div className="ed-ai-presets">
-        {presetsFor(block.type, block.data).map((preset) => (
+        {presetsFor(block.type, block.data, target).map((preset) => (
           <button
             key={preset.label}
             type="button"
@@ -135,17 +177,12 @@ export function AiRewritePanel({ block, ai }) {
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) request();
         }}
-        placeholder="What should change? e.g. Tailor this toward platform engineering roles"
+        placeholder={PLACEHOLDERS[target.kind] || PLACEHOLDERS.block}
         maxLength={2000}
         disabled={loading}
+        aria-label={part ? `Instruction for rewriting ${part}` : 'Instruction for the AI rewrite'}
       />
-      {hiddenCount > 0 && (
-        <p className="ed-field-hint">
-          {hiddenCount === 1 ? 'One bullet here is' : `${hiddenCount} bullets here are`} hidden from web or print. Hidden
-          bullets are sent to the AI too. It's told to keep them out of the tagline and description, which always
-          show, but check the review before accepting.
-        </p>
-      )}
+      {hiddenCount > 0 && <p className="ed-field-hint">{hiddenNote(target, hiddenCount)}</p>}
       <div className="ed-ai-actions">
         {picksTense && (
           <select
@@ -187,11 +224,13 @@ export function AiRewritePanel({ block, ai }) {
           <BulletReview review={proposal.bulletReview} />
           {stale && (
             <div className="ed-field-error">
-              You've edited this block since this rewrite was generated. Accepting replaces those edits.
+              {target.kind === 'bullet'
+                ? "This bullet has been edited or moved since this rewrite was generated. Accepting puts the rewrite at this position, replacing what's there now."
+                : `You've edited this ${part || 'block'} since this rewrite was generated. Accepting replaces those edits.`}
             </div>
           )}
           <div className="ed-ai-actions">
-            <button type="button" className="ed-btn ed-btn-primary" onClick={() => ai.onAccept()}>
+            <button type="button" className="ed-btn ed-btn-primary" onClick={() => ai.onAccept(key)}>
               Accept
             </button>
             <span className="ed-field-hint">Previewed on the right. Accepting saves a draft change; publish to make it live.</span>

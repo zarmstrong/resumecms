@@ -9,7 +9,15 @@ import { ResumeView } from '../resume/ResumeView.jsx';
 import { pdfUrl } from '../resume/pdfUrl.js';
 import { BLOCK_TYPE_LABELS, defaultDataForType } from './blockDefaults.js';
 import { createBlockReorderItems } from './blockDrag.js';
-import { isProposalStale } from './aiReview.js';
+import {
+  applyProposal,
+  describeTarget,
+  isProposalStale,
+  previewData,
+  proposalKey,
+  relocateTarget,
+  targetSlice,
+} from './aiReview.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -62,14 +70,21 @@ export function EditorPage({ onLogout }) {
   const [leftWidth, setLeftWidth] = useState(loadLeftPaneWidth);
   const [resizingPane, setResizingPane] = useState(false);
   const [aiSettings, setAiSettings] = useState(null);
-  // At most one AI rewrite in flight or under review at a time:
-  // { blockId, instruction, status: 'loading' | 'ready' | 'error', proposal, error }
-  const [aiState, setAiState] = useState(null);
+  // Open AI rewrites, keyed by proposalKey(blockId, target), so each block
+  // (and each bullet, description, or item within one) can have its own in
+  // flight or under review at the same time:
+  // { blockId, target, instruction, status: 'loading' | 'ready' | 'error', proposal, error }
+  const [aiProposals, setAiProposals] = useState({});
 
   const debounceTimers = useRef({});
   const columnsRef = useRef(null);
   const reorderRequestIdRef = useRef(0);
-  const aiRequestIdRef = useRef(0);
+  // Requests still in flight, per proposal key ({ id, blockId, target,
+  // status: 'loading' }, the fields dropAiProposals' predicates can rely on).
+  // A response is applied only if its request is still the latest for that
+  // key; the entry is removed once it settles.
+  const aiRequestsRef = useRef({});
+  const aiRequestCounterRef = useRef(0);
   // Tracks the in-progress width during a drag so handleUp can persist the
   // final value directly — avoids a synchronous localStorage write on every
   // pointermove (one per pixel dragged), which was making the resize feel
@@ -214,7 +229,8 @@ export function EditorPage({ onLogout }) {
 
   async function handleDiscard() {
     const draft = await api.discardDraft();
-    clearAiProposal();
+    // Every block's data changes out from under its proposals.
+    dropAiProposals(() => true);
     setHeader(draft.header);
     setSite(draft.site);
     setBlocks(draft.blocks);
@@ -305,7 +321,7 @@ export function EditorPage({ onLogout }) {
     setBlocks((prev) =>
       prev.filter((b) => b.id !== id).map((b) => (b.parentId === id ? { ...b, parentId: null } : b))
     );
-    if (aiState?.blockId === id) clearAiProposal();
+    dropAiProposals((entry) => entry.blockId === id);
     try {
       await api.deleteBlock(id);
     } catch (err) {
@@ -340,51 +356,130 @@ export function EditorPage({ onLogout }) {
   }
 
   // An AI rewrite is only a proposal held here until accepted: the preview
-  // pane renders it in place of the block's real data, and nothing reaches
-  // the server until handleAiAccept saves it like any other block edit.
-  function clearAiProposal() {
-    aiRequestIdRef.current++;
-    setAiState(null);
+  // pane renders it in place of that part of the block's real data, and
+  // nothing reaches the server until handleAiAccept saves it like any other
+  // block edit.
+  //
+  // Drops every proposal `match` returns true for, and forgets their
+  // requests so a response still in flight for one is ignored. `match` sees
+  // both state entries and in-flight request entries; both carry blockId,
+  // target, and status.
+  function dropAiProposals(match) {
+    for (const [key, request] of Object.entries(aiRequestsRef.current)) {
+      if (match(request)) delete aiRequestsRef.current[key];
+    }
+    setAiProposals((prev) => {
+      const next = Object.fromEntries(Object.entries(prev).filter(([, entry]) => !match(entry)));
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }
+
+  // Keeps open proposals attached to what they were made for. A bullet or
+  // item proposal follows its bullet or item when the list shifts (a drag,
+  // or a delete or insert above it): it's re-keyed to the new position, so
+  // its panel and preview move with it. One whose position is gone and can't
+  // be found, or whose block is gone, is dropped, since it would otherwise
+  // stay counted in the banner with no panel to reject it from. Loading
+  // entries are left alone until their response lands (they have no
+  // baseData yet); this runs again then.
+  useEffect(() => {
+    const moved = [];
+    const dropped = new Set();
+    for (const [key, entry] of Object.entries(aiProposals)) {
+      const block = blocks.find((b) => b.id === entry.blockId);
+      if (!block) {
+        dropped.add(key);
+        continue;
+      }
+      if (entry.status !== 'ready') continue;
+      const target = relocateTarget(block.type, entry.proposal, block.data);
+      if (target === null) dropped.add(key);
+      else if (target !== entry.proposal.target) moved.push([key, target]);
+    }
+    if (moved.length === 0 && dropped.size === 0) return;
+    for (const key of dropped) delete aiRequestsRef.current[key];
+    setAiProposals((prev) => {
+      const gone = new Set([...dropped, ...moved.map(([key]) => key)]);
+      const next = Object.fromEntries(Object.entries(prev).filter(([key]) => !gone.has(key)));
+      for (const [key, target] of moved) {
+        const entry = prev[key];
+        if (!entry) continue;
+        const newKey = proposalKey(entry.blockId, target);
+        // Two proposals can't share a position; the one already there wins.
+        if (next[newKey]) continue;
+        const origin = entry.proposal.origin || entry.proposal.target;
+        next[newKey] = { ...entry, target, proposal: { ...entry.proposal, target, origin } };
+      }
+      return next;
+    });
+  }, [blocks, aiProposals]);
+
+  function handleAiReject(key) {
+    dropAiProposals((entry) => proposalKey(entry.blockId, entry.target) === key);
   }
 
   // `tense` is what a custom block's rewrite is sent with; `pickedTense` is
   // the user's own pick in the panel, or null when the picker was left on the
-  // setting's default, so a reopened panel restores only a real pick.
-  async function handleAiRequest(blockId, instruction, tense, pickedTense = null) {
+  // setting's default, so a reopened panel restores only a real pick. Both
+  // are kept on the entry for that block and target.
+  async function handleAiRequest(blockId, target, instruction, tense, pickedTense = null) {
     const block = blocks.find((b) => b.id === blockId);
     if (!block) return;
-    // A newer request (or a discard) supersedes any response still in flight.
-    const requestId = ++aiRequestIdRef.current;
-    setAiState({ blockId, instruction, tense, pickedTense, status: 'loading', proposal: null, error: null });
+    // A newer request for the same block and target (or a discard)
+    // supersedes any response still in flight for it; other keys are left
+    // alone.
+    const key = proposalKey(blockId, target);
+    const id = ++aiRequestCounterRef.current;
+    aiRequestsRef.current[key] = { id, blockId, target, status: 'loading' };
+    const settle = (patch) => {
+      if (aiRequestsRef.current[key]?.id !== id) return;
+      if (patch.status !== 'loading') delete aiRequestsRef.current[key];
+      setAiProposals((prev) => ({
+        ...prev,
+        [key]: { blockId, target, instruction, tense, pickedTense, proposal: null, error: null, ...patch },
+      }));
+    };
+    settle({ status: 'loading' });
     try {
-      const { proposal } = await api.aiRewrite(blockId, block.data, instruction, tense);
-      if (aiRequestIdRef.current !== requestId) return;
-      setAiState({ blockId, instruction, tense, pickedTense, status: 'ready', proposal, error: null });
+      const { proposal } = await api.aiRewrite(blockId, block.data, instruction, target, tense);
+      settle({ status: 'ready', proposal });
     } catch (err) {
-      if (aiRequestIdRef.current !== requestId) return;
-      setAiState({ blockId, instruction, tense, pickedTense, status: 'error', proposal: null, error: err.message });
+      settle({ status: 'error', error: err.message });
     }
   }
 
-  function handleAiAccept() {
-    const proposal = aiState?.proposal;
+  function handleAiAccept(key) {
+    const proposal = aiProposals[key]?.proposal;
     const block = proposal && blocks.find((b) => b.id === proposal.blockId);
-    if (!block) return clearAiProposal();
+    if (!block) return handleAiReject(key);
+    if (targetSlice(block.type, block.data, proposal.target) === null) {
+      window.alert(`The ${describeTarget(proposal.target)} this rewrite was for is no longer there, so it can't be applied.`);
+      return handleAiReject(key);
+    }
     if (
-      isProposalStale(proposal, block.data) &&
-      !window.confirm("You've edited this block since the rewrite was generated. Replace your edits with the rewrite?")
+      isProposalStale(block.type, proposal, block.data) &&
+      !window.confirm(
+        `You've edited this ${describeTarget(proposal.target) || 'block'} since the rewrite was generated. Replace your edits with the rewrite?`
+      )
     ) {
       return;
     }
-    handleBlockDataChange(block.id, proposal.proposedData);
-    clearAiProposal();
+    handleBlockDataChange(block.id, applyProposal(block.type, block.data, proposal));
+    handleAiReject(key);
   }
 
-  const aiProposal = aiState?.status === 'ready' ? aiState.proposal : null;
-  const aiProposalBlock = aiProposal && blocks.find((b) => b.id === aiProposal.blockId);
-  const previewBlocks = aiProposal
-    ? blocks.map((b) => (b.id === aiProposal.blockId ? { ...b, data: aiProposal.proposedData } : b))
+  const readyProposals = Object.values(aiProposals)
+    .filter((entry) => entry.status === 'ready')
+    .map((entry) => entry.proposal);
+  const aiHighlightIds = new Set(readyProposals.map((p) => p.blockId));
+  const previewBlocks = readyProposals.length
+    ? blocks.map((b) =>
+        aiHighlightIds.has(b.id) ? { ...b, data: previewData(b.type, b.data, readyProposals.filter((p) => p.blockId === b.id)) } : b
+      )
     : blocks;
+  // With exactly one open rewrite, the banner can accept it directly.
+  const soleReadyKey = readyProposals.length === 1 ? proposalKey(readyProposals[0].blockId, readyProposals[0].target) : null;
+  const soleReadyBlock = soleReadyKey && blocks.find((b) => b.id === readyProposals[0].blockId);
 
   async function handleLogout() {
     await api.logout();
@@ -476,10 +571,10 @@ export function EditorPage({ onLogout }) {
                 pickedTenseTypes: aiSettings?.pickedTenseTypes,
                 pickedTenses: aiSettings?.pickedTenses,
                 pickedTenseDefault: aiSettings?.pickedTenseDefault,
-                state: aiState,
+                proposals: aiProposals,
                 onRequest: handleAiRequest,
                 onAccept: handleAiAccept,
-                onReject: clearAiProposal,
+                onReject: handleAiReject,
               }}
             />
             <AddBlockMenu onAdd={handleAdd} />
@@ -500,17 +595,27 @@ export function EditorPage({ onLogout }) {
         />
 
         <div className="ed-right-pane">
-          {aiProposalBlock ? (
+          {readyProposals.length > 0 ? (
             <div className="ed-preview-label ed-ai-preview-banner">
               <span>
-                Previewing AI rewrite of {BLOCK_TYPE_LABELS[aiProposalBlock.type] || 'block'} (outlined) — not saved yet
+                {soleReadyBlock
+                  ? `Previewing AI rewrite of ${BLOCK_TYPE_LABELS[soleReadyBlock.type] || 'block'}${
+                      describeTarget(readyProposals[0].target) ? ` (${describeTarget(readyProposals[0].target)})` : ''
+                    }, outlined — not saved yet`
+                  : `Previewing ${readyProposals.length} AI rewrites (outlined) — not saved yet. Accept each in its block.`}
               </span>
-              <button type="button" className="ed-btn ed-btn-ghost" onClick={clearAiProposal}>
-                Discard
+              <button
+                type="button"
+                className="ed-btn ed-btn-ghost"
+                onClick={() => dropAiProposals((entry) => entry.status === 'ready')}
+              >
+                {readyProposals.length === 1 ? 'Discard' : 'Discard all'}
               </button>
-              <button type="button" className="ed-btn ed-btn-primary" onClick={handleAiAccept}>
-                Accept
-              </button>
+              {soleReadyKey && (
+                <button type="button" className="ed-btn ed-btn-primary" onClick={() => handleAiAccept(soleReadyKey)}>
+                  Accept
+                </button>
+              )}
             </div>
           ) : (
             <div className="ed-preview-label">Draft preview — dimmed blocks are hidden from web and/or print</div>
@@ -521,7 +626,7 @@ export function EditorPage({ onLogout }) {
               site={site}
               blocks={previewBlocks}
               mode="preview"
-              highlightBlockId={aiProposal?.blockId}
+              highlightBlockIds={aiHighlightIds}
             />
           </div>
         </div>

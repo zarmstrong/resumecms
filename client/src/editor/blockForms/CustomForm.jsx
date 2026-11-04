@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { CUSTOM_BODY_TYPES, defaultCustomItem } from '../blockDefaults.js';
+import { targetKey } from '../aiReview.js';
+import { useCloseWhenEntryLeaves } from '../useCloseWhenEntryLeaves.js';
 
 const DEFAULT_TAG_COLOR = '#2f6f4e';
 
@@ -92,7 +95,58 @@ function ItemBodyFields({ item, onChange }) {
   }
 }
 
-export function CustomForm({ data, onChange }) {
+// One item row. `aiPanel`/`aiEntry` are as in ExperienceForm's bullets: the
+// item's rewrite panel opens below its fields, and stays open while it has
+// a rewrite in flight or under review.
+function CustomItem({ item, index, setItem, setItemType, removeItem, aiPanel, aiEntry }) {
+  const [aiOpen, setAiOpen] = useState(false);
+  const aiShown = Boolean(aiPanel && (aiOpen || aiEntry));
+  useCloseWhenEntryLeaves(aiEntry, setAiOpen);
+  return (
+    <div className="ed-custom-item">
+      <div className="ed-field-row">
+        <input
+          className="ed-input ed-input-flex"
+          value={item.heading || ''}
+          onChange={(e) => setItem(index, { heading: e.target.value })}
+          placeholder="Optional item heading"
+        />
+        <select
+          className="ed-input ed-field-narrow"
+          value={item.bodyType || 'text'}
+          onChange={(e) => setItemType(index, e.target.value)}
+        >
+          {CUSTOM_BODY_TYPES.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="ed-icon-btn" onClick={() => removeItem(index)} aria-label="Remove item">
+          ✕
+        </button>
+        {aiPanel && (
+          <button
+            type="button"
+            className={`ed-icon-btn${aiShown ? ' ed-icon-btn-active' : ''}`}
+            onClick={() => setAiOpen((open) => !open)}
+            aria-label="Rewrite item with AI"
+            aria-expanded={aiShown}
+            title="Rewrite this item with AI"
+          >
+            ✨
+          </button>
+        )}
+      </div>
+      <ItemBodyFields item={item} onChange={(patch) => setItem(index, patch)} />
+      {aiShown &&
+        aiPanel({ kind: 'item', index }, { open: true, onClose: () => setAiOpen(false), className: 'ed-ai-panel-inline' })}
+    </div>
+  );
+}
+
+// `aiPanel`/`aiEntries`: see ExperienceForm.
+export function CustomForm({ data, onChange, aiPanel = null, aiEntries = null }) {
   const items = (data.items || []).map(normalizeItem);
 
   function setItem(i, patch) {
@@ -125,31 +179,16 @@ export function CustomForm({ data, onChange }) {
       <div className="ed-field">
         <span>Items</span>
         {items.map((item, i) => (
-          <div className="ed-custom-item" key={i}>
-            <div className="ed-field-row">
-              <input
-                className="ed-input ed-input-flex"
-                value={item.heading || ''}
-                onChange={(e) => setItem(i, { heading: e.target.value })}
-                placeholder="Optional item heading"
-              />
-              <select
-                className="ed-input ed-field-narrow"
-                value={item.bodyType || 'text'}
-                onChange={(e) => setItemType(i, e.target.value)}
-              >
-                {CUSTOM_BODY_TYPES.map(({ value, label }) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="ed-icon-btn" onClick={() => removeItem(i)} aria-label="Remove item">
-                ✕
-              </button>
-            </div>
-            <ItemBodyFields item={item} onChange={(patch) => setItem(i, patch)} />
-          </div>
+          <CustomItem
+            key={i}
+            item={item}
+            index={i}
+            setItem={setItem}
+            setItemType={setItemType}
+            removeItem={removeItem}
+            aiPanel={aiPanel}
+            aiEntry={aiEntries?.[targetKey({ kind: 'item', index: i })]}
+          />
         ))}
         <button type="button" className="ed-btn ed-btn-ghost" onClick={addItem}>
           + Add item
