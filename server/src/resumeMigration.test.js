@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { ensureSchema } from './schema.js';
-import { migrateToResumes, pdfPathFor, DEFAULT_SLUG } from './resumeMigration.js';
+import { migrateToResumes, adoptLegacyRows, DEFAULT_SLUG } from './resumeMigration.js';
+import { pdfPathFor } from './pdfPaths.js';
 import { createResumeStore } from './resumeStore.js';
 
 // An install from before resume variants: the old two-table schema (no
@@ -128,4 +129,22 @@ test('a failed migration puts the PDF back and leaves the database as it was', (
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM resumes').get().n, 0);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM blocks WHERE resume_id IS NOT NULL').get().n, 0);
   assert.ok(db.prepare("SELECT 1 FROM settings WHERE key = 'header'").get());
+});
+
+test('rows written by pre-variant code after the migration: blocks are adopted, settings only reported', () => {
+  const { db, legacyPdfPath, pdfDir } = legacyInstall();
+  const id = migrateToResumes(db, { pdfDir, legacyPdfPath });
+  assert.deepEqual(adoptLegacyRows(db), { adopted: 0, legacyKeys: [] });
+
+  // What a rolled-back image would write: an unowned block and a global header.
+  db.prepare(
+    "INSERT INTO blocks (id, type, position, data, created_at, updated_at) VALUES ('late', 'summary', 2, '{}', 'x', 'x')"
+  ).run();
+  db.prepare(`INSERT INTO settings (key, value) VALUES ('header', '{"name":"Placeholder"}')`).run();
+
+  assert.deepEqual(adoptLegacyRows(db), { adopted: 1, legacyKeys: ['header'] });
+  assert.equal(db.prepare("SELECT resume_id FROM blocks WHERE id = 'late'").get().resume_id, id);
+  const store = createResumeStore({ db, pdfDir, renderPdf: async () => Buffer.from('x') });
+  assert.deepEqual(store.getHeader(), { name: 'Zed' });
+  assert.ok(store.getBlock('late'));
 });

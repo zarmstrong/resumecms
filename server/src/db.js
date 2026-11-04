@@ -7,7 +7,7 @@ import { ensureSchema } from './schema.js';
 import { createSettings } from './settings.js';
 import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
 import { DATA_DIR } from './dataDir.js';
-import { migrateToResumes } from './resumeMigration.js';
+import { migrateToResumes, adoptLegacyRows } from './resumeMigration.js';
 import { LEGACY_PDF_PATH, PDF_DIR } from './pdfPaths.js';
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -136,6 +136,17 @@ function seedLegacyResume() {
 if (!db.prepare('SELECT 1 FROM resumes LIMIT 1').get()) {
   seedLegacyResume();
   migrateToResumes(db, { pdfDir: PDF_DIR, legacyPdfPath: LEGACY_PDF_PATH });
+}
+
+{
+  const { adopted, legacyKeys } = adoptLegacyRows(db);
+  if (adopted) console.warn(`Attached ${adopted} block(s) with no resume to the default resume.`);
+  if (legacyKeys.length) {
+    console.warn(
+      `WARNING: the global settings table has per-resume rows (${legacyKeys.join(', ')}), probably written by an ` +
+        'older version. They are ignored; the default resume reads its own rows in resume_settings.'
+    );
+  }
 }
 
 // RESUMECMS_ADMIN_USERNAME/RESUMECMS_APP_PASSWORD are only read here, once,

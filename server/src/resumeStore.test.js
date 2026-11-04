@@ -6,7 +6,8 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { ensureSchema } from './schema.js';
 import { createResumeStore, NESTABLE_TYPES } from './resumeStore.js';
-import { migrateToResumes, pdfPathFor } from './resumeMigration.js';
+import { migrateToResumes } from './resumeMigration.js';
+import { pdfPathFor } from './pdfPaths.js';
 
 // Exercises the real SQL against an in-memory database — the regression
 // guard for the logic that used to live inline in routes/blocks.js and
@@ -674,7 +675,7 @@ test('ensurePdfs reports a failed render without hiding the others', async () =>
 
   const { rendered, errors } = await store.ensurePdfs();
   assert.equal(rendered, 1);
-  assert.deepEqual(errors.map((e) => e.message), ['boom']);
+  assert.deepEqual(errors.map((e) => [e.resumeId, e.error.message]), [[broken, 'boom']]);
   assert.ok(store.forResume(fine).getPdfFile());
   assert.equal(store.forResume(broken).getPdfFile(), null);
 });

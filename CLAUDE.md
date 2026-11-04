@@ -122,6 +122,10 @@ it attaches the blocks, moves the settings rows, and moves
 `<RESUMECMS_DATA_DIR>/resume.pdf` to the new per-resume path. A fresh
 install goes through the same path: `db.js` seeds the old single-resume
 shape and migrates it, and none of that seeding runs once a resume exists.
+Every boot also runs `adoptLegacyRows()`: blocks with no `resume_id`
+(written by a rolled-back pre-variant image) are attached to the default
+resume, and per-resume keys back in the global `settings` table are only
+warned about, never moved.
 
 ### Route mount order matters
 
@@ -393,7 +397,10 @@ for every published resume, renders only if that resume has no PDF yet) —
 (the store's `getPdfFile()`), it doesn't render on demand. Each resume has
 its own file, `<RESUMECMS_DATA_DIR>/pdf/<resume id>.pdf` (`pdfPaths.js`,
 `pdfPathFor()`), keyed by id so a slug rename never orphans it; the
-renderer loads `/print?resume=<id>`. All of them go through the store's
+renderer loads `/print?resume=<id>`. The client doesn't read that
+parameter yet, so `store.js` refuses to render any resume but the default
+(it would capture the default's content under another resume's name);
+lift that once `/print` honours it. All of them go through the store's
 single PDF queue (`withPdfLock`, shared by every resume), so two renders
 never run at once and a slow first-boot render can't overwrite a newer
 publish; keep any new PDF-writing code on that queue. Each render is bounded by the

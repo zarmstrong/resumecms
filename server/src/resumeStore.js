@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { httpError } from './httpError.js';
 import { assertBlockData, isValidBlockData } from './blockData.js';
 import { createResumeSettings } from './settings.js';
-import { pdfPathFor } from './resumeMigration.js';
+import { pdfPathFor } from './pdfPaths.js';
 import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
 import { promotedBlockPositions } from './blockDeletion.js';
 import { findSplitSectionId } from './blockReorder.js';
@@ -154,16 +154,35 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     return scopedStore(resumeId);
   }
 
+  // A resume's operations close over nothing but its id (all state lives in
+  // SQLite and the PDF queue above), so one instance per id is reused rather
+  // than rebuilt on every call through the default-bound delegates. (forResume
+  // checks the id exists before reaching this, but whatever deletes a resume
+  // should still drop its entry.)
+  const scopedStores = new Map();
+  function scopedStore(resumeId) {
+    let scoped = scopedStores.get(resumeId);
+    if (!scoped) {
+      scoped = createScopedStore(resumeId);
+      scopedStores.set(resumeId, scoped);
+    }
+    return scoped;
+  }
+
   // Renders a PDF for every published resume that has none yet. Each one
   // is queued behind any in-flight publish, so none can overwrite a fresher
   // render. Resolves once all have settled, with how many were rendered
-  // and the failures (one resume's broken render mustn't hide the others).
+  // and the failures as { resumeId, error } (one resume's broken render
+  // mustn't hide the others, and the log has to say which one broke).
   async function ensurePdfs() {
-    const rows = db.prepare("SELECT resume_id FROM resume_settings WHERE key = 'published_resume'").all();
-    const results = await Promise.allSettled(rows.map(({ resume_id: id }) => scopedStore(id).ensurePdf()));
+    const ids = db
+      .prepare("SELECT resume_id FROM resume_settings WHERE key = 'published_resume'")
+      .all()
+      .map((row) => row.resume_id);
+    const results = await Promise.allSettled(ids.map((id) => scopedStore(id).ensurePdf()));
     return {
       rendered: results.filter((r) => r.status === 'fulfilled' && r.value.rendered).length,
-      errors: results.filter((r) => r.status === 'rejected').map((r) => r.reason),
+      errors: results.flatMap((r, i) => (r.status === 'rejected' ? [{ resumeId: ids[i], error: r.reason }] : [])),
     };
   }
 
@@ -175,7 +194,7 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
 
   // ---- one resume ----------------------------------------------------------
 
-  function scopedStore(resumeId) {
+  function createScopedStore(resumeId) {
     const { getSetting, setSetting, touchDraft } = createResumeSettings(db, resumeId);
     const pdfPath = pdfPathFor(pdfDir, resumeId);
 

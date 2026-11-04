@@ -91,6 +91,8 @@ app.listen(PORT, () => {
   // running, so they can't race on the output files.
   store
     .ensurePdfs()
-    .then(({ errors }) => errors.forEach((err) => console.error('Initial PDF generation failed:', err)))
+    .then(({ errors }) =>
+      errors.forEach(({ resumeId, error }) => console.error(`Initial PDF generation failed for resume ${resumeId}:`, error))
+    )
     .catch((err) => console.error('Initial PDF generation failed:', err));
 });
