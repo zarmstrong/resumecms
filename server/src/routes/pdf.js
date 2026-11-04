@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { store } from '../store.js';
 import { PDF as PDF_CACHE_CONTROL } from '../cacheHeaders.js';
+import { sendError } from './sendError.js';
 
 const router = Router();
 
@@ -17,8 +18,7 @@ router.get('/resume.pdf', (req, res) => {
   try {
     pdf = store.getPdfFile();
   } catch (err) {
-    console.error('PDF lookup failed:', err);
-    return res.status(500).json({ error: 'Could not read the PDF' });
+    return sendError(res, err);
   }
   if (!pdf) {
     return res.status(404).json({ error: 'No PDF has been published yet' });

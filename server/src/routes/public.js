@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { store } from '../store.js';
 import { REVALIDATE } from '../cacheHeaders.js';
+import { handle } from './sendError.js';
 
 const router = Router();
 
@@ -11,11 +12,11 @@ const router = Router();
 // mode=print -> blocks flagged visible in print/PDF (others become placeholders)
 // See publicBlocks.js for why hidden blocks are kept as content-free
 // placeholders instead of being dropped.
-router.get('/resume', (req, res) => {
+router.get('/resume', handle((req, res) => {
   // Always revalidate (see cacheHeaders.js), whatever happens below; the
   // ETag res.json adds still turns an unchanged snapshot into a 304.
   res.set('Cache-Control', REVALIDATE);
   res.json(store.getPublishedResume(req.query.mode));
-});
+}));
 
 export default router;

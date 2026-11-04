@@ -154,8 +154,9 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     return scopedStore(resumeId);
   }
 
-  // A resume's operations close over nothing but its id (all state lives in
-  // SQLite and the PDF queue above), so one instance per id is reused rather
+  // A resume's operations keep no state of their own (only its id and the
+  // store's shared handles; the rest lives in SQLite and the PDF queue
+  // above), so one instance per id is reused rather
   // than rebuilt on every call through the default-bound delegates. (forResume
   // checks the id exists before reaching this, but whatever deletes a resume
   // should still drop its entry.)

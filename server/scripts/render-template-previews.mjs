@@ -66,9 +66,12 @@ async function main() {
 
   const dataDir = mkdtempSync(path.join(tmpdir(), 'resumecms-preview-'));
   // The server auto-generates an initial PDF (its own separate headless
-  // Chromium launch, see src/pdfRenderer.js) whenever RESUMECMS_DATA_DIR has
-  // no resume.pdf yet — irrelevant to this tool and pure overhead, so
-  // pre-seed an empty placeholder to skip it.
+  // Chromium launch, see src/pdfRenderer.js) whenever the default resume has
+  // no PDF under RESUMECMS_DATA_DIR/pdf/ yet — irrelevant to this tool and
+  // pure overhead. The id of a fresh install's resume isn't known up front,
+  // so pre-seed an empty placeholder at the legacy resume.pdf path: the
+  // first-boot migration (resumeMigration.js) moves it to the default
+  // resume's path, which makes the boot render skip it.
   writeFileSync(path.join(dataDir, 'resume.pdf'), '');
   console.log(`Booting a throwaway server (port ${PORT}, ephemeral data dir ${dataDir})...`);
 
