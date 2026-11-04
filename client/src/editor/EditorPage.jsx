@@ -607,7 +607,9 @@ export function EditorPage({ onLogout }) {
               <button
                 type="button"
                 className="ed-btn ed-btn-ghost"
-                onClick={() => dropAiProposals((entry) => entry.status === 'ready')}
+                // Every rewrite, not just the ready ones: one still in flight
+                // would otherwise turn up in the preview after "Discard all".
+                onClick={() => dropAiProposals(() => true)}
               >
                 {readyProposals.length === 1 ? 'Discard' : 'Discard all'}
               </button>

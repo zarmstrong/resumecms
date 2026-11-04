@@ -383,7 +383,8 @@ of the preview until you accept or discard it.
   experience bullets. When it's off, the AI may only reword bullets in
   place. When it's on, the AI can restructure them, and each resulting
   bullet keeps the web/print visibility of the original it most
-  resembles. New bullets start visible everywhere, and the review marks
+  resembles. New top-level bullets start visible everywhere, and new
+  sub-bullets start with their parent bullet's visibility. The review marks
   added, removed, and hidden bullets. The AI is told not to merge a hidden
   bullet's content into a visible one. "Visibility of the original" means
   where it actually showed: a sub-bullet of a hidden bullet was never shown,

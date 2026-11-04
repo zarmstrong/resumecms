@@ -396,8 +396,28 @@ test('a bullet rewrite may restructure its sub-bullets, which inherit the bullet
   assert.equal(top.visiblePrint, false);
   assert.deepEqual(top.children.map((c) => c.text), ['Wrote runbooks for every service', 'Trained new hires']);
   assert.equal(top.children[0].visiblePrint, false);
+  // The new sub-bullet starts with the bullet's visibility, not visible everywhere.
+  assert.deepEqual([top.children[1].visibleWeb, top.children[1].visiblePrint], [true, false]);
   assert.deepEqual(bulletReview.items.map((i) => [i.depth, i.before]), [[0, 'Ran on-call'], [1, 'Wrote runbooks for every service'], [1, null]]);
+  assert.equal(bulletReview.items[2].visiblePrint, false);
   assert.deepEqual(bulletReview.removed, [{ depth: 1, before: 'Paged at night', wasHidden: true }]);
+});
+
+test('in a whole-block restructure, a new sub-bullet starts with its parent\'s visibility', () => {
+  const data = { bullets: [bullet('Ran the on-call rotation', { visibleWeb: false }), bullet('Shipped the billing system')] };
+  const rewrite = {
+    tagline: '',
+    bullets: [
+      { text: 'Ran the on-call rotation', children: [{ text: 'Wrote runbooks' }] },
+      { text: 'Shipped the billing system', children: [] },
+      { text: 'Mentored two engineers', children: [] },
+    ],
+  };
+  const { data: merged } = mergeRewrite('experience', data, rewrite, { allowBulletRestructure: true });
+  const flags = (b) => [b.visibleWeb, b.visiblePrint];
+  assert.deepEqual(flags(merged.bullets[0].children[0]), [false, true]);
+  // A new top-level bullet still starts visible everywhere.
+  assert.deepEqual(flags(merged.bullets[2]), [true, true]);
 });
 
 test('a sub-bullet rewrite writes only that sub-bullet', () => {

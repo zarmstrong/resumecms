@@ -407,19 +407,25 @@ export function restructureBullets(originals, proposed, { depth = 0, parentShown
 
   const review = [];
   let index = 0;
-  function build(list, depth) {
+  // A new (unmatched) bullet starts with its parent's visibility: `parentShown`
+  // for the list's own level (a single-bullet rewrite's sub-bullets), the
+  // built parent's flags below that, and visible everywhere at the top of a
+  // whole block. A new sub-bullet under a hidden bullet is hidden with it
+  // anyway, but keeping the flags means un-hiding the parent later doesn't
+  // reveal it while the sub-bullets around it stay hidden.
+  function build(list, depth, inherited) {
     return list.map((p) => {
       const ti = index++;
       const match = matchOf.has(ti) ? from[matchOf.get(ti)] : null;
-      const visibleWeb = match ? match.shown.visibleWeb : true;
-      const visiblePrint = match ? match.shown.visiblePrint : true;
+      const visibleWeb = match ? match.shown.visibleWeb : inherited ? inherited.visibleWeb : true;
+      const visiblePrint = match ? match.shown.visiblePrint : inherited ? inherited.visiblePrint : true;
       review.push({ depth, before: match ? match.bullet.text : null, after: p.text, wasHidden: match ? isHidden(match.shown) : false, visibleWeb, visiblePrint });
       const bullet = { text: p.text, visibleWeb, visiblePrint, children: [] };
-      if (p.children) bullet.children = build(p.children, depth + 1);
+      if (p.children) bullet.children = build(p.children, depth + 1, { visibleWeb, visiblePrint });
       return bullet;
     });
   }
-  const bullets = build(proposed, depth);
+  const bullets = build(proposed, depth, parentShown);
   const removed = from
     .filter((_, fi) => !usedFrom.has(fi))
     .map(({ bullet, depth, shown }) => ({ depth, before: bullet.text, wasHidden: isHidden(shown) }));
