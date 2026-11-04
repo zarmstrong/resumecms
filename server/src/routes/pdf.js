@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { store } from '../store.js';
 import { PDF as PDF_CACHE_CONTROL } from '../cacheHeaders.js';
 import { sendError } from './sendError.js';
+import { pdfFileName } from '../pdfFileName.js';
 
 const router = Router();
 
@@ -24,8 +25,7 @@ router.get('/resume.pdf', (req, res) => {
     return res.status(404).json({ error: 'No PDF has been published yet' });
   }
 
-  const name = (pdf.name || 'Resume').trim().replace(/[^a-z0-9]+/gi, ' ').trim().replace(/\s+/g, '-');
-  const fileName = `Resume-of-${name}.pdf`;
+  const fileName = pdfFileName(pdf.name);
 
   // The PDF headers go through sendFile's `headers` option so they're only
   // applied once the file is actually being sent — an error response below
