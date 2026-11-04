@@ -10,7 +10,13 @@ import { CustomForm } from './blockForms/CustomForm.jsx';
 import { VisibilityToggle } from './VisibilityToggle.jsx';
 import { BlockStyleForm } from './BlockStyleForm.jsx';
 import { AiRewritePanel } from './AiRewritePanel.jsx';
-import { AI_REWRITABLE_TYPES } from './aiReview.js';
+import { AI_REWRITABLE_TYPES, targetKey } from './aiReview.js';
+
+// One block's open AI proposals, keyed by targetKey, or null when it has none.
+function proposalsForBlock(proposals, blockId) {
+  const entries = Object.values(proposals || {}).filter((entry) => entry.blockId === blockId);
+  return entries.length ? Object.fromEntries(entries.map((entry) => [targetKey(entry.target), entry])) : null;
+}
 
 const FORM_COMPONENTS = {
   heading: HeadingForm,
@@ -57,6 +63,17 @@ export function SortableBlockRow({ block, nested, drop, nestTarget, moving, ai, 
 
   const FormComponent = FORM_COMPONENTS[block.type];
   const { title, subtitle } = summarize(block);
+  const aiEnabled = Boolean(ai?.available && AI_REWRITABLE_TYPES.has(block.type));
+  // Forms with parts that can be rewritten on their own (an experience
+  // description or bullet, a custom item) render a scoped panel with this,
+  // and look up a part's open proposal in `aiEntries` (keyed by targetKey).
+  // Both are rebuilt each render on purpose. ExperienceForm's memoized
+  // bullet rows only skip renders mid-drag, when the form passes its last
+  // props through unchanged anyway; a keystroke re-renders every row (see
+  // bulletPropsEqual). A stable callback reading a ref would let a skipped
+  // row keep a stale block or accept handler.
+  const aiPanel = aiEnabled ? (target, props) => <AiRewritePanel block={block} ai={ai} target={target} {...props} /> : null;
+  const aiEntries = aiEnabled ? proposalsForBlock(ai.proposals, block.id) : null;
 
   return (
     <div ref={setNodeRef} className={`ed-block-row${nested ? ' ed-block-row-nested' : ''}${isDragging || moving ? ' ed-block-row-dragging' : ''}${nestTarget ? ' ed-block-nest-target' : ''}${drop?.headingId ? ' ed-block-nest-active' : ''}`}>
@@ -93,9 +110,20 @@ export function SortableBlockRow({ block, nested, drop, nestTarget, moving, ai, 
       {expanded && (
         <div className="ed-block-row-body">
           {FormComponent && (
-            <FormComponent data={block.data} onChange={(newData) => onChangeData(block.id, newData)} />
+            <FormComponent
+              data={block.data}
+              onChange={(newData) => onChangeData(block.id, newData)}
+              aiPanel={aiPanel}
+              aiEntries={aiEntries}
+            />
           )}
-          {ai?.available && AI_REWRITABLE_TYPES.has(block.type) && <AiRewritePanel block={block} ai={ai} />}
+          {aiEnabled && (
+            <AiRewritePanel
+              block={block}
+              ai={ai}
+              label={block.type === 'experience' ? '✨ Rewrite tagline and bullets with AI' : '✨ Rewrite with AI'}
+            />
+          )}
           <BlockStyleForm data={block.data} onChange={(newData) => onChangeData(block.id, newData)} />
         </div>
       )}

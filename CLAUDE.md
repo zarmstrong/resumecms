@@ -241,9 +241,42 @@ filter and the print/PDF path need to recurse into `children`.
 returns a proposal: the block's data with only allowlisted prose fields
 replaced, via `mergeRewrite()` in `server/src/ai/rewritableFields.js`.
 `EditorPage` holds that proposal, swaps it into the `blocks` it passes to
-`ResumeView` (outlined via `highlightBlockId`), and on Accept saves it through
+`ResumeView` (outlined via `highlightBlockIds`), and on Accept saves it through
 the normal `PUT /api/blocks/:id` path, so `touchDraft()` and publish work
 unchanged.
+
+A request's optional `target` narrows the rewrite: `block` (default),
+`description` (experience), `bullet` with an index `path` (`[i]` with its
+sub-bullets, or `[i, j]`; experience), or `item` with an `index` (custom).
+`normalizeTarget()` validates it against the block (`InvalidTargetError` → 400).
+`rewriteInput()`/`outputSchema()` put only the target's fields in the editable
+set and schema, with the rest of the block as context (a placeholder marks
+the target's spot). `mergeRewrite()` writes back only the target, whatever
+else the model returns. In particular, an experience `block` rewrite no longer
+includes the description and copies it through unchanged; only the
+`description` target can change it. The editor keys open proposals by
+`proposalKey(blockId, target)` (`client/src/editor/aiReview.js`), so several
+can be open at once, even on one block. `applyProposal()` writes just a
+proposal's target onto the block's current data, `previewData()` composes all
+of a block's proposals for the preview, and `isProposalStale()` only compares
+the target's slice. Bullet and item targets are positions, so an effect in
+`EditorPage` re-keys a ready proposal when its bullet or item moves, and
+drops it when its position is gone, or its block is. `relocateTarget()`
+aligns the list at the proposal's depth in `anchorData` (the block data it
+was last placed against) with the current one: unchanged entries pair in
+order (LCS), an unpaired entry in an equal-sized gap was edited in place
+and stays put, and otherwise a unique unpaired exact copy is where it was
+dragged. The effect advances `anchorData` on every change to the block, so
+each call resolves one change; comparing against `baseData` instead can't
+tell "edited, then a bullet added above" from other sequences. A placed
+proposal keeps `origin`, its position in its own `baseData`/`proposedData`,
+which `applyProposal()`, `isProposalStale()` and the review diff read from.
+`previewedProposals()` is the one place that decides what the preview
+shows (the banner count and outline use it too), and a mounted row panel
+resyncs its instruction and tense when a different request (`requestId`)
+moves under it. The helpers take the block type because an
+experience `block` target doesn't own the description: accepting one keeps
+the current description.
 
 `REWRITABLE_TYPES` there is an explicit allowlist like `NESTABLE_TYPES`, mirrored
 client-side as `AI_REWRITABLE_TYPES` in `client/src/editor/aiReview.js`. A new

@@ -31,11 +31,11 @@ import './resume.css';
 // mode: 'web' | 'print' | 'preview'
 // 'preview' is used inside the editor and shows every block regardless of
 // visibility flags, dimming the ones that are hidden from web/print.
-// `highlightBlockId` (preview only) outlines one block — the editor uses it
-// to mark a block it's showing an unsaved AI rewrite for.
+// `highlightBlockIds` (preview only, a Set of ids) outlines blocks — the
+// editor uses it to mark the blocks it's showing unsaved AI rewrites for.
 // `pdfVersion` (web only) identifies the PDF on disk, from the public API;
 // it cache-busts the PDF link (see pdfUrl.js).
-export function ResumeView({ header, site, blocks, mode = 'web', highlightBlockId = null, pdfVersion = null }) {
+export function ResumeView({ header, site, blocks, mode = 'web', highlightBlockIds = null, pdfVersion = null }) {
   const isPreview = mode === 'preview';
   const colors = normalizeSiteColors(site);
   const pillPad = PILL_PADDING_CSS[normalizePillPadding(site)];
@@ -113,7 +113,7 @@ export function ResumeView({ header, site, blocks, mode = 'web', highlightBlockI
     if (block.hidden) return null;
 
     const dimmed = isPreview && !(block.visibleWeb && block.visiblePrint);
-    const highlighted = isPreview && highlightBlockId === block.id;
+    const highlighted = isPreview && Boolean(highlightBlockIds?.has(block.id));
 
     return (
       <div

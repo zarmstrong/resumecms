@@ -5,6 +5,8 @@ import {
 } from '@dnd-kit/core';
 import { MAX_BULLET_DEPTH, normalizeBullet } from '../../resume/bulletUtils.js';
 import { VisibilityToggle } from '../VisibilityToggle.jsx';
+import { targetKey } from '../aiReview.js';
+import { useRowPanelOpen } from '../useRowPanelOpen.js';
 import {
   bulletAt, dropTargetPath, moveAtPath, moveBulletBy, parsePath, pathKey, projectBulletDrop, removeAtPath, updateAtPath,
 } from '../bulletDrag.js';
@@ -20,6 +22,7 @@ const SCREEN_READER_INSTRUCTIONS = {
   draggable: 'Press Up or Down to move this bullet among its siblings. With a pointer, drag it to a new position.',
 };
 
+const DESCRIPTION_TARGET = Object.freeze({ kind: 'description' });
 function newBullet(text = '') {
   return { text, visibleWeb: true, visiblePrint: true, children: [] };
 }
@@ -34,7 +37,12 @@ function lowerFirst(text) {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
-export function ExperienceForm({ data, onChange }) {
+// `aiPanel` and `aiEntries` come from SortableBlockRow when AI rewrites are
+// available (both null otherwise): `aiPanel(target, props)` renders a
+// rewrite panel for the description or one bullet, and `aiEntries` holds
+// this block's open proposals by targetKey, so a bullet with one keeps its
+// panel open.
+export function ExperienceForm({ data, onChange, aiPanel = null, aiEntries = null }) {
   const bullets = (data.bullets || []).map((b) => normalizeBullet(b));
   const [importText, setImportText] = useState(null); // null = import panel hidden
   const [liveMessage, setLiveMessage] = useState('');
@@ -271,6 +279,10 @@ export function ExperienceForm({ data, onChange }) {
           placeholder="A short blurb about the role, shown above the bullet points"
         />
       </label>
+      {aiPanel?.(DESCRIPTION_TARGET, {
+        label: data.description?.trim() ? '✨ Rewrite description with AI' : '✨ Write description with AI',
+        className: 'ed-ai-panel-field',
+      })}
 
       <div className="ed-field">
         <span>Bullet points</span>
@@ -290,6 +302,8 @@ export function ExperienceForm({ data, onChange }) {
             addSubBullet={addSubBullet}
             removeBullet={removeBullet}
             moveBullet={moveBullet}
+            aiPanel={aiPanel}
+            aiEntries={aiEntries}
           />
         </DndContext>
         <div className="ed-bullet-actions">
@@ -390,12 +404,21 @@ function bulletPropsEqual(a, b) {
     && a.patchBullet === b.patchBullet
     && a.addSubBullet === b.addSubBullet
     && a.removeBullet === b.removeBullet
-    && a.moveBullet === b.moveBullet;
+    && a.moveBullet === b.moveBullet
+    && a.aiPanel === b.aiPanel
+    && a.aiEntries === b.aiEntries;
 }
 
-const BulletEditor = memo(function BulletEditor({ bullet, path, activeKey, drop, patchBullet, addSubBullet, removeBullet, moveBullet }) {
+const BulletEditor = memo(function BulletEditor({
+  bullet, path, activeKey, drop, patchBullet, addSubBullet, removeBullet, moveBullet, aiPanel, aiEntries,
+}) {
   const depth = path.length - 1;
   const key = pathKey(path);
+  // The panel opens when this bullet gets a rewrite (and on remount while it
+  // has one), and the ✨ button toggles it; see useRowPanelOpen.
+  const aiEntry = aiEntries?.[targetKey({ kind: 'bullet', path })];
+  const [aiOpen, setAiOpen] = useRowPanelOpen(aiEntry);
+  const aiShown = Boolean(aiPanel && aiOpen);
   const { attributes, listeners, setNodeRef: setDragRef, setActivatorNodeRef } = useDraggable({ id: key });
   const { setNodeRef: setDropRef } = useDroppable({ id: key });
   function setNodeRef(node) {
@@ -466,7 +489,23 @@ const BulletEditor = memo(function BulletEditor({ bullet, path, activeKey, drop,
         <button type="button" className="ed-icon-btn" onClick={() => removeBullet(path)} aria-label="Remove bullet">
           ✕
         </button>
+        {aiPanel && (
+          <button
+            type="button"
+            className={`ed-icon-btn${aiShown ? ' ed-icon-btn-active' : ''}`}
+            onClick={() => setAiOpen((open) => !open)}
+            aria-label={depth ? 'Rewrite sub-bullet with AI' : 'Rewrite bullet with AI'}
+            aria-expanded={aiShown}
+            title={depth ? 'Rewrite this sub-bullet with AI' : 'Rewrite this bullet (and its sub-bullets) with AI'}
+          >
+            ✨
+          </button>
+        )}
       </div>
+      {/* Outside the row, so the panel is never part of the drag handle's
+          node or a drop target. */}
+      {aiShown &&
+        aiPanel({ kind: 'bullet', path }, { open: true, onClose: () => setAiOpen(false), className: 'ed-ai-panel-inline' })}
       {bullet.children.length > 0 && (
         <div className="ed-bullet-children">
           {bullet.children.map((child, i) => (
@@ -480,6 +519,8 @@ const BulletEditor = memo(function BulletEditor({ bullet, path, activeKey, drop,
               addSubBullet={addSubBullet}
               removeBullet={removeBullet}
               moveBullet={moveBullet}
+              aiPanel={aiPanel}
+              aiEntries={aiEntries}
             />
           ))}
         </div>

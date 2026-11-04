@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RewriteShapeError, hasRewritableShape, mergeRewrite, outputSchema, rewriteInput, textSimilarity } from './rewritableFields.js';
+import {
+  InvalidTargetError,
+  RewriteShapeError,
+  hasRewritableShape,
+  mergeRewrite,
+  normalizeTarget,
+  outputSchema,
+  rewriteInput,
+  targetKey,
+  textSimilarity,
+} from './rewritableFields.js';
 
 const bullet = (text, flags = {}, children = []) => ({ text, visibleWeb: true, visiblePrint: true, children, ...flags });
 
@@ -22,7 +32,6 @@ test('rewriteInput separates editable prose from read-only facts', () => {
   const { editable, context } = rewriteInput('experience', experience);
   assert.deepEqual(editable, {
     tagline: 'Makes anvils.',
-    description: '',
     bullets: [
       { text: 'Built the deploy pipeline for all services', children: [{ text: 'Cut deploy time in half' }] },
       { text: 'Ran on-call rotation for the platform team', hidden: true, children: [] },
@@ -79,32 +88,43 @@ test('reword mode keeps each bullet\'s visibility by position', () => {
   assert.equal(bulletReview.items.find((i) => i.after === 'Led on-call').wasHidden, true);
 });
 
-test('an experience description can be written where there was none', () => {
-  const rewrite = {
+const DESCRIPTION = { kind: 'description' };
+
+test('an experience description can be written where there was none, changing nothing else', () => {
+  const rewrite = { description: ' Owned deploys and on-call for the platform team. ', tagline: 'Ignored', bullets: [] };
+  const { data, bulletReview } = mergeRewrite('experience', experience, rewrite, { target: DESCRIPTION });
+  assert.deepEqual(data, { ...experience, description: 'Owned deploys and on-call for the platform team.' });
+  assert.equal(bulletReview, undefined);
+});
+
+test('a description rewrite missing the description is rejected', () => {
+  assert.throws(() => mergeRewrite('experience', { bullets: [] }, {}, { target: DESCRIPTION }), RewriteShapeError);
+});
+
+test('a block or bullet rewrite leaves the description byte-identical, whatever the model returns', () => {
+  const data = { ...experience, description: 'Owned deploys.\n' };
+  const block = {
     tagline: 'Makes anvils.',
-    description: ' Owned deploys and on-call for the platform team. ',
+    description: 'Something else entirely.',
     bullets: [
       { text: 'Built the deploy pipeline for all services', children: [{ text: 'Cut deploy time in half' }] },
       { text: 'Ran on-call rotation for the platform team', children: [] },
     ],
   };
-  const { data } = mergeRewrite('experience', experience, rewrite);
-  assert.equal(data.description, 'Owned deploys and on-call for the platform team.');
-  assert.equal(data.tagline, 'Makes anvils.');
-});
-
-test('an experience rewrite missing the description is rejected', () => {
-  const rewrite = { tagline: 'Makes anvils.', bullets: [] };
-  assert.throws(() => mergeRewrite('experience', { bullets: [] }, rewrite), RewriteShapeError);
+  assert.equal(mergeRewrite('experience', data, block).data.description, 'Owned deploys.\n');
+  const bullet = { bullet: { text: 'Led on-call', children: [] }, description: 'Something else entirely.' };
+  assert.equal(mergeRewrite('experience', data, bullet, { target: { kind: 'bullet', path: [1] } }).data.description, 'Owned deploys.\n');
+  // A block that never had a description doesn't gain one.
+  assert.ok(!('description' in mergeRewrite('experience', experience, block).data));
 });
 
 test('a field the model left alone keeps its stored value exactly', () => {
   const data = { tagline: 'Makes anvils.\n', bullets: [] };
-  const rewrite = { tagline: 'Makes anvils.', description: '', bullets: [] };
-  const { data: merged } = mergeRewrite('experience', data, rewrite);
+  const { data: merged } = mergeRewrite('experience', data, { tagline: 'Makes anvils.', bullets: [] });
   assert.equal(merged.tagline, 'Makes anvils.\n');
   // A description the block never had isn't saved as an empty string.
-  assert.equal(merged.description, undefined);
+  const { data: described } = mergeRewrite('experience', data, { description: '' }, { target: DESCRIPTION });
+  assert.equal(described.description, undefined);
 });
 
 test('reword mode rejects a changed bullet count', () => {
@@ -234,6 +254,209 @@ test('output schemas satisfy strict structured-output rules', () => {
     if (schema.type === 'array') check(schema.items, `${path}[]`);
   }
   for (const type of ['heading', 'summary', 'skills_group', 'experience', 'custom']) check(outputSchema(type), type);
+  check(outputSchema('experience', { kind: 'description' }), 'experience/description');
+  check(outputSchema('experience', { kind: 'bullet', path: [0] }), 'experience/bullet [0]');
+  check(outputSchema('experience', { kind: 'bullet', path: [0, 0] }), 'experience/bullet [0,0]');
+  check(outputSchema('custom', { kind: 'item', index: 0 }), 'custom/item');
+});
+
+test('output schemas list only the target\'s fields', () => {
+  const fields = (schema) => Object.keys(schema.properties.rewrite.properties);
+  assert.deepEqual(fields(outputSchema('experience')), ['tagline', 'bullets']);
+  assert.deepEqual(fields(outputSchema('experience', { kind: 'description' })), ['description']);
+  assert.deepEqual(fields(outputSchema('experience', { kind: 'bullet', path: [0] })), ['bullet']);
+  assert.ok('children' in outputSchema('experience', { kind: 'bullet', path: [0] }).properties.rewrite.properties.bullet.properties);
+  assert.deepEqual(Object.keys(outputSchema('experience', { kind: 'bullet', path: [0, 1] }).properties.rewrite.properties.bullet.properties), ['text']);
+  assert.deepEqual(fields(outputSchema('custom', { kind: 'item', index: 0 })), ['heading', 'body']);
+});
+
+test('targetKey gives each target a stable string', () => {
+  assert.equal(targetKey(undefined), 'block');
+  assert.equal(targetKey({ kind: 'block' }), 'block');
+  assert.equal(targetKey({ kind: 'description' }), 'description');
+  assert.equal(targetKey({ kind: 'bullet', path: [2] }), 'bullet:2');
+  assert.equal(targetKey({ kind: 'bullet', path: [2, 0] }), 'bullet:2.0');
+  assert.equal(targetKey({ kind: 'item', index: 3 }), 'item:3');
+});
+
+test('normalizeTarget defaults to the block and strips stray keys', () => {
+  assert.deepEqual(normalizeTarget('summary', {}, undefined), { kind: 'block' });
+  assert.deepEqual(normalizeTarget('experience', experience, { kind: 'bullet', path: [0, 0], extra: 1 }), { kind: 'bullet', path: [0, 0] });
+});
+
+test('normalizeTarget rejects targets that do not fit the block', () => {
+  const bad = [
+    ['summary', {}, 'nope'],
+    ['summary', {}, { kind: 'description' }],
+    ['custom', { items: [] }, { kind: 'bullet', path: [0] }],
+    ['experience', experience, { kind: 'item', index: 0 }],
+    ['experience', experience, { kind: 'bullet', path: [] }],
+    ['experience', experience, { kind: 'bullet', path: [0, 0, 0] }],
+    ['experience', experience, { kind: 'bullet', path: [-1] }],
+    ['experience', experience, { kind: 'bullet', path: ['0'] }],
+    ['experience', experience, { kind: 'bullet', path: [5] }],
+    ['experience', experience, { kind: 'bullet', path: [1, 0] }],
+    ['custom', { items: [{}] }, { kind: 'item', index: 1 }],
+    ['experience', experience, { kind: 'whole' }],
+  ];
+  for (const [type, data, target] of bad) {
+    assert.throws(() => normalizeTarget(type, data, target), InvalidTargetError, JSON.stringify(target));
+  }
+});
+
+test('a description target edits only the description, with the rest as context', () => {
+  const { editable, context } = rewriteInput('experience', { ...experience, description: 'Old blurb' }, { kind: 'description' });
+  assert.deepEqual(editable, { description: 'Old blurb' });
+  assert.equal(context.tagline, 'Makes anvils.');
+  assert.equal(context.company, 'Acme');
+  assert.deepEqual(context.bullets[1], { text: 'Ran on-call rotation for the platform team', hidden: true, children: [] });
+});
+
+test('the block target sends the description as context only', () => {
+  const { editable, context } = rewriteInput('experience', { ...experience, description: 'Old blurb' });
+  assert.ok(!('description' in editable));
+  assert.equal(context.description, 'Old blurb');
+});
+
+test('a bullet target edits one bullet, with a placeholder where it sits in the context', () => {
+  const data = { ...experience, description: 'Old blurb' };
+  const top = rewriteInput('experience', data, { kind: 'bullet', path: [0] });
+  assert.deepEqual(top.editable, {
+    bullet: { text: 'Built the deploy pipeline for all services', children: [{ text: 'Cut deploy time in half' }] },
+  });
+  assert.equal(top.context.description, 'Old blurb');
+  assert.equal(top.context.tagline, 'Makes anvils.');
+  assert.deepEqual(top.context.bullets[0], { text: '[the part being rewritten]' });
+  assert.equal(top.context.bullets[1].text, 'Ran on-call rotation for the platform team');
+
+  const sub = rewriteInput('experience', data, { kind: 'bullet', path: [0, 0] });
+  assert.deepEqual(sub.editable, { bullet: { text: 'Cut deploy time in half' } });
+  assert.deepEqual(sub.context.bullets[0], {
+    text: 'Built the deploy pipeline for all services',
+    children: [{ text: '[the part being rewritten]' }],
+  });
+});
+
+test('a sub-bullet target under a hidden bullet is marked hidden', () => {
+  const data = { bullets: [bullet('Hidden parent', { visibleWeb: false }, [bullet('Child')])] };
+  const { editable } = rewriteInput('experience', data, { kind: 'bullet', path: [0, 0] });
+  assert.deepEqual(editable, { bullet: { text: 'Child', hidden: true } });
+});
+
+test('a bullet rewrite writes only that bullet, keeping its flags and the other bullets as stored', () => {
+  const data = { ...experience, bullets: ['Legacy string bullet', ...experience.bullets] };
+  const rewrite = {
+    bullet: { text: 'Led the on-call rotation', children: [] },
+    tagline: 'Ignored',
+  };
+  const { data: merged, bulletReview } = mergeRewrite('experience', data, rewrite, { target: { kind: 'bullet', path: [2] } });
+  assert.deepEqual(merged, {
+    ...data,
+    bullets: [data.bullets[0], data.bullets[1], { ...data.bullets[2], text: 'Led the on-call rotation' }],
+  });
+  assert.equal(merged.bullets[0], 'Legacy string bullet');
+  assert.equal(merged.bullets[1], data.bullets[1]);
+  assert.deepEqual(bulletReview, {
+    items: [
+      {
+        depth: 0,
+        before: 'Ran on-call rotation for the platform team',
+        after: 'Led the on-call rotation',
+        wasHidden: true,
+        visibleWeb: true,
+        visiblePrint: false,
+      },
+    ],
+    removed: [],
+  });
+});
+
+test('a bullet rewrite rewords its sub-bullets in place when restructuring is off', () => {
+  const rewrite = { bullet: { text: 'Built the deploy pipeline', children: [{ text: 'Halved deploy time' }] } };
+  const { data, bulletReview } = mergeRewrite('experience', experience, rewrite, { target: { kind: 'bullet', path: [0] } });
+  assert.equal(data.bullets[0].text, 'Built the deploy pipeline');
+  assert.equal(data.bullets[0].children[0].text, 'Halved deploy time');
+  assert.equal(data.bullets[1], experience.bullets[1]);
+  assert.deepEqual(bulletReview.items.map((i) => i.depth), [0, 1]);
+
+  const extra = { bullet: { text: 'x', children: [{ text: 'a' }, { text: 'b' }] } };
+  assert.throws(() => mergeRewrite('experience', experience, extra, { target: { kind: 'bullet', path: [0] } }), RewriteShapeError);
+});
+
+test('a bullet rewrite may restructure its sub-bullets, which inherit the bullet\'s visibility', () => {
+  const data = {
+    bullets: [bullet('Ran on-call', { visiblePrint: false }, [bullet('Wrote runbooks for every service'), bullet('Paged at night')])],
+  };
+  const rewrite = { bullet: { text: 'Led on-call', children: [{ text: 'Wrote runbooks for every service' }, { text: 'Trained new hires' }] } };
+  const { data: merged, bulletReview } = mergeRewrite('experience', data, rewrite, {
+    target: { kind: 'bullet', path: [0] },
+    allowBulletRestructure: true,
+  });
+  const [top] = merged.bullets;
+  assert.equal(top.visiblePrint, false);
+  assert.deepEqual(top.children.map((c) => c.text), ['Wrote runbooks for every service', 'Trained new hires']);
+  assert.equal(top.children[0].visiblePrint, false);
+  // The new sub-bullet starts with the bullet's visibility, not visible everywhere.
+  assert.deepEqual([top.children[1].visibleWeb, top.children[1].visiblePrint], [true, false]);
+  assert.deepEqual(bulletReview.items.map((i) => [i.depth, i.before]), [[0, 'Ran on-call'], [1, 'Wrote runbooks for every service'], [1, null]]);
+  assert.equal(bulletReview.items[2].visiblePrint, false);
+  assert.deepEqual(bulletReview.removed, [{ depth: 1, before: 'Paged at night', wasHidden: true }]);
+});
+
+test('in a whole-block restructure, a new sub-bullet starts with its parent\'s visibility', () => {
+  const data = { bullets: [bullet('Ran the on-call rotation', { visibleWeb: false }), bullet('Shipped the billing system')] };
+  const rewrite = {
+    tagline: '',
+    bullets: [
+      { text: 'Ran the on-call rotation', children: [{ text: 'Wrote runbooks' }] },
+      { text: 'Shipped the billing system', children: [] },
+      { text: 'Mentored two engineers', children: [] },
+    ],
+  };
+  const { data: merged } = mergeRewrite('experience', data, rewrite, { allowBulletRestructure: true });
+  const flags = (b) => [b.visibleWeb, b.visiblePrint];
+  assert.deepEqual(flags(merged.bullets[0].children[0]), [false, true]);
+  // A new top-level bullet still starts visible everywhere.
+  assert.deepEqual(flags(merged.bullets[2]), [true, true]);
+});
+
+test('a sub-bullet rewrite writes only that sub-bullet', () => {
+  const rewrite = { bullet: { text: 'Halved deploy time' } };
+  const { data, bulletReview } = mergeRewrite('experience', experience, rewrite, { target: { kind: 'bullet', path: [0, 0] } });
+  assert.deepEqual(data, {
+    ...experience,
+    bullets: [{ ...experience.bullets[0], children: [{ ...experience.bullets[0].children[0], text: 'Halved deploy time' }] }, experience.bullets[1]],
+  });
+  assert.deepEqual(bulletReview.items, [
+    { depth: 1, before: 'Cut deploy time in half', after: 'Halved deploy time', wasHidden: false, visibleWeb: true, visiblePrint: true },
+  ]);
+  assert.throws(() => mergeRewrite('experience', experience, {}, { target: { kind: 'bullet', path: [0, 0] } }), RewriteShapeError);
+});
+
+test('an item target edits one custom item, with the others as context', () => {
+  const data = {
+    title: 'Certifications',
+    items: [
+      { heading: 'AWS', bodyType: 'text', text: 'Solutions Architect' },
+      { heading: 'Languages', bodyType: 'tags', items: 'English, Spanish' },
+    ],
+  };
+  const { editable, context } = rewriteInput('custom', data, { kind: 'item', index: 1 });
+  assert.deepEqual(editable, { heading: 'Languages', body: 'English, Spanish' });
+  assert.deepEqual(context, {
+    title: 'Certifications',
+    itemBodyType: 'tags',
+    items: [
+      { heading: 'AWS', body: 'Solutions Architect' },
+      { heading: '', body: '[the part being rewritten]' },
+    ],
+  });
+
+  const { data: merged } = mergeRewrite('custom', data, { heading: 'Languages', body: 'English (native), Spanish (fluent)', title: 'Ignored' }, {
+    target: { kind: 'item', index: 1 },
+  });
+  assert.deepEqual(merged, { ...data, items: [data.items[0], { ...data.items[1], items: 'English (native), Spanish (fluent)' }] });
+  assert.equal(merged.items[0], data.items[0]);
 });
 
 test('textSimilarity ignores case and punctuation', () => {

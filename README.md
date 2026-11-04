@@ -154,7 +154,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
-| `POST /api/ai/rewrite` | `{ blockId, data, instruction, tense? }` → `{ proposal }` for review; saves nothing. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
+| `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense? }` → `{ proposal }` for review; saves nothing. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
 | `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
 | `GET /api/public/resume.pdf` | public, streams the last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
@@ -338,6 +338,32 @@ diff in the block and the rewritten block, outlined, in the live preview.
 **Accept** saves it as an ordinary draft edit; it still isn't public until
 you Publish.
 
+Parts of a block can also be rewritten on their own:
+
+- Each experience bullet, and each sub-bullet, has a ✨ button that
+  rewrites just that bullet (a bullet's sub-bullets come with it). The
+  rest of the entry is sent as read-only context so the rewrite stays
+  consistent with its neighbors, and nothing else in the entry changes.
+- The experience description has its own "Rewrite description with AI"
+  button (or "Write description" when it's empty). The entry's main button
+  becomes "Rewrite tagline and bullets with AI" and never changes the
+  description, whatever the AI returns. Likewise, a bullet rewrite never
+  changes the description.
+- Each item in a custom block has a ✨ button that rewrites just that item.
+
+Several rewrites can be open at once, on different blocks or on different
+parts of one block. The preview shows all of them together, each one is
+accepted or discarded in its own panel, and **Discard all** in the preview
+banner clears them. A rewrite only warns that it's out of date when the
+part it rewrites has changed since. An open rewrite follows its bullet or
+item when you drag it, or delete or add one above it. Once you edit the
+description, bullet, or item a rewrite is for, the rewrite stays open with
+the warning but drops out of the preview, and its panel says so. A bullet
+rewrite is also left out of the preview while a rewrite that may add,
+remove, or reorder that block's bullets is open. The ✨ button on a bullet
+or item collapses and reopens its panel; collapsing doesn't discard the
+rewrite.
+
 - Only the block's prose is sent and can change. Dates, URLs,
   company/institution names, visibility flags, and block styling are
   always kept from the original. Education blocks aren't rewritable.
@@ -348,24 +374,29 @@ you Publish.
   hiding a bullet to keep its text away from the provider.
 - The AI is told not to invent facts. Where a number would help, it
   inserts a placeholder like `[X%]` for you to fill in.
-- Experience entries also get a *Write description* preset, which drafts
-  the optional description from the entry's own tagline and bullets. If the
-  entry already has a description, the preset is *Rewrite description*. An
-  empty description stays empty unless you ask for one. The description has
-  no visibility toggle and always shows, so the AI is told not to use
-  anything from hidden bullets in it (or in the tagline, for the same
-  reason). Check the review before accepting.
+- The description's rewrite panel has a *Write description* preset, which
+  drafts the optional description from the entry's own tagline and
+  bullets. If the entry already has a description, the preset is *Rewrite
+  description*. An empty description stays empty unless you ask for one.
+  The description has no visibility toggle and always shows, so the AI is
+  told not to use anything from hidden bullets in it (or in the tagline,
+  for the same reason). A single-bullet rewrite is likewise told not to
+  carry a hidden bullet's content into a visible bullet. Check the review
+  before accepting.
 - **Let AI add, remove, or merge bullets** (off by default) controls
   experience bullets. When it's off, the AI may only reword bullets in
   place. When it's on, the AI can restructure them, and each resulting
   bullet keeps the web/print visibility of the original it most
-  resembles. New bullets start visible everywhere, and the review marks
+  resembles. New top-level bullets start visible everywhere, and new
+  sub-bullets start with their parent bullet's visibility. The review marks
   added, removed, and hidden bullets. The AI is told not to merge a hidden
   bullet's content into a visible one. "Visibility of the original" means
   where it actually showed: a sub-bullet of a hidden bullet was never shown,
   so it stays hidden even if the AI promotes it to a top-level bullet, and
   it keeps those hidden flags as its own afterwards (un-hiding the parent
-  later won't un-hide it).
+  later won't un-hide it). For a single-bullet rewrite the setting applies
+  to that bullet's sub-bullets; the bullet itself always keeps its own
+  visibility.
 - **Verb tense** (default *Let the AI decide*) adds one line to the prompt
   for experience entries, so rewrites stop drifting between "Led" and
   "Lead". *Past tense* and *Present tense* always ask for that tense, and
@@ -404,7 +435,7 @@ you Publish.
   button: *Any tense*, *Past tense*, or *Present tense*. It starts at the
   setting when that is *Past tense* or *Present tense*, and at *Any tense*
   otherwise. Summaries, headings, and skills rows get no tense
-  instruction.
+  instruction. A custom item's ✨ rewrite has the same menu.
 - The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
   the same panel. Rewrites are rate-limited to 30 per 10 minutes.
 - **Timeout** (default 60 seconds, 20–120) is how long a rewrite may take,
