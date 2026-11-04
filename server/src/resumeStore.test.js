@@ -6,32 +6,48 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { ensureSchema } from './schema.js';
 import { createResumeStore, NESTABLE_TYPES } from './resumeStore.js';
+import { migrateToResumes, pdfPathFor } from './resumeMigration.js';
 
 // Exercises the real SQL against an in-memory database — the regression
 // guard for the logic that used to live inline in routes/blocks.js and
 // routes/publish.js. Nothing here touches db.js or RESUMECMS_DATA_DIR.
+//
+// `store`'s own methods act on the default resume (what most tests here
+// exercise); `addResume` makes another one for the isolation tests.
 
 function makeStore({ renderPdf, pdfTimeoutMs } = {}) {
   const db = new Database(':memory:');
   ensureSchema(db);
-  const pdfPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'resumecms-store-')), 'resume.pdf');
-  const calls = { renderPdf: 0 };
+  const defaultId = migrateToResumes(db);
+  const pdfDir = fs.mkdtempSync(path.join(os.tmpdir(), 'resumecms-store-'));
+  const calls = { renderPdf: 0, resumeIds: [] };
   const store = createResumeStore({
     db,
-    pdfPath,
+    pdfDir,
     pdfTimeoutMs,
     renderPdf:
       renderPdf ||
-      (async () => {
+      (async ({ resumeId }) => {
         calls.renderPdf += 1;
+        calls.resumeIds.push(resumeId);
         return Buffer.from('%PDF-fake');
       }),
   });
-  const setting = (key) => {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  const settingOf = (resumeId, key) => {
+    const row = db.prepare('SELECT value FROM resume_settings WHERE resume_id = ? AND key = ?').get(resumeId, key);
     return row ? JSON.parse(row.value) : null;
   };
-  return { store, db, pdfPath, calls, setting };
+  const setting = (key) => settingOf(defaultId, key);
+  const addResume = (slug) => {
+    const id = `id-${slug}`;
+    const now = new Date().toISOString();
+    db.prepare(
+      'INSERT INTO resumes (id, slug, name, is_default, is_public, created_at, updated_at) VALUES (?, ?, ?, 0, 0, ?, ?)'
+    ).run(id, slug, slug, now, now);
+    return id;
+  };
+  const pdfPath = pdfPathFor(pdfDir, defaultId);
+  return { store, db, defaultId, pdfDir, pdfPath, calls, setting, settingOf, addResume };
 }
 
 const ids = (blocks) => blocks.map((b) => b.id);
@@ -332,7 +348,7 @@ test('publish still writes the snapshot when the PDF render fails, and says so',
 
 test('pdfStale tracks whether the PDF on disk matches the published snapshot', async () => {
   let ok = true;
-  const { store, db, pdfPath, setting } = makeStore({
+  const { store, db, defaultId, pdfPath, setting } = makeStore({
     renderPdf: async () => {
       if (!ok) throw new Error('no chromium');
       return Buffer.from('pdf');
@@ -340,7 +356,8 @@ test('pdfStale tracks whether the PDF on disk matches the published snapshot', a
   });
   // An install upgraded from before pdf_meta existed: snapshot + file, no
   // meta → assumed current.
-  db.prepare("INSERT INTO settings (key, value) VALUES ('published_resume', ?)").run(
+  db.prepare("INSERT INTO resume_settings (resume_id, key, value) VALUES (?, 'published_resume', ?)").run(
+    defaultId,
     JSON.stringify({ header: {}, site: {}, blocks: [], publishedAt: '2026-01-01T00:00:00.000Z' })
   );
   fs.writeFileSync(pdfPath, 'old');
@@ -494,7 +511,7 @@ test('the PDF is written atomically: the old file stays intact until the new one
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), '%PDF-first');
   await store.publish();
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), '%PDF-second');
-  assert.deepEqual(fs.readdirSync(path.dirname(pdfPath)), ['resume.pdf'], 'the temp file is renamed away');
+  assert.deepEqual(fs.readdirSync(path.dirname(pdfPath)), [path.basename(pdfPath)], 'the temp file is renamed away');
 });
 
 test('discardDraft restores the published snapshot and 409s when nothing is published', async () => {
@@ -521,4 +538,143 @@ test('discardDraft restores the published snapshot and 409s when nothing is publ
   assert.deepEqual(setting('draft_meta'), { lastEditedAt: null });
   assert.equal(store.getPublishStatus().isDirty, false);
   assert.deepEqual(store.listBlocks(), restored.blocks);
+});
+
+// ---- several resumes -------------------------------------------------------
+
+test('blocks belong to one resume: another resume can neither see nor touch them', () => {
+  const { store, addResume } = makeStore();
+  const other = store.forResume(addResume('other'));
+  const h = other.createBlock({ type: 'heading', data: { text: 'Theirs' } });
+  const x = other.createBlock({ type: 'experience', data: { jobTitle: 'X' }, parentId: h.id });
+  const mine = store.createBlock({ type: 'summary', data: { text: 'mine' } });
+
+  // Positions are per resume: each one's first top-level block is 0.
+  assert.deepEqual([h.position, mine.position], [0, 0]);
+  assert.deepEqual(ids(store.listBlocks()), [mine.id]);
+  assert.deepEqual(ids(other.listBlocks()), [h.id, x.id]);
+
+  const notFound = (fn) => assert.throws(fn, (e) => e.status === 404 && /Block not found/.test(e.message));
+  notFound(() => store.getBlock(x.id));
+  notFound(() => store.updateBlock(x.id, { data: { jobTitle: 'hijacked' } }));
+  notFound(() => store.deleteBlock(h.id));
+  const mine2 = store.createBlock({ type: 'experience', data: {} });
+  assert.throws(
+    () => store.createBlock({ type: 'experience', parentId: h.id }),
+    (e) => e.status === 400 && /does not reference an existing/.test(e.message)
+  );
+  assert.throws(
+    () => store.updateBlock(mine2.id, { parentId: h.id }),
+    (e) => e.status === 400 && /does not reference an existing/.test(e.message)
+  );
+  assert.throws(
+    () => store.reorderBlocks([{ id: mine.id }, { id: mine2.id }, { id: h.id }]),
+    (e) => e.status === 400 && /unknown block id/.test(e.message)
+  );
+
+  // Nothing above leaked into the other resume.
+  assert.deepEqual(other.getBlock(x.id).data, { jobTitle: 'X' });
+  assert.deepEqual(ids(other.listBlocks()), [h.id, x.id]);
+});
+
+test("deleting a heading promotes only its own resume's children", () => {
+  const { store, addResume } = makeStore();
+  const other = store.forResume(addResume('other'));
+  const top = other.createBlock({ type: 'summary', data: {} });
+  const h = store.createBlock({ type: 'heading', data: {} });
+  const a = store.createBlock({ type: 'experience', data: {}, parentId: h.id });
+  store.deleteBlock(h.id);
+  assert.deepEqual(store.listBlocks().map((b) => [b.id, b.parentId, b.position]), [[a.id, null, 0]]);
+  assert.deepEqual(other.listBlocks().map((b) => [b.id, b.position]), [[top.id, 0]]);
+});
+
+test('header, site, drafts and publishing are per resume', async () => {
+  const { store, addResume, calls, pdfDir, settingOf, defaultId } = makeStore();
+  const otherId = addResume('other');
+  const other = store.forResume(otherId);
+  store.setHeader({ name: 'Default' });
+  other.setHeader({ name: 'Other' });
+  other.setSite({ title: 'Other site' });
+  assert.deepEqual(store.getHeader(), { name: 'Default' });
+  assert.deepEqual(other.getSite(), { title: 'Other site' });
+  assert.equal(store.getSite(), null);
+
+  const b = other.createBlock({ type: 'summary', data: { text: 'o' } });
+  await other.publish();
+  assert.deepEqual(calls.resumeIds, [otherId]);
+  assert.deepEqual(other.getPdfFile(), { path: pdfPathFor(pdfDir, otherId), name: 'Other' });
+  assert.equal(store.getPdfFile(), null);
+  assert.equal(other.getPublishStatus().isDirty, false);
+  assert.equal(store.getPublishStatus().isDirty, true, "the default's edits are still unpublished");
+  assert.equal(store.getPublishStatus().publishedAt, null);
+  assert.equal(settingOf(defaultId, 'published_resume'), null);
+  assert.deepEqual(ids(other.getPublishedResume('web').blocks), [b.id]);
+  assert.deepEqual(store.getPublishedResume('web').blocks, []);
+
+  // Discarding one resume's draft leaves the other's blocks alone.
+  const mine = store.createBlock({ type: 'summary', data: {} });
+  other.createBlock({ type: 'heading', data: {} });
+  assert.deepEqual(ids(other.discardDraft().blocks), [b.id]);
+  assert.deepEqual(ids(store.listBlocks()), [mine.id]);
+  assert.throws(() => store.discardDraft(), (e) => e.status === 409);
+});
+
+test('forResume 404s an unknown resume, and the store follows whichever resume is the default', () => {
+  const { store, db, addResume, defaultId } = makeStore();
+  for (const id of ['nope', undefined, 7]) {
+    assert.throws(() => store.forResume(id), (e) => e.status === 404 && /Resume not found/.test(e.message));
+  }
+  const otherId = addResume('other');
+  store.forResume(otherId).setHeader({ name: 'Other' });
+  assert.equal(store.defaultResumeId(), defaultId);
+  db.transaction(() => {
+    db.prepare('UPDATE resumes SET is_default = 0').run();
+    db.prepare('UPDATE resumes SET is_default = 1 WHERE id = ?').run(otherId);
+  })();
+  assert.equal(store.defaultResumeId(), otherId);
+  assert.deepEqual(store.getHeader(), { name: 'Other' });
+
+  db.prepare('UPDATE resumes SET is_default = 0').run();
+  assert.throws(() => store.getHeader(), (e) => e.status === 500 && /No default resume/.test(e.message));
+});
+
+test('only one resume can be the default', () => {
+  const { db, addResume } = makeStore();
+  const id = addResume('other');
+  assert.throws(() => db.prepare('UPDATE resumes SET is_default = 1 WHERE id = ?').run(id), /UNIQUE/);
+});
+
+test('ensurePdfs renders each published resume that has no PDF yet, and only those', async () => {
+  const { store, addResume, calls, defaultId } = makeStore();
+  const a = addResume('a');
+  addResume('never-published');
+  await store.publish();
+  await store.forResume(a).publish();
+  fs.rmSync(store.forResume(a).getPdfFile().path);
+  calls.resumeIds.length = 0;
+
+  assert.deepEqual(await store.ensurePdfs(), { rendered: 1, errors: [] });
+  assert.deepEqual(calls.resumeIds, [a]);
+  assert.ok(store.forResume(a).getPdfFile());
+  assert.ok(store.forResume(defaultId).getPdfFile());
+});
+
+test('ensurePdfs reports a failed render without hiding the others', async () => {
+  const { store, addResume } = makeStore({
+    renderPdf: async ({ resumeId }) => {
+      if (resumeId === 'id-broken') throw new Error('boom');
+      return Buffer.from('ok');
+    },
+  });
+  const broken = addResume('broken');
+  const fine = addResume('fine');
+  await assert.rejects(store.forResume(broken).publish(), (e) => e.status === 500);
+  await store.forResume(fine).publish();
+  fs.rmSync(store.forResume(fine).getPdfFile().path);
+
+  const { rendered, errors } = await store.ensurePdfs();
+  assert.equal(rendered, 1);
+  assert.deepEqual(errors.map((e) => e.message), ['boom']);
+  assert.ok(store.forResume(fine).getPdfFile());
+  assert.equal(store.forResume(broken).getPdfFile(), null);
 });

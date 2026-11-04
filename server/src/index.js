@@ -85,9 +85,12 @@ app.listen(PORT, () => {
 
   // A published snapshot can exist (seeded from pre-existing draft content
   // on first boot after this feature shipped) without a PDF file ever
-  // having been generated for it yet — render one now so the download link
-  // isn't broken until someone happens to click Publish. The store queues
-  // this behind any publish that's already running, so the two can't race
-  // on the output file.
-  store.ensurePdf().catch((err) => console.error('Initial PDF generation failed:', err));
+  // having been generated for it yet — render one now for each such resume
+  // so the download link isn't broken until someone happens to click
+  // Publish. The store queues these behind any publish that's already
+  // running, so they can't race on the output files.
+  store
+    .ensurePdfs()
+    .then(({ errors }) => errors.forEach((err) => console.error('Initial PDF generation failed:', err)))
+    .catch((err) => console.error('Initial PDF generation failed:', err));
 });

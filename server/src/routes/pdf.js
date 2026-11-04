@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import fs from 'node:fs';
-import { getSetting } from '../db.js';
-import { PDF_PATH } from '../pdfRenderer.js';
+import { store } from '../store.js';
 import { PDF as PDF_CACHE_CONTROL } from '../cacheHeaders.js';
 
 const router = Router();
 
+// Serves the default resume's PDF.
 router.get('/resume.pdf', (req, res) => {
   // Keep shared caches out and make browsers revalidate (see
   // cacheHeaders.js) — a CDN that caches by file extension would otherwise
@@ -14,13 +13,18 @@ router.get('/resume.pdf', (req, res) => {
   // The `?v=` the client appends (the store's pdfVersion) is ignored here;
   // it only exists to give each render a fresh URL.
   res.set('Cache-Control', PDF_CACHE_CONTROL);
-  if (!fs.existsSync(PDF_PATH)) {
+  let pdf;
+  try {
+    pdf = store.getPdfFile();
+  } catch (err) {
+    console.error('PDF lookup failed:', err);
+    return res.status(500).json({ error: 'Could not read the PDF' });
+  }
+  if (!pdf) {
     return res.status(404).json({ error: 'No PDF has been published yet' });
   }
 
-  const published = getSetting('published_resume') || {};
-  const header = published.header || {};
-  const name = (header.name || 'Resume').trim().replace(/[^a-z0-9]+/gi, ' ').trim().replace(/\s+/g, '-');
+  const name = (pdf.name || 'Resume').trim().replace(/[^a-z0-9]+/gi, ' ').trim().replace(/\s+/g, '-');
   const fileName = `Resume-of-${name}.pdf`;
 
   // The PDF headers go through sendFile's `headers` option so they're only
@@ -35,7 +39,7 @@ router.get('/resume.pdf', (req, res) => {
       'Content-Disposition': `attachment; filename="${fileName}"`,
     },
   };
-  res.sendFile(PDF_PATH, options, (err) => {
+  res.sendFile(pdf.path, options, (err) => {
     // The client going away mid-download isn't an error of ours, and once
     // headers are out there's nothing left to say.
     if (!err || err.code === 'ECONNABORTED' || res.headersSent) return;
