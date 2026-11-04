@@ -260,12 +260,21 @@ can be open at once, even on one block. `applyProposal()` writes just a
 proposal's target onto the block's current data, `previewData()` composes all
 of a block's proposals for the preview, and `isProposalStale()` only compares
 the target's slice. Bullet and item targets are positions, so an effect in
-`EditorPage` re-keys a ready proposal when its bullet or item moves
-(`relocateTarget()`, which looks for the one position holding exactly the
-original content), and drops it when its position is gone, or its block is.
-A re-keyed proposal keeps `origin`, its position in its own
-`baseData`/`proposedData`, which `applyProposal()`, `isProposalStale()`
-and the review diff read from. The helpers take the block type because an
+`EditorPage` re-keys a ready proposal when its bullet or item moves, and
+drops it when its position is gone, or its block is. `relocateTarget()`
+aligns the list at the proposal's depth in `anchorData` (the block data it
+was last placed against) with the current one: unchanged entries pair in
+order (LCS), an unpaired entry in an equal-sized gap was edited in place
+and stays put, and otherwise a unique unpaired exact copy is where it was
+dragged. The effect advances `anchorData` on every change to the block, so
+each call resolves one change; comparing against `baseData` instead can't
+tell "edited, then a bullet added above" from other sequences. A placed
+proposal keeps `origin`, its position in its own `baseData`/`proposedData`,
+which `applyProposal()`, `isProposalStale()` and the review diff read from.
+`previewedProposals()` is the one place that decides what the preview
+shows (the banner count and outline use it too), and a mounted row panel
+resyncs its instruction and tense when a different request (`requestId`)
+moves under it. The helpers take the block type because an
 experience `block` target doesn't own the description: accepting one keeps
 the current description.
 

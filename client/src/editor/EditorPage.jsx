@@ -382,8 +382,14 @@ export function EditorPage({ onLogout }) {
   // stay counted in the banner with no panel to reject it from. Loading
   // entries are left alone until their response lands (they have no
   // baseData yet); this runs again then.
+  //
+  // Each check compares the block against the proposal's anchorData, the
+  // data it was last placed against, and then advances the anchor (see
+  // relocateTarget), so a run of edits and moves is resolved one change at
+  // a time. A proposal whose anchor is already the block's current data is
+  // skipped, which also keeps this from looping on its own update.
   useEffect(() => {
-    const moved = [];
+    const placed = [];
     const dropped = new Set();
     for (const [key, entry] of Object.entries(aiProposals)) {
       const block = blocks.find((b) => b.id === entry.blockId);
@@ -392,23 +398,29 @@ export function EditorPage({ onLogout }) {
         continue;
       }
       if (entry.status !== 'ready') continue;
+      const kind = entry.proposal.target?.kind;
+      if (kind !== 'bullet' && kind !== 'item') continue;
+      if ((entry.proposal.anchorData ?? entry.proposal.baseData) === block.data) continue;
       const target = relocateTarget(block.type, entry.proposal, block.data);
       if (target === null) dropped.add(key);
-      else if (target !== entry.proposal.target) moved.push([key, target]);
+      else placed.push({ key, entry, target, anchorData: block.data });
     }
-    if (moved.length === 0 && dropped.size === 0) return;
+    if (placed.length === 0 && dropped.size === 0) return;
     for (const key of dropped) delete aiRequestsRef.current[key];
     setAiProposals((prev) => {
-      const gone = new Set([...dropped, ...moved.map(([key]) => key)]);
+      const gone = new Set([...dropped, ...placed.map(({ key }) => key)]);
       const next = Object.fromEntries(Object.entries(prev).filter(([key]) => !gone.has(key)));
-      for (const [key, target] of moved) {
-        const entry = prev[key];
-        if (!entry) continue;
+      for (const { key, entry, target, anchorData } of placed) {
+        // A newer request for this key landed since; leave it to the next run.
+        if (prev[key] !== entry) {
+          if (prev[key]) next[key] = prev[key];
+          continue;
+        }
         const newKey = proposalKey(entry.blockId, target);
         // Two proposals can't share a position; the one already there wins.
         if (next[newKey]) continue;
         const origin = entry.proposal.origin || entry.proposal.target;
-        next[newKey] = { ...entry, target, proposal: { ...entry.proposal, target, origin } };
+        next[newKey] = { ...entry, target, proposal: { ...entry.proposal, target, origin, anchorData } };
       }
       return next;
     });

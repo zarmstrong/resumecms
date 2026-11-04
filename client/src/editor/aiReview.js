@@ -91,37 +91,84 @@ function positionsOf(data, kind) {
 
 const sliceJson = (type, data, target) => JSON.stringify(targetSlice(type, data, target) ?? null);
 
+// Longest-common-subsequence pairs [i, j] (in order) between two lists of
+// strings. Lists here are a block's bullets or items, so they're short.
+function lcsPairs(a, b) {
+  const table = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      table[i][j] = a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+  const pairs = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) pairs.push([i++, j++]);
+    else if (table[i + 1][j] >= table[i][j + 1]) i++;
+    else j++;
+  }
+  return pairs;
+}
+
 // Bullet and item proposals are tied to a position, and positions shift
-// when bullets or items are dragged, deleted, or added above them. Returns
-// where the proposal applies now:
-// - its current target while the bullet or item there is still the one it
-//   was made for, or was edited in place: the position holds text that
-//   wasn't anywhere in baseData, which a move or delete never leaves behind
-//   (they only shift other originals into it). It stays put, stale, rather
-//   than jumping to an identical bullet elsewhere;
-// - else the one position elsewhere that holds exactly the original content
-//   (it moved; a sub-bullet only matches sub-bullets);
-// - else null when its position is gone, or its current target.
-// Other targets never move.
+// when bullets or items are dragged, deleted, or added. Returns where the
+// proposal applies now, by aligning the bullets (or items) at its depth in
+// `proposal.anchorData` (the block data its `target` was last placed
+// against; baseData until EditorPage first relocates it) with the current
+// ones. EditorPage advances the anchor on every change to the block, so
+// each call only has to resolve one edit, insert, delete, or move, which
+// these rules can always tell apart:
+// 1. Unchanged bullets are paired in order (longest common subsequence).
+//    If the proposal's own bullet is paired, that's where it is now: this
+//    follows inserts and deletes above it.
+// 2. Otherwise, if the unpaired stretch around it has the same length in
+//    both lists, it was edited in place: it keeps its relative spot there,
+//    stale. An identical bullet elsewhere is already paired with its own
+//    original, so the proposal can't jump onto it.
+// 3. Otherwise, the one unpaired current bullet with exactly its original
+//    content is where it was dragged to (a sub-bullet only matches
+//    sub-bullets).
+// 4. Otherwise it can't be placed: null when its current position is gone,
+//    else it stays where it is (stale).
+// Returns `proposal.target` itself when nothing moved, so callers can
+// compare by identity. Other targets never move.
 export function relocateTarget(type, proposal, currentData) {
   const { target } = proposal;
   if (target?.kind !== 'bullet' && target?.kind !== 'item') return target;
-  const origin = originOf(proposal);
-  const base = sliceJson(type, proposal.baseData, origin);
-  const here = targetSlice(type, currentData, target);
-  const hereJson = sliceJson(type, currentData, target);
-  if (here !== null && hereJson === base) return target;
+  const anchor = proposal.anchorData ?? proposal.baseData;
   const depth = (t) => (t.kind === 'bullet' ? t.path.length : 0);
-  const sameDepth = (t) => depth(t) === depth(origin);
-  if (here !== null) {
-    const originals = positionsOf(proposal.baseData, target.kind)
-      .filter(sameDepth)
-      .map((t) => sliceJson(type, proposal.baseData, t));
-    if (!originals.includes(hereJson)) return target;
+  const sameDepth = (t) => depth(t) === depth(target);
+  const here = targetSlice(type, currentData, target);
+  const stay = here === null ? null : target;
+  const keep = (t) => (targetKey(t) === targetKey(target) ? target : t);
+
+  const basePositions = positionsOf(anchor, target.kind).filter(sameDepth);
+  const currentPositions = positionsOf(currentData, target.kind).filter(sameDepth);
+  const o = basePositions.findIndex((t) => targetKey(t) === targetKey(target));
+  if (o === -1) return stay;
+  const a = basePositions.map((t) => sliceJson(type, anchor, t));
+  const b = currentPositions.map((t) => sliceJson(type, currentData, t));
+  const pairs = lcsPairs(a, b);
+
+  const paired = pairs.find(([i]) => i === o);
+  if (paired) return keep(currentPositions[paired[1]]);
+
+  let before = [-1, -1];
+  let after = [a.length, b.length];
+  for (const pair of pairs) {
+    if (pair[0] < o) before = pair;
+    else {
+      after = pair;
+      break;
+    }
   }
-  const matches = positionsOf(currentData, target.kind).filter((t) => sameDepth(t) && sliceJson(type, currentData, t) === base);
-  if (matches.length === 1) return matches[0];
-  return here === null ? null : target;
+  if (after[0] - before[0] === after[1] - before[1]) return keep(currentPositions[before[1] + (o - before[0])]);
+
+  const pairedCurrent = new Set(pairs.map(([, j]) => j));
+  const moved = b.map((_, j) => j).filter((j) => !pairedCurrent.has(j) && b[j] === a[o]);
+  if (moved.length === 1) return keep(currentPositions[moved[0]]);
+  return stay;
 }
 
 // `currentData` with the proposal's target replaced by what the proposal

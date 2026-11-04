@@ -234,8 +234,17 @@ test('relocateTarget follows a bullet that moved, and keeps one edited in place'
   assert.equal(isProposalStale('experience', proposal, edited), true);
   // Deleted, and its position is gone: null.
   assert.equal(relocateTarget('experience', proposal, { bullets: [b('One'), b('Two')] }), null);
-  // Ambiguous (two identical bullets): stays put.
-  assert.equal(relocateTarget('experience', proposal, { bullets: [b('Three'), b('Three'), b('x')] }), proposal.target);
+  // A new (empty) bullet added above it: follows.
+  assert.deepEqual(
+    relocateTarget('experience', proposal, { bullets: [b(''), b('One'), b('Two', [b('Two-a')]), b('Three')] }),
+    { kind: 'bullet', path: [3] }
+  );
+  // A new bullet added above it while it was being edited elsewhere: the
+  // edit to another bullet doesn't stop it following.
+  assert.deepEqual(
+    relocateTarget('experience', proposal, { bullets: [b('One!'), b('New'), b('Two', [b('Two-a')]), b('Three')] }),
+    { kind: 'bullet', path: [3] }
+  );
 });
 
 test('relocateTarget keeps a bullet edited in place, even when an identical bullet is elsewhere', () => {
@@ -245,6 +254,22 @@ test('relocateTarget keeps a bullet edited in place, even when an identical bull
   // Not moved to [2]: [0] now holds text that was never in the block.
   assert.equal(relocateTarget('experience', proposal, edited), proposal.target);
   assert.equal(isProposalStale('experience', proposal, edited), true);
+  // Edited, then a bullet added (below, or above it): EditorPage advances
+  // the anchor after each change, and it never jumps to the twin.
+  const anchored = { ...proposal, anchorData: edited };
+  assert.equal(
+    relocateTarget('experience', anchored, { bullets: [...edited.bullets, b('New')] }),
+    anchored.target
+  );
+  assert.deepEqual(
+    relocateTarget('experience', anchored, { bullets: [b('New'), ...edited.bullets] }),
+    { kind: 'bullet', path: [1] }
+  );
+  // Deleted above after the edit: follows up.
+  assert.deepEqual(
+    relocateTarget('experience', { ...proposal, target: { kind: 'bullet', path: [1] }, anchorData: { bullets: [b('New'), ...edited.bullets] } }, edited),
+    { kind: 'bullet', path: [0] }
+  );
   // A real move still relocates: [0] now holds another original bullet.
   const dragged = { bullets: [b('Shipped app'), b('Managed team'), b('Other')] };
   const single = { target: { kind: 'bullet', path: [0] }, baseData: { bullets: [b('Managed team'), b('Shipped app'), b('Other')] } };
