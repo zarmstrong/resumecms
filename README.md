@@ -121,7 +121,7 @@ the server.
 | `RESUMECMS_APP_PASSWORD` | yes | Initial password to sign in to `/editor`. Only read once, to seed the DB on first boot — change it later from Account Settings in the editor, not this variable. |
 | `RESUMECMS_SESSION_SECRET` | yes | Random string used to sign session cookies. |
 | `PORT` | no | Server port. Defaults to `4000`. |
-| `RESUMECMS_DATA_DIR` | no | Where the SQLite file lives. Defaults to `/data`. |
+| `RESUMECMS_DATA_DIR` | no | Where the SQLite file (`resume.sqlite3`) and the rendered PDFs (`pdf/`) live. Defaults to `/data`. |
 | `RESUMECMS_TRUST_PROXY` | behind a reverse proxy | Express `trust proxy` value: the proxy's IP/subnet (e.g. `172.18.0.1`, `loopback`), or a hop count if the app port is only reachable through the proxy. Unset trusts no proxy. See the login rate-limiting notes below. |
 | `RESUMECMS_CAPTCHA_PROVIDER` | no | `turnstile` or `recaptcha` to require a captcha on login. Unset disables it. |
 | `RESUMECMS_TURNSTILE_SITE_KEY` / `RESUMECMS_TURNSTILE_SECRET_KEY` | if using Turnstile | From the [Cloudflare Turnstile dashboard](https://dash.cloudflare.com/?to=/:account/turnstile). |

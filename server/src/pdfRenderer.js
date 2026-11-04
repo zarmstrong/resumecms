@@ -1,10 +1,7 @@
-import path from 'node:path';
 import puppeteer from 'puppeteer';
-import { DATA_DIR } from './dataDir.js';
 
-// Where the published PDF lives on disk. Written by the store's publish()
-// (and the first-boot render in index.js), served as-is by routes/pdf.js.
-export const PDF_PATH = path.join(DATA_DIR, 'resume.pdf');
+// Renders a PDF and returns its bytes; the store decides where they go
+// (see pdfPaths.js and resumeStore.js's writePdf).
 
 let browserPromise = null;
 function getBrowser() {
@@ -51,9 +48,14 @@ function untilAborted(promise, signal) {
 // `signal` (optional) comes from the store's render timeout: when it fires,
 // whatever stage the render is at is torn down (browser reset) and this
 // rejects, rather than the render being left running beside the next one.
-export async function renderResumePdf({ signal } = {}) {
+// `resumeId` names the resume to render. The print page is addressed by
+// id, not slug, so a rename mid-render can't make it render another one.
+// (Until the client reads `?resume=`, /print renders the default resume,
+// which is the only one that can exist so far.)
+export async function renderResumePdf({ signal, resumeId } = {}) {
   const port = process.env.PORT || 4000;
-  const printUrl = `http://127.0.0.1:${port}/print`;
+  const query = resumeId ? `?resume=${encodeURIComponent(resumeId)}` : '';
+  const printUrl = `http://127.0.0.1:${port}/print${query}`;
 
   signal?.throwIfAborted();
   const launch = getBrowser();

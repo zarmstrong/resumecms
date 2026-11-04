@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { db, getSetting, setSetting, rowToBlock } from '../db.js';
+import { getSetting, setSetting } from '../db.js';
+import { store } from '../store.js';
+import { sendError } from './sendError.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { verifyPassword } from '../passwords.js';
 import { applyAiSettingsUpdate, normalizeAiSettings, publicAiSettings } from '../ai/aiSettings.js';
@@ -72,15 +74,20 @@ router.post('/rewrite', rewriteLimiter, async (req, res) => {
   if (instruction.length > MAX_INSTRUCTION_LENGTH) {
     return res.status(400).json({ error: `Instructions are limited to ${MAX_INSTRUCTION_LENGTH} characters.` });
   }
-  const row = db.prepare('SELECT * FROM blocks WHERE id = ?').get(blockId);
-  if (!row) return res.status(404).json({ error: 'Block not found' });
+  // Through the store so the lookup is scoped to a resume like every other
+  // blocks query (a raw SELECT here would find another resume's block).
+  let block;
+  try {
+    block = store.getBlock(blockId);
+  } catch (err) {
+    return sendError(res, err);
+  }
 
   const settings = normalizeAiSettings(getSetting('ai'));
   if (!publicAiSettings(settings).available) {
     return res.status(409).json({ error: 'AI rewriting is not set up. Add an API key in Account Settings.' });
   }
 
-  const block = rowToBlock(row);
   // The editor autosaves on a debounce, so the client's copy can be a few
   // hundred ms ahead of the DB. Rewrite what the user is actually looking
   // at; the type always comes from the DB, and a malformed client copy

@@ -14,7 +14,9 @@ one level deep under a `heading` block via `parentId` — this is an explicit
 allowlist (`NESTABLE_TYPES` in `resumeStore.js`), not "everything but
 heading/summary", so a new block type added later is top-level-only until
 deliberately added to it (see "Block nesting" below). The header
-(name/title/contact) is a separate singleton setting. Besides the editor,
+(name/title/contact) is a separate setting. The install can hold several
+resumes, each with its own blocks, header and site settings (see "Several
+resumes" below). Besides the editor,
 an MCP client can drive the same operations (see "MCP server" below).
 
 Three surfaces render from the same data/components: `/` (public), `/print`
@@ -73,7 +75,7 @@ The editor's writes (`PUT/POST/DELETE /api/blocks*`, `/api/header`,
 `/api/site`) and the MCP tools both go through the shared store
 (`server/src/resumeStore.js`, bound to the real DB in `server/src/store.js`),
 whose mutating methods write the live "draft" tables directly and call
-`touchDraft()` (`server/src/settings.js`, re-exported from `db.js`) to bump
+`touchDraft()` (`createResumeSettings` in `server/src/settings.js`) to bump
 `draft_meta.lastEditedAt`. The routes in `routes/blocks.js`,
 `routes/publish.js`, and `routes/public.js` are thin wrappers that map a
 store error's `.status` onto the response (wrap every handler over the
@@ -88,12 +90,42 @@ snapshot, so an edit in the same millisecond as a publish still counts;
 `POST /api/discard-draft` overwrites the draft tables from the
 last published snapshot. On first boot after this split was introduced,
 whatever was in the draft tables becomes the initial published snapshot
-(see the migration block at the bottom of `db.js`) so existing installs
-don't go blank.
+(see `seedLegacyResume()` in `db.js`) so existing installs don't go blank.
 
 When adding a new draft-mutating operation, put it in the store and call
 `touchDraft()` there (not in a route or tool), or the "unpublished changes"
 indicator will silently go stale for one of the two front doors.
+
+### Several resumes
+
+All of the above is per resume (issue #53). The install keeps several
+resumes ("variants") in the `resumes` table (`server/src/schema.js`): a
+stable `id`, a renameable `slug`, and exactly one `is_default` (a partial
+unique index allows at most one; the store never removes the last). Each
+resume owns its blocks (`blocks.resume_id`) and its `header`, `site`,
+`draft_meta`, `published_resume` and `pdf_meta` rows in `resume_settings`
+(`RESUME_SETTING_KEYS`); the global `settings` table keeps only
+`credentials`, `totp` and `ai`, and `db.js`'s `getSetting`/`setSetting`
+only ever see those.
+
+`store.forResume(id)` returns the content operations bound to one resume
+(404 for an unknown id), and every `blocks` query inside is scoped by
+`resume_id`: a block of another resume is "not found", so it can't be
+edited, deleted, reordered or nested under through the wrong one. Any new
+`blocks` query must be scoped the same way. The store object itself also
+carries every operation bound to whichever resume is the default at call
+time — that's what the unprefixed REST routes and MCP tools use.
+
+`migrateToResumes()` (`server/src/resumeMigration.js`) turns an install
+from before variants into its default resume (slug `main`) on first boot:
+it attaches the blocks, moves the settings rows, and moves
+`<RESUMECMS_DATA_DIR>/resume.pdf` to the new per-resume path. A fresh
+install goes through the same path: `db.js` seeds the old single-resume
+shape and migrates it, and none of that seeding runs once a resume exists.
+Every boot also runs `adoptLegacyRows()`: blocks with no `resume_id`
+(written by a rolled-back pre-variant image) are attached to the default
+resume, and per-resume keys back in the global `settings` table are only
+warned about, never moved.
 
 ### Route mount order matters
 
@@ -359,18 +391,24 @@ packages stays small.
 `server/src/pdfRenderer.js` drives headless Chromium (Puppeteer) to render
 the `/print` route and produce a PDF. It's only ever invoked through the
 store: `publish()` (behind `POST /api/publish` and the MCP `publish` tool)
-and `ensurePdf()` (called from `index.js` on boot, renders only if no PDF
-exists yet) — `GET /api/public/resume.pdf` only ever serves the
-already-rendered file at `PDF_PATH` (exported from `pdfRenderer.js`,
-`<RESUMECMS_DATA_DIR>/resume.pdf`), it doesn't render on demand. Both go
-through the store's single PDF queue (`withPdfLock`), so two renders never
-run at once and a slow first-boot render can't overwrite a newer publish;
-keep any new PDF-writing code on that queue. Each render is bounded by the
+and `ensurePdf()` (called through `ensurePdfs()` from `index.js` on boot
+for every published resume, renders only if that resume has no PDF yet) —
+`GET /api/public/resume.pdf` only ever serves the already-rendered file
+(the store's `getPdfFile()`), it doesn't render on demand. Each resume has
+its own file, `<RESUMECMS_DATA_DIR>/pdf/<resume id>.pdf` (`pdfPaths.js`,
+`pdfPathFor()`), keyed by id so a slug rename never orphans it; the
+renderer loads `/print?resume=<id>`. The client doesn't read that
+parameter yet, so `store.js` refuses to render any resume but the default
+(it would capture the default's content under another resume's name);
+lift that once `/print` honours it. All of them go through the store's
+single PDF queue (`withPdfLock`, shared by every resume), so two renders
+never run at once and a slow first-boot render can't overwrite a newer
+publish; keep any new PDF-writing code on that queue. Each render is bounded by the
 store's `pdfTimeoutMs` (default 90 s, `DEFAULT_PDF_TIMEOUT_MS`) so a hung
 Chromium releases the queue instead of blocking every later publish — the
 renderer gets an `AbortSignal` and, when it fires, closes the shared
 browser so the abandoned render stops and the next one starts fresh — and
-the file is written to `resume.pdf.tmp` and renamed into place so a
+the file is written to a `.tmp` sibling and renamed into place so a
 download overlapping a publish never reads a partial file. `publish()`
 takes the snapshot synchronously at call time — before queuing the render
 — so edits and discards from either front door are strictly ordered
