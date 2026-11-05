@@ -26,12 +26,20 @@ const { version } = createRequire(import.meta.url)('../../package.json');
 // state problem). Errors without a status are internal failures: they're
 // logged and surfaced as a generic [500]. Every call is also logged as one
 // JSON line — the audit trail for a token that grants full editor access.
+//
+// The install holds several resumes (issue #53). Every content tool takes an
+// optional resumeId (scopedToResume below): omitted, it acts on the default
+// resume, as the unprefixed REST routes do; given, on that one, through
+// store.forResume() (an unknown id is a 404). The resume tools manage the
+// resumes themselves.
 
-const INSTRUCTIONS = `resumecms edits a single-user resume site.
+const INSTRUCTIONS = `resumecms edits a single-user resume site that can hold several resumes (e.g. one tailored per kind of job).
 
-Content model: the resume is an ordered list of blocks ({ id, type, position, parentId, visibleWeb, visiblePrint, data }). Types: heading, summary, skills_group, experience, education, custom. An experience, skills_group, education, or custom block may be nested one level under a heading via parentId; heading and summary are always top-level. Call get_block_schemas for each type's data shape — the server type-checks the documented keys (e.g. bullets must be an array) and rejects a mismatch with a 400, but doesn't check enum values or unknown keys.
+Resumes: list_resumes shows them. Every content tool takes an optional resumeId; without it, it acts on the DEFAULT resume (the one the main domain shows). A new resume (create_resume, optionally copying another's draft with copyFrom) is private and unpublished; update_resume makes it public, gives it domains, or makes it the default.
 
-Draft vs published: every write tool changes the DRAFT only. Nothing is visible on the public site or PDF until you call publish. get_publish_status reports whether unpublished changes exist; discard_draft throws the draft away. Prefer reading with get_draft (everything at once) and editing with update_block (which merges data keys) and move_block (which handles ordering for you).`;
+Content model: a resume is an ordered list of blocks ({ id, type, position, parentId, visibleWeb, visiblePrint, data }). Types: heading, summary, skills_group, experience, education, custom. An experience, skills_group, education, or custom block may be nested one level under a heading via parentId; heading and summary are always top-level. Call get_block_schemas for each type's data shape — the server type-checks the documented keys (e.g. bullets must be an array) and rejects a mismatch with a 400, but doesn't check enum values or unknown keys.
+
+Draft vs published: every write tool changes the DRAFT only, of one resume. Nothing is visible on the public site or PDF until you call publish for that resume. get_publish_status reports whether unpublished changes exist; discard_draft throws the draft away. Prefer reading with get_draft (everything at once) and editing with update_block (which merges data keys) and move_block (which handles ordering for you).`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -42,24 +50,32 @@ const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: t
 const mutating = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 const destructive = { readOnlyHint: false, destructiveHint: true, openWorldHint: false };
 
+const resumeIdArg = () =>
+  z.string().describe('Resume to act on (an id from list_resumes). Omit for the default resume, the one the main domain shows.');
+// The required resumeId of the tools that manage a resume rather than its content.
+const requiredResumeId = () => z.string().describe('Resume id.');
+
 const orderOf = (blocks) => blocks.map((b) => ({ id: b.id, type: b.type, parentId: b.parentId ?? null }));
 
 // Each entry: the registerTool config plus `run(store, args)`.
-const TOOLS = [
-  // ---- reading -------------------------------------------------------------
-  {
-    name: 'get_block_schemas',
-    config: {
-      title: 'Describe block data shapes',
-      description:
-        'Documents the `data` shape of each block type (and the header and site-settings objects). These shapes come from the editor UI. The server type-checks the documented block keys on write (a wrong kind of value, e.g. bullets as a string, is a 400) but not enum values or unknown keys, and stores the header and site settings as-is — so follow the shapes to keep the editor and templates rendering correctly.',
-      inputSchema: {
-        type: BLOCK_TYPE_ENUM.optional().describe('Return only this block type (omit for everything, including header and site).'),
-      },
-      annotations: readOnly,
+const SCHEMA_TOOL = {
+  name: 'get_block_schemas',
+  config: {
+    title: 'Describe block data shapes',
+    description:
+      'Documents the `data` shape of each block type (and the header and site-settings objects). These shapes come from the editor UI. The server type-checks the documented block keys on write (a wrong kind of value, e.g. bullets as a string, is a 400) but not enum values or unknown keys, and stores the header and site settings as-is — so follow the shapes to keep the editor and templates rendering correctly.',
+    inputSchema: {
+      type: BLOCK_TYPE_ENUM.optional().describe('Return only this block type (omit for everything, including header and site).'),
     },
-    run: (store, { type }) => (type ? blockSchemaFor(type) : BLOCK_SCHEMAS),
+    annotations: readOnly,
   },
+  run: (store, { type }) => (type ? blockSchemaFor(type) : BLOCK_SCHEMAS),
+};
+
+// The tools that act on one resume's content; scopedToResume() gives each
+// its resumeId argument, so `store` in their run() is already the right one.
+const CONTENT_TOOLS = [
+  // ---- reading -------------------------------------------------------------
   {
     name: 'get_draft',
     config: {
@@ -283,6 +299,96 @@ const TOOLS = [
   },
 ];
 
+const RESUME_TOOLS = [
+  {
+    name: 'list_resumes',
+    config: {
+      title: 'List resumes',
+      description:
+        'Returns every resume, the default first: { id, slug, name, isDefault, isPublic, hostnames, createdAt, updatedAt, publishedAt, isDirty, pdfStale }. Pass an id as resumeId to the other tools to work on that resume. A public, published resume is shown at /r/<slug> and on its hostnames; the default is what the main domain shows.',
+      annotations: readOnly,
+    },
+    run: (store) => ({ resumes: store.listResumes() }),
+  },
+  {
+    name: 'get_resume',
+    config: {
+      title: 'Get one resume',
+      description: "Returns one resume's settings and publish status (the same shape as list_resumes). Use get_draft with its resumeId for its content.",
+      inputSchema: { resumeId: requiredResumeId() },
+      annotations: readOnly,
+    },
+    run: (store, { resumeId }) => ({ resume: store.getResume(resumeId) }),
+  },
+  {
+    name: 'create_resume',
+    config: {
+      title: 'Create a resume',
+      description:
+        "Adds a resume, private and unpublished. With copyFrom (a resume id) it starts as a copy of that resume's DRAFT (header, site settings and every block, with new block ids); without it, with the default resume's header and site settings and no blocks. slug (its /r/<slug> link name: lowercase letters, digits and single dashes) is derived from the name when omitted. Returns the new resume; edit it with the content tools and its resumeId, then publish it.",
+      inputSchema: {
+        name: z.string().describe('Name shown in the editor, e.g. "Sales".'),
+        slug: z.string().optional().describe('Link name, e.g. "sales-2026". Must be unused; omit to derive one from the name.'),
+        copyFrom: z.string().optional().describe('Id of a resume whose draft to copy. Omit to start without blocks.'),
+      },
+      annotations: mutating,
+    },
+    run: (store, args) => ({ resume: store.createResume(args) }),
+  },
+  {
+    name: 'update_resume',
+    config: {
+      title: 'Update a resume',
+      description:
+        "Changes a resume's settings; send only what changes. isPublic: true shows a published resume at /r/<slug> (false hides it again and removes its hostnames). hostnames REPLACES its domains (send the full list, [] to remove them all): a request for one of them gets this resume once it's published, and giving it any makes it public. isDefault: true makes it the resume the main domain shows; it must have been published, the default is always public, and there's no un-defaulting (make another one the default instead). Returns the updated resume.",
+      inputSchema: {
+        resumeId: requiredResumeId(),
+        name: z.string().optional().describe('New name.'),
+        slug: z.string().optional().describe('New link name (lowercase letters, digits and single dashes).'),
+        isPublic: z.boolean().optional().describe('Whether /r/<slug> (and its hostnames) show it once published.'),
+        isDefault: z.boolean().optional().describe('true makes it the default resume.'),
+        hostnames: z
+          .array(z.string())
+          .optional()
+          .describe('Its complete list of domains, e.g. ["sales.example.com"]; DNS and the reverse proxy must point them at this server.'),
+      },
+      annotations: { ...mutating, idempotentHint: true },
+    },
+    // The SDK's zod parse drops keys that weren't sent, so `patch` holds
+    // exactly the fields to change, as a REST PATCH body would.
+    run: (store, { resumeId, ...patch }) => {
+      if (Object.keys(patch).length === 0) {
+        throw httpError(400, 'Nothing to update: send at least one of name, slug, isPublic, isDefault, or hostnames');
+      }
+      return { resume: store.updateResume(resumeId, patch) };
+    },
+  },
+  {
+    name: 'delete_resume',
+    config: {
+      title: 'Delete a resume',
+      description:
+        "Permanently deletes a resume with its blocks, settings, domains, published version and PDF. The default resume can't be deleted (make another one the default first).",
+      inputSchema: { resumeId: requiredResumeId() },
+      annotations: destructive,
+    },
+    run: (store, { resumeId }) => store.deleteResume(resumeId),
+  },
+];
+
+// A content tool with an optional resumeId: run() gets the store bound to
+// that resume (forResume 404s an unknown id), or the default-bound store
+// itself when it's omitted, and never sees the argument.
+function scopedToResume(tool) {
+  return {
+    ...tool,
+    config: { ...tool.config, inputSchema: { ...tool.config.inputSchema, resumeId: resumeIdArg().optional() } },
+    run: (store, { resumeId, ...args }) => tool.run(resumeId === undefined ? store : store.forResume(resumeId), args),
+  };
+}
+
+const TOOLS = [SCHEMA_TOOL, ...CONTENT_TOOLS.map(scopedToResume), ...RESUME_TOOLS];
+
 export const TOOL_NAMES = TOOLS.map((t) => t.name);
 
 function ok(result) {
@@ -298,17 +404,19 @@ export function createMcpServer({ store, log = console }) {
     // Zod input errors are handled by the SDK before the callback runs.
     server.registerTool(name, config, async (args) => {
       const startedAt = Date.now();
+      // The resume the call named, if any (none means the default).
+      const resumeId = typeof args?.resumeId === 'string' ? args.resumeId : undefined;
       try {
         const result = ok(await run(store, args || {}));
-        audit({ tool: name, ok: true, durationMs: Date.now() - startedAt });
+        audit({ tool: name, resumeId, ok: true, durationMs: Date.now() - startedAt });
         return result;
       } catch (err) {
         if (err && err.status) {
-          audit({ tool: name, ok: false, status: err.status, error: err.message, durationMs: Date.now() - startedAt });
+          audit({ tool: name, resumeId, ok: false, status: err.status, error: err.message, durationMs: Date.now() - startedAt });
           if (err.cause) log.error(`MCP tool ${name}:`, err.cause); // e.g. the Chromium error behind a failed publish
           throw new Error(`[${err.status}] ${err.message}`);
         }
-        audit({ tool: name, ok: false, status: 500, error: 'internal', durationMs: Date.now() - startedAt });
+        audit({ tool: name, resumeId, ok: false, status: 500, error: 'internal', durationMs: Date.now() - startedAt });
         log.error(`MCP tool ${name} failed:`, err);
         throw new Error('[500] Internal server error');
       }

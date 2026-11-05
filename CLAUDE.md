@@ -114,7 +114,8 @@ only ever see those.
 edited, deleted, reordered or nested under through the wrong one. Any new
 `blocks` query must be scoped the same way. The store object itself also
 carries every operation bound to whichever resume is the default at call
-time — that's what the unprefixed REST routes and MCP tools use.
+time — that's what the unprefixed REST routes and MCP tools called without
+a `resumeId` use.
 
 The store also manages the resumes themselves (`listResumes`,
 `createResume`, `updateResume`, `deleteResume`; pure validation and the
@@ -394,7 +395,14 @@ The tools live in `server/src/mcp/createMcpServer.js`: the definitions
 (names, descriptions, zod schemas) are a module-level `TOOLS` array built
 once, and the factory only registers them on a fresh `McpServer` — the SDK
 binds a server to exactly one transport, so per-request servers are
-unavoidable in stateless mode. It takes the store (and a logger) as
+unavoidable in stateless mode. The content tools sit in `CONTENT_TOOLS`,
+and `scopedToResume()` gives each an optional `resumeId` and hands its
+`run()` `store.forResume(resumeId)` (or the default-bound store when it's
+omitted), so no content tool handles the argument itself; put a new
+content tool there too. The resume tools (`list_resumes`, `get_resume`,
+`create_resume`, `update_resume`, `delete_resume`) wrap the store's
+resume methods, and every `mcp_tool` log line carries the `resumeId` a
+call named. `createMcpServer()` takes the store (and a logger) as
 parameters so `createMcpServer.test.js` can drive it over the SDK's
 `InMemoryTransport` against a fake. Results are JSON text only (no
 `structuredContent`, to avoid doubling payloads); store errors are rethrown
