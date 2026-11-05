@@ -5,6 +5,7 @@ import { assertBlockData, isValidBlockData } from './blockData.js';
 import { createResumeSettings } from './settings.js';
 import { pdfPathFor } from './pdfPaths.js';
 import { cloneBlockRows, slugify, uniqueSlug, validateName, validateSlug } from './resumeFields.js';
+import { normalizeHostnames, requestHostKey } from './hostnames.js';
 import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
 import { promotedBlockPositions } from './blockDeletion.js';
 import { findSplitSectionId } from './blockReorder.js';
@@ -170,6 +171,50 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     return !!db.prepare('SELECT 1 FROM resumes WHERE slug = ? AND id IS NOT ?').get(slug, exceptId);
   }
 
+  function hostnamesOf(resumeId) {
+    return db.prepare('SELECT hostname FROM resume_hosts WHERE resume_id = ? ORDER BY hostname').all(resumeId).map((r) => r.hostname);
+  }
+
+  function hostOwner(hostname) {
+    return db.prepare('SELECT resume_id FROM resume_hosts WHERE hostname = ?').get(hostname)?.resume_id ?? null;
+  }
+
+  function isPublished(resumeId) {
+    return !!db.prepare("SELECT 1 FROM resume_settings WHERE resume_id = ? AND key = 'published_resume'").get(resumeId);
+  }
+
+  // What the public site serves on `hostname` (a request's req.hostname):
+  // the resume mapped to that domain, as long as it's public and published,
+  // otherwise the default. A domain mapped to a resume that hasn't been
+  // published yet shows the default until it is, rather than a blank page.
+  // The private check is belt and braces: making a resume private already
+  // removes its domains (updateResume).
+  function forHost(hostname) {
+    const key = requestHostKey(hostname);
+    const row =
+      key &&
+      db
+        .prepare(
+          `SELECT r.id FROM resume_hosts h
+             JOIN resumes r ON r.id = h.resume_id AND r.is_public = 1
+             JOIN resume_settings s ON s.resume_id = r.id AND s.key = 'published_resume'
+           WHERE h.hostname = ?`
+        )
+        .get(key);
+    return scopedStore(row ? row.id : defaultResumeId());
+  }
+
+  // A resume by its link name (/r/<slug>), for the public site: only a
+  // public, published one. A private or unpublished resume is "not found",
+  // exactly like a slug that doesn't exist, so the response doesn't reveal
+  // which slugs are in use.
+  function forPublicSlug(slug) {
+    // Slugs are stored lowercase, but a link typed or pasted as /r/Sales should still find it.
+    const row = typeof slug === 'string' && db.prepare('SELECT id FROM resumes WHERE slug = ? AND is_public = 1').get(slug.toLowerCase());
+    if (!row || !isPublished(row.id)) throw httpError(404, 'Resume not found');
+    return scopedStore(row.id);
+  }
+
   // The API shape of a resume: its own fields plus where its content stands
   // (the same publish status the editor polls for the default one).
   function toResume(row) {
@@ -180,6 +225,7 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
       name: row.name,
       isDefault: row.is_default === 1,
       isPublic: row.is_public === 1,
+      hostnames: hostnamesOf(row.id),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       publishedAt,
@@ -245,14 +291,20 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     return getResume(id);
   }
 
-  const RESUME_FIELDS = ['name', 'slug', 'isPublic', 'isDefault'];
+  const RESUME_FIELDS = ['name', 'slug', 'isPublic', 'isDefault', 'hostnames'];
 
-  // Renames, changes the slug, makes public/private, or makes this the
-  // default (moving the flag off the old one in the same transaction). The
-  // default is what `/` serves, so it's always public, and only a resume
-  // that has been published can take over: the public site reads the
-  // default's published snapshot, and an unpublished one would blank it.
-  // There's no un-defaulting; another resume takes the flag instead.
+  // Renames, changes the slug, makes public/private, sets its domains, or
+  // makes this the default (moving the flag off the old one in the same
+  // transaction). The default is what `/` serves, so it's always public,
+  // and only a resume that has been published can take over: the public
+  // site reads the default's published snapshot, and an unpublished one
+  // would blank it. There's no un-defaulting; another resume takes the flag
+  // instead.
+  //
+  // `hostnames` replaces the resume's domains. Anyone can send any Host
+  // header straight to the server, so a domain is never a way of keeping a
+  // resume private: giving a resume domains makes it public, and making it
+  // private removes them.
   function updateResume(resumeId, patch = {}) {
     const row = existingResumeRow(resumeId);
     patch = assertObject(patch ?? {}, 'resume');
@@ -281,9 +333,21 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
       if (patch.isPublic === false) throw httpError(409, 'The default resume is always public');
       next.isPublic = true;
     }
-    if (makeDefault && !scopedStore(resumeId).getPublishStatus().publishedAt) {
+    if (makeDefault && !isPublished(resumeId)) {
       throw httpError(409, 'Publish this resume before making it the default: the public site shows its published version');
     }
+    // null: leave the domains as they are.
+    let hostnames = null;
+    if ('hostnames' in patch) {
+      hostnames = normalizeHostnames(patch.hostnames);
+      const taken = hostnames.find((hostname) => (hostOwner(hostname) ?? resumeId) !== resumeId);
+      if (taken) throw httpError(409, `${taken} already shows another resume`);
+      if (hostnames.length > 0) {
+        if (patch.isPublic === false) throw httpError(409, "A private resume can't have domains: anyone can reach a domain");
+        next.isPublic = true;
+      }
+    }
+    if (!next.isPublic) hostnames = [];
 
     db.transaction(() => {
       if (makeDefault) db.prepare('UPDATE resumes SET is_default = 0 WHERE is_default = 1').run();
@@ -291,11 +355,16 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
         `UPDATE resumes SET name = ?, slug = ?, is_public = ?, is_default = CASE WHEN ? THEN 1 ELSE is_default END,
            updated_at = ? WHERE id = ?`
       ).run(next.name, next.slug, next.isPublic ? 1 : 0, makeDefault ? 1 : 0, new Date().toISOString(), resumeId);
+      if (hostnames) {
+        db.prepare('DELETE FROM resume_hosts WHERE resume_id = ?').run(resumeId);
+        const insert = db.prepare('INSERT INTO resume_hosts (hostname, resume_id) VALUES (?, ?)');
+        for (const hostname of hostnames) insert.run(hostname, resumeId);
+      }
     })();
     return getResume(resumeId);
   }
 
-  // Removes a resume with its blocks, settings and PDF. The default can't
+  // Removes a resume with its blocks, settings, domains and PDF. The default can't
   // go (make another one the default first), so there's always one. The
   // PDF goes straight away, not on the PDF queue (which could be busy with
   // another resume's render for a while): a render of this one that's still
@@ -311,6 +380,7 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     db.transaction(() => {
       db.prepare('DELETE FROM blocks WHERE resume_id = ?').run(resumeId);
       db.prepare('DELETE FROM resume_settings WHERE resume_id = ?').run(resumeId);
+      db.prepare('DELETE FROM resume_hosts WHERE resume_id = ?').run(resumeId);
       db.prepare('DELETE FROM resumes WHERE id = ?').run(resumeId);
     })();
     scopedStores.delete(resumeId);
@@ -365,6 +435,8 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
   return {
     ...delegates,
     forResume,
+    forHost,
+    forPublicSlug,
     defaultResumeId,
     ensurePdfs,
     listResumes,

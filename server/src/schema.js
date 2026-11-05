@@ -59,6 +59,16 @@ export function ensureSchema(db) {
       value TEXT NOT NULL,
       PRIMARY KEY (resume_id, key)
     );
+
+    -- Domains mapped to a resume: a request for one of these hosts is
+    -- served that resume instead of the default (resumeStore.js's forHost).
+    -- Stored normalized (hostnames.js), so the primary key is what makes
+    -- one domain show one resume.
+    CREATE TABLE IF NOT EXISTS resume_hosts (
+      hostname TEXT PRIMARY KEY,
+      resume_id TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS resume_hosts_by_resume ON resume_hosts (resume_id);
   `);
 
   const hasResumeId = db

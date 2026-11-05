@@ -150,6 +150,18 @@ test('the HTML shell revalidates on / and on client-side routes, with an ETag fo
   assert.equal(again, 304);
 });
 
+test("a resume's own link (/r/<slug>) is unlisted; every other page is not", async () => {
+  for (const route of ['/r/sales', '/r', '/R/sales']) {
+    const res = await fetch(`${base()}${route}`);
+    assert.equal(res.status, 200, route);
+    assert.equal(res.headers.get('x-robots-tag'), 'noindex', route);
+  }
+  for (const route of ['/', '/editor', '/print', '/resume']) {
+    const res = await fetch(`${base()}${route}`);
+    assert.equal(res.headers.get('x-robots-tag'), null, route);
+  }
+});
+
 function rawStatus(url, headers) {
   return new Promise((resolve, reject) => {
     http.get(url, { headers }, (res) => {

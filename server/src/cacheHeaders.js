@@ -23,6 +23,12 @@ export const PDF = 'private, no-cache';
 // can be a private resume, so nothing may keep a copy of it.
 export const RENDER = 'private, no-store';
 
+// Not a cache policy, but sent alongside one on every unlisted public
+// response (a resume's /r/<slug> page, its JSON and PDF) as X-Robots-Tag:
+// only the default resume and resumes mapped to a domain are meant to be
+// found by search engines.
+export const NOINDEX = 'noindex';
+
 // Vite's content-hashed bundles under /assets/: the name changes whenever
 // the content does, so these can be cached indefinitely.
 export const IMMUTABLE = 'public, max-age=31536000, immutable';

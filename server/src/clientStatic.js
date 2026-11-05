@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'node:path';
-import { REVALIDATE, hashedAssetsWatcher, looksLikeFile, staticCacheControl } from './cacheHeaders.js';
+import { NOINDEX, REVALIDATE, hashedAssetsWatcher, looksLikeFile, staticCacheControl } from './cacheHeaders.js';
 
 // Serve the built client (Vite output) for everything the API routes didn't
 // claim, including client-side routes like /editor and /print — the SPA
@@ -33,6 +33,8 @@ export function mountClient(app, clientDist) {
   const indexHtml = path.join(clientDist, 'index.html');
   app.get('/{*splat}', (req, res) => {
     res.set('Cache-Control', REVALIDATE);
+    // A resume's own link (/r/<slug>) is unlisted; see cacheHeaders.js.
+    if (/^\/r(\/|$)/i.test(req.path)) res.set('X-Robots-Tag', NOINDEX);
     if (looksLikeFile(req.path)) {
       // A file express.static didn't find (see looksLikeFile): a plain 404,
       // never the HTML shell.
