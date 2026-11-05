@@ -9,6 +9,13 @@ export const MAX_HOSTNAMES = 20;
 
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
+// The one conversion both storing and matching use, so the two can't drift
+// apart: ASCII (xn--) form, then one trailing dot stripped. Stripping after
+// converting, and only once: a full stop other than "." becomes "." in the
+// ASCII form, and stripping before as well would let "example.com.." through
+// as "example.com". '' when the URL parser rejects the name.
+const toAsciiKey = (lower) => domainToASCII(lower).replace(/\.$/, '');
+
 // A domain as stored in resume_hosts: lowercase ASCII (an internationalized
 // name becomes its xn-- form, which is what browsers send in Host), no
 // trailing dot, at least two labels, no port, scheme, path or wildcard.
@@ -21,11 +28,9 @@ export function normalizeHostname(raw) {
       `${JSON.stringify(String(raw).slice(0, 100))} isn't a domain name like sales.example.com (no "https://", port, path or "*")`
     );
   if (typeof raw !== 'string') throw httpError(400, 'each domain must be a string');
-  const trimmed = raw.trim().toLowerCase().replace(/\.$/, '');
+  const trimmed = raw.trim().toLowerCase();
   if (!trimmed || /[/:*@?#\\\s]/.test(trimmed)) throw invalid();
-  // Strip a trailing dot again: converting can produce one (a full stop
-  // other than "." becomes "." in the ASCII form).
-  const ascii = domainToASCII(trimmed).replace(/\.$/, '');
+  const ascii = toAsciiKey(trimmed);
   if (!ascii || ascii.length > 253) throw invalid();
   const labels = ascii.split('.');
   if (labels.length < 2 || !labels.every((label) => LABEL.test(label))) throw invalid();
@@ -53,7 +58,7 @@ export function normalizeHostnames(list) {
 export function requestHostKey(hostname) {
   if (typeof hostname !== 'string' || !hostname) return null;
   const lower = hostname.toLowerCase();
-  return (domainToASCII(lower) || lower).replace(/\.$/, '');
+  return toAsciiKey(lower) || lower.replace(/\.$/, '');
 }
 
 // The request headers a host-resolved response depends on, for its Vary:
