@@ -211,6 +211,12 @@ clients take the equivalent JSON:
 Everything the tools write goes to the **draft**, exactly like the editor;
 nothing is visible on the public site or PDF until `publish` is called.
 
+Every tool below except `get_block_schemas` and the resume tools takes an
+optional `resumeId` (an id from `list_resumes`): without it, it works on the
+default resume, the one your main domain shows; with it, on that resume
+("copy my resume as Sales, rewrite it for account executive roles, and
+publish it"). An unknown `resumeId` is a `[404] Resume not found`.
+
 | Tool | What it does |
 |---|---|
 | `get_block_schemas` | documents each block type's `data` shape plus the header and site-settings objects (`type` narrows it to one block type); the documented block keys are type-checked on write, so a wrong-kind value (`bullets` as a string) is a 400 |
@@ -227,6 +233,10 @@ nothing is visible on the public site or PDF until `publish` is called.
 | `publish` | snapshot the draft to the public site and re-render the PDF (takes a few seconds) |
 | `discard_draft` | restore the draft from the last published snapshot |
 | `get_published_resume` | the published snapshot as the site (`mode: "web"`) or PDF (`"print"`) sees it |
+| `list_resumes`, `get_resume` | every resume (the default first) / one, by `resumeId`, with its slug, visibility, domains and publish status, as `GET /api/resumes` returns them |
+| `create_resume` | `{ name, slug?, copyFrom? }` — a new private, unpublished resume; `copyFrom` copies that resume's draft |
+| `update_resume` | `{ resumeId, name?, slug?, isPublic?, isDefault?, hostnames? }` — send only what changes, with the same rules as `PATCH /api/resumes/:id` (`hostnames` replaces the list and makes the resume public; only a published resume can become the default) |
+| `delete_resume` | `{ resumeId }` — deletes a resume with its blocks, domains and PDF; the default can't be deleted |
 
 Tool errors carry the same status the REST API would return, e.g.
 `[404] Block not found`.
@@ -241,7 +251,8 @@ never logged. Every rejected attempt (`"event":"mcp_auth_failed"`, with the
 client address as `ip` — the real client once `RESUMECMS_TRUST_PROXY` is
 set, otherwise your proxy's own address — plus the `X-Forwarded-For`
 header as received as `forwardedFor`) and every tool call
-(`"event":"mcp_tool"`, with the tool name, outcome and duration) is written
+(`"event":"mcp_tool"`, with the tool name, the `resumeId` it named if any,
+outcome and duration) is written
 to the same JSON log as requests, so `docker compose logs | grep mcp_`
 shows exactly what a client did with the token. To revoke a token, change `RESUMECMS_MCP_TOKEN` and restart
 the container. If a client reports an OAuth or discovery error against

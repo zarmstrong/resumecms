@@ -12,7 +12,9 @@ import { BLOCK_TYPES, mergeShallow } from '../resumeStore.js';
 
 const EXPECTED_TOOLS = [
   'create_block',
+  'create_resume',
   'delete_block',
+  'delete_resume',
   'discard_draft',
   'get_block',
   'get_block_schemas',
@@ -20,15 +22,20 @@ const EXPECTED_TOOLS = [
   'get_header',
   'get_publish_status',
   'get_published_resume',
+  'get_resume',
   'get_site_settings',
   'list_blocks',
+  'list_resumes',
   'move_block',
   'publish',
   'reorder_blocks',
   'update_block',
   'update_header',
+  'update_resume',
   'update_site_settings',
 ];
+
+const RESUME_TOOLS = ['create_resume', 'delete_resume', 'get_resume', 'list_resumes', 'update_resume'];
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -42,6 +49,8 @@ function fakeStore() {
   let header = { name: 'Zed', email: 'z@x', links: [{ type: 'github', label: 'gh', url: 'https://g' }] };
   let site = { title: 'T', font: 'inter', colors: { accent: '#111111', heading: '#222222' } };
   const calls = [];
+  // The other resumes forResume() hands out, by id: tests put fakes in it.
+  const resumes = {};
   const find = (id) => {
     const b = blocks.find((x) => x.id === id);
     if (!b) throw httpError(404, 'Block not found');
@@ -58,6 +67,20 @@ function fakeStore() {
   return {
     calls,
     blocks,
+    resumes,
+    forResume: (id) => {
+      if (!Object.hasOwn(resumes, id)) throw httpError(404, 'Resume not found');
+      return resumes[id];
+    },
+    listResumes: () => [{ id: 'main', isDefault: true }, ...Object.keys(resumes).map((id) => ({ id, isDefault: false }))],
+    getResume: (id) => ({ id }),
+    createResume: (input) => { calls.push(['createResume', input]); return { id: 'new', ...input }; },
+    updateResume: (id, patch) => {
+      calls.push(['updateResume', id, patch]);
+      if (patch.isDefault === false) throw httpError(409, 'Make another resume the default instead');
+      return { id, ...patch };
+    },
+    deleteResume: (id) => { calls.push(['deleteResume', id]); return { deleted: id }; },
     getHeader: () => ({ ...header }),
     setHeader: (h, opts) => { header = opts?.merge ? mergeShallow(header, h, 'header') : h; return { ...header }; },
     getSite: () => ({ ...site }),
@@ -313,4 +336,91 @@ test('every tool call leaves an audit log line', async (t) => {
   for (const line of logged.info) {
     assert.ok(line.time && typeof line.durationMs === 'number');
   }
+});
+
+test('every content tool takes an optional resumeId; the resume tools and get_block_schemas do not', async (t) => {
+  const { client, close } = await connect(fakeStore());
+  t.after(close);
+  const { tools } = await client.listTools();
+  for (const tool of tools) {
+    const { properties = {}, required = [] } = tool.inputSchema;
+    if (tool.name === 'get_block_schemas') {
+      assert.equal(properties.resumeId, undefined);
+    } else if (RESUME_TOOLS.includes(tool.name)) {
+      const takesOne = !['list_resumes', 'create_resume'].includes(tool.name);
+      assert.equal(required.includes('resumeId'), takesOne, tool.name);
+    } else {
+      assert.ok(properties.resumeId?.description, `${tool.name} needs a resumeId`);
+      assert.ok(!required.includes('resumeId'), `${tool.name}'s resumeId must be optional`);
+    }
+  }
+});
+
+test('a resumeId sends the call to that resume, without it to the default, and an unknown one is a 404', async (t) => {
+  const store = fakeStore();
+  const sales = fakeStore();
+  store.resumes.sales = sales;
+  const { call, logged, close } = await connect(store);
+  t.after(close);
+
+  const block = (await call('create_block', { resumeId: 'sales', type: 'summary', data: { text: 'Sells' } })).json.block;
+  assert.deepEqual(sales.blocks.map((b) => b.id), [block.id]);
+  assert.equal(store.blocks.length, 0);
+  assert.deepEqual((await call('get_draft', { resumeId: 'sales' })).json.blocks.map((b) => b.id), [block.id]);
+  assert.deepEqual((await call('get_draft')).json.blocks, []);
+
+  // the tool itself never sees resumeId: the patch is what it was without one
+  await call('update_block', { resumeId: 'sales', id: block.id, data: { text: 'Sells more' } });
+  assert.deepEqual(sales.calls.at(-1), ['updateBlock', block.id, { data: { text: 'Sells more' } }, { mergeData: true }]);
+  await call('move_block', { resumeId: 'sales', id: block.id, index: 0 });
+  assert.equal(sales.calls.at(-1)[0], 'reorderBlocks');
+  await call('publish', { resumeId: 'sales' });
+  assert.equal(sales.calls.at(-1)[0], 'publish');
+  assert.equal((await call('update_header', { resumeId: 'sales', header: { title: 'Seller' } })).json.header.title, 'Seller');
+  assert.equal((await call('get_header')).json.header.title, undefined, "the default's header is untouched");
+  assert.equal(store.calls.length, 0);
+
+  const unknown = await call('delete_block', { resumeId: 'nope', id: block.id });
+  assert.equal(unknown.isError, true);
+  assert.equal(unknown.text, '[404] Resume not found');
+  assert.equal(sales.blocks.length, 1);
+
+  const audited = logged.info.map(({ tool, resumeId, ok }) => [tool, resumeId, ok]);
+  assert.deepEqual(audited.at(0), ['create_block', 'sales', true]);
+  assert.deepEqual(audited.at(2), ['get_draft', undefined, true]);
+  assert.deepEqual(audited.at(-1), ['delete_block', 'nope', false]);
+});
+
+test('the resume tools hand the store exactly what was sent', async (t) => {
+  const store = fakeStore();
+  store.resumes.sales = fakeStore();
+  const { call, close } = await connect(store);
+  t.after(close);
+
+  assert.deepEqual((await call('list_resumes')).json.resumes.map((r) => r.id), ['main', 'sales']);
+  assert.deepEqual((await call('get_resume', { resumeId: 'sales' })).json.resume, { id: 'sales' });
+
+  await call('create_resume', { name: 'Sales' });
+  assert.deepEqual(store.calls.at(-1), ['createResume', { name: 'Sales' }]);
+  await call('create_resume', { name: 'Ops', slug: 'ops', copyFrom: 'sales' });
+  assert.deepEqual(store.calls.at(-1), ['createResume', { name: 'Ops', slug: 'ops', copyFrom: 'sales' }]);
+  assert.equal((await call('create_resume', {})).isError, true, 'name is required');
+
+  const updated = (await call('update_resume', { resumeId: 'sales', hostnames: ['sales.example.com'], isPublic: true })).json.resume;
+  assert.deepEqual(updated, { id: 'sales', isPublic: true, hostnames: ['sales.example.com'] });
+  assert.deepEqual(store.calls.at(-1), ['updateResume', 'sales', { isPublic: true, hostnames: ['sales.example.com'] }]);
+  await call('update_resume', { resumeId: 'sales', hostnames: [] });
+  assert.deepEqual(store.calls.at(-1), ['updateResume', 'sales', { hostnames: [] }]);
+
+  const callsBefore = store.calls.length;
+  const nothing = await call('update_resume', { resumeId: 'sales' });
+  assert.equal(nothing.isError, true);
+  assert.match(nothing.text, /\[400\] Nothing to update/);
+  assert.equal(store.calls.length, callsBefore, 'the store must not be touched');
+
+  const conflict = await call('update_resume', { resumeId: 'main', isDefault: false });
+  assert.equal(conflict.text, '[409] Make another resume the default instead');
+
+  assert.deepEqual((await call('delete_resume', { resumeId: 'sales' })).json, { deleted: 'sales' });
+  assert.deepEqual(store.calls.at(-1), ['deleteResume', 'sales']);
 });
