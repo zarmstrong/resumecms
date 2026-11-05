@@ -23,10 +23,16 @@ export function normalizeHostname(raw) {
   if (typeof raw !== 'string') throw httpError(400, 'each domain must be a string');
   const trimmed = raw.trim().toLowerCase().replace(/\.$/, '');
   if (!trimmed || /[/:*@?#\\\s]/.test(trimmed)) throw invalid();
-  const ascii = domainToASCII(trimmed);
+  // Strip a trailing dot again: converting can produce one (a full stop
+  // other than "." becomes "." in the ASCII form).
+  const ascii = domainToASCII(trimmed).replace(/\.$/, '');
   if (!ascii || ascii.length > 253) throw invalid();
   const labels = ascii.split('.');
   if (labels.length < 2 || !labels.every((label) => LABEL.test(label))) throw invalid();
+  // A name ending in a number is an IP address to the URL parser ("0x7f.1"
+  // becomes 127.0.0.1), not a domain: a browser never sends it as a domain's
+  // Host, and mapping 127.0.0.1 would repoint local checks at one resume.
+  if (/^\d+$/.test(labels[labels.length - 1])) throw invalid();
   return ascii;
 }
 
@@ -39,12 +45,15 @@ export function normalizeHostnames(list) {
 }
 
 // The key to look a request's host up by: Express's req.hostname (already
-// without the port; X-Forwarded-Host's when 'trust proxy' is on),
-// lowercased and without a trailing dot. Never throws: a host that can't
-// match anything simply gets the default resume.
+// without the port; X-Forwarded-Host's when 'trust proxy' is on), in the
+// same form normalizeHostname() stores: lowercase ASCII, an
+// internationalized name as xn-- (browsers send that already, but a proxy
+// may forward the Unicode spelling), without a trailing dot. Never throws:
+// a host that can't match anything simply gets the default resume.
 export function requestHostKey(hostname) {
   if (typeof hostname !== 'string' || !hostname) return null;
-  return hostname.toLowerCase().replace(/\.$/, '');
+  const lower = hostname.toLowerCase();
+  return (domainToASCII(lower) || lower).replace(/\.$/, '');
 }
 
 // The request headers a host-resolved response depends on, for its Vary:
