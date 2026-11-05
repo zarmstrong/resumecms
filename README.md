@@ -51,8 +51,16 @@ types don't cover — certifications, publications, volunteer work, side
 projects — without touching any code. They drag, reorder, and toggle
 visibility exactly like built-in blocks.
 
-The header (name, title, contact info, links) is a singleton, edited
-separately from the block list since a resume only has one.
+The header (name, title, contact info, links) is edited separately from
+the block list, since a resume only has one.
+
+An install can hold **several resumes** (say, one per kind of role), each
+with its own blocks, header, site settings, published version and PDF. One
+of them is the **default**, which the public site serves. A new resume is
+private until made public, and can start as a copy of an existing one. For
+now they're managed through the API (see `/api/resumes` below); the
+editor's switcher and public `/r/<link name>` pages are still to come
+([#53](https://github.com/zarmstrong/resumecms/issues/53)).
 
 ## Templates
 
@@ -152,11 +160,20 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`/`visiblePrint` (booleans), and/or `parentId` |
 | `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted); 404 for an unknown id |
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
+| `GET /api/publish/status` | `{ publishedAt, isDirty, pdfStale, pdfVersion }` |
+| `POST /api/publish` | snapshot the draft to the public site and re-render the PDF |
+| `POST /api/discard-draft` | restore the draft from the last published snapshot |
+| `GET /api/resumes` | every resume, default first: `{ id, slug, name, isDefault, isPublic, createdAt, updatedAt, publishedAt, isDirty, pdfStale }` |
+| `POST /api/resumes` | `{ name, slug?, copyFrom? }` → a new private, unpublished resume. With `copyFrom` (a resume id) it starts as a copy of that resume's draft; without it, with the default resume's header and site settings and no blocks. `slug` (lowercase letters, digits and dashes) defaults to one made from the name; a taken one is a 409 |
+| `GET /api/resumes/:id` | one resume, same shape as the list |
+| `PATCH /api/resumes/:id` | any of `{ name, slug, isPublic, isDefault: true }`. Only a published resume can become the default, the default is always public, and there's no un-defaulting: make another resume the default instead |
+| `DELETE /api/resumes/:id` | delete a resume with its blocks, settings and PDF; the default can't be deleted (409) |
+| `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`) for that resume. The unprefixed ones act on whichever resume is the default |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense? }` → `{ proposal }` for review; saves nothing. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
-| `GET /api/public/resume?mode=web\|print` | public, filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
-| `GET /api/public/resume.pdf` | public, streams the last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
+| `GET /api/public/resume?mode=web\|print` | public, the default resume's published version, filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
+| `GET /api/public/resume.pdf` | public, streams the default resume's last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
 
 ## MCP server
