@@ -58,8 +58,8 @@ app.use(
 // route further down actually matches) and get rejected there instead.
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/totp', totpRoutes); // /api/auth/totp/status, /setup, /confirm, /disable (auth-gated)
-app.use('/api/public', publicRoutes); // /api/public/resume
-app.use('/api/public', pdfRoutes); // /api/public/resume.pdf
+app.use('/api/public', publicRoutes); // /api/public/resume, /api/public/resumes/:slug
+app.use('/api/public', pdfRoutes); // /api/public/resume.pdf, /api/public/resumes/:slug/resume.pdf
 app.use('/api/ai', aiRoutes); // /api/ai/settings, /api/ai/rewrite (auth-gated)
 app.use('/api/resumes', resumeRoutes); // /api/resumes[/:id], plus every editor route under /api/resumes/:id/ (auth-gated)
 app.use('/api', blockRoutes); // /api/header, /api/site, /api/blocks... (auth-gated)

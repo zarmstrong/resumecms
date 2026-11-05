@@ -5,6 +5,7 @@ import { handle } from './sendError.js';
 import { createBlockRoutes } from './blocks.js';
 import { createPublishRoutes } from './publish.js';
 import { rewriteHandlers } from './ai.js';
+import { sendResumePdf } from './sendPdf.js';
 
 // Managing the install's resumes (issue #53), plus every editor route for
 // one resume under /api/resumes/:resumeId (AI rewrite included) — the same
@@ -30,7 +31,8 @@ router.get('/:resumeId', handle((req, res) => {
   res.json({ resume: store.getResume(req.params.resumeId) });
 }));
 
-// Any of { name, slug, isPublic, isDefault: true } — see updateResume.
+// Any of { name, slug, isPublic, isDefault: true, hostnames } — see
+// updateResume.
 router.patch('/:resumeId', handle((req, res) => {
   res.json({ resume: store.updateResume(req.params.resumeId, req.body || {}) });
 }));
@@ -40,6 +42,13 @@ router.delete('/:resumeId', handle((req, res) => {
 }));
 
 const forResume = (req) => store.forResume(req.params.resumeId);
+
+// Any resume's PDF, private ones included, so a tailored resume can be
+// attached to an application without making it public.
+router.get('/:resumeId/resume.pdf', (req, res) => {
+  sendResumePdf(res, () => forResume(req));
+});
+
 router.post('/:resumeId/ai/rewrite', ...rewriteHandlers(forResume));
 router.use('/:resumeId', createBlockRoutes(forResume));
 router.use('/:resumeId', createPublishRoutes(forResume));

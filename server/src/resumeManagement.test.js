@@ -243,3 +243,87 @@ for (const when of ['queued', 'running']) {
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM resume_settings WHERE resume_id = ?').get(r.id).n, 0);
   });
 }
+
+test('domains: setting them makes a resume public, making it private removes them, and each shows one resume', async () => {
+  const { store, defaultId } = makeStore();
+  const sales = store.createResume({ name: 'Sales' });
+  const ops = store.createResume({ name: 'Ops' });
+
+  const mapped = store.updateResume(sales.id, { hostnames: ['Sales.Example.com', 'sales.example.com.', 'jobs.example.com'] });
+  assert.deepEqual(mapped.hostnames, ['jobs.example.com', 'sales.example.com']);
+  assert.equal(mapped.isPublic, true, 'a resume with domains is public');
+  assert.deepEqual(store.listResumes().find((r) => r.id === sales.id).hostnames, ['jobs.example.com', 'sales.example.com']);
+  assert.deepEqual(store.getResume(defaultId).hostnames, []);
+
+  assert.equal(await statusOf(() => store.updateResume(ops.id, { hostnames: ['sales.example.com'] })), 409, 'taken by another resume');
+  assert.equal(await statusOf(() => store.updateResume(ops.id, { hostnames: ['https://ops.example.com'] })), 400);
+  assert.equal(await statusOf(() => store.updateResume(ops.id, { hostnames: 'ops.example.com' })), 400);
+  assert.equal(await statusOf(() => store.updateResume(ops.id, { hostnames: ['ops.example.com'], isPublic: false })), 409);
+  assert.deepEqual(store.getResume(ops.id).hostnames, [], 'a refused update changes nothing');
+  assert.equal(store.getResume(ops.id).isPublic, false);
+
+  assert.deepEqual(store.updateResume(sales.id, { name: 'Sales 2026' }).hostnames, ['jobs.example.com', 'sales.example.com'], 'other updates keep them');
+  assert.deepEqual(store.updateResume(sales.id, { hostnames: ['sales.example.com'] }).hostnames, ['sales.example.com'], 'a list replaces them');
+  const privateAgain = store.updateResume(sales.id, { isPublic: false });
+  assert.deepEqual([privateAgain.isPublic, privateAgain.hostnames], [false, []]);
+  assert.deepEqual(store.updateResume(ops.id, { hostnames: ['sales.example.com'] }).hostnames, ['sales.example.com'], 'freed for another resume');
+
+  assert.deepEqual(store.updateResume(defaultId, { hostnames: ['example.com'] }).hostnames, ['example.com'], 'the default can have domains too');
+  assert.equal(await statusOf(() => store.updateResume(defaultId, { hostnames: [], isPublic: false })), 409);
+});
+
+test('a host shows its mapped resume once that is published, and the default otherwise', async () => {
+  const { store, defaultId } = makeStore();
+  await store.publish();
+  const sales = store.createResume({ name: 'Sales', copyFrom: defaultId });
+  store.forResume(sales.id).setHeader({ name: 'Zed, Sales' });
+  store.updateResume(sales.id, { hostnames: ['sales.example.com'] });
+
+  const nameOn = (hostname) => store.forHost(hostname).getPublishedResume().header?.name;
+  assert.equal(nameOn('sales.example.com'), 'Zed', 'not published yet: the default');
+  await store.forResume(sales.id).publish();
+  assert.equal(nameOn('sales.example.com'), 'Zed, Sales');
+  assert.equal(nameOn('SALES.example.com.'), 'Zed, Sales');
+  assert.equal(store.forHost('sales.example.com').getPdfFile().path, store.forResume(sales.id).getPdfFile().path);
+  for (const other of ['example.com', 'www.sales.example.com', '127.0.0.1', '', undefined]) {
+    assert.equal(nameOn(other), 'Zed', String(other));
+  }
+
+  store.updateResume(sales.id, { isPublic: false });
+  assert.equal(nameOn('sales.example.com'), 'Zed', 'private again: the mapping is gone');
+
+  store.updateResume(sales.id, { hostnames: ['sales.example.com'] });
+  store.deleteResume(sales.id);
+  assert.equal(nameOn('sales.example.com'), 'Zed', 'deleted: the default');
+});
+
+test('a public link (/r/<slug>) finds only a public, published resume', async () => {
+  const { store, defaultId } = makeStore();
+  const sales = store.createResume({ name: 'Sales', copyFrom: defaultId });
+  store.forResume(sales.id).setHeader({ name: 'Zed, Sales' });
+
+  assert.equal(await statusOf(() => store.forPublicSlug('sales')), 404, 'private and unpublished');
+  await store.forResume(sales.id).publish();
+  assert.equal(await statusOf(() => store.forPublicSlug('sales')), 404, 'published but private');
+  store.updateResume(sales.id, { isPublic: true });
+  assert.equal(store.forPublicSlug('sales').getPublishedResume().header.name, 'Zed, Sales');
+  assert.equal(store.forPublicSlug('Sales').getPublishedResume().header.name, 'Zed, Sales', 'a link typed with capitals');
+
+  const draft = store.createResume({ name: 'Draft' });
+  store.updateResume(draft.id, { isPublic: true });
+  assert.equal(await statusOf(() => store.forPublicSlug('draft')), 404, 'public but never published');
+  assert.equal(await statusOf(() => store.forPublicSlug('main')), 404, 'the default, never published');
+  await store.publish();
+  assert.equal(store.forPublicSlug('main').getPublishedResume().header.name, 'Zed', 'the default has a link too');
+  for (const bad of ['nope', '', undefined, sales.id]) {
+    assert.equal(await statusOf(() => store.forPublicSlug(bad)), 404, String(bad));
+  }
+});
+
+test('deleting a resume removes its domains', () => {
+  const { store, db } = makeStore();
+  const r = store.createResume({ name: 'Sales' });
+  store.updateResume(r.id, { hostnames: ['sales.example.com'] });
+  store.deleteResume(r.id);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM resume_hosts').get().n, 0);
+});

@@ -133,9 +133,27 @@ publish handlers under `/api/resumes/:resumeId/`: `routes/blocks.js` and
 default export is the unprefixed default-resume instance; `routes/ai.js`'s
 `rewriteHandlers(storeFor)` does the same for the AI rewrite (one shared
 rate limiter). Address a resume by the URL prefix, never a body field, so a
-client that prefixes its calls can't forget it on one of them. `resumes.is_public`
-is stored but doesn't gate anything yet; the public `/r/<slug>` pages and
-subdomain mapping that read it come next.
+client that prefixes its calls can't forget it on one of them.
+
+The public side picks a resume in two ways, both in the store. `forHost(req.hostname)`
+(behind `/api/public/resume` and `/api/public/resume.pdf`) returns the
+resume whose domain that is (`resume_hosts`, normalized by `hostnames.js`),
+if it's public and published, and the default otherwise; the render
+cookie (see "PDF generation") takes precedence over it.
+`forPublicSlug(slug)` (behind `/api/public/resumes/:slug` and its
+`resume.pdf`) 404s unless the resume is public and published, so an
+unknown, private and unpublished slug all look the same. Those slug
+responses and the `/r/<slug>` HTML shell carry `X-Robots-Tag: noindex`
+(`NOINDEX` in `cacheHeaders.js`), and the two host-resolved routes send
+`Vary: Host, X-Forwarded-Host` (`HOST_HEADERS`; behind a trusted proxy
+the host comes from the latter) so no cache hands one domain's resume to
+another. A domain is never access control (anyone
+can send any `Host`), so `updateResume` makes a resume public when it
+gets domains and removes them when it goes private; keep that pairing if
+you add another way to set either. The editor's routes never follow the
+host: the unprefixed ones always mean the default. The client's
+`/r/<slug>` page that reads the slug endpoint comes with the editor's
+switcher (phase 4).
 
 `migrateToResumes()` (`server/src/resumeMigration.js`) turns an install
 from before variants into its default resume (slug `main`) on first boot:
@@ -414,8 +432,10 @@ the `/print` route and produce a PDF. It's only ever invoked through the
 store: `publish()` (behind `POST /api/publish` and the MCP `publish` tool)
 and `ensurePdf()` (called through `ensurePdfs()` from `index.js` on boot
 for every published resume, renders only if that resume has no PDF yet) —
-`GET /api/public/resume.pdf` only ever serves the already-rendered file
-(the store's `getPdfFile()`), it doesn't render on demand. Each resume has
+`GET /api/public/resume.pdf` (and the other two PDF routes: by slug, and
+the editor's `GET /api/resumes/:id/resume.pdf`, all through
+`sendResumePdf()` in `routes/sendPdf.js`) only ever serves the already-rendered
+file (the store's `getPdfFile()`), it doesn't render on demand. Each resume has
 its own file, `<RESUMECMS_DATA_DIR>/pdf/<resume id>.pdf` (`pdfPaths.js`,
 `pdfPathFor()`), keyed by id so a slug rename never orphans it; the
 renderer loads `/print` in a throwaway browser context holding a signed
@@ -448,8 +468,9 @@ a later render catches up — the editor shows "PDF out of date" for it.
 ### Cache headers
 
 Every public response carries an explicit `Cache-Control` from
-`server/src/cacheHeaders.js`: `no-cache` for `/api/public/resume` and the
-HTML shell, `private, no-cache` for the PDF, `immutable` for the hashed
+`server/src/cacheHeaders.js`: `no-cache` for `/api/public/resume`,
+`/api/public/resumes/:slug` and the HTML shell, `private, no-cache` for
+every PDF route, `immutable` for the hashed
 files Vite's build manifest lists (`build.manifest` in
 `client/vite.config.js` → `dist/.vite/manifest.json`, re-read whenever its
 mtime changes so a rebuild under a running dev server is picked up; a file

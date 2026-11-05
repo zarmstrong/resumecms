@@ -57,10 +57,13 @@ the block list, since a resume only has one.
 An install can hold **several resumes** (say, one per kind of role), each
 with its own blocks, header, site settings, published version and PDF. One
 of them is the **default**, which the public site serves. A new resume is
-private until made public, and can start as a copy of an existing one. For
-now they're managed through the API (see `/api/resumes` below); the
-editor's switcher and public `/r/<link name>` pages are still to come
-([#53](https://github.com/zarmstrong/resumecms/issues/53)).
+private until made public, and can start as a copy of an existing one. A
+public resume has its own unlisted link, and can also be given domains of
+its own (`sales.example.com` shows the sales resume, everything else the
+default; see [Showing a resume on its own domain](#showing-a-resume-on-its-own-domain)).
+For now they're managed through the API (see `/api/resumes` below); the
+editor's switcher and the `/r/<link name>` page that reads that link are
+still to come ([#53](https://github.com/zarmstrong/resumecms/issues/53)).
 
 ## Templates
 
@@ -163,17 +166,20 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/publish/status` | `{ publishedAt, isDirty, pdfStale, pdfVersion }` |
 | `POST /api/publish` | snapshot the draft to the public site and re-render the PDF |
 | `POST /api/discard-draft` | restore the draft from the last published snapshot |
-| `GET /api/resumes` | every resume, default first: `{ id, slug, name, isDefault, isPublic, createdAt, updatedAt, publishedAt, isDirty, pdfStale }` |
+| `GET /api/resumes` | every resume, default first: `{ id, slug, name, isDefault, isPublic, hostnames, createdAt, updatedAt, publishedAt, isDirty, pdfStale }` |
 | `POST /api/resumes` | `{ name, slug?, copyFrom? }` → a new private, unpublished resume. With `copyFrom` (a resume id) it starts as a copy of that resume's draft; without it, with the default resume's header and site settings and no blocks. `slug` (lowercase letters, digits and dashes) defaults to one made from the name; a taken one is a 409 |
 | `GET /api/resumes/:id` | one resume, same shape as the list |
-| `PATCH /api/resumes/:id` | any of `{ name, slug, isPublic, isDefault: true }`. Only a published resume can become the default, the default is always public, and there's no un-defaulting: make another resume the default instead |
-| `DELETE /api/resumes/:id` | delete a resume with its blocks, settings and PDF; the default can't be deleted (409) |
+| `PATCH /api/resumes/:id` | any of `{ name, slug, isPublic, isDefault: true, hostnames }`. Only a published resume can become the default, the default is always public, and there's no un-defaulting: make another resume the default instead. `hostnames` replaces the resume's domains (see [Showing a resume on its own domain](#showing-a-resume-on-its-own-domain)): giving it any makes it public, making it private removes them, and a domain another resume has is a 409 |
+| `DELETE /api/resumes/:id` | delete a resume with its blocks, settings, domains and PDF; the default can't be deleted (409) |
+| `GET /api/resumes/:id/resume.pdf` | download any resume's last rendered PDF, private ones included |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`) for that resume. The unprefixed ones act on whichever resume is the default |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense? }` → `{ proposal }` for review; saves nothing. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
-| `GET /api/public/resume?mode=web\|print` | public, the default resume's published version, filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
-| `GET /api/public/resume.pdf` | public, streams the default resume's last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
+| `GET /api/public/resume?mode=web\|print` | public, the published version of the resume this domain shows (the default, unless the request's host is one of another resume's `hostnames`), filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
+| `GET /api/public/resume.pdf` | public, streams that same resume's last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
+| `GET /api/public/resumes/:slug?mode=web\|print` | public, the same for a resume by its link name; 404 unless that resume is public and published. Sent with `X-Robots-Tag: noindex` |
+| `GET /api/public/resumes/:slug/resume.pdf` | public, its PDF, on the same terms |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
 
 ## MCP server
@@ -300,6 +306,40 @@ is `true` (which trusts everyone), mixes a hop count into an address list
   compose network is recreated, which silently puts everyone back in one
   bucket. To close both, publish the port on loopback only
   (`'127.0.0.1:4000:4000'`) so only a proxy on the same host can reach it.
+
+### Showing a resume on its own domain
+
+A public resume can be given one or more domains (`hostnames` in `PATCH
+/api/resumes/:id`). A request whose host is one of them gets that resume
+at `/` and `/api/public/resume.pdf`; any other host gets the default.
+Domains are stored lowercase, without a port or trailing dot, and can't
+be wildcards. A domain mapped to a resume that hasn't been published yet
+keeps showing the default until it is.
+
+A domain isn't a way to keep a resume private: anyone can send any `Host`
+header straight to the server. So giving a resume a domain makes it
+public, and making it private removes its domains.
+
+For each domain:
+
+1. **DNS:** point it at the same place as the main site (with Cloudflare,
+   a proxied record; Universal SSL covers first-level subdomains).
+2. **Reverse proxy:** route it to the same backend, and keep the client's
+   `Host` header. If the proxy's TLS certificate is per domain (e.g. a
+   Cloudflare Origin Certificate), check that it covers the new one.
+3. **Check the app sees it:**
+   `curl -H 'Host: sales.example.com' http://127.0.0.1:4000/api/public/resume`
+   should return the mapped resume. With `RESUMECMS_TRUST_PROXY` set, the
+   app reads the host from the trusted proxy's `X-Forwarded-Host` instead,
+   when it sends one.
+
+Do your editing from the main domain: the login session is per host, and
+the editor's unprefixed routes always edit the default resume, whichever
+domain they're called on.
+
+A resume's own link (`/r/<link name>`, its JSON and its PDF) is sent with
+`X-Robots-Tag: noindex`, and nothing links to it, so only the default and
+resumes with a domain of their own are meant to show up in search.
 
 ### Caching and CDNs
 
