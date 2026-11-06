@@ -337,12 +337,12 @@ const RESUME_TOOLS = [
     config: {
       title: 'Create a resume',
       description:
-        "Adds a resume, private and unpublished. With copyFrom (a resume id) it starts as a copy of that resume's DRAFT (header, site settings and every block, with new block ids); without it, with the default resume's header and site settings and no blocks. slug (its /r/<slug> link name: lowercase letters, digits and single dashes) is derived from the name when omitted. A copy keeps its source's tailoring brief unless you send one. Returns the new resume; edit it with the content tools and its resumeId, then publish it.",
+        "Adds a resume, private and unpublished. With copyFrom (a resume id) it starts as a copy of that resume's DRAFT (header, site settings and every block, with new block ids); without it, with the default resume's header and site settings and no blocks. slug (its /r/<slug> link name: lowercase letters, digits and single dashes) is derived from the name when omitted. A copy keeps its source's tailoring brief unless you send one (or null for none). Returns the new resume; edit it with the content tools and its resumeId, then publish it.",
       inputSchema: {
         name: z.string().describe('Name shown in the editor, e.g. "Sales".'),
         slug: z.string().optional().describe('Link name, e.g. "sales-2026". Must be unused; omit to derive one from the name.'),
         copyFrom: z.string().optional().describe('Id of a resume whose draft to copy. Omit to start without blocks.'),
-        tailoring: tailoringArg().optional(),
+        tailoring: tailoringArg().nullable().optional(),
       },
       annotations: mutating,
     },

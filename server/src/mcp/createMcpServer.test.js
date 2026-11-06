@@ -416,6 +416,8 @@ test('the resume tools hand the store exactly what was sent', async (t) => {
   const brief = { audience: 'SRE roles', posting: 'We need on-call experience.' };
   await call('create_resume', { name: 'Acme', copyFrom: 'sales', tailoring: brief });
   assert.deepEqual(store.calls.at(-1), ['createResume', { name: 'Acme', copyFrom: 'sales', tailoring: brief }]);
+  await call('create_resume', { name: 'Fresh', copyFrom: 'sales', tailoring: null });
+  assert.deepEqual(store.calls.at(-1), ['createResume', { name: 'Fresh', copyFrom: 'sales', tailoring: null }], "null opts a copy out of its source's");
   await call('update_resume', { resumeId: 'sales', tailoring: brief });
   assert.deepEqual(store.calls.at(-1), ['updateResume', 'sales', { tailoring: brief }]);
   await call('update_resume', { resumeId: 'sales', tailoring: null });

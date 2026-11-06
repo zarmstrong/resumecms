@@ -240,7 +240,7 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 | `discard_draft` | restore the draft from the last published snapshot |
 | `get_published_resume` | the published snapshot as the site (`mode: "web"`) or PDF (`"print"`) sees it |
 | `list_resumes`, `get_resume` | every resume (the default first) / one, by `resumeId`, with its slug, visibility, domains and publish status, as `GET /api/resumes` returns them |
-| `create_resume` | `{ name, slug?, copyFrom?, tailoring? }` — a new private, unpublished resume; `copyFrom` copies that resume's draft |
+| `create_resume` | `{ name, slug?, copyFrom?, tailoring? }` — a new private, unpublished resume; `copyFrom` copies that resume's draft, and its `tailoring` unless one (or null) is sent |
 | `update_resume` | `{ resumeId, name?, slug?, isPublic?, isDefault?, hostnames?, tailoring? }` — send only what changes, with the same rules as `PATCH /api/resumes/:id` (`hostnames` replaces the list and makes the resume public; only a published resume can become the default; `tailoring` records the brief a resume is tailored for, null removes it) |
 | `delete_resume` | `{ resumeId }` — deletes a resume with its blocks, domains and PDF; the default can't be deleted |
 
