@@ -116,6 +116,11 @@ export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openPro
   // dropped. A picker left on the default keeps following the setting.
   const [pickedTense, setPickedTense] = useState(state?.pickedTense ?? null);
   const tense = pickerTense(pickedTense, ai.pickedTenseDefault, ai.pickedTenses);
+  // On a tailored resume (ai.tailoring, issue #53), a rewrite is tailored to
+  // its brief unless unticked; with it ticked the instruction is optional.
+  // A request already made keeps its own choice.
+  const [tailored, setTailored] = useState(state ? Boolean(state.tailored) : true);
+  const tailoring = ai.tailoring ? tailored : false;
   const open = controlled ? openProp : openState;
   // Bullet and item rows are keyed by index, so when proposals follow their
   // bullets to new positions (EditorPage's relocation), a mounted panel can
@@ -123,13 +128,23 @@ export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openPro
   // Take that request's instruction and tense then, so "Try again" resends
   // what produced the diff on screen. A request made from this panel already
   // carries this panel's values, so syncing to it changes nothing.
+  // A request this panel didn't make (a tailoring run's) opens it too, so
+  // its result isn't left unseen behind the closed button; a controlled
+  // row panel does the same through its caller (useRowPanelOpen).
   const seenRequest = useRef(state?.requestId);
   useEffect(() => {
     if (!state?.requestId || state.requestId === seenRequest.current) return;
     seenRequest.current = state.requestId;
-    setInstruction(state.instruction || '');
+    // A tailoring run's request has no instruction of its own: leave one
+    // typed here but not sent yet.
+    if (state.instruction || !state.tailored) setInstruction(state.instruction || '');
     setPickedTense(state.pickedTense ?? null);
-  }, [state]);
+    // Only a request made while the resume had a brief says anything about
+    // the checkbox; one from before keeps it at its default.
+    if (ai.tailoring) setTailored(Boolean(state.tailored));
+    if (!controlled) setOpenState(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- per request, read at the time
+  }, [state, controlled]);
 
   if (!open) {
     if (controlled) return null;
@@ -162,9 +177,12 @@ export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openPro
     .map((e) => e.proposal);
   const inPreview = proposal && previewedProposals(block.type, block.data, blockReady).includes(proposal);
 
+  const canRequest = Boolean(instruction.trim()) || tailoring;
   function request() {
-    if (!instruction.trim()) return;
-    ai.onRequest(block.id, target, instruction.trim(), picksTense ? tense : undefined, picksTense ? pickedTense : null);
+    if (!canRequest) return;
+    ai.onRequest(block.id, target, instruction.trim(), picksTense ? tense : undefined, picksTense ? pickedTense : null, {
+      tailored: tailoring,
+    });
   }
 
   function close() {
@@ -198,12 +216,18 @@ export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openPro
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) request();
         }}
-        placeholder={PLACEHOLDERS[target.kind] || PLACEHOLDERS.block}
+        placeholder={tailoring ? 'Optional: anything else to change' : PLACEHOLDERS[target.kind] || PLACEHOLDERS.block}
         maxLength={2000}
         disabled={loading}
         aria-label={part ? `Instruction for rewriting ${part}` : 'Instruction for the AI rewrite'}
       />
       {hiddenCount > 0 && <p className="ed-field-hint">{hiddenNote(target, hiddenCount)}</p>}
+      {ai.tailoring && (
+        <label className="ed-checkbox-field ed-ai-tailor">
+          <input type="checkbox" checked={tailored} onChange={(e) => setTailored(e.target.checked)} disabled={loading} />
+          Tailor for “{ai.tailoring.audience}”
+        </label>
+      )}
       <div className="ed-ai-actions">
         {picksTense && (
           <select
@@ -221,7 +245,7 @@ export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openPro
             ))}
           </select>
         )}
-        <button type="button" className="ed-btn ed-btn-primary" onClick={request} disabled={loading || !instruction.trim()}>
+        <button type="button" className="ed-btn ed-btn-primary" onClick={request} disabled={loading || !canRequest}>
           {loading ? 'Rewriting…' : proposal ? 'Try again' : 'Rewrite'}
         </button>
         <button type="button" className="ed-btn ed-btn-ghost" onClick={close} disabled={loading}>

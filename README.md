@@ -449,9 +449,25 @@ tailored also sees an outline of the rest of the resume (job titles,
 companies, skills, education, leaving out anything hidden where the
 summary shows, or anywhere at all while the summary itself is hidden), so
 it can describe you as a whole. Each resume keeps the
-brief it was tailored for (`tailoring`). For now tailoring is in the API
-and the MCP tools; the editor's Tailor button is still to come
-([#53](https://github.com/zarmstrong/resumecms/issues/53)).
+brief it was tailored for (`tailoring`), and the editor shows it next to
+the resume switcher.
+
+To tailor in the editor, tick **Tailor the copy with AI** in **New
+resume** (when copying the open resume), or click **Tailor…** to tailor
+the open one again, starting from its saved brief. Pick which sections
+to tailor: summary, experience and skills to start with, headings and
+custom sections if you like. Sections hidden on both web and print, and
+ones with no text, are skipped. Each section, and each experience entry's
+description, gets its own rewrite, three at a time, with progress and a
+Cancel button. A section that fails keeps its text and is listed with
+**Retry**. The rewrites open in the usual review panels and show in the
+preview. **Accept all** in the preview banner saves what the preview
+shows, except a rewrite of a section you've edited since, which you
+accept in its own panel. **Discard all** rejects them. Nothing changes
+until you accept, so the copy stays an exact copy if you accept nothing.
+On a tailored resume, a single rewrite's panel has a **Tailor for …**
+checkbox, on by default, that sends the brief too, so the instruction
+becomes optional.
 
 - Only the block's prose is sent and can change. Dates, URLs,
   company/institution names, visibility flags, and block styling are

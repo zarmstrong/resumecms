@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   AI_PRESETS,
   BLOCK_TARGET,
+  acceptAllPlan,
   applyProposal,
   bulletChange,
   changedFields,
@@ -201,6 +202,34 @@ test('previewData lays narrow proposals over a whole-block one, whatever order t
   assert.equal(data.description, 'New blurb');
   assert.equal(data.bullets[0].text, 'Legacy reworded');
   assert.equal(previewData('experience', exp, []), exp);
+});
+
+test('Accept all saves what the preview shows, except a whole-block rewrite the block was edited since', () => {
+  const summaryData = { text: 'Engineer.' };
+  const blocks = [
+    { id: 'e', type: 'experience', data: exp },
+    { id: 's', type: 'summary', data: summaryData },
+    { id: 'k', type: 'skills_group', data: { category: 'Cloud', items: 'AWS, edited' } },
+    { id: 'none', type: 'summary', data: { text: 'Untouched.' } },
+  ];
+  const expBlock = { blockId: 'e', target: BLOCK_TARGET, baseData: exp, proposedData: { ...exp, tagline: 'New tagline' } };
+  const expDescription = { blockId: 'e', target: { kind: 'description' }, baseData: exp, proposedData: { ...exp, description: 'New blurb' } };
+  const summary = { blockId: 's', target: BLOCK_TARGET, baseData: summaryData, proposedData: { text: 'SRE.' } };
+  // made before the skills row was edited: the preview shows it, Accept all leaves it
+  const staleSkills = { blockId: 'k', target: BLOCK_TARGET, baseData: { category: 'Cloud', items: 'AWS' }, proposedData: { category: 'Cloud', items: 'AWS, GCP' } };
+
+  const plan = acceptAllPlan(blocks, [summary, expDescription, staleSkills, expBlock]);
+  assert.deepEqual(plan.changes.map((c) => c.blockId), ['e', 's']);
+  const expData = plan.changes[0].data;
+  assert.equal(expData.tagline, 'New tagline');
+  assert.equal(expData.description, 'New blurb', 'both of the entry\'s rewrites, composed');
+  assert.deepEqual(expData, previewData('experience', exp, [expBlock, expDescription]), 'exactly what the preview shows');
+  assert.deepEqual(plan.changes[1].data, { text: 'SRE.' });
+  assert.deepEqual(plan.skipped, [staleSkills]);
+  assert.equal(plan.accepted.length, 3);
+  assert.ok(previewedProposals('skills_group', blocks[2].data, [staleSkills]).includes(staleSkills), 'though the preview shows it');
+
+  assert.deepEqual(acceptAllPlan(blocks, []), { changes: [], accepted: [], skipped: [] });
 });
 
 test('isProposalStale only looks at the part the proposal is for', () => {

@@ -218,6 +218,31 @@ export function previewData(type, data, proposals) {
   return previewedProposals(type, data, proposals).reduce((current, proposal) => applyProposal(type, current, proposal), data);
 }
 
+// What the preview banner's "Accept all" saves, given every block and every
+// ready proposal: for each block, the proposals previewedProposals shows,
+// applied in its order, minus whole-block ones the block has been edited
+// since. The preview still shows those (see previewedProposals), but a
+// single Accept asks before replacing the edits, and a bulk one can't ask
+// about each, so they stay open in their panels. Returns { changes:
+// [{ blockId, data }], accepted, skipped } (proposals), the skipped ones
+// being those left open.
+export function acceptAllPlan(blocks, proposals) {
+  const changes = [];
+  const accepted = [];
+  const skipped = [];
+  for (const block of blocks) {
+    const mine = proposals.filter((p) => p.blockId === block.id);
+    if (mine.length === 0) continue;
+    const shown = previewedProposals(block.type, block.data, mine);
+    const fresh = shown.filter((p) => !(targetKey(p.target) === 'block' && isProposalStale(block.type, p, block.data)));
+    skipped.push(...mine.filter((p) => !fresh.includes(p)));
+    if (fresh.length === 0) continue;
+    accepted.push(...fresh);
+    changes.push({ blockId: block.id, data: fresh.reduce((current, p) => applyProposal(block.type, current, p), block.data) });
+  }
+  return { changes, accepted, skipped };
+}
+
 // The proposals previewData lays over a block's data, in the order it
 // applies them. The banner counts these and the preview outlines their
 // blocks, so neither claims a rewrite the preview isn't showing.

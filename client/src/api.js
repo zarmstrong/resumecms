@@ -82,9 +82,14 @@ export function resumeApi(resumeId) {
     // through updateBlock like any other edit.
     // `target` narrows the rewrite to part of the block (see aiReview.js).
     // `tense` is only sent for blocks with a tense picker (the settings'
-    // pickedTenseTypes); undefined drops out of the JSON.
-    aiRewrite: (blockId, data, instruction, target, tense) =>
-      request(`${prefix}/ai/rewrite`, { method: 'POST', body: JSON.stringify({ blockId, data, instruction, target, tense }) }),
+    // pickedTenseTypes); undefined drops out of the JSON. `brief` (a
+    // resume's tailoring) tailors the rewrite; with one, the instruction
+    // may be empty.
+    aiRewrite: (blockId, data, instruction, target, tense, brief) =>
+      request(`${prefix}/ai/rewrite`, {
+        method: 'POST',
+        body: JSON.stringify({ blockId, data, instruction, target, tense, brief: brief || undefined }),
+      }),
 
     publish: () => request(`${prefix}/publish`, { method: 'POST' }),
     publishStatus: () => request(`${prefix}/publish/status`),

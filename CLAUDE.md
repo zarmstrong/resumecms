@@ -398,6 +398,22 @@ keeps the brief it was tailored for as its `tailoring` setting
 note, so no `touchDraft()` and never published, and a copy keeps its
 source's unless given one.
 
+In the editor, a tailoring run is just many ordinary proposals.
+`client/src/editor/tailorRun.js` picks the items (`tailorItems`: one per
+block of the chosen types, plus an experience description; it skips
+blocks hidden everywhere and ones with no text) and runs them
+(`createTailorRun`, `TAILOR_CONCURRENCY` at a time, `cancel()` forgetting
+what's in flight). Each item goes through `EditorPage`'s
+`handleAiRequest` with the brief, which resolves with how it ended, so
+review, staleness and relocation all work unchanged. A run started from
+New resume (`TailorModal.jsx`'s fields in `ResumeModals.jsx`) has to
+survive the switch to the copy, which remounts `EditorPage`: so
+`ResumesEditor` holds it as `pendingTailor` until the copy's page has
+loaded and takes it. A run stops when its page unmounts. "Accept all" saves
+`acceptAllPlan()` (`aiReview.js`): what the preview shows, minus
+whole-block proposals whose block was edited since, which the preview
+still shows but a bulk accept mustn't apply without asking.
+
 Output schemas must stay valid for both providers' strict structured-output
 modes. That means `additionalProperties: false` and every property in
 `required` on every object, and no recursion (the two bullet levels are

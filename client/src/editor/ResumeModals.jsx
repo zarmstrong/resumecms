@@ -1,20 +1,27 @@
 import { useState } from 'react';
 import { api } from '../api.js';
 import { parseHostnames, publicUrl, resumePatch } from './resumeLinks.js';
+import { TailorFields, emptyTailorForm, tailorBrief, tailorCount } from './TailorModal.jsx';
 
 // The two dialogs behind the editor's resume switcher (issue #53). Like
 // SettingsModal, they close only through their own buttons.
 
 // "New resume…": a copy of the open resume's draft, or a resume with the
 // default's header and look and no sections (what the server's
-// createResume does without copyFrom). `onCreate(input)` makes it and
-// switches to it; it's EditorPage's, which first saves any edit still
-// waiting, so the copy has it.
-export function NewResumeModal({ resume, defaultResume, onCreate, onClose }) {
+// createResume does without copyFrom). `onCreate(input, tailor)` makes it
+// and switches to it; it's EditorPage's, which first saves any edit still
+// waiting, so the copy has it. A copy can also be tailored with AI (when
+// `ai` says it's set up): its brief goes in `input.tailoring`, and
+// `tailor` ({ brief, types }) asks the new copy's editor to start the run.
+export function NewResumeModal({ resume, defaultResume, blocks, ai, onCreate, onClose }) {
   const [name, setName] = useState('');
   const [copy, setCopy] = useState(true);
+  const [tailoring, setTailoring] = useState(false);
+  const [tailorForm, setTailorForm] = useState(() => emptyTailorForm(null));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const tailor = copy && tailoring && ai?.available;
+  const count = tailor ? tailorCount(tailorForm, blocks) : null;
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -23,7 +30,12 @@ export function NewResumeModal({ resume, defaultResume, onCreate, onClose }) {
     try {
       // Switches to the new resume, which closes this; it returns without
       // one if a failed save made the user stop.
-      await onCreate({ name, ...(copy ? { copyFrom: resume.id } : {}) });
+      if (tailor) {
+        const brief = tailorBrief(tailorForm);
+        await onCreate({ name, copyFrom: resume.id, tailoring: brief }, { brief, types: tailorForm.types });
+      } else {
+        await onCreate({ name, ...(copy ? { copyFrom: resume.id } : {}) });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -60,14 +72,27 @@ export function NewResumeModal({ resume, defaultResume, onCreate, onClose }) {
               No sections yet, with the header and look of “{defaultResume.name}”
             </label>
             <span className="ed-field-hint">It starts private and unpublished, so nobody sees it until you say so.</span>
+            {copy && ai?.available && (
+              <label className="ed-field ed-checkbox-field">
+                <input type="checkbox" checked={tailoring} onChange={(e) => setTailoring(e.target.checked)} disabled={busy} />
+                Tailor the copy with AI
+              </label>
+            )}
+            {tailor && (
+              <TailorFields form={tailorForm} onChange={setTailorForm} limits={ai.briefLimits} idPrefix="ed-new-tailor" disabled={busy} />
+            )}
             {error && <div className="ed-login-error">{error}</div>}
           </div>
           <div className="ed-modal-actions">
             <button type="button" className="ed-btn ed-btn-ghost" onClick={onClose} disabled={busy}>
               Cancel
             </button>
-            <button type="submit" className="ed-btn ed-btn-primary" disabled={busy || !name.trim()}>
-              {busy ? 'Creating…' : 'Create'}
+            <button
+              type="submit"
+              className="ed-btn ed-btn-primary"
+              disabled={busy || !name.trim() || (tailor && (!tailorForm.audience.trim() || count === 0))}
+            >
+              {busy ? 'Creating…' : tailor ? (count === 0 ? 'Nothing to tailor' : 'Create and tailor') : 'Create'}
             </button>
           </div>
         </div>
