@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { api } from '../api.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api, resumeApi } from '../api.js';
 import { BlockList } from './BlockList.jsx';
 import { AddBlockMenu } from './AddBlockMenu.jsx';
 import { HeaderEditorForm } from './HeaderEditorForm.jsx';
@@ -9,6 +9,9 @@ import { ResumeView } from '../resume/ResumeView.jsx';
 import { pdfUrl } from '../resume/pdfUrl.js';
 import { BLOCK_TYPE_LABELS, defaultDataForType } from './blockDefaults.js';
 import { createBlockReorderItems } from './blockDrag.js';
+import { createSaveQueue } from './saveQueue.js';
+import { publicUrl, resumeLabel } from './resumeLinks.js';
+import { NewResumeModal, ResumeSettingsModal } from './ResumeModals.jsx';
 import {
   applyProposal,
   describeTarget,
@@ -48,11 +51,22 @@ function timeAgo(iso) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function EditorPage({ onLogout }) {
+// The editor for one resume (`resume`, as GET /api/resumes lists it).
+// ResumesEditor mounts a fresh one per resume, so everything below belongs
+// to that resume alone; every content call goes through resumeApi(its id).
+// `onSwitch(id, list?)` opens another resume, `onResumesChanged()` reloads
+// the list (resolving with it).
+export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogout }) {
+  const rapi = useMemo(() => resumeApi(resume.id), [resume.id]);
+  const saves = useMemo(() => createSaveQueue({ delayMs: SAVE_DEBOUNCE_MS }), []);
+  const [newResumeOpen, setNewResumeOpen] = useState(false);
+  const [resumeSettingsOpen, setResumeSettingsOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [header, setHeader] = useState(null);
   const [site, setSite] = useState(null);
   const [blocks, setBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [headerOpen, setHeaderOpen] = useState(false);
   const [siteOpen, setSiteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -76,7 +90,6 @@ export function EditorPage({ onLogout }) {
   // { blockId, target, instruction, status: 'loading' | 'ready' | 'error', proposal, error }
   const [aiProposals, setAiProposals] = useState({});
 
-  const debounceTimers = useRef({});
   const columnsRef = useRef(null);
   const reorderRequestIdRef = useRef(0);
   // Requests still in flight, per proposal key ({ id, blockId, target,
@@ -145,10 +158,10 @@ export function EditorPage({ onLogout }) {
 
   useEffect(() => {
     Promise.all([
-      api.getHeader(),
-      api.getSite(),
-      api.getBlocks(),
-      api.publishStatus(),
+      rapi.getHeader(),
+      rapi.getSite(),
+      rapi.getBlocks(),
+      rapi.publishStatus(),
       api.getCredentials(),
     ]).then(([h, s, b, status, credentials]) => {
       setHeader(h.header);
@@ -160,6 +173,11 @@ export function EditorPage({ onLogout }) {
       setPdfStale(!!status.pdfStale);
       setUsername(credentials.username);
       setLoading(false);
+    }).catch((err) => {
+      // Deleted since the list was loaded (another tab, an MCP client): a
+      // fresh list no longer has it, so ResumesEditor opens the default.
+      if (err.status === 404) onResumesChanged().catch((e) => setLoadError(e.message));
+      else setLoadError(err.message);
     });
     // Kept out of the Promise.all above: the editor must still load if this
     // fails — AI rewrites just stay hidden.
@@ -167,8 +185,49 @@ export function EditorPage({ onLogout }) {
       .getAiSettings()
       .then(({ ai }) => setAiSettings(ai))
       .catch((err) => console.error('Failed to load AI settings', err));
-  }, []);
+  }, [rapi]);
 
+  // Unmounting (another resume opened, or logging out) sends whatever is
+  // still waiting on its debounce rather than dropping it. A switch started
+  // here has already waited for them (leaveFor), so this is for one that
+  // wasn't, like the browser's back button.
+  useEffect(() => () => saves.runWaiting(), [saves]);
+
+  // Gets every edit to the server, then does `next`: for whatever reads
+  // the server's copy (opening another resume, copying this one). A save
+  // that failed is reported, and only a confirm goes on without it.
+  async function afterSaving(next) {
+    setSwitching(true);
+    try {
+      const failed = await saves.flush();
+      if (failed.length && !window.confirm(`A change didn't save (${failed[0].message || 'unknown error'}). Go on without it?`)) return;
+      await next();
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  function handleSwitch(id) {
+    afterSaving(() => onSwitch(id));
+  }
+
+  async function handleCreateResume(input) {
+    let created;
+    await afterSaving(async () => {
+      ({ resume: created } = await api.createResume(input));
+    });
+    if (!created) return;
+    // It exists now, so a failed reload mustn't read as a failed create (a
+    // retry would make a second one): open it from the list we have.
+    const list = await onResumesChanged().catch(() => [...resumes, created]);
+    onSwitch(created.id, list);
+  }
+
+  async function handleResumeDeleted() {
+    // It's gone either way, so a failed reload still opens the default.
+    const list = await onResumesChanged().catch(() => resumes.filter((r) => r.id !== resume.id));
+    onSwitch(list.find((r) => r.isDefault).id, list);
+  }
   // Any edit or discard supersedes the message from the last publish; the
   // lasting state (an out-of-date PDF) is carried by pdfStale instead.
   // Counts edits so a publish can tell whether anything changed while it
@@ -190,7 +249,7 @@ export function EditorPage({ onLogout }) {
     setPublishError(null);
     const editsBefore = editSeq.current;
     try {
-      const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion } = await api.publish();
+      const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion } = await rapi.publish();
       setPublishedAt(newPublishedAt);
       setPdfVersion(newPdfVersion ?? null);
       setPdfStale(false);
@@ -200,7 +259,7 @@ export function EditorPage({ onLogout }) {
       // debounced save is still on its way.
       let stillDirty = editSeq.current !== editsBefore;
       try {
-        const status = await api.publishStatus();
+        const status = await rapi.publishStatus();
         stillDirty = stillDirty || status.isDirty;
         setPdfStale(!!status.pdfStale);
         setPdfVersion(status.pdfVersion ?? null);
@@ -209,6 +268,9 @@ export function EditorPage({ onLogout }) {
       }
       setIsDirty(stillDirty);
       setPublishState('published');
+      // The list shows when each resume was published (its link, and
+      // whether it can become the default, depend on it).
+      onResumesChanged().catch(() => {});
       setTimeout(() => setPublishState((s) => (s === 'published' ? 'idle' : s)), 1500);
     } catch (err) {
       setPublishState('idle');
@@ -216,7 +278,7 @@ export function EditorPage({ onLogout }) {
       // The snapshot may have gone live even though the PDF render failed,
       // so don't guess — ask the server what state it's actually in.
       try {
-        const status = await api.publishStatus();
+        const status = await rapi.publishStatus();
         setPublishedAt(status.publishedAt);
         setPdfVersion(status.pdfVersion ?? null);
         setIsDirty(status.isDirty);
@@ -224,11 +286,24 @@ export function EditorPage({ onLogout }) {
       } catch {
         // leave the indicator as it was
       }
+      // Same for the list: a failed render still published it.
+      onResumesChanged().catch(() => {});
     }
   }
 
   async function handleDiscard() {
-    const draft = await api.discardDraft();
+    // Every save goes out first, so none lands on top of the discarded
+    // draft; once it's discarded, a save that failed is moot (and one
+    // typed meanwhile is replaced on screen below).
+    await saves.flush();
+    let draft;
+    try {
+      draft = await rapi.discardDraft();
+    } catch (err) {
+      setPublishError(err.message || 'Discard failed');
+      return;
+    }
+    if (saves.forget(() => true)) setSaveState('idle');
     // Every block's data changes out from under its proposals.
     dropAiProposals(() => true);
     setHeader(draft.header);
@@ -242,37 +317,30 @@ export function EditorPage({ onLogout }) {
     setHeader(newHeader);
     markDirty();
     setSaveState('saving');
-    clearTimeout(debounceTimers.current.__header);
-    debounceTimers.current.__header = setTimeout(() => {
-      api.putHeader(newHeader).then(flashSaved, saveFailed);
-    }, SAVE_DEBOUNCE_MS);
+    saves.schedule('header', () => saves.track(rapi.putHeader(newHeader), 'header').then(flashSaved, saveFailed));
   }
 
   function handleBlockDataChange(id, newData) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, data: newData } : b)));
     markDirty();
     setSaveState('saving');
-    clearTimeout(debounceTimers.current[id]);
-    debounceTimers.current[id] = setTimeout(() => {
-      api.updateBlock(id, { data: newData }).then(flashSaved, saveFailed);
-    }, SAVE_DEBOUNCE_MS);
+    saves.schedule(`block:${id}`, () =>
+      saves.track(rapi.updateBlock(id, { data: newData }), `block:${id}`).then(flashSaved, saveFailed)
+    );
   }
 
   function handleSiteChange(newSite) {
     setSite(newSite);
     markDirty();
     setSaveState('saving');
-    clearTimeout(debounceTimers.current.__site);
-    debounceTimers.current.__site = setTimeout(() => {
-      api.putSite(newSite).then(flashSaved, saveFailed);
-    }, SAVE_DEBOUNCE_MS);
+    saves.schedule('site', () => saves.track(rapi.putSite(newSite), 'site').then(flashSaved, saveFailed));
   }
 
   async function handleVisibilityChange(id, patch) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
     markDirty();
     setSaveState('saving');
-    await api.updateBlock(id, patch);
+    await saves.track(rapi.updateBlock(id, patch), `block:${id}:${Object.keys(patch).sort().join(',')}`);
     flashSaved();
   }
 
@@ -286,9 +354,7 @@ export function EditorPage({ onLogout }) {
     // in-flight earlier response can't clobber a later optimistic update.
     const requestId = ++reorderRequestIdRef.current;
     try {
-      const { blocks: canonical } = await api.reorderBlocks(
-        createBlockReorderItems(reordered, blocks)
-      );
+      const { blocks: canonical } = await saves.track(rapi.reorderBlocks(createBlockReorderItems(reordered, blocks)));
       if (reorderRequestIdRef.current !== requestId) return;
       setBlocks(canonical);
       flashSaved();
@@ -299,7 +365,7 @@ export function EditorPage({ onLogout }) {
       // parentId the server rejected) — refetch the real state instead of
       // leaving the UI stuck showing an order that was never actually
       // saved.
-      const { blocks: fresh } = await api.getBlocks();
+      const { blocks: fresh } = await rapi.getBlocks();
       if (reorderRequestIdRef.current !== requestId) return;
       setBlocks(fresh);
       setSaveState('idle');
@@ -307,7 +373,7 @@ export function EditorPage({ onLogout }) {
   }
 
   async function handleAdd(type) {
-    const { block } = await api.createBlock(type, defaultDataForType(type));
+    const { block } = await saves.track(rapi.createBlock(type, defaultDataForType(type)));
     setBlocks((prev) => [...prev, block]);
     markDirty();
   }
@@ -322,8 +388,11 @@ export function EditorPage({ onLogout }) {
       prev.filter((b) => b.id !== id).map((b) => (b.parentId === id ? { ...b, parentId: null } : b))
     );
     dropAiProposals((entry) => entry.blockId === id);
+    // Its edits stop mattering: a save still waiting would only 404 after
+    // the delete, and a failed one would be reported on every switch.
+    if (saves.forget((key) => key === `block:${id}` || key.startsWith(`block:${id}:`))) setSaveState('idle');
     try {
-      await api.deleteBlock(id);
+      await saves.track(rapi.deleteBlock(id));
     } catch (err) {
       // Already gone (deleted from another session or an MCP client): the
       // optimistic removal above is the right end state, and whoever
@@ -341,7 +410,7 @@ export function EditorPage({ onLogout }) {
   // preview matches what's actually stored.
   async function resyncBlocks() {
     try {
-      const { blocks: fresh } = await api.getBlocks();
+      const { blocks: fresh } = await rapi.getBlocks();
       setBlocks(fresh);
     } catch {
       // keep the local copy; a reload sorts it out
@@ -455,7 +524,7 @@ export function EditorPage({ onLogout }) {
     };
     settle({ status: 'loading' });
     try {
-      const { proposal } = await api.aiRewrite(blockId, block.data, instruction, target, tense);
+      const { proposal } = await rapi.aiRewrite(blockId, block.data, instruction, target, tense);
       settle({ status: 'ready', proposal });
     } catch (err) {
       settle({ status: 'error', error: err.message });
@@ -508,17 +577,44 @@ export function EditorPage({ onLogout }) {
   const soleReadyBlock = soleReadyKey && blocks.find((b) => b.id === previewed[0].blockId);
   const openRewriteCount = Object.keys(aiProposals).length;
 
-  async function handleLogout() {
-    await api.logout();
-    onLogout();
+  function handleLogout() {
+    // Before the session ends, or the waiting saves would go out without it.
+    return afterSaving(async () => {
+      await api.logout();
+      onLogout();
+    });
   }
 
+  if (loadError) return <div className="ed-loading">Couldn't load this resume: {loadError}</div>;
   if (loading) return <div className="ed-loading">Loading editor…</div>;
+
+  const defaultResume = resumes.find((r) => r.isDefault) || resume;
+  const viewUrl = publicUrl(resume, window.location);
 
   return (
     <div className="ed-shell" style={resizingPane ? { cursor: 'col-resize', userSelect: 'none' } : undefined}>
       <header className="ed-topbar">
-        <div className="ed-topbar-title">Resume Editor</div>
+        <div className="ed-resume-switcher">
+          <select
+            className="ed-input ed-resume-select"
+            aria-label="Resume"
+            value={resume.id}
+            onChange={(e) => handleSwitch(e.target.value)}
+            disabled={switching}
+          >
+            {resumes.map((r) => (
+              <option key={r.id} value={r.id}>
+                {resumeLabel(r)}
+              </option>
+            ))}
+          </select>
+          <button className="ed-btn ed-btn-ghost" onClick={() => setResumeSettingsOpen(true)} disabled={switching}>
+            Resume settings
+          </button>
+          <button className="ed-btn ed-btn-ghost" onClick={() => setNewResumeOpen(true)} disabled={switching}>
+            New resume
+          </button>
+        </div>
         <div className="ed-topbar-status">
           {saveState === 'saving' && 'Saving…'}
           {saveState === 'saved' && 'Saved'}
@@ -532,7 +628,9 @@ export function EditorPage({ onLogout }) {
           )}
         </div>
         <div className="ed-topbar-actions">
-          {isDirty && (
+          {/* A resume never published has nothing to go back to (and is
+              always "dirty": a new one starts that way). */}
+          {isDirty && publishedAt && (
             <button className="ed-btn ed-btn-ghost" onClick={handleDiscard}>
               Discard changes
             </button>
@@ -542,12 +640,29 @@ export function EditorPage({ onLogout }) {
             {publishState === 'published' && 'Published'}
             {publishState === 'idle' && 'Publish'}
           </button>
-          <a className="ed-btn ed-btn-ghost" href="/" target="_blank" rel="noreferrer">
-            View public site
-          </a>
-          <a className="ed-btn ed-btn-ghost" href={pdfUrl(pdfVersion)}>
-            Download PDF
-          </a>
+          {viewUrl ? (
+            <a className="ed-btn ed-btn-ghost" href={viewUrl} target="_blank" rel="noreferrer">
+              View public site
+            </a>
+          ) : (
+            <span
+              className="ed-btn ed-btn-ghost ed-btn-inert"
+              title={resume.isPublic ? 'Publish it to give it a public page.' : 'Private: only you can see it, here and in its PDF.'}
+            >
+              {resume.isPublic ? 'Not published yet' : 'Private'}
+            </span>
+          )}
+          {/* No file yet (never published, or its only render failed): the
+              link would leave the editor for a JSON 404. */}
+          {pdfVersion ? (
+            <a className="ed-btn ed-btn-ghost" href={pdfUrl(pdfVersion, rapi.pdfPath)}>
+              Download PDF
+            </a>
+          ) : (
+            <span className="ed-btn ed-btn-ghost ed-btn-inert" title="Publish it to render its PDF.">
+              No PDF yet
+            </span>
+          )}
           <button className="ed-btn ed-btn-ghost" onClick={() => setSettingsOpen(true)}>
             Account Settings
           </button>
@@ -661,6 +776,23 @@ export function EditorPage({ onLogout }) {
         </div>
       </div>
 
+      {newResumeOpen && (
+        <NewResumeModal
+          resume={resume}
+          defaultResume={defaultResume}
+          onCreate={handleCreateResume}
+          onClose={() => setNewResumeOpen(false)}
+        />
+      )}
+      {resumeSettingsOpen && (
+        <ResumeSettingsModal
+          resume={resume}
+          defaultResume={defaultResume}
+          onChanged={onResumesChanged}
+          onDeleted={handleResumeDeleted}
+          onClose={() => setResumeSettingsOpen(false)}
+        />
+      )}
       {settingsOpen && (
         <SettingsModal
           username={username}

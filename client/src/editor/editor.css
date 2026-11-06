@@ -49,14 +49,13 @@
 .ed-topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  /* The resume switcher and the actions together outgrow a laptop screen:
+     the actions move to a second row rather than squeezing the status. */
+  flex-wrap: wrap;
+  gap: 10px 16px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
-}
-
-.ed-topbar-title {
-  font-weight: 600;
 }
 
 .ed-topbar-status {
@@ -1046,4 +1045,53 @@
 .ed-ai-preview-banner span {
   flex: 1;
   color: var(--signal);
+}
+
+/* ---- Resume switcher + resume dialogs (issue #53) ---------------------- */
+.ed-resume-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ed-resume-select {
+  width: auto;
+  max-width: 260px;
+}
+
+/* A label in a button's place (e.g. "Private" where "View public site" goes). */
+.ed-btn-inert,
+.ed-btn-inert:hover {
+  color: var(--slate-light);
+  border-color: var(--line);
+  cursor: default;
+}
+
+.ed-btn-danger {
+  color: var(--warn);
+}
+
+.ed-btn-danger:hover {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.ed-resume-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.ed-resume-link a {
+  overflow-wrap: anywhere;
+  color: var(--signal);
+}
+
+.ed-resume-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
 }
