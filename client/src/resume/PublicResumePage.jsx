@@ -36,9 +36,12 @@ export function PublicResumePage({ mode, slug = null }) {
         .catch((err) => {
           if (cancelled || seq !== latest) return;
           // Keep whatever is on screen if a background refetch fails; only
-          // the initial load has nothing better to show than the error.
+          // the initial load has nothing better to show than the error. A
+          // slug's 404 is the exception: it was made private, unpublished
+          // or deleted, so it comes off the screen too.
+          const notFound = err.status === 404;
           setState((prev) =>
-            prev.resume ? prev : { loading: false, error: err.message, notFound: err.status === 404, resume: null }
+            prev.resume && !(slug && notFound) ? prev : { loading: false, error: err.message, notFound, resume: null }
           );
         });
     };
