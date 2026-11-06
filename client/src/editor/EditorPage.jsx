@@ -12,7 +12,10 @@ import { createBlockReorderItems } from './blockDrag.js';
 import { createSaveQueue } from './saveQueue.js';
 import { publicUrl, resumeLabel } from './resumeLinks.js';
 import { NewResumeModal, ResumeSettingsModal } from './ResumeModals.jsx';
+import { TailorModal } from './TailorModal.jsx';
+import { createTailorRun, tailorItems } from './tailorRun.js';
 import {
+  acceptAllPlan,
   applyProposal,
   describeTarget,
   isProposalStale,
@@ -54,9 +57,11 @@ function timeAgo(iso) {
 // The editor for one resume (`resume`, as GET /api/resumes lists it).
 // ResumesEditor mounts a fresh one per resume, so everything below belongs
 // to that resume alone; every content call goes through resumeApi(its id).
-// `onSwitch(id, list?)` opens another resume, `onResumesChanged()` reloads
-// the list (resolving with it).
-export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogout }) {
+// `onSwitch(id, list?, tailor?)` opens another resume, `onResumesChanged()`
+// reloads the list (resolving with it). `pendingTailor` is a tailoring run
+// to start once this has loaded (a copy made with "Tailor the copy"), and
+// `onPendingTailorTaken()` says it has been.
+export function EditorPage({ resume, resumes, onSwitch, pendingTailor, onPendingTailorTaken, onResumesChanged, onLogout }) {
   const rapi = useMemo(() => resumeApi(resume.id), [resume.id]);
   const saves = useMemo(() => createSaveQueue({ delayMs: SAVE_DEBOUNCE_MS }), []);
   const [newResumeOpen, setNewResumeOpen] = useState(false);
@@ -89,8 +94,23 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
   // flight or under review at the same time:
   // { blockId, target, instruction, status: 'loading' | 'ready' | 'error', proposal, error }
   const [aiProposals, setAiProposals] = useState({});
+  const [tailorOpen, setTailorOpen] = useState(false);
+  // The tailoring run on screen: createTailorRun's state plus its brief and
+  // items (for Retry), or null.
+  const [tailorRun, setTailorRun] = useState(null);
 
   const columnsRef = useRef(null);
+  // The current blocks, for requests a tailoring run sends after the
+  // render that started it.
+  const blocksRef = useRef(blocks);
+  blocksRef.current = blocks;
+  const runnerRef = useRef(null);
+  const runTokenRef = useRef(null);
+  const mountedRef = useRef(true);
+  // The current proposals, for a tailoring run deciding whether a spot was
+  // taken by a newer request since it started.
+  const aiProposalsRef = useRef(aiProposals);
+  aiProposalsRef.current = aiProposals;
   const reorderRequestIdRef = useRef(0);
   // Requests still in flight, per proposal key ({ id, blockId, target,
   // status: 'loading' }, the fields dropAiProposals' predicates can rely on).
@@ -193,6 +213,30 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
   // wasn't, like the browser's back button.
   useEffect(() => () => saves.runWaiting(), [saves]);
 
+  // A tailoring run sends nothing more once this resume is closed, and one
+  // that would start after that (handleTailor's save outlasting the page)
+  // doesn't start.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      runnerRef.current?.cancel();
+    };
+  }, []);
+
+  // A copy made with "Tailor the copy" starts its run here, once loaded.
+  // From a timer, so StrictMode's mount-unmount-mount in development
+  // starts it once, not twice.
+  useEffect(() => {
+    if (loading || !pendingTailor) return undefined;
+    const timer = setTimeout(() => {
+      onPendingTailorTaken();
+      startTailoring(pendingTailor.brief, tailorItems(blocksRef.current, pendingTailor.types));
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when it has loaded
+  }, [loading]);
+
   // Gets every edit to the server, then does `next`: for whatever reads
   // the server's copy (opening another resume, copying this one). A save
   // that failed is reported, and only a confirm goes on without it.
@@ -211,7 +255,8 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
     afterSaving(() => onSwitch(id));
   }
 
-  async function handleCreateResume(input) {
+  // `tailor` ({ brief, types }) tailors the copy once it's open.
+  async function handleCreateResume(input, tailor = null) {
     let created;
     await afterSaving(async () => {
       ({ resume: created } = await api.createResume(input));
@@ -220,7 +265,48 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
     // It exists now, so a failed reload mustn't read as a failed create (a
     // retry would make a second one): open it from the list we have.
     const list = await onResumesChanged().catch(() => [...resumes, created]);
-    onSwitch(created.id, list);
+    onSwitch(created.id, list, tailor);
+  }
+
+  // AI tailoring (issue #53): one rewrite per item (tailorRun.js), each a
+  // normal proposal under review, `brief` sent with every one. Starting a
+  // run replaces one still going; its open proposals stay.
+  function startTailoring(brief, items) {
+    if (!mountedRef.current) return;
+    runnerRef.current?.cancel();
+    // Only the latest run updates the bar; it reports its first state
+    // before createTailorRun returns.
+    const token = {};
+    runTokenRef.current = token;
+    // A rewrite asked for in a panel after the run started wins over the
+    // run's own for that spot, which is skipped when its turn comes.
+    const startedAt = aiRequestCounterRef.current;
+    const takenSince = (key) =>
+      Math.max(aiRequestsRef.current[key]?.id ?? 0, aiProposalsRef.current[key]?.requestId ?? 0) > startedAt;
+    runnerRef.current = createTailorRun({
+      items,
+      run: (item) =>
+        takenSince(proposalKey(item.blockId, item.target))
+          ? { superseded: true }
+          : handleAiRequest(item.blockId, item.target, '', undefined, null, { brief }),
+      onUpdate: (state) => {
+        if (runTokenRef.current === token) setTailorRun({ ...state, brief, items });
+      },
+    });
+  }
+
+  function cancelTailoring() {
+    const abandoned = runnerRef.current?.cancel() ?? [];
+    // Their requests are forgotten too, so a late one doesn't turn up.
+    const keys = new Set(abandoned.map((item) => proposalKey(item.blockId, item.target)));
+    dropAiProposals((entry) => entry.status === 'loading' && keys.has(proposalKey(entry.blockId, entry.target)));
+  }
+
+  // "Tailor…": saves the brief on the resume, then runs.
+  async function handleTailor(brief, types) {
+    await api.updateResume(resume.id, { tailoring: brief });
+    onResumesChanged().catch(() => {});
+    startTailoring(brief, tailorItems(blocksRef.current, types));
   }
 
   async function handleResumeDeleted() {
@@ -304,8 +390,11 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
       return;
     }
     if (saves.forget(() => true)) setSaveState('idle');
-    // Every block's data changes out from under its proposals.
+    // Every block's data changes out from under its proposals, and a
+    // tailoring run would go on adding more.
+    runnerRef.current?.cancel();
     dropAiProposals(() => true);
+    setTailorRun(null); // it pointed at rewrites that are gone
     setHeader(draft.header);
     setSite(draft.site);
     setBlocks(draft.blocks);
@@ -502,33 +591,53 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
   // `tense` is what a custom block's rewrite is sent with; `pickedTense` is
   // the user's own pick in the panel, or null when the picker was left on the
   // setting's default, so a reopened panel restores only a real pick. Both
-  // are kept on the entry for that block and target.
-  async function handleAiRequest(blockId, target, instruction, tense, pickedTense = null) {
-    const block = blocks.find((b) => b.id === blockId);
-    if (!block) return;
+  // are kept on the entry for that block and target. `brief` tailors the
+  // rewrite (the entry keeps `tailored` for the panel's checkbox).
+  //
+  // Resolves with how it ended, for a tailoring run: { ok: true },
+  // { ok: false, error }, or { superseded: true } when a newer request for
+  // the same spot (or a discard) took over, or the block is gone.
+  async function handleAiRequest(blockId, target, instruction, tense, pickedTense = null, { brief = null } = {}) {
+    // The latest blocks: a tailoring run sends requests renders after the
+    // one that started it.
+    const block = blocksRef.current.find((b) => b.id === blockId);
+    // Deleted since (a tailoring run's item): nothing to retry.
+    if (!block) return { superseded: true };
     // A newer request for the same block and target (or a discard)
     // supersedes any response still in flight for it; other keys are left
     // alone.
     const key = proposalKey(blockId, target);
     const id = ++aiRequestCounterRef.current;
     aiRequestsRef.current[key] = { id, blockId, target, status: 'loading' };
+    const tailored = Boolean(brief);
     const settle = (patch) => {
-      if (aiRequestsRef.current[key]?.id !== id) return;
+      if (aiRequestsRef.current[key]?.id !== id) return false;
       if (patch.status !== 'loading') delete aiRequestsRef.current[key];
       setAiProposals((prev) => ({
         ...prev,
         // requestId tells a panel which request it's showing (see
         // AiRewritePanel), since relocation can move another one under it.
-        [key]: { blockId, target, instruction, tense, pickedTense, requestId: id, proposal: null, error: null, ...patch },
+        [key]: { blockId, target, instruction, tense, pickedTense, tailored, requestId: id, proposal: null, error: null, ...patch },
       }));
+      return true;
     };
     settle({ status: 'loading' });
     try {
-      const { proposal } = await rapi.aiRewrite(blockId, block.data, instruction, target, tense);
-      settle({ status: 'ready', proposal });
+      const { proposal } = await rapi.aiRewrite(blockId, block.data, instruction, target, tense, brief);
+      return settle({ status: 'ready', proposal }) ? { ok: true } : { superseded: true };
     } catch (err) {
-      settle({ status: 'error', error: err.message });
+      return settle({ status: 'error', error: err.message }) ? { ok: false, error: err.message } : { superseded: true };
     }
+  }
+
+  // "Accept all" in the preview banner: saves what the preview shows
+  // (acceptAllPlan), except whole-block rewrites whose block was edited
+  // since, which stay open to be accepted one by one.
+  function handleAcceptAll() {
+    const { changes, accepted } = acceptAllPlan(blocks, readyProposals);
+    for (const { blockId, data } of changes) handleBlockDataChange(blockId, data);
+    const keys = new Set(accepted.map((p) => proposalKey(p.blockId, p.target)));
+    dropAiProposals((entry) => entry.status === 'ready' && keys.has(proposalKey(entry.blockId, entry.target)));
   }
 
   function handleAiAccept(key) {
@@ -576,6 +685,9 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
   const soleReadyKey = previewed.length === 1 ? proposalKey(previewed[0].blockId, previewed[0].target) : null;
   const soleReadyBlock = soleReadyKey && blocks.find((b) => b.id === previewed[0].blockId);
   const openRewriteCount = Object.keys(aiProposals).length;
+  const tailoringNow = Boolean(tailorRun && !tailorRun.finished);
+  // With several in the preview, the banner can accept them all at once.
+  const acceptAll = previewed.length > 1 ? acceptAllPlan(blocks, readyProposals) : null;
 
   function handleLogout() {
     // Before the session ends, or the waiting saves would go out without it.
@@ -614,6 +726,21 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
           <button className="ed-btn ed-btn-ghost" onClick={() => setNewResumeOpen(true)} disabled={switching}>
             New resume
           </button>
+          {aiSettings?.available && (
+            <button
+              className="ed-btn ed-btn-ghost"
+              onClick={() => setTailorOpen(true)}
+              disabled={switching || tailoringNow}
+              title="Rewrite this resume's sections for an audience or a job posting, for you to review"
+            >
+              Tailor…
+            </button>
+          )}
+          {resume.tailoring && (
+            <span className="ed-tailored-chip" title={resume.tailoring.posting ? 'Tailored for a job posting too' : undefined}>
+              Tailored for {resume.tailoring.audience}
+            </span>
+          )}
         </div>
         <div className="ed-topbar-status">
           {saveState === 'saving' && 'Saving…'}
@@ -672,6 +799,60 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
         </div>
       </header>
 
+      {tailorRun && (
+        <div className="ed-tailor-bar" role="status">
+          <span className="ed-tailor-bar-text">
+            {!tailorRun.finished
+              ? `Tailoring for “${tailorRun.brief.audience}”: ${tailorRun.done + tailorRun.skipped + tailorRun.failed.length} of ${tailorRun.total}…`
+              : tailorRun.cancelled
+                ? tailorRun.done === 0
+                  ? 'Tailoring cancelled before any rewrite came back.'
+                  : `Tailoring cancelled: ${tailorRun.done} of ${tailorRun.total} rewritten. Review them in the preview.`
+                : tailorRun.total === 0
+                  ? 'Nothing to tailor: no section of the chosen kinds has text to work from.'
+                  : `Tailored for “${tailorRun.brief.audience}”: ${tailorRun.done} of ${tailorRun.total} ready to review in the preview.${
+                      tailorRun.skipped
+                        ? ` ${tailorRun.skipped} skipped: rewritten some other way or deleted meanwhile.`
+                        : ''
+                    }`}
+          </span>
+          {tailorRun.finished && tailorRun.failed.length > 0 && (
+            <span className="ed-tailor-bar-failed">
+              {tailorRun.failed.length} failed: {tailorRun.failed.map(({ item, error }) => `${item.label} (${error})`).join('; ')}
+            </span>
+          )}
+          {!tailorRun.finished ? (
+            <button type="button" className="ed-btn ed-btn-ghost" onClick={cancelTailoring}>
+              Cancel
+            </button>
+          ) : (
+            <>
+              {tailorRun.failed.length > 0 && !tailorRun.cancelled && (
+                <button
+                  type="button"
+                  className="ed-btn ed-btn-ghost"
+                  // Not one rewritten some other way since it failed: its
+                  // panel holds a request in flight or a rewrite to review.
+                  onClick={() =>
+                    startTailoring(
+                      tailorRun.brief,
+                      tailorRun.failed
+                        .map(({ item }) => item)
+                        .filter((item) => !['loading', 'ready'].includes(aiProposals[proposalKey(item.blockId, item.target)]?.status))
+                    )
+                  }
+                >
+                  Retry {tailorRun.failed.length === 1 ? 'it' : 'them'}
+                </button>
+              )}
+              <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setTailorRun(null)}>
+                Dismiss
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="ed-columns" ref={columnsRef} style={{ gridTemplateColumns: `${leftWidth}px 6px 1fr` }}>
         <div className="ed-left-pane">
           <section className="ed-panel">
@@ -714,7 +895,13 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
                 pickedTenses: aiSettings?.pickedTenses,
                 pickedTenseDefault: aiSettings?.pickedTenseDefault,
                 proposals: aiProposals,
-                onRequest: handleAiRequest,
+                // The brief this resume was tailored for: a panel offers to
+                // tailor its rewrite to it ("Tailor for …", on by default).
+                tailoring: resume.tailoring,
+                onRequest: (blockId, target, instruction, tense, pickedTense, { tailored = false } = {}) =>
+                  handleAiRequest(blockId, target, instruction, tense, pickedTense, {
+                    brief: tailored ? resume.tailoring : null,
+                  }),
                 onAccept: handleAiAccept,
                 onReject: handleAiReject,
               }}
@@ -744,20 +931,34 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
                   ? `Previewing AI rewrite of ${BLOCK_TYPE_LABELS[soleReadyBlock.type] || 'block'}${
                       describeTarget(previewed[0].target) ? ` (${describeTarget(previewed[0].target)})` : ''
                     }, outlined — not saved yet`
-                  : `Previewing ${previewed.length} AI rewrites (outlined) — not saved yet. Accept each in its block.`}
+                  : `Previewing ${previewed.length} AI rewrites (outlined) — not saved yet.`}
+                {acceptAll?.skipped.length > 0 &&
+                  ` ${acceptAll.skipped.length} ${acceptAll.skipped.length === 1 ? 'is' : 'are'} for a part you've edited since or can't be previewed: accept ${
+                    acceptAll.skipped.length === 1 ? 'it' : 'those'
+                  } in ${acceptAll.skipped.length === 1 ? 'its' : 'their'} block.`}
               </span>
               <button
                 type="button"
                 className="ed-btn ed-btn-ghost"
                 // Every rewrite, not just the ready ones: one still in flight
-                // would otherwise turn up in the preview after "Discard all".
-                onClick={() => dropAiProposals(() => true)}
+                // would otherwise turn up in the preview after "Discard all",
+                // and so would the rest of a tailoring run.
+                onClick={() => {
+                  runnerRef.current?.cancel();
+                  dropAiProposals(() => true);
+                  setTailorRun(null); // it pointed at rewrites that are gone
+                }}
               >
                 {openRewriteCount === 1 ? 'Discard' : 'Discard all'}
               </button>
               {soleReadyKey && (
                 <button type="button" className="ed-btn ed-btn-primary" onClick={() => handleAiAccept(soleReadyKey)}>
                   Accept
+                </button>
+              )}
+              {acceptAll?.accepted.length > 0 && (
+                <button type="button" className="ed-btn ed-btn-primary" onClick={handleAcceptAll}>
+                  Accept all ({acceptAll.accepted.length})
                 </button>
               )}
             </div>
@@ -780,8 +981,19 @@ export function EditorPage({ resume, resumes, onSwitch, onResumesChanged, onLogo
         <NewResumeModal
           resume={resume}
           defaultResume={defaultResume}
+          blocks={blocks}
+          ai={aiSettings}
           onCreate={handleCreateResume}
           onClose={() => setNewResumeOpen(false)}
+        />
+      )}
+      {tailorOpen && (
+        <TailorModal
+          resume={resume}
+          blocks={blocks}
+          limits={aiSettings?.briefLimits}
+          onTailor={handleTailor}
+          onClose={() => setTailorOpen(false)}
         />
       )}
       {resumeSettingsOpen && (

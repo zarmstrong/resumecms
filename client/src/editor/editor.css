@@ -1095,3 +1095,63 @@
   flex-wrap: wrap;
   margin-bottom: 6px;
 }
+
+/* ---- AI tailoring (issue #53) ----------------------------------------- */
+.ed-tailored-chip {
+  font-size: 12px;
+  color: var(--signal);
+  background: var(--signal-dim);
+  border-radius: var(--radius);
+  padding: 3px 8px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-tailor-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 8px 20px;
+  background: var(--signal-dim);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.ed-tailor-bar-text {
+  color: var(--signal);
+}
+
+.ed-tailor-bar-failed {
+  flex-basis: 100%;
+  order: 1;
+  color: var(--warn);
+}
+
+.ed-tailor-bar .ed-btn:first-of-type {
+  margin-left: auto;
+}
+
+.ed-tailor-types {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.ed-tailor-types legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.ed-ai-tailor {
+  display: flex;
+  font-size: 13px;
+  margin: 4px 0;
+}

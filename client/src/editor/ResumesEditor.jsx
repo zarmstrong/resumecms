@@ -41,17 +41,35 @@ export function ResumesEditor({ onLogout }) {
   const requestedId = searchParams.get('resume');
   const current = resumes && pickResume(resumes, requestedId);
 
+  // A tailoring run asked for with a new copy ({ resumeId, brief, types }):
+  // it runs in the copy's EditorPage, which only exists once the switch
+  // below has mounted it, so it waits here until that one takes it.
+  const [pendingTailor, setPendingTailor] = useState(null);
+  // Whether the copy a pending run is for has been shown yet: once it has,
+  // leaving it without the run starting (Back before it loaded, a load
+  // error) drops the run rather than leave it to start on a later visit.
+  const pendingShown = useRef(false);
+
   // The default lives at plain /editor, any other resume at ?resume=<id>.
   // A `list` that knows a resume the shown one doesn't (a create whose
   // reload failed) is adopted, or pickResume would open the default.
   const switchTo = useCallback(
-    (id, list = resumes) => {
+    (id, list = resumes, tailor = null) => {
       const target = list.find((r) => r.id === id);
       if (target) setResumes((shownList) => (shownList.some((r) => r.id === id) ? shownList : list));
+      pendingShown.current = false;
+      setPendingTailor(tailor && target ? { resumeId: id, ...tailor } : null);
       setSearchParams(target && !target.isDefault ? { resume: id } : {});
     },
     [resumes, setSearchParams]
   );
+  const takePendingTailor = useCallback(() => setPendingTailor(null), []);
+  const currentId = current?.id;
+  useEffect(() => {
+    if (!pendingTailor || !currentId) return;
+    if (currentId === pendingTailor.resumeId) pendingShown.current = true;
+    else if (pendingShown.current) setPendingTailor(null);
+  }, [currentId, pendingTailor]);
 
   // A ?resume= that names nothing (a deleted resume, an old bookmark) or
   // the default opens the default: drop it so the address matches.
@@ -70,6 +88,8 @@ export function ResumesEditor({ onLogout }) {
       resume={current}
       resumes={resumes}
       onSwitch={switchTo}
+      pendingTailor={pendingTailor?.resumeId === current.id ? pendingTailor : null}
+      onPendingTailorTaken={takePendingTailor}
       onResumesChanged={reload}
       onLogout={onLogout}
     />
