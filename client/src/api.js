@@ -50,6 +50,19 @@ export const api = {
     request(`/resumes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteResume: (id) => request(`/resumes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+  // The install's landing page (issue #70): its draft, status, and what its
+  // preview resolves against. Not per resume.
+  getLanding: () => request('/landing'),
+  putLanding: (landing) => request('/landing', { method: 'PUT', body: JSON.stringify(landing) }),
+  landingStatus: () => request('/landing/status'),
+  publishLanding: () => request('/landing/publish', { method: 'POST' }),
+  discardLandingDraft: () => request('/landing/discard-draft', { method: 'POST' }),
+  setLandingEnabled: (enabled) => request('/landing/enabled', { method: 'PUT', body: JSON.stringify({ enabled }) }),
+
+  // What `/` shows on this host: { kind: 'landing', landing } or
+  // { kind: 'resume', resume }.
+  getPublicHome: () => request('/public/home'),
+
   // The published resume the server picks for this host (`/`), or the
   // public one at /r/<slug> when `slug` is given.
   getPublicResume: (mode, slug = null) =>

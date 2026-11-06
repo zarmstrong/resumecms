@@ -1155,3 +1155,38 @@
   font-size: 13px;
   margin: 4px 0;
 }
+
+/* ---- Landing page editor (issue #70) ------------------------------------- */
+.ed-landing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.ed-landing-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.ed-landing-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ed-landing-card-status {
+  color: var(--warn);
+}
+
+.ed-landing-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}

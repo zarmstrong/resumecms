@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { EditorPage } from './EditorPage.jsx';
-import { pickResume } from './resumeLinks.js';
+import { LandingEditorPage } from './LandingEditorPage.jsx';
+import { LANDING_PAGE, landingShown, pickResume } from './resumeLinks.js';
 
 // The editor for whichever resume `?resume=<id>` names (issue #53), the
 // default when it names none or one that's gone. EditorPage is keyed by
@@ -38,6 +39,16 @@ export function ResumesEditor({ onLogout }) {
     reload().catch((err) => setError(err.message));
   }, [reload]);
 
+  // Whether the landing page holds `/` (issue #70), so the default resume's
+  // public link points at /resume while it does. The landing page's own
+  // editor keeps it current; failing to load it only costs that link.
+  const [landingStatus, setLandingStatus] = useState(null);
+  useEffect(() => {
+    api.landingStatus().then(setLandingStatus, () => {});
+  }, []);
+
+  // The landing page has its own editor, at ?page=landing.
+  const onLandingPage = searchParams.get('page') === LANDING_PAGE;
   const requestedId = searchParams.get('resume');
   const current = resumes && pickResume(resumes, requestedId);
 
@@ -55,6 +66,11 @@ export function ResumesEditor({ onLogout }) {
   // reload failed) is adopted, or pickResume would open the default.
   const switchTo = useCallback(
     (id, list = resumes, tailor = null) => {
+      if (id === LANDING_PAGE) {
+        setPendingTailor(null);
+        setSearchParams({ page: LANDING_PAGE });
+        return;
+      }
       const target = list.find((r) => r.id === id);
       if (target) setResumes((shownList) => (shownList.some((r) => r.id === id) ? shownList : list));
       pendingShown.current = false;
@@ -74,13 +90,18 @@ export function ResumesEditor({ onLogout }) {
   // A ?resume= that names nothing (a deleted resume, an old bookmark) or
   // the default opens the default: drop it so the address matches.
   useEffect(() => {
+    if (onLandingPage) return;
     if (current && requestedId && (requestedId !== current.id || current.isDefault)) {
       setSearchParams({}, { replace: true });
     }
-  }, [current, requestedId, setSearchParams]);
+  }, [current, requestedId, setSearchParams, onLandingPage]);
 
   if (error) return <div className="ed-loading">Couldn't load your resumes: {error}</div>;
   if (!current) return <div className="ed-loading">Loading editor…</div>;
+
+  if (onLandingPage) {
+    return <LandingEditorPage resumes={resumes} onSwitch={switchTo} onStatus={setLandingStatus} onLogout={onLogout} />;
+  }
 
   return (
     <EditorPage
@@ -91,6 +112,7 @@ export function ResumesEditor({ onLogout }) {
       pendingTailor={pendingTailor?.resumeId === current.id ? pendingTailor : null}
       onPendingTailorTaken={takePendingTailor}
       onResumesChanged={reload}
+      landingShown={landingShown(landingStatus)}
       onLogout={onLogout}
     />
   );

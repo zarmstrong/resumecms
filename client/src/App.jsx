@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 import { api } from './api.js';
 import { PublicResumePage } from './resume/PublicResumePage.jsx';
 import { TemplatePreviewPage } from './resume/TemplatePreviewPage.jsx';
+import { HomePage, ResumeRoute } from './landing/HomePage.jsx';
 import { LoginPage } from './editor/LoginPage.jsx';
 import { ResumesEditor } from './editor/ResumesEditor.jsx';
 import './editor/editor.css';
@@ -33,7 +34,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<PublicResumePage mode="web" />} />
+        {/* The landing page or the default resume, per host (issue #70). */}
+        <Route path="/" element={<HomePage />} />
+        <Route path="/resume" element={<ResumeRoute />} />
         <Route path="/print" element={<PublicResumePage mode="print" />} />
         <Route path="/r/:slug" element={<SlugResumePage />} />
         <Route path="/template-preview" element={<TemplatePreviewPage />} />

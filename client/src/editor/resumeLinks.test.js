@@ -35,6 +35,9 @@ test('only a published resume has a public URL: the main site, its domain, or it
   const withDomain = resume({ isPublic: true, publishedAt: 'x', hostnames: ['sales.example.com', 'z.example.com'] });
   assert.equal(publicUrl(withDomain, prod), 'https://sales.example.com/', 'its first domain is preferred');
   assert.equal(publicUrl(withDomain, dev), 'http://sales.example.com:5173/', "the editor's scheme and port carry over");
+  // While the landing page holds `/`, the default lives at /resume.
+  assert.equal(publicUrl(main, prod, { landingShown: true }), 'https://me.example/resume');
+  assert.equal(publicUrl(withDomain, prod, { landingShown: true }), 'https://sales.example.com/');
 });
 
 test("the switcher's label says who can see a resume", () => {

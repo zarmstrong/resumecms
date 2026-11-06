@@ -106,7 +106,7 @@ export function NewResumeModal({ resume, defaultResume, blocks, ai, onCreate, on
 // sends only what changed (resumePatch). `onChanged()` reloads the list
 // (this resume's new settings come back through the `resume` prop);
 // `onDeleted()` is EditorPage's, which reloads and opens the default.
-export function ResumeSettingsModal({ resume, defaultResume, onChanged, onDeleted, onClose }) {
+export function ResumeSettingsModal({ resume, defaultResume, landingShown = false, onChanged, onDeleted, onClose }) {
   const [form, setForm] = useState(() => ({
     name: resume.name,
     slug: resume.slug,
@@ -120,7 +120,7 @@ export function ResumeSettingsModal({ resume, defaultResume, onChanged, onDelete
   const patch = resumePatch(resume, form);
   const dirty = Object.keys(patch).length > 0;
   const hasDomains = parseHostnames(form.hostnames).length > 0;
-  const url = publicUrl(resume, window.location);
+  const url = publicUrl(resume, window.location, { landingShown });
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
   // Every action here reports its error in the dialog rather than closing it.
