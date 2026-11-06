@@ -35,7 +35,7 @@ const { version } = createRequire(import.meta.url)('../../package.json');
 
 const INSTRUCTIONS = `resumecms edits a single-user resume site that can hold several resumes (e.g. one tailored per kind of job).
 
-Resumes: list_resumes shows them. Every content tool takes an optional resumeId; without it, it acts on the DEFAULT resume (the one the main domain shows). A new resume (create_resume, optionally copying another's draft with copyFrom) is private and unpublished; update_resume makes it public, gives it domains, or makes it the default.
+Resumes: list_resumes shows them. Every content tool takes an optional resumeId; without it, it acts on the DEFAULT resume (the one the main domain shows). A new resume (create_resume, optionally copying another's draft with copyFrom) is private and unpublished; update_resume makes it public, gives it domains, or makes it the default. To tailor a resume for an audience or a job posting, copy it, rewrite the copy's blocks yourself (emphasis and wording only: never add a skill, technology or claim the resume doesn't already support), and record the brief as its tailoring.
 
 Content model: a resume is an ordered list of blocks ({ id, type, position, parentId, visibleWeb, visiblePrint, data }). Types: heading, summary, skills_group, experience, education, custom. An experience, skills_group, education, or custom block may be nested one level under a heading via parentId; heading and summary are always top-level. Call get_block_schemas for each type's data shape — the server type-checks the documented keys (e.g. bullets must be an array) and rejects a mismatch with a 400, but doesn't check enum values or unknown keys.
 
@@ -54,6 +54,18 @@ const resumeIdArg = () =>
   z.string().describe('Resume to act on (an id from list_resumes). Omit for the default resume, the one the main domain shows.');
 // The required resumeId of the tools that manage a resume rather than its content.
 const requiredResumeId = () => z.string().describe('Resume id.');
+// The brief a resume is tailored for (ai/brief.js checks it and its caps).
+// Only a note on the resume: it changes nothing in the content.
+const tailoringArg = () =>
+  z
+    .object({
+      audience: z.string().describe('Who it is for, e.g. "security engineering roles". Required.'),
+      posting: z.string().optional().describe('The job posting it targets, pasted.'),
+      guidance: z.string().optional().describe('Extra guidance for tailoring.'),
+    })
+    .describe(
+      'The brief this resume is tailored for, which the editor shows and pre-fills when re-tailoring. Record it when you tailor a resume\'s content for an audience or job.'
+    );
 
 const orderOf = (blocks) => blocks.map((b) => ({ id: b.id, type: b.type, parentId: b.parentId ?? null }));
 
@@ -325,11 +337,12 @@ const RESUME_TOOLS = [
     config: {
       title: 'Create a resume',
       description:
-        "Adds a resume, private and unpublished. With copyFrom (a resume id) it starts as a copy of that resume's DRAFT (header, site settings and every block, with new block ids); without it, with the default resume's header and site settings and no blocks. slug (its /r/<slug> link name: lowercase letters, digits and single dashes) is derived from the name when omitted. Returns the new resume; edit it with the content tools and its resumeId, then publish it.",
+        "Adds a resume, private and unpublished. With copyFrom (a resume id) it starts as a copy of that resume's DRAFT (header, site settings and every block, with new block ids); without it, with the default resume's header and site settings and no blocks. slug (its /r/<slug> link name: lowercase letters, digits and single dashes) is derived from the name when omitted. A copy keeps its source's tailoring brief unless you send one (or null for none). Returns the new resume; edit it with the content tools and its resumeId, then publish it.",
       inputSchema: {
         name: z.string().describe('Name shown in the editor, e.g. "Sales".'),
         slug: z.string().optional().describe('Link name, e.g. "sales-2026". Must be unused; omit to derive one from the name.'),
         copyFrom: z.string().optional().describe('Id of a resume whose draft to copy. Omit to start without blocks.'),
+        tailoring: tailoringArg().nullable().optional(),
       },
       annotations: mutating,
     },
@@ -340,7 +353,7 @@ const RESUME_TOOLS = [
     config: {
       title: 'Update a resume',
       description:
-        "Changes a resume's settings; send only what changes. isPublic: true shows a published resume at /r/<slug> (false hides it again and removes its hostnames). hostnames REPLACES its domains (send the full list, [] to remove them all): a request for one of them gets this resume once it's published, and giving it any makes it public. isDefault: true makes it the resume the main domain shows; it must have been published, the default is always public, and there's no un-defaulting (make another one the default instead). Returns the updated resume.",
+        "Changes a resume's settings; send only what changes. isPublic: true shows a published resume at /r/<slug> (false hides it again and removes its hostnames). hostnames REPLACES its domains (send the full list, [] to remove them all): a request for one of them gets this resume once it's published, and giving it any makes it public. isDefault: true makes it the resume the main domain shows; it must have been published, the default is always public, and there's no un-defaulting (make another one the default instead). tailoring replaces the brief it's tailored for (null removes it). Returns the updated resume.",
       inputSchema: {
         resumeId: requiredResumeId(),
         name: z.string().optional().describe('New name.'),
@@ -351,6 +364,7 @@ const RESUME_TOOLS = [
           .array(z.string())
           .optional()
           .describe('Its complete list of domains, e.g. ["sales.example.com"]; DNS and the reverse proxy must point them at this server.'),
+        tailoring: tailoringArg().nullable().optional(),
       },
       annotations: { ...mutating, idempotentHint: true },
     },
@@ -358,7 +372,7 @@ const RESUME_TOOLS = [
     // exactly the fields to change, as a REST PATCH body would.
     run: (store, { resumeId, ...patch }) => {
       if (Object.keys(patch).length === 0) {
-        throw httpError(400, 'Nothing to update: send at least one of name, slug, isPublic, isDefault, or hostnames');
+        throw httpError(400, 'Nothing to update: send at least one of name, slug, isPublic, isDefault, hostnames, or tailoring');
       }
       return { resume: store.updateResume(resumeId, patch) };
     },

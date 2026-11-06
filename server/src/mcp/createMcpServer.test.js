@@ -412,6 +412,18 @@ test('the resume tools hand the store exactly what was sent', async (t) => {
   await call('update_resume', { resumeId: 'sales', hostnames: [] });
   assert.deepEqual(store.calls.at(-1), ['updateResume', 'sales', { hostnames: [] }]);
 
+  // the tailoring brief goes through as sent, and null clears it
+  const brief = { audience: 'SRE roles', posting: 'We need on-call experience.' };
+  await call('create_resume', { name: 'Acme', copyFrom: 'sales', tailoring: brief });
+  assert.deepEqual(store.calls.at(-1), ['createResume', { name: 'Acme', copyFrom: 'sales', tailoring: brief }]);
+  await call('create_resume', { name: 'Fresh', copyFrom: 'sales', tailoring: null });
+  assert.deepEqual(store.calls.at(-1), ['createResume', { name: 'Fresh', copyFrom: 'sales', tailoring: null }], "null opts a copy out of its source's");
+  await call('update_resume', { resumeId: 'sales', tailoring: brief });
+  assert.deepEqual(store.calls.at(-1), ['updateResume', 'sales', { tailoring: brief }]);
+  await call('update_resume', { resumeId: 'sales', tailoring: null });
+  assert.deepEqual(store.calls.at(-1), ['updateResume', 'sales', { tailoring: null }]);
+  assert.equal((await call('update_resume', { resumeId: 'sales', tailoring: { posting: 'x' } })).isError, true, 'audience is required');
+
   const callsBefore = store.calls.length;
   const nothing = await call('update_resume', { resumeId: 'sales' });
   assert.equal(nothing.isError, true);

@@ -22,7 +22,7 @@ router.get('/', handle((req, res) => {
   res.json({ resumes: store.listResumes() });
 }));
 
-// { name, slug?, copyFrom? } — see the store's createResume.
+// { name, slug?, copyFrom?, tailoring? } — see the store's createResume.
 router.post('/', handle((req, res) => {
   res.status(201).json({ resume: store.createResume(req.body || {}) });
 }));
@@ -31,8 +31,8 @@ router.get('/:resumeId', handle((req, res) => {
   res.json({ resume: store.getResume(req.params.resumeId) });
 }));
 
-// Any of { name, slug, isPublic, isDefault: true, hostnames } — see
-// updateResume.
+// Any of { name, slug, isPublic, isDefault: true, hostnames, tailoring } —
+// see updateResume.
 router.patch('/:resumeId', handle((req, res) => {
   res.json({ resume: store.updateResume(req.params.resumeId, req.body || {}) });
 }));

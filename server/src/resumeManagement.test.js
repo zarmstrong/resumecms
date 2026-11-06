@@ -320,6 +320,40 @@ test('a public link (/r/<slug>) finds only a public, published resume', async ()
   }
 });
 
+test('a resume keeps the brief it was tailored for: set, copied, replaced, cleared, never published', async () => {
+  const { store, db, defaultId } = makeStore();
+  const brief = { audience: 'SRE roles', posting: 'On-call.', guidance: '' };
+  assert.equal(store.getResume(defaultId).tailoring, null);
+
+  const acme = store.createResume({ name: 'Acme', copyFrom: defaultId, tailoring: { audience: ' SRE roles ', posting: 'On-call.' } });
+  assert.deepEqual(acme.tailoring, brief, 'checked and trimmed');
+  assert.deepEqual(store.listResumes().find((r) => r.id === acme.id).tailoring, brief);
+  assert.deepEqual(store.createResume({ name: 'Acme 2', copyFrom: acme.id }).tailoring, brief, "a copy keeps its source's");
+  assert.equal(store.createResume({ name: 'Acme 3', copyFrom: acme.id, tailoring: null }).tailoring, null, 'unless told otherwise');
+  assert.equal(store.createResume({ name: 'Blank' }).tailoring, null);
+  assert.equal(await statusOf(() => store.createResume({ name: 'Bad', tailoring: { posting: 'x' } })), 400);
+  assert.equal(store.listResumes().length, 5, 'a bad brief creates nothing');
+
+  // It's a note about the draft, not part of it.
+  const statusBefore = store.forResume(acme.id).getPublishStatus();
+  const updated = store.updateResume(acme.id, { tailoring: { audience: 'Platform roles', guidance: 'Stress Kubernetes.' } });
+  assert.deepEqual(updated.tailoring, { audience: 'Platform roles', posting: '', guidance: 'Stress Kubernetes.' });
+  assert.deepEqual(store.forResume(acme.id).getPublishStatus(), statusBefore, 'not a draft change');
+  assert.deepEqual(store.updateResume(acme.id, { name: 'Acme SRE' }).tailoring, updated.tailoring, 'other updates leave it');
+  assert.equal(await statusOf(() => store.updateResume(acme.id, { tailoring: 'SRE' })), 400);
+  assert.throws(() => store.updateResume(acme.id, { tailoring: { audience: '' } }), /^Error: tailoring\.audience is required/);
+  assert.equal(await statusOf(() => store.updateResume(acme.id, { tailoring: { audience: 'x'.repeat(201) } })), 400);
+  assert.deepEqual(store.getResume(acme.id).tailoring, updated.tailoring, 'a refused update changes nothing');
+
+  await store.forResume(acme.id).publish();
+  assert.equal(JSON.stringify(store.forResume(acme.id).getPublishedResume()).includes('Platform roles'), false);
+
+  assert.equal(store.updateResume(acme.id, { tailoring: null }).tailoring, null);
+  store.updateResume(acme.id, { tailoring: brief });
+  store.deleteResume(acme.id);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM resume_settings WHERE resume_id = ? AND key = 'tailoring'").get(acme.id).n, 0);
+});
+
 test('deleting a resume removes its domains', () => {
   const { store, db } = makeStore();
   const r = store.createResume({ name: 'Sales' });

@@ -172,16 +172,16 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/publish/status` | `{ publishedAt, isDirty, pdfStale, pdfVersion }` |
 | `POST /api/publish` | snapshot the draft to the public site and re-render the PDF |
 | `POST /api/discard-draft` | restore the draft from the last published snapshot |
-| `GET /api/resumes` | every resume, default first: `{ id, slug, name, isDefault, isPublic, hostnames, createdAt, updatedAt, publishedAt, isDirty, pdfStale }` |
-| `POST /api/resumes` | `{ name, slug?, copyFrom? }` → a new private, unpublished resume. With `copyFrom` (a resume id) it starts as a copy of that resume's draft; without it, with the default resume's header and site settings and no blocks. `slug` (lowercase letters, digits and dashes) defaults to one made from the name; a taken one is a 409 |
+| `GET /api/resumes` | every resume, default first: `{ id, slug, name, isDefault, isPublic, hostnames, tailoring, createdAt, updatedAt, publishedAt, isDirty, pdfStale }`. `tailoring` is the brief it was tailored for, `{ audience, posting, guidance }`, or null |
+| `POST /api/resumes` | `{ name, slug?, copyFrom?, tailoring? }` → a new private, unpublished resume. With `copyFrom` (a resume id) it starts as a copy of that resume's draft, and keeps its `tailoring` unless one (or null) is sent; without it, with the default resume's header and site settings and no blocks. `slug` (lowercase letters, digits and dashes) defaults to one made from the name; a taken one is a 409 |
 | `GET /api/resumes/:id` | one resume, same shape as the list |
-| `PATCH /api/resumes/:id` | any of `{ name, slug, isPublic, isDefault: true, hostnames }`. Only a published resume can become the default, the default is always public, and there's no un-defaulting: make another resume the default instead. `hostnames` replaces the resume's domains (see [Showing a resume on its own domain](#showing-a-resume-on-its-own-domain)): giving it any makes it public, making it private removes them, and a domain another resume has is a 409 |
+| `PATCH /api/resumes/:id` | any of `{ name, slug, isPublic, isDefault: true, hostnames, tailoring }`. `tailoring` replaces the brief (null removes it); it's a note, not a draft change, and never published. Only a published resume can become the default, the default is always public, and there's no un-defaulting: make another resume the default instead. `hostnames` replaces the resume's domains (see [Showing a resume on its own domain](#showing-a-resume-on-its-own-domain)): giving it any makes it public, making it private removes them, and a domain another resume has is a 409 |
 | `DELETE /api/resumes/:id` | delete a resume with its blocks, settings, domains and PDF; the default can't be deleted (409) |
 | `GET /api/resumes/:id/resume.pdf` | download any resume's last rendered PDF, private ones included |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`) for that resume. The unprefixed ones act on whichever resume is the default |
-| `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, and per-provider `{ hasKey, hint }` — never the key itself |
+| `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, a tailoring brief's caps (`briefLimits`), and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
-| `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense? }` → `{ proposal }` for review; saves nothing. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
+| `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense?, brief? }` → `{ proposal }` for review; saves nothing. `brief` (`{ audience, posting?, guidance? }`, see [AI rewrites](#ai-rewrites)) tailors the rewrite; with one, `instruction` may be empty. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
 | `GET /api/public/resume?mode=web\|print` | public, the published version of the resume this domain shows (the default, unless the request's host is one of another resume's `hostnames`), filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
 | `GET /api/public/resume.pdf` | public, streams that same resume's last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
 | `GET /api/public/resumes/:slug?mode=web\|print` | public, the same for a resume by its link name; 404 unless that resume is public and published. Sent with `X-Robots-Tag: noindex` |
@@ -240,8 +240,8 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 | `discard_draft` | restore the draft from the last published snapshot |
 | `get_published_resume` | the published snapshot as the site (`mode: "web"`) or PDF (`"print"`) sees it |
 | `list_resumes`, `get_resume` | every resume (the default first) / one, by `resumeId`, with its slug, visibility, domains and publish status, as `GET /api/resumes` returns them |
-| `create_resume` | `{ name, slug?, copyFrom? }` — a new private, unpublished resume; `copyFrom` copies that resume's draft |
-| `update_resume` | `{ resumeId, name?, slug?, isPublic?, isDefault?, hostnames? }` — send only what changes, with the same rules as `PATCH /api/resumes/:id` (`hostnames` replaces the list and makes the resume public; only a published resume can become the default) |
+| `create_resume` | `{ name, slug?, copyFrom?, tailoring? }` — a new private, unpublished resume; `copyFrom` copies that resume's draft, and its `tailoring` unless one (or null) is sent |
+| `update_resume` | `{ resumeId, name?, slug?, isPublic?, isDefault?, hostnames?, tailoring? }` — send only what changes, with the same rules as `PATCH /api/resumes/:id` (`hostnames` replaces the list and makes the resume public; only a published resume can become the default; `tailoring` records the brief a resume is tailored for, null removes it) |
 | `delete_resume` | `{ resumeId }` — deletes a resume with its blocks, domains and PDF; the default can't be deleted |
 
 Tool errors carry the same status the REST API would return, e.g.
@@ -439,6 +439,20 @@ remove, or reorder that block's bullets is open. The ✨ button on a bullet
 or item collapses and reopens its panel; collapsing doesn't discard the
 rewrite.
 
+A rewrite can also **tailor** a block to a brief: who the resume is for
+("security engineering roles", required), optionally a pasted job
+posting (up to 12,000 characters) and your own guidance. Tailoring changes
+what's stressed and how it's worded, and uses the posting's wording only
+where your resume already supports it; it never adds a skill,
+technology, or claim because the posting asks for one. A summary being
+tailored also sees an outline of the rest of the resume (job titles,
+companies, skills, education, leaving out anything hidden where the
+summary shows, or anywhere at all while the summary itself is hidden), so
+it can describe you as a whole. Each resume keeps the
+brief it was tailored for (`tailoring`). For now tailoring is in the API
+and the MCP tools; the editor's Tailor button is still to come
+([#53](https://github.com/zarmstrong/resumecms/issues/53)).
+
 - Only the block's prose is sent and can change. Dates, URLs,
   company/institution names, visibility flags, and block styling are
   always kept from the original. Education blocks aren't rewritable.
@@ -512,7 +526,8 @@ rewrite.
   otherwise. Summaries, headings, and skills rows get no tense
   instruction. A custom item's ✨ rewrite has the same menu.
 - The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
-  the same panel. Rewrites are rate-limited to 30 per 10 minutes.
+  the same panel. Rewrites are rate-limited to 30 per 10 minutes, and
+  tailoring rewrites (one per block) separately to 120 per 10 minutes.
 - **Timeout** (default 60 seconds, 20–120) is how long a rewrite may take,
   including one automatic retry, before the server gives up on the
   provider. If you run behind a reverse proxy, keep it below the proxy's

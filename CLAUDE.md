@@ -103,7 +103,7 @@ resumes ("variants") in the `resumes` table (`server/src/schema.js`): a
 stable `id`, a renameable `slug`, and exactly one `is_default` (a partial
 unique index allows at most one; the store never removes the last). Each
 resume owns its blocks (`blocks.resume_id`) and its `header`, `site`,
-`draft_meta`, `published_resume` and `pdf_meta` rows in `resume_settings`
+`draft_meta`, `published_resume`, `pdf_meta` and `tailoring` rows in `resume_settings`
 (`RESUME_SETTING_KEYS`); the global `settings` table keeps only
 `credentials`, `totp` and `ai`, and `db.js`'s `getSetting`/`setSetting`
 only ever see those.
@@ -378,6 +378,25 @@ options, and its default from `publicAiSettings()`, so nothing about it is
 mirrored client-side. The README and the `AiSettings.jsx` hint both describe
 this in prose (the hint more briefly), so update both with it. The prompt's
 wording for each tense stays in `rewrite.js` (`TENSE_RULES`).
+
+Tailoring (issue #53) is a rewrite with a `brief` (`server/src/ai/brief.js`:
+`{ audience, posting, guidance }`, checked and capped by `normalizeBrief()`,
+caps in `BRIEF_LIMITS`, exposed as `briefLimits` by `publicAiSettings()`).
+It only changes the prompt: `buildPrompt` adds `TAILORING_RULES` and the
+brief as read-only context (the posting is the employer's text, so a rule
+says it's data, not instructions), and the guidance goes after the
+instruction as the person's own words. Target, schema and merge are the
+same as without one, and with a brief the instruction may be empty
+(`TAILOR_INSTRUCTION`). A summary tailored also gets `resumeOutline()` of
+the rest of its resume, built in the route from the stored draft; it
+leaves out every block hidden anywhere the summary shows (a summary hidden
+everywhere counts as shown everywhere, since unhiding it publishes its
+text), so keep that filter if you add fields to it. Requests with a brief count against their
+own rate limiter (`tailorLimiter`) instead of `rewriteLimiter`. Each resume
+keeps the brief it was tailored for as its `tailoring` setting
+(`createResume`/`updateResume`, shown on every resume the API returns): a
+note, so no `touchDraft()` and never published, and a copy keeps its
+source's unless given one.
 
 Output schemas must stay valid for both providers' strict structured-output
 modes. That means `additionalProperties: false` and every property in
