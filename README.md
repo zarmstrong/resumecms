@@ -447,7 +447,8 @@ where your resume already supports it; it never adds a skill,
 technology, or claim because the posting asks for one. A summary being
 tailored also sees an outline of the rest of the resume (job titles,
 companies, skills, education, leaving out anything hidden where the
-summary shows), so it can describe you as a whole. Each resume keeps the
+summary shows, or anywhere at all while the summary itself is hidden), so
+it can describe you as a whole. Each resume keeps the
 brief it was tailored for (`tailoring`). For now tailoring is in the API
 and the MCP tools; the editor's Tailor button is still to come
 ([#53](https://github.com/zarmstrong/resumecms/issues/53)).

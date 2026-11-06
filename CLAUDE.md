@@ -389,8 +389,9 @@ instruction as the person's own words. Target, schema and merge are the
 same as without one, and with a brief the instruction may be empty
 (`TAILOR_INSTRUCTION`). A summary tailored also gets `resumeOutline()` of
 the rest of its resume, built in the route from the stored draft; it
-leaves out every block hidden anywhere the summary shows, so keep that
-filter if you add fields to it. Requests with a brief count against their
+leaves out every block hidden anywhere the summary shows (a summary hidden
+everywhere counts as shown everywhere, since unhiding it publishes its
+text), so keep that filter if you add fields to it. Requests with a brief count against their
 own rate limiter (`tailorLimiter`) instead of `rewriteLimiter`. Each resume
 keeps the brief it was tailored for as its `tailoring` setting
 (`createResume`/`updateResume`, shown on every resume the API returns): a

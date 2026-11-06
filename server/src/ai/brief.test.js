@@ -69,6 +69,8 @@ test('the outline leaves out whatever is hidden anywhere the summary shows', () 
   assert.deepEqual(titles(block('s', 'summary', {})), ['Both']);
   assert.deepEqual(titles(block('s', 'summary', {}, { print: false })), ['Web only', 'Both']);
   assert.deepEqual(titles(block('s', 'summary', {}, { web: false })), ['Print only', 'Both']);
+  // hidden everywhere for now, so it may be unhidden anywhere
+  assert.deepEqual(titles(block('s', 'summary', {}, { web: false, print: false })), ['Both']);
   assert.equal(resumeOutline(blocks, block('s', 'summary', {})).skills, undefined);
 });
 

@@ -39,9 +39,13 @@ export function normalizeBrief(raw, label = 'brief') {
 // reword its own text: job titles and companies, skills, and education.
 // `blocks` is the draft in display order. A block that's hidden anywhere
 // `summary` shows is left out, so nothing hidden reaches the summary's
-// public text. Null when there's nothing to show.
+// public text. A summary hidden everywhere counts as shown everywhere:
+// it's most likely a draft about to be unhidden, text and all. Null when
+// there's nothing to show.
 export function resumeOutline(blocks, summary) {
-  const shownWherever = (block) => (!summary.visibleWeb || block.visibleWeb) && (!summary.visiblePrint || block.visiblePrint);
+  const hiddenEverywhere = !summary.visibleWeb && !summary.visiblePrint;
+  const shows = { web: hiddenEverywhere || summary.visibleWeb, print: hiddenEverywhere || summary.visiblePrint };
+  const shownWherever = (block) => (!shows.web || block.visibleWeb) && (!shows.print || block.visiblePrint);
   const text = (value) => (typeof value === 'string' ? value.trim() : '');
   const outline = { experience: [], skills: [], education: [] };
   for (const block of blocks) {
