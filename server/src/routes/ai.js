@@ -9,6 +9,7 @@ import { applyAiSettingsUpdate, normalizeAiSettings, publicAiSettings } from '..
 import { AiError } from '../ai/providers.js';
 import { MAX_INSTRUCTION_LENGTH, rewriteBlock } from '../ai/rewrite.js';
 import { hasRewritableShape } from '../ai/rewritableFields.js';
+import { normalizeBrief, resumeOutline } from '../ai/brief.js';
 
 const router = Router();
 
@@ -27,13 +28,26 @@ const settingsLimiter = rateLimit({
 });
 
 // Every rewrite spends the owner's provider credits, so a stolen session or
-// a stuck client can't run up an unbounded bill.
+// a stuck client can't run up an unbounded bill. A rewrite with a brief
+// (tailoring, brief.js) is one of a run of one request per block, so it
+// counts against its own, larger cap instead: 30 would run out after a
+// couple of runs. Each request counts against exactly one of the two.
+const hasBrief = (req) => req.body?.brief != null;
 const rewriteLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   limit: 30,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: hasBrief,
   message: { error: 'Too many AI rewrites in a short time. Wait a few minutes and try again.' },
+});
+const tailorLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => !hasBrief(req),
+  message: { error: 'Too much AI tailoring in a short time. Wait a few minutes and try again.' },
 });
 
 // All routes below require an authenticated editor session.
@@ -70,24 +84,38 @@ router.put('/settings', settingsLimiter, (req, res) => {
 // `storeFor(req)` picks the resume the block is looked up in, as in
 // routes/blocks.js: the default one at POST /api/ai/rewrite, the :resumeId
 // one at POST /api/resumes/:resumeId/ai/rewrite (routes/resumes.js). Both
-// share the one rate limiter, so the credit cap is per install.
+// share the same rate limiters, so the credit cap is per install.
+//
+// `brief` (optional, brief.js) tailors the rewrite to an audience and job
+// posting. With one, the instruction may be empty (TAILOR_INSTRUCTION
+// stands in), and a summary also sees an outline of the rest of its
+// resume.
 export function rewriteHandlers(storeFor) {
-  return [rewriteLimiter, (req, res) => rewrite(req, res, storeFor)];
+  return [rewriteLimiter, tailorLimiter, (req, res) => rewrite(req, res, storeFor)];
 }
 
 async function rewrite(req, res, storeFor) {
   const { blockId, data, tense, target } = req.body || {};
   const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
   if (typeof blockId !== 'string') return res.status(400).json({ error: 'blockId is required' });
-  if (!instruction) return res.status(400).json({ error: 'Tell the AI what to change.' });
+  let brief = null;
+  try {
+    if (hasBrief(req)) brief = normalizeBrief(req.body.brief);
+  } catch (err) {
+    return sendError(res, err);
+  }
+  if (!instruction && !brief) return res.status(400).json({ error: 'Tell the AI what to change.' });
   if (instruction.length > MAX_INSTRUCTION_LENGTH) {
     return res.status(400).json({ error: `Instructions are limited to ${MAX_INSTRUCTION_LENGTH} characters.` });
   }
   // Through the store so the lookup is scoped to a resume like every other
   // blocks query (a raw SELECT here would find another resume's block).
   let block;
+  let outline = null;
   try {
-    block = storeFor(req).getBlock(blockId);
+    const resumeStore = storeFor(req);
+    block = resumeStore.getBlock(blockId);
+    if (brief && block.type === 'summary') outline = resumeOutline(resumeStore.listBlocks(), block);
   } catch (err) {
     return sendError(res, err);
   }
@@ -116,7 +144,7 @@ async function rewrite(req, res, storeFor) {
     // with a bad tense for a missing block, or with AI not set up, gets those
     // instead. The editor takes its options from the settings, so only
     // another client sends one.
-    const proposal = await rewriteBlock({ type: block.type, data: baseData, instruction, settings, tense, target });
+    const proposal = await rewriteBlock({ type: block.type, data: baseData, instruction, settings, tense, target, brief, outline });
     res.json({ proposal: { blockId, baseData, ...proposal } });
   } catch (err) {
     if (err instanceof AiError) return res.status(err.status).json({ error: err.message });

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AiSettingsError, applyAiSettingsUpdate, normalizeAiSettings, publicAiSettings } from './aiSettings.js';
+import { BRIEF_LIMITS } from './brief.js';
 
 test('public settings never include the API key itself', () => {
   const pub = publicAiSettings({ enabled: true, provider: 'anthropic', apiKeys: { anthropic: 'sk-ant-abcdefghijkl1234' } });
@@ -26,6 +27,7 @@ test('defaults: disabled, Claude, bullet restructuring off', () => {
   for (const { label } of Object.values(pub.tenses)) assert.equal(typeof label, 'string');
   assert.equal(pub.models.anthropic, 'claude-opus-5-5');
   assert.equal(pub.timeoutSeconds, 60);
+  assert.deepEqual(pub.briefLimits, BRIEF_LIMITS);
 });
 
 test('timeout accepts whole seconds from 20 to 120 only', () => {

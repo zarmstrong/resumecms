@@ -5,8 +5,8 @@
 //
 // createSettings() is the global `settings` table (credentials, totp, ai).
 // createResumeSettings() is one resume's rows in `resume_settings` (header,
-// site, draft_meta, published_resume, pdf_meta) with the same interface, so
-// the store's code reads the same either way.
+// site, draft_meta, published_resume, pdf_meta, tailoring) with the same
+// interface, so the store's code reads the same either way.
 export function createSettings(db) {
   function getSetting(key) {
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
@@ -23,7 +23,7 @@ export function createSettings(db) {
 }
 
 // The settings that belong to one resume rather than to the whole install.
-export const RESUME_SETTING_KEYS = ['header', 'site', 'draft_meta', 'published_resume', 'pdf_meta'];
+export const RESUME_SETTING_KEYS = ['header', 'site', 'draft_meta', 'published_resume', 'pdf_meta', 'tailoring'];
 
 export function createResumeSettings(db, resumeId) {
   function getSetting(key) {

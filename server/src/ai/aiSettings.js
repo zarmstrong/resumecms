@@ -9,6 +9,7 @@
 // publicAiSettings() is the only shape that ever leaves the server.
 
 import { AI_TENSES, DEFAULT_TENSE, PICKED_TENSES, PICKED_TENSE_TYPES, defaultPickedTense, isAiTense } from './tense.js';
+import { BRIEF_LIMITS } from './brief.js';
 
 export const AI_PROVIDERS = {
   anthropic: { label: 'Claude (Anthropic)', defaultModel: 'claude-opus-5-5' },
@@ -81,6 +82,8 @@ export function publicAiSettings(stored) {
     pickedTenseTypes: [...PICKED_TENSE_TYPES],
     timeoutSeconds: s.timeoutSeconds,
     timeoutRange: { min: AI_TIMEOUT_SECONDS.min, max: AI_TIMEOUT_SECONDS.max },
+    // A tailoring brief's caps (brief.js), for the editor's form.
+    briefLimits: { ...BRIEF_LIMITS },
     keys,
     providers: Object.fromEntries(
       Object.entries(AI_PROVIDERS).map(([id, p]) => [id, { label: p.label, defaultModel: p.defaultModel }])

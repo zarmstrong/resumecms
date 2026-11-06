@@ -10,6 +10,7 @@ import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
 import { promotedBlockPositions } from './blockDeletion.js';
 import { findSplitSectionId } from './blockReorder.js';
 import { blocksForMode } from './publicBlocks.js';
+import { normalizeBrief } from './ai/brief.js';
 
 // The single implementation of every content operation the editor's REST
 // routes and the MCP tools expose: blocks, header, site settings, publish
@@ -216,7 +217,8 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
   }
 
   // The API shape of a resume: its own fields plus where its content stands
-  // (the same publish status the editor polls for the default one).
+  // (the same publish status the editor polls for the default one), and
+  // the brief it was last tailored for (brief.js), or null.
   function toResume(row) {
     const { publishedAt, isDirty, pdfStale } = scopedStore(row.id).getPublishStatus();
     return {
@@ -226,6 +228,7 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
       isDefault: row.is_default === 1,
       isPublic: row.is_public === 1,
       hostnames: hostnamesOf(row.id),
+      tailoring: createResumeSettings(db, row.id).getSetting('tailoring'),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       publishedAt,
@@ -249,12 +252,16 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
   // no blocks. The published snapshot and PDF are never copied: the new
   // resume has unpublished changes from the start. `slug` defaults to one
   // derived from the name, made unique; an explicit one must be free.
+  // `tailoring` is the brief it's about to be tailored for. A copy sent
+  // none keeps its source's, since its content is still tailored for that;
+  // an explicit null starts it with none.
   function createResume(input = {}) {
-    const { name, slug, copyFrom } = assertObject(input ?? {}, 'resume');
+    const { name, slug, copyFrom, tailoring } = assertObject(input ?? {}, 'resume');
     const cleanName = validateName(name);
     if (copyFrom != null && !resumeRow(copyFrom)) {
       throw httpError(400, 'copyFrom does not reference an existing resume');
     }
+    const brief = tailoring == null ? null : normalizeBrief(tailoring, 'tailoring');
     let cleanSlug;
     if (slug == null) {
       cleanSlug = uniqueSlug(slugify(cleanName), (s) => slugTaken(s));
@@ -276,6 +283,8 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
       const site = source.getSite();
       if (header) target.setSetting('header', header);
       if (site) target.setSetting('site', site);
+      const sourceBrief = copyFrom != null && tailoring === undefined ? createResumeSettings(db, copyFrom).getSetting('tailoring') : null;
+      if (brief || sourceBrief) target.setSetting('tailoring', brief || sourceBrief);
       if (copyFrom != null) {
         const rows = db.prepare('SELECT * FROM blocks WHERE resume_id = ?').all(copyFrom);
         const insert = db.prepare(
@@ -291,7 +300,7 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     return getResume(id);
   }
 
-  const RESUME_FIELDS = ['name', 'slug', 'isPublic', 'isDefault', 'hostnames'];
+  const RESUME_FIELDS = ['name', 'slug', 'isPublic', 'isDefault', 'hostnames', 'tailoring'];
 
   // Renames, changes the slug, makes public/private, sets its domains, or
   // makes this the default (moving the flag off the old one in the same
@@ -305,6 +314,10 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
   // header straight to the server, so a domain is never a way of keeping a
   // resume private: giving a resume domains makes it public, and making it
   // private removes them.
+  //
+  // `tailoring` replaces the brief it was tailored for (brief.js), null
+  // removes it. It's a note about the draft, not part of it, so it isn't a
+  // draft change and is never published.
   function updateResume(resumeId, patch = {}) {
     const row = existingResumeRow(resumeId);
     patch = assertObject(patch ?? {}, 'resume');
@@ -348,6 +361,8 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
       }
     }
     if (!next.isPublic) hostnames = [];
+    // undefined: leave it as it is.
+    const tailoring = 'tailoring' in patch ? (patch.tailoring === null ? null : normalizeBrief(patch.tailoring, 'tailoring')) : undefined;
 
     db.transaction(() => {
       if (makeDefault) db.prepare('UPDATE resumes SET is_default = 0 WHERE is_default = 1').run();
@@ -360,6 +375,8 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
         const insert = db.prepare('INSERT INTO resume_hosts (hostname, resume_id) VALUES (?, ?)');
         for (const hostname of hostnames) insert.run(hostname, resumeId);
       }
+      if (tailoring === null) db.prepare("DELETE FROM resume_settings WHERE resume_id = ? AND key = 'tailoring'").run(resumeId);
+      else if (tailoring) createResumeSettings(db, resumeId).setSetting('tailoring', tailoring);
     })();
     return getResume(resumeId);
   }
