@@ -3,7 +3,8 @@
 // createResumeSettings() to whatever handle it's given, so tests can run it
 // against ':memory:'.
 //
-// createSettings() is the global `settings` table (credentials, totp, ai).
+// createSettings() is the global `settings` table (credentials, totp, ai,
+// and the landing page's keys, see landingStore.js).
 // createResumeSettings() is one resume's rows in `resume_settings` (header,
 // site, draft_meta, published_resume, pdf_meta, tailoring) with the same
 // interface, so the store's code reads the same either way.

@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { BLOCK_TYPES } from '../resumeStore.js';
 import { httpError } from '../httpError.js';
+import { LINK_TYPES, PHOTO_SOURCES } from '../landingFields.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
 import { moveBlockOrder } from './moveBlock.js';
 
@@ -39,7 +40,9 @@ Resumes: list_resumes shows them. Every content tool takes an optional resumeId;
 
 Content model: a resume is an ordered list of blocks ({ id, type, position, parentId, visibleWeb, visiblePrint, data }). Types: heading, summary, skills_group, experience, education, custom. An experience, skills_group, education, or custom block may be nested one level under a heading via parentId; heading and summary are always top-level. Call get_block_schemas for each type's data shape — the server type-checks the documented keys (e.g. bullets must be an array) and rejects a mismatch with a 400, but doesn't check enum values or unknown keys.
 
-Draft vs published: every write tool changes the DRAFT only, of one resume. Nothing is visible on the public site or PDF until you call publish for that resume. get_publish_status reports whether unpublished changes exist; discard_draft throws the draft away. Prefer reading with get_draft (everything at once) and editing with update_block (which merges data keys) and move_block (which handles ordering for you).`;
+Draft vs published: every write tool changes the DRAFT only, of one resume. Nothing is visible on the public site or PDF until you call publish for that resume. get_publish_status reports whether unpublished changes exist; discard_draft throws the draft away. Prefer reading with get_draft (everything at once) and editing with update_block (which merges data keys) and move_block (which handles ordering for you).
+
+Landing page: the install can also have a short home page at / (a headline, an intro, a photo, links and cards linking to some of the resumes), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -390,6 +393,84 @@ const RESUME_TOOLS = [
   },
 ];
 
+// The install's landing page (issue #70; landingStore.js). Not per resume.
+const landingLink = () =>
+  z.object({
+    type: z.enum(LINK_TYPES).optional().describe('Picks the badge it is drawn with; omit for a plain link.'),
+    label: z.string().describe('Display text, e.g. "github.com/you".'),
+    url: z.string().describe('An http, https or mailto URL.'),
+  });
+const landingCard = () =>
+  z.object({
+    resumeId: z.string().describe('A resume id from list_resumes.'),
+    label: z.string().optional().describe("Card title, e.g. \"Engineering\". Empty uses the resume's published header title (never its internal name)."),
+    blurb: z.string().optional().describe('A line or two about this resume.'),
+  });
+
+const LANDING_TOOLS = [
+  {
+    name: 'get_landing_page',
+    config: {
+      title: 'Get the landing page',
+      description:
+        "Returns the landing page's DRAFT (`landing`), its status ({ enabled, publishedAt, isDirty }), and `context`: the resumes a card can currently link to (public and published; a card for any other resume is left out of the public page), and the default resume's published photo and site settings, which the page reuses. Before anything is saved, the draft is built from the default resume's published header.",
+      annotations: readOnly,
+    },
+    run: (store) => ({ landing: store.getLanding(), status: store.getLandingStatus(), context: store.getLandingContext() }),
+  },
+  {
+    name: 'update_landing_page',
+    config: {
+      title: 'Update the landing page',
+      description:
+        "Merges fields into the landing page's DRAFT: send only what changes (links and resumes are replaced as whole lists; null resets a field). Nothing is public until publish_landing_page. Returns the draft.",
+      inputSchema: {
+        headline: z.string().nullable().optional().describe('Big heading, usually your name.'),
+        subheadline: z.string().nullable().optional().describe('One line under it, e.g. a title.'),
+        intro: z.string().nullable().optional().describe('A few lines about yourself, plain text; a blank line starts a new paragraph.'),
+        photo: z.enum(PHOTO_SOURCES).nullable().optional().describe("'resume' uses the default resume's published header photo, 'custom' uses photoUrl, 'none' shows none."),
+        photoUrl: z.string().nullable().optional().describe("A base64 data: URL of a JPEG, PNG or WebP image, for photo: 'custom'."),
+        links: z.array(landingLink()).nullable().optional().describe('The complete list of links, in order.'),
+        resumes: z.array(landingCard()).nullable().optional().describe('The complete list of resume cards, in order.'),
+      },
+      annotations: { ...mutating, idempotentHint: true },
+    },
+    run: (store, patch) => {
+      if (Object.keys(patch).length === 0) throw httpError(400, 'Nothing to update: send at least one landing page field');
+      return { landing: store.setLanding(patch, { merge: true }) };
+    },
+  },
+  {
+    name: 'publish_landing_page',
+    config: {
+      title: 'Publish the landing page',
+      description: "Snapshots the landing page's DRAFT to the public site. It shows at / only while the landing page is enabled. Returns its status.",
+      annotations: mutating,
+    },
+    run: (store) => store.publishLanding(),
+  },
+  {
+    name: 'discard_landing_draft',
+    config: {
+      title: 'Discard the landing page draft',
+      description: 'Throws away unpublished landing page changes, restoring the draft from its last published snapshot. Returns the restored draft.',
+      annotations: destructive,
+    },
+    run: (store) => ({ landing: store.discardLandingDraft() }),
+  },
+  {
+    name: 'set_landing_page_enabled',
+    config: {
+      title: 'Switch the landing page on or off',
+      description:
+        "Takes effect on the public site at once. On: / shows the published landing page (once there is one) on every host that isn't a resume's own domain, and the default resume moves to /resume. Off: / shows the default resume again. Returns its status.",
+      inputSchema: { enabled: z.boolean() },
+      annotations: { ...mutating, idempotentHint: true },
+    },
+    run: (store, { enabled }) => store.setLandingEnabled(enabled),
+  },
+];
+
 // A content tool with an optional resumeId: run() gets the store bound to
 // that resume (forResume 404s an unknown id), or the default-bound store
 // itself when it's omitted, and never sees the argument.
@@ -401,7 +482,7 @@ function scopedToResume(tool) {
   };
 }
 
-const TOOLS = [SCHEMA_TOOL, ...CONTENT_TOOLS.map(scopedToResume), ...RESUME_TOOLS];
+const TOOLS = [SCHEMA_TOOL, ...CONTENT_TOOLS.map(scopedToResume), ...RESUME_TOOLS, ...LANDING_TOOLS];
 
 export const TOOL_NAMES = TOOLS.map((t) => t.name);
 

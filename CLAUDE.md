@@ -105,7 +105,8 @@ unique index allows at most one; the store never removes the last). Each
 resume owns its blocks (`blocks.resume_id`) and its `header`, `site`,
 `draft_meta`, `published_resume`, `pdf_meta` and `tailoring` rows in `resume_settings`
 (`RESUME_SETTING_KEYS`); the global `settings` table keeps only
-`credentials`, `totp` and `ai`, and `db.js`'s `getSetting`/`setSetting`
+`credentials`, `totp`, `ai` and the landing page's keys (see "Landing
+page" below), and `db.js`'s `getSetting`/`setSetting`
 only ever see those.
 
 `store.forResume(id)` returns the content operations bound to one resume
@@ -183,10 +184,70 @@ Every boot also runs `adoptLegacyRows()`: blocks with no `resume_id`
 resume, and per-resume keys back in the global `settings` table are only
 warned about, never moved.
 
+### Landing page
+
+An optional home page at `/` (issue #70), off by default. It belongs to the
+install, not to a resume, so it lives in the global `settings` table:
+`landing_draft`, `landing_published`, `landing_meta` (its own
+`lastEditedAt`, bumped by `touchLanding()`) and `landing_enabled`.
+`server/src/landingStore.js` holds the operations and is composed into the
+store by `createResumeStore()`; validation and the public shape are pure, in
+`landingFields.js`. It's a fixed set of fields, not blocks:
+`{ headline, subheadline, intro, photo, photoUrl, links, resumes }`, the
+last being cards `{ resumeId, label, blurb }`. It's checked far more
+strictly than the header, because all of it is shown to every visitor:
+unknown keys, wrong types and values over `LANDING_LIMITS` are a 400, a
+link with any scheme but http/https/mailto is too (the client's
+`safeHref()` rule, run through the WHATWG parser so `java\tscript:` is
+caught; a URL the parser rejects outright, like a half-typed `https://`,
+saves but is never shown), and `photoUrl` has to be
+a base64 JPEG/PNG/WebP `data:` URL. A new card must name an existing
+resume, but a card already in the draft may outlive its resume, so a
+deletion doesn't make the draft unsavable. Publishing it is separate from
+publishing any resume, and `landing_enabled` isn't drafted: it takes
+effect at once, and does nothing until a snapshot exists.
+
+`resolveLanding()` is the only shape that leaves the server publicly, and
+it resolves references when the page is requested, not when it's
+published (`landingContext()`). That's what keeps a resume made private,
+unpublished or deleted after the publish off the page, and keeps a renamed
+one's link working. Cards carry an `href` (`/resume` for the default,
+`/r/<slug>` otherwise) and a label, never a resume id or its internal
+`name` (which can say who it was tailored for); an empty label uses the
+resume's published header title. The photo (`photo: 'resume'`) and the
+site settings come from the default resume's *published* snapshot, never
+its draft. Keep both properties if you add fields.
+
+`GET /api/public/home` is what `/` loads: `{ kind: 'landing' }` from
+`landingForHost()` when it's enabled, published and the host isn't in
+`resume_hosts` (any mapping, published or not, so switching the page on
+never changes what a resume's domain shows), otherwise `{ kind: 'resume' }`
+with what `/api/public/resume?mode=web` would send. One request, so a cold
+load never shows the resume and then swaps. It sends `REVALIDATE` and
+`HOST_HEADERS`. The editor's routes are in `routes/landing.js`
+(`/api/landing`, mounted before the catch-all `/api`), and the MCP tools
+are `LANDING_TOOLS` in `createMcpServer.js` (no `resumeId`;
+`update_landing_page` merges via `mergeLandingPatch()`).
+
+On the client, `/` is `HomePage` (`client/src/landing/HomePage.jsx`), which
+renders `LandingView` or the resume from that one response, and `/resume`
+is `ResumeRoute`, which redirects to `/` whenever `/` would show a resume
+itself. Both refetch like `PublicResumePage`, through the shared
+`usePublicFetch()` hook. The editor opens the landing page from the
+switcher (`ResumeSelect`, value `LANDING_PAGE`) as `/editor?page=landing`,
+where `ResumesEditor` mounts `LandingEditorPage` instead of `EditorPage`;
+it has its own save queue, flushed before a switch, publish, discard and
+logout. Its preview resolves the local draft with
+`client/src/landing/resolveLanding.js`, a mirror of the server's
+`resolveLanding()` (keep the two in step), against the `context` from
+`GET /api/landing`. While the page is shown (`landingShown()` in
+`resumeLinks.js`), `publicUrl()` gives the default resume's link as
+`/resume`.
+
 ### Route mount order matters
 
 `server/src/index.js` mounts `/api/auth`, `/api/auth/totp`,
-`/api/public`, `/api/ai` and `/api/resumes` *before* the catch-all `/api` mount for `blockRoutes`/
+`/api/public`, `/api/ai`, `/api/resumes` and `/api/landing` *before* the catch-all `/api` mount for `blockRoutes`/
 `publishRoutes`. Express matches `app.use()` by path prefix, so a more
 specific route registered after the broad `/api` mount would first hit
 `blockRoutes`' unconditional `requireAuth` and get rejected. Keep

@@ -11,6 +11,7 @@ import { promotedBlockPositions } from './blockDeletion.js';
 import { findSplitSectionId } from './blockReorder.js';
 import { blocksForMode } from './publicBlocks.js';
 import { normalizeBrief } from './ai/brief.js';
+import { createLandingStore } from './landingStore.js';
 
 // The single implementation of every content operation the editor's REST
 // routes and the MCP tools expose: blocks, header, site settings, publish
@@ -449,8 +450,12 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     RESUME_METHODS.map((name) => [name, (...args) => scopedStore(defaultResumeId())[name](...args)])
   );
 
+  // The install's landing page (issue #70), see landingStore.js.
+  const landing = createLandingStore({ db, defaultResumeId });
+
   return {
     ...delegates,
+    ...landing,
     forResume,
     forHost,
     forPublicSlug,

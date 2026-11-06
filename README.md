@@ -179,11 +179,18 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `DELETE /api/resumes/:id` | delete a resume with its blocks, settings, domains and PDF; the default can't be deleted (409) |
 | `GET /api/resumes/:id/resume.pdf` | download any resume's last rendered PDF, private ones included |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`) for that resume. The unprefixed ones act on whichever resume is the default |
+| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, intro, photo, photoUrl, links, resumes }`), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card can link to (public and published). Before the first save the draft is built from the default resume's published header |
+| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link that isn't `http`/`https`/`mailto`, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card for an unknown resume are all a 400 |
+| `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
+| `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it) |
+| `POST /api/landing/discard-draft` | restore the landing page draft from its last published snapshot |
+| `PUT /api/landing/enabled` | `{ enabled }`: takes effect at once, and only shows the page once it's been published |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, a tailoring brief's caps (`briefLimits`), and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense?, brief? }` → `{ proposal }` for review; saves nothing. `brief` (`{ audience, posting?, guidance? }`, see [AI rewrites](#ai-rewrites)) tailors the rewrite; with one, `instruction` may be empty. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
 | `GET /api/public/resume?mode=web\|print` | public, the published version of the resume this domain shows (the default, unless the request's host is one of another resume's `hostnames`), filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
 | `GET /api/public/resume.pdf` | public, streams that same resume's last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
+| `GET /api/public/home` | public, what `/` shows on this host: `{ kind: 'landing', landing }` when the landing page is enabled, published and the host isn't one of a resume's `hostnames`, otherwise `{ kind: 'resume', resume }` (the same as `/api/public/resume?mode=web`). Cards only list public, published resumes, by link (`/resume` for the default, `/r/<slug>` otherwise), never by id or internal name. Sent with `Vary: Host, X-Forwarded-Host` |
 | `GET /api/public/resumes/:slug?mode=web\|print` | public, the same for a resume by its link name; 404 unless that resume is public and published. Sent with `X-Robots-Tag: noindex` |
 | `GET /api/public/resumes/:slug/resume.pdf` | public, its PDF, on the same terms |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
@@ -217,7 +224,7 @@ clients take the equivalent JSON:
 Everything the tools write goes to the **draft**, exactly like the editor;
 nothing is visible on the public site or PDF until `publish` is called.
 
-Every tool below except `get_block_schemas` and the resume tools takes an
+Every tool below except `get_block_schemas`, the resume tools and the landing page tools takes an
 optional `resumeId` (an id from `list_resumes`): without it, it works on the
 default resume, the one your main domain shows; with it, on that resume
 ("copy my resume as Sales, rewrite it for account executive roles, and
@@ -243,6 +250,10 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 | `create_resume` | `{ name, slug?, copyFrom?, tailoring? }` — a new private, unpublished resume; `copyFrom` copies that resume's draft, and its `tailoring` unless one (or null) is sent |
 | `update_resume` | `{ resumeId, name?, slug?, isPublic?, isDefault?, hostnames?, tailoring? }` — send only what changes, with the same rules as `PATCH /api/resumes/:id` (`hostnames` replaces the list and makes the resume public; only a published resume can become the default; `tailoring` records the brief a resume is tailored for, null removes it) |
 | `delete_resume` | `{ resumeId }` — deletes a resume with its blocks, domains and PDF; the default can't be deleted |
+| `get_landing_page` | the landing page draft, its status and its context, as `GET /api/landing` returns them |
+| `update_landing_page` | merge fields into the landing page draft (`links` and `resumes` are replaced whole, `null` resets a field), with the same checks as `PUT /api/landing` |
+| `publish_landing_page`, `discard_landing_draft` | publish the landing page draft / restore it from its last published snapshot |
+| `set_landing_page_enabled` | `{ enabled }` — switches the landing page at `/` on or off, at once |
 
 Tool errors carry the same status the REST API would return, e.g.
 `[404] Block not found`.
@@ -358,6 +369,35 @@ resume's domain as its link once it has one.
 A resume's own link (`/r/<link name>`, its JSON and its PDF) is sent with
 `X-Robots-Tag: noindex`, and nothing links to it, so only the default and
 resumes with a domain of their own are meant to show up in search.
+
+### A landing page at `/`
+
+By default `/` is your default resume. You can put a short home page
+there instead: a headline, a few lines about yourself, a photo, links, and
+cards linking to whichever resumes you choose. Open **Landing page** from
+the editor's resume switcher, fill it in, **Publish** it, and tick
+**Show at /**. The default resume then lives at `/resume`; `/r/<link name>`,
+`/print` and every PDF link stay where they were. Untick it and `/` is the
+resume again (`/resume` then redirects there, so links saved meanwhile
+keep working).
+
+The landing page has its own draft and Publish, separate from every
+resume's. It takes its colors and fonts from the default resume's
+published site settings, and "The default resume's photo" means the photo
+in that resume's published header.
+
+What visitors see:
+
+- A card only appears for a resume that is public and published, checked
+  on every request: making one private or deleting it takes its card off at
+  once, without republishing. A card's title is the one you give it, or
+  else that resume's published header title, never its name in the editor
+  (which may say who it was tailored for).
+- Links must be `http`, `https` or `mailto`, and the intro is plain text
+  (a blank line starts a new paragraph), never HTML or markdown.
+- A domain mapped to a resume keeps showing that resume, landing page or
+  not. The landing page only replaces the default resume on hosts that
+  aren't one of a resume's domains.
 
 ### Caching and CDNs
 
