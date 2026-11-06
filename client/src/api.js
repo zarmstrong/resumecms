@@ -37,34 +37,60 @@ export const api = {
   getCredentials: () => request('/auth/credentials'),
   updateCredentials: (payload) => request('/auth/credentials', { method: 'POST', body: JSON.stringify(payload) }),
 
-  getHeader: () => request('/header'),
-  putHeader: (header) => request('/header', { method: 'PUT', body: JSON.stringify(header) }),
-
-  getSite: () => request('/site'),
-  putSite: (site) => request('/site', { method: 'PUT', body: JSON.stringify(site) }),
-
-  getBlocks: () => request('/blocks'),
-  createBlock: (type, data, parentId = null) =>
-    request('/blocks', { method: 'POST', body: JSON.stringify({ type, data, parentId }) }),
-  updateBlock: (id, patch) => request(`/blocks/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
-  deleteBlock: (id) => request(`/blocks/${id}`, { method: 'DELETE' }),
-  // items: [{ id, parentId }] in the desired flat order (a heading's
-  // children immediately follow it) — see BlockList.jsx's flat-order model.
-  reorderBlocks: (items) => request('/blocks/reorder', { method: 'POST', body: JSON.stringify({ items }) }),
-
   getAiSettings: () => request('/ai/settings'),
   updateAiSettings: (payload) => request('/ai/settings', { method: 'PUT', body: JSON.stringify(payload) }),
-  // Returns a proposal only — nothing is saved until it's accepted and sent
-  // through updateBlock like any other edit.
-  // `target` narrows the rewrite to part of the block (see aiReview.js).
-  // `tense` is only sent for blocks with a tense picker (the settings'
-  // pickedTenseTypes); undefined drops out of the JSON.
-  aiRewrite: (blockId, data, instruction, target, tense) =>
-    request('/ai/rewrite', { method: 'POST', body: JSON.stringify({ blockId, data, instruction, target, tense }) }),
 
-  getPublicResume: (mode) => request(`/public/resume?mode=${mode}`),
+  // The install's resumes (issue #53). The content of one is edited through
+  // resumeApi(id) below.
+  listResumes: () => request('/resumes'),
+  // { name, slug?, copyFrom? }
+  createResume: (input) => request('/resumes', { method: 'POST', body: JSON.stringify(input) }),
+  // Any of { name, slug, isPublic, isDefault: true, hostnames }
+  updateResume: (id, patch) =>
+    request(`/resumes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteResume: (id) => request(`/resumes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
-  publish: () => request('/publish', { method: 'POST' }),
-  publishStatus: () => request('/publish/status'),
-  discardDraft: () => request('/discard-draft', { method: 'POST' }),
+  // The published resume the server picks for this host (`/`), or the
+  // public one at /r/<slug> when `slug` is given.
+  getPublicResume: (mode, slug = null) =>
+    request(slug ? `/public/resumes/${encodeURIComponent(slug)}?mode=${mode}` : `/public/resume?mode=${mode}`),
 };
+
+// The editor's calls for one resume, all under /api/resumes/:id, so a call
+// can't land on another resume by leaving an id out. (The server's
+// unprefixed /api routes still mean the default resume; the editor doesn't
+// use them.)
+export function resumeApi(resumeId) {
+  const prefix = `/resumes/${encodeURIComponent(resumeId)}`;
+  return {
+    getHeader: () => request(`${prefix}/header`),
+    putHeader: (header) => request(`${prefix}/header`, { method: 'PUT', body: JSON.stringify(header) }),
+
+    getSite: () => request(`${prefix}/site`),
+    putSite: (site) => request(`${prefix}/site`, { method: 'PUT', body: JSON.stringify(site) }),
+
+    getBlocks: () => request(`${prefix}/blocks`),
+    createBlock: (type, data, parentId = null) =>
+      request(`${prefix}/blocks`, { method: 'POST', body: JSON.stringify({ type, data, parentId }) }),
+    updateBlock: (id, patch) => request(`${prefix}/blocks/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+    deleteBlock: (id) => request(`${prefix}/blocks/${id}`, { method: 'DELETE' }),
+    // items: [{ id, parentId }] in the desired flat order (a heading's
+    // children immediately follow it) — see BlockList.jsx's flat-order model.
+    reorderBlocks: (items) => request(`${prefix}/blocks/reorder`, { method: 'POST', body: JSON.stringify({ items }) }),
+
+    // Returns a proposal only — nothing is saved until it's accepted and sent
+    // through updateBlock like any other edit.
+    // `target` narrows the rewrite to part of the block (see aiReview.js).
+    // `tense` is only sent for blocks with a tense picker (the settings'
+    // pickedTenseTypes); undefined drops out of the JSON.
+    aiRewrite: (blockId, data, instruction, target, tense) =>
+      request(`${prefix}/ai/rewrite`, { method: 'POST', body: JSON.stringify({ blockId, data, instruction, target, tense }) }),
+
+    publish: () => request(`${prefix}/publish`, { method: 'POST' }),
+    publishStatus: () => request(`${prefix}/publish/status`),
+    discardDraft: () => request(`${prefix}/discard-draft`, { method: 'POST' }),
+
+    // Behind login, so a private resume's PDF downloads too.
+    pdfPath: `${BASE}${prefix}/resume.pdf`,
+  };
+}

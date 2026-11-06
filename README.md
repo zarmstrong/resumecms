@@ -14,6 +14,8 @@ exact same components.
   bullet moves among its siblings, carrying its sub-bullets — dragging can't
   turn a bullet into a sub-bullet or back), or move with the Up/Down arrow
   keys on their drag handle.
+- **`/r/<link name>`** — another resume's public page, once it's public
+  and published (see "several resumes" below).
 - **`/print`** — the print-styled version of the resume (used internally by
   the PDF export; you generally won't visit this directly).
 - **Download PDF** — server-generates a real PDF on demand via headless
@@ -61,9 +63,13 @@ private until made public, and can start as a copy of an existing one. A
 public resume has its own unlisted link, and can also be given domains of
 its own (`sales.example.com` shows the sales resume, everything else the
 default; see [Showing a resume on its own domain](#showing-a-resume-on-its-own-domain)).
-For now they're managed through the API (see `/api/resumes` below); the
-editor's switcher and the `/r/<link name>` page that reads that link are
-still to come ([#53](https://github.com/zarmstrong/resumecms/issues/53)).
+The editor's top bar switches between them. **New resume** copies the open
+one (or starts with the default's header and look and no sections), and
+**Resume settings** renames it, changes its link, makes it public or
+private, sets its domains, makes it the default, copies its link, or
+deletes it. Each resume has its own Publish and Download PDF; a private
+one's PDF downloads from the editor without making it public. The same
+operations are in the API (`/api/resumes` below) and the MCP tools.
 
 ## Templates
 
@@ -346,7 +352,8 @@ For each domain:
 
 Do your editing from the main domain: the login session is per host, and
 the editor's unprefixed routes always edit the default resume, whichever
-domain they're called on.
+domain they're called on. The editor's **Resume settings** shows a
+resume's domain as its link once it has one.
 
 A resume's own link (`/r/<link name>`, its JSON and its PDF) is sent with
 `X-Robots-Tag: noindex`, and nothing links to it, so only the default and

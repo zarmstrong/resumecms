@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { ResumeView } from './ResumeView.jsx';
+import { PDF_URL_PATH, publicPdfPath } from './pdfUrl.js';
 
 // A publish stamps the snapshot with publishedAt and a render changes
 // pdfVersion, so those two identify what's on screen. Only a snapshot
@@ -11,7 +12,9 @@ function sameResume(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function PublicResumePage({ mode }) {
+// `slug` (web only) shows the public resume at /r/<slug> instead of the
+// one the server picks for this host.
+export function PublicResumePage({ mode, slug = null }) {
   const [state, setState] = useState({ loading: true, error: null, resume: null });
 
   useEffect(() => {
@@ -23,7 +26,7 @@ export function PublicResumePage({ mode }) {
     const load = () => {
       const seq = ++latest;
       api
-        .getPublicResume(mode)
+        .getPublicResume(mode, slug)
         .then((resume) => {
           if (cancelled || seq !== latest) return;
           // Same snapshot and PDF as what's on screen (the usual case for a
@@ -33,8 +36,13 @@ export function PublicResumePage({ mode }) {
         .catch((err) => {
           if (cancelled || seq !== latest) return;
           // Keep whatever is on screen if a background refetch fails; only
-          // the initial load has nothing better to show than the error.
-          setState((prev) => (prev.resume ? prev : { loading: false, error: err.message, resume: null }));
+          // the initial load has nothing better to show than the error. A
+          // slug's 404 is the exception: it was made private, unpublished
+          // or deleted, so it comes off the screen too.
+          const notFound = err.status === 404;
+          setState((prev) =>
+            prev.resume && !(slug && notFound) ? prev : { loading: false, error: err.message, notFound, resume: null }
+          );
         });
     };
     load();
@@ -60,7 +68,7 @@ export function PublicResumePage({ mode }) {
       window.removeEventListener('pageshow', onPageShow);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [mode]);
+  }, [mode, slug]);
 
   useEffect(() => {
     if (mode === 'print' && !state.loading) {
@@ -70,6 +78,10 @@ export function PublicResumePage({ mode }) {
   }, [mode, state.loading]);
 
   if (state.loading) return null;
+  // A private, unpublished or unknown /r/<slug> all 404 alike on the server.
+  if (state.notFound && slug) {
+    return <div style={{ padding: 40, fontFamily: 'var(--font-ui)' }}>This resume isn't available.</div>;
+  }
   if (state.error) {
     return <div style={{ padding: 40, fontFamily: 'var(--font-ui)' }}>Couldn't load resume: {state.error}</div>;
   }
@@ -77,5 +89,14 @@ export function PublicResumePage({ mode }) {
   const { header, site, blocks, pdfVersion } = state.resume;
   if (site?.title) document.title = site.title;
 
-  return <ResumeView header={header} site={site} blocks={blocks} mode={mode} pdfVersion={pdfVersion} />;
+  return (
+    <ResumeView
+      header={header}
+      site={site}
+      blocks={blocks}
+      mode={mode}
+      pdfVersion={pdfVersion}
+      pdfPath={slug ? publicPdfPath(slug) : PDF_URL_PATH}
+    />
+  );
 }

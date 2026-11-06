@@ -153,8 +153,24 @@ can send any `Host`), so `updateResume` makes a resume public when it
 gets domains and removes them when it goes private; keep that pairing if
 you add another way to set either. The editor's routes never follow the
 host: the unprefixed ones always mean the default. The client's
-`/r/<slug>` page that reads the slug endpoint comes with the editor's
-switcher (phase 4).
+`/r/:slug` route (`App.jsx`) renders `PublicResumePage` with that slug,
+its PDF link pointing at the slug's PDF (`publicPdfPath()`).
+
+In the editor, `ResumesEditor.jsx` loads the list and mounts `EditorPage`
+for the resume `?resume=<id>` names (plain `/editor` for the default),
+keyed by its id, so switching remounts it: AI proposals, debounce timers
+and late responses can't cross to another resume. `EditorPage` makes
+every content call through `resumeApi(id)` (`api.js`, always under
+`/api/resumes/:id`; the client no longer calls the unprefixed routes), and
+every edit to the draft goes through its `createSaveQueue()`
+(`editor/saveQueue.js`): debounced saves by `schedule()`, every edit's
+request by `track()` (with a key when a failure leaves the edit only on
+screen, so it's still reported at the next switch). Switching, New resume
+(the server copies its *stored* draft), Discard and Log out `flush()`
+first, and unmounting sends whatever is still waiting, so a new edit must
+be tracked there too or a switch can outrun it. The switcher's dialogs are
+in `ResumeModals.jsx`, and their pure parts (which resume to open, its
+public URL, the settings form's PATCH) in `resumeLinks.js`.
 
 `migrateToResumes()` (`server/src/resumeMigration.js`) turns an install
 from before variants into its default resume (slug `main`) on first boot:

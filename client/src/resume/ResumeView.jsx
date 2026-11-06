@@ -25,7 +25,7 @@ import {
   getLayoutTemplate,
 } from './templateRegistry.js';
 import { blockWrapperStyle, blockWrapperClassName } from './blockStyle.js';
-import { pdfUrl } from './pdfUrl.js';
+import { PDF_URL_PATH, pdfUrl } from './pdfUrl.js';
 import './resume.css';
 
 // mode: 'web' | 'print' | 'preview'
@@ -34,8 +34,18 @@ import './resume.css';
 // `highlightBlockIds` (preview only, a Set of ids) outlines blocks — the
 // editor uses it to mark the blocks it's showing unsaved AI rewrites for.
 // `pdfVersion` (web only) identifies the PDF on disk, from the public API;
-// it cache-busts the PDF link (see pdfUrl.js).
-export function ResumeView({ header, site, blocks, mode = 'web', highlightBlockIds = null, pdfVersion = null }) {
+// it cache-busts the PDF link (see pdfUrl.js). `pdfPath` is which PDF the
+// link downloads: the host's public one unless given (/r/<slug> passes its
+// own).
+export function ResumeView({
+  header,
+  site,
+  blocks,
+  mode = 'web',
+  highlightBlockIds = null,
+  pdfVersion = null,
+  pdfPath = PDF_URL_PATH,
+}) {
   const isPreview = mode === 'preview';
   const colors = normalizeSiteColors(site);
   const pillPad = PILL_PADDING_CSS[normalizePillPadding(site)];
@@ -133,7 +143,7 @@ export function ResumeView({ header, site, blocks, mode = 'web', highlightBlockI
         header={header}
         showActions={mode === 'web'}
         onPrint={() => window.print()}
-        pdfHref={mode === 'web' ? pdfUrl(pdfVersion) : null}
+        pdfHref={mode === 'web' ? pdfUrl(pdfVersion, pdfPath) : null}
         template={normalizeTemplate(site)}
       />
       {LayoutComponent ? (
