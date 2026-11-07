@@ -14,7 +14,7 @@ import {
   wordDiff,
 } from './aiReview.js';
 
-function DiffText({ before, after }) {
+export function DiffText({ before, after }) {
   return (
     <span className="ed-diff">
       {wordDiff(before, after).map((run, i) =>

@@ -3,6 +3,9 @@ import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from 
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { moveParagraph } from '../letters/letterParts.js';
+import { letterTargetKey } from '../letters/letterAi.js';
+import { LetterDraftPanel, ParagraphAiPanel } from './LetterAiPanels.jsx';
+import { useRowPanelOpen } from './useRowPanelOpen.js';
 
 // How long a keyboard-move announcement stays in the live region (as in
 // ExperienceForm).
@@ -12,8 +15,10 @@ const LIVE_MESSAGE_MS = 3000;
 // field of its data (see server/src/coverLetterFields.js, and
 // mcp/blockSchemas.js's COVER_LETTER_SCHEMA, which documents the same
 // fields). `onChange(letter)` gets the whole letter back, { title, data }.
-// `headerName` is what a blank signature signs with.
-export function CoverLetterForm({ letter, headerName, onChange }) {
+// `headerName` is what a blank signature signs with. `ai` (null without an
+// AI provider) is the page's AI writing for this letter; see
+// LetterAiPanels.jsx.
+export function CoverLetterForm({ letter, headerName, onChange, ai = null }) {
   const data = letter.data || {};
   const paragraphs = Array.isArray(data.paragraphs) ? data.paragraphs : [];
   const setData = (patch) => onChange({ ...letter, data: { ...data, ...patch } });
@@ -51,11 +56,12 @@ export function CoverLetterForm({ letter, headerName, onChange }) {
       </label>
 
       <div className="ed-block-style-heading">Letter</div>
+      {ai && <LetterDraftPanel letter={letter} ai={ai} />}
       <label className="ed-field">
         <span>Salutation</span>
         <input className="ed-input" placeholder="Dear Hiring Manager," {...field('salutation')} />
       </label>
-      <Paragraphs paragraphs={paragraphs} onChange={(next) => setData({ paragraphs: next })} />
+      <Paragraphs letter={letter} paragraphs={paragraphs} onChange={(next) => setData({ paragraphs: next })} ai={ai} />
       <div className="ed-field-row">
         <label className="ed-field">
           <span>Closing</span>
@@ -74,7 +80,7 @@ export function CoverLetterForm({ letter, headerName, onChange }) {
 // with Up/Down on it. Paragraphs have no ids, so rows are keyed by index; a
 // drop only applies if the list is still the one the drag picked up
 // (moveParagraph), so an edit landing mid-drag can't move the wrong one.
-function Paragraphs({ paragraphs, onChange }) {
+function Paragraphs({ letter, paragraphs, onChange, ai }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const snapshot = useRef(null);
   const [liveMessage, setLiveMessage] = useState('');
@@ -136,6 +142,8 @@ function Paragraphs({ paragraphs, onChange }) {
               onText={(value) => onChange(paragraphs.map((p, j) => (j === i ? value : p)))}
               onRemove={() => onChange(paragraphs.filter((_, j) => j !== i))}
               onMove={(delta) => moveBy(i, delta)}
+              aiPanel={ai && ((props) => <ParagraphAiPanel letter={letter} index={i} ai={ai} {...props} />)}
+              aiEntry={ai?.entries[letterTargetKey({ kind: 'paragraph', index: i })] || null}
             />
           ))}
         </SortableContext>
@@ -147,8 +155,13 @@ function Paragraphs({ paragraphs, onChange }) {
   );
 }
 
-function ParagraphRow({ id, index, text, count, onText, onRemove, onMove }) {
+// `aiPanel`/`aiEntry`: the paragraph's AI rewrite panel and its request, as
+// for ExperienceForm's bullets; the panel opens when a request lands here
+// and the ✨ button toggles it (useRowPanelOpen).
+function ParagraphRow({ id, index, text, count, onText, onRemove, onMove, aiPanel, aiEntry }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const [aiOpen, setAiOpen] = useRowPanelOpen(aiEntry);
+  const aiShown = Boolean(aiPanel && aiOpen);
 
   function handleKeyDown(e) {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
@@ -161,33 +174,48 @@ function ParagraphRow({ id, index, text, count, onText, onRemove, onMove }) {
   return (
     <div
       ref={setNodeRef}
-      className={`ed-bullet-row${isDragging ? ' ed-bullet-dragging' : ''}`}
+      className={isDragging ? 'ed-bullet-dragging' : undefined}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
-      <button
-        type="button"
-        ref={setActivatorNodeRef}
-        className="ed-drag-handle"
-        data-paragraph-handle={index}
-        {...attributes}
-        {...listeners}
-        onKeyDown={handleKeyDown}
-        aria-label={`Paragraph ${index + 1} of ${count}: drag to reorder, or press Up or Down to move`}
-        aria-keyshortcuts="ArrowUp ArrowDown"
-        title="Drag to reorder, or press Up/Down to move"
-      >
-        ⠿
-      </button>
-      <textarea
-        className="ed-textarea"
-        rows={4}
-        value={text}
-        aria-label={`Paragraph ${index + 1}`}
-        onChange={(e) => onText(e.target.value)}
-      />
-      <button type="button" className="ed-icon-btn" onClick={onRemove} aria-label={`Remove paragraph ${index + 1}`}>
-        ✕
-      </button>
+      <div className="ed-bullet-row">
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          className="ed-drag-handle"
+          data-paragraph-handle={index}
+          {...attributes}
+          {...listeners}
+          onKeyDown={handleKeyDown}
+          aria-label={`Paragraph ${index + 1} of ${count}: drag to reorder, or press Up or Down to move`}
+          aria-keyshortcuts="ArrowUp ArrowDown"
+          title="Drag to reorder, or press Up/Down to move"
+        >
+          ⠿
+        </button>
+        <textarea
+          className="ed-textarea"
+          rows={4}
+          value={text}
+          aria-label={`Paragraph ${index + 1}`}
+          onChange={(e) => onText(e.target.value)}
+        />
+        <button type="button" className="ed-icon-btn" onClick={onRemove} aria-label={`Remove paragraph ${index + 1}`}>
+          ✕
+        </button>
+        {aiPanel && (
+          <button
+            type="button"
+            className={`ed-icon-btn${aiShown ? ' ed-icon-btn-active' : ''}`}
+            onClick={() => setAiOpen((open) => !open)}
+            aria-label={`Rewrite paragraph ${index + 1} with AI`}
+            aria-expanded={aiShown}
+            title="Rewrite this paragraph with AI"
+          >
+            ✨
+          </button>
+        )}
+      </div>
+      {aiShown && aiPanel({ onClose: () => setAiOpen(false) })}
     </div>
   );
 }

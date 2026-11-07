@@ -21,8 +21,9 @@ exact same components.
 - **Download PDF** — server-generates a real PDF on demand via headless
   Chromium, from the same markup as the print view.
 - **Cover letters** — private letters kept next to each resume, drawn under
-  its header in its look, downloadable as PDF or copied as plain text (see
-  "Cover letters" below).
+  its header in its look, downloadable as PDF or copied as plain text, and
+  optionally drafted with AI from the resume and a job posting (see "Cover
+  letters" below).
 
 ## How content is modeled
 
@@ -185,6 +186,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/resumes/:id/cover-letters` | `{ title?, data? }` (an empty letter when `data` is left out) or `{ title?, copyFrom: <letter id> }` (a copy of another of its letters). `data`'s keys are type-checked (`paragraphs` must be an array of strings); an unknown field is a 400 |
 | `GET/PUT/DELETE /api/resumes/:id/cover-letters/:letterId` | one letter. `PUT` takes `{ title?, data? }`, `data` replaced whole. A letter of another resume is a 404 |
 | `GET /api/resumes/:id/cover-letters/:letterId/letter.pdf` | the letter as a PDF download, rendered on request and reused until the letter or its resume's header or site settings change |
+| `POST /api/resumes/:id/cover-letters/:letterId/rewrite` | `{ data?, target?, instruction?, brief? }` → `{ proposal }` for review; saves nothing. `target` is `{ kind: 'letter' }` (default: salutation, body and closing) or `{ kind: 'paragraph', index }`. A letter with an empty body is drafted without an instruction; otherwise an instruction or a `brief` is required. Shares `ai/rewrite`'s rate limits (a request with a `brief` counts as tailoring) |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`) for that resume. The unprefixed ones act on whichever resume is the default |
 | `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, photo, photoUrl, sections }`, each section `{ id, kind, title, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url }]`), `links` (`links`) or `resumes` (`cards: [{ resumeId, label, blurb }]`)), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card can link to (public and published). Before the first save the draft is built from the default resume's published header |
 | `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL that isn't `http`/`https`/`mailto`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card for an unknown resume are all a 400 |
@@ -435,6 +437,24 @@ application forms that only take a text box. Copying a resume doesn't
 copy its letters; deleting one deletes them. MCP clients can write them
 too (`create_cover_letter` and friends), from a job posting of their own.
 
+With an AI provider set up (see [AI rewrites](#ai-rewrites)), **Draft with
+AI** writes the salutation, body and closing from the resume, and **Rewrite
+letter with AI** reworks them once there's a body ("Shorter", "More
+formal", "Warmer", or your own instruction). Tick **Write it for a job or
+audience** to give it a brief; it starts as the one the resume was
+tailored for, and changes there are only sent, never saved. Each
+paragraph's ✨ button rewrites just that paragraph, with the rest of the
+letter as context (on a tailored resume, tailored to its brief unless you
+untick it). As with block rewrites, nothing changes until you accept: the
+preview shows the proposal outlined, a paragraph rewrite follows its
+paragraph when you move it, and one whose paragraph you've edited since
+warns before replacing it. What's sent: the letter, the brief, your
+header's name and title (not your contact details), and the resume as it
+stands in the editor, less every section and bullet hidden on both web
+and print. The AI is told not to claim anything the resume doesn't say,
+and to leave placeholders like `[why this company]` for what only you
+know. The recipient, date, address and signature are never changed.
+
 ### Caching and CDNs
 
 The server states a cache policy on everything the public can fetch, so a
@@ -548,7 +568,8 @@ becomes optional.
 - Only the block's prose is sent and can change. Dates, URLs,
   company/institution names, visibility flags, and block styling are
   always kept from the original. Education blocks aren't rewritable.
-  Your header and contact details are never sent.
+  Your header and contact details are never sent (a cover letter's AI
+  writing sends your name and title; see [Cover letters](#cover-letters)).
 - Bullets hidden from web or print **are** sent along with the rest of
   their block, so the AI can rewrite them too. The rewrite panel says how
   many hidden bullets a block has before you send it. Don't rely on

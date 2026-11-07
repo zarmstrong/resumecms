@@ -189,6 +189,11 @@ function experienceInput(data, target) {
 
 const customItemInput = (item) => ({ heading: item.heading || '', body: item[bodyField(item)] || '' });
 
+// A stored custom item as { heading, body }, whatever its body type (and
+// legacy shape). For prompts that read a custom section as context, like
+// a cover letter's (letterWriting.js).
+export const customItemProse = (item) => customItemInput(normalizeCustomItem(item));
+
 // Splits a block's data into what the model may rewrite (`editable`) and
 // what it should only read for context (`context`). `target` must already
 // be normalized (normalizeTarget).
@@ -279,7 +284,7 @@ export function outputSchema(type, target = BLOCK_TARGET) {
 // structural change it wasn't allowed to make).
 export class RewriteShapeError extends Error {}
 
-function requireString(value, field) {
+export function requireString(value, field) {
   if (typeof value !== 'string') throw new RewriteShapeError(`AI response is missing "${field}"`);
   return value.trim();
 }
@@ -287,7 +292,7 @@ function requireString(value, field) {
 // A field the model left alone keeps its stored value exactly. Otherwise the
 // trim above would show stray whitespace as a change, and a field the block
 // never had would be saved as an empty string.
-function rewritten(original, value, field) {
+export function rewritten(original, value, field) {
   const next = requireString(value, field);
   return next === String(original ?? '').trim() ? original : next;
 }

@@ -92,8 +92,9 @@ function positionsOf(data, kind) {
 const sliceJson = (type, data, target) => JSON.stringify(targetSlice(type, data, target) ?? null);
 
 // Longest-common-subsequence pairs [i, j] (in order) between two lists of
-// strings. Lists here are a block's bullets or items, so they're short.
-function lcsPairs(a, b) {
+// strings. Lists here are a block's bullets or items (or a cover letter's
+// paragraphs, letters/letterAi.js), so they're short.
+export function lcsPairs(a, b) {
   const table = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
   for (let i = a.length - 1; i >= 0; i--) {
     for (let j = b.length - 1; j >= 0; j--) {

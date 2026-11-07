@@ -2,6 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, resumeApi } from '../api.js';
 import { CoverLetterView } from '../letters/CoverLetterView.jsx';
 import { letterText, letterToday } from '../letters/letterParts.js';
+import {
+  applyLetterProposal,
+  isLetterProposalStale,
+  letterProposalKey,
+  letterSlice,
+  letterTargetKey,
+  previewLetterData,
+  previewedLetterProposals,
+  relocateParagraph,
+} from '../letters/letterAi.js';
 import { CoverLetterForm } from './CoverLetterForm.jsx';
 import { ResumeSelect } from './ResumeSelect.jsx';
 import { createSaveQueue } from './saveQueue.js';
@@ -18,6 +28,11 @@ const letterKey = (id) => `letter:${id}`;
 // waiting. Letters aren't drafted or published, so there's no Publish: a
 // saved edit is the letter. The preview uses the resume's draft header and
 // look, as the PDF does.
+//
+// With an AI provider set up, a letter can be drafted or rewritten whole,
+// or a paragraph at a time (letters/letterAi.js). Proposals are held here,
+// per letter and target, shown in the preview, and saved through the same
+// save queue when accepted; nothing reaches the server before that.
 export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }) {
   const rapi = useMemo(() => resumeApi(resume.id), [resume.id]);
   const saves = useMemo(() => createSaveQueue({ delayMs: SAVE_DEBOUNCE_MS }), []);
@@ -36,6 +51,18 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
   // Letters deleted here: a save of one still in flight then fails, and
   // that's no news.
   const deletedRef = useRef(new Set());
+  const [aiSettings, setAiSettings] = useState(null);
+  // Open AI requests and proposals, by letterProposalKey(letterId, target):
+  // { letterId, target, instruction, brief, requestId, status: 'loading' |
+  // 'ready' | 'error', proposal, error }.
+  const [aiEntries, setAiEntries] = useState({});
+  // The request each key is waiting on, so a newer one (or a discard)
+  // supersedes a response still in flight.
+  const aiRequestsRef = useRef({});
+  const aiCounterRef = useRef(0);
+  // The letters as last rendered, for a request reading the data to send.
+  const lettersRef = useRef(letters);
+  lettersRef.current = letters;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -47,6 +74,11 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
         setSite(s);
       })
       .catch((err) => mountedRef.current && setLoadError(err.message));
+    // Without them there's no AI writing; the letters work as before.
+    api
+      .getAiSettings()
+      .then(({ ai }) => mountedRef.current && setAiSettings(ai))
+      .catch((err) => console.error('Failed to load AI settings', err));
     return () => {
       mountedRef.current = false;
       clearTimeout(noticeTimer.current);
@@ -136,8 +168,112 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
       }
     }
     if (!mountedRef.current) return;
+    dropAi((entry) => entry.letterId === letter.id);
     setLetters((list) => list.filter((l) => l.id !== letter.id));
   }
+
+  function dropAi(match) {
+    for (const [key, request] of Object.entries(aiRequestsRef.current)) {
+      if (match(request)) delete aiRequestsRef.current[key];
+    }
+    setAiEntries((prev) => {
+      const next = Object.fromEntries(Object.entries(prev).filter(([, entry]) => !match(entry)));
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }
+
+  // Sends what's on screen for the letter (its save may still be waiting),
+  // and keeps the result unless a newer request for the same spot, or a
+  // discard, came since.
+  async function handleAiRequest(letterId, target, { instruction, brief }) {
+    const letter = lettersRef.current.find((l) => l.id === letterId);
+    if (!letter) return;
+    const key = letterProposalKey(letterId, target);
+    const id = ++aiCounterRef.current;
+    aiRequestsRef.current[key] = { id, letterId, target };
+    const settle = (patch) => {
+      if (aiRequestsRef.current[key]?.id !== id || !mountedRef.current) return;
+      if (patch.status !== 'loading') delete aiRequestsRef.current[key];
+      setAiEntries((prev) => ({
+        ...prev,
+        [key]: { letterId, target, instruction, brief, requestId: id, proposal: null, error: null, ...patch },
+      }));
+    };
+    settle({ status: 'loading' });
+    try {
+      const { proposal } = await rapi.rewriteCoverLetter(letterId, { data: letter.data, target, instruction, brief });
+      settle({ status: 'ready', proposal });
+    } catch (err) {
+      settle({ status: 'error', error: err.message || 'AI writing failed' });
+    }
+  }
+
+  function handleAiReject(letterId, target) {
+    const key = letterProposalKey(letterId, target);
+    dropAi((entry) => letterProposalKey(entry.letterId, entry.target) === key);
+  }
+
+  // True once the proposal is applied (and on its way to the server).
+  function handleAiAccept(letterId, target) {
+    const entry = aiEntries[letterProposalKey(letterId, target)];
+    const letter = letters.find((l) => l.id === letterId);
+    if (!letter || !entry?.proposal) {
+      handleAiReject(letterId, target);
+      return false;
+    }
+    const { proposal } = entry;
+    if (letterSlice(letter.data, proposal.target) === null) {
+      window.alert("The paragraph this rewrite was for is no longer there, so it can't be applied.");
+      handleAiReject(letterId, target);
+      return false;
+    }
+    if (
+      isLetterProposalStale(proposal, letter.data) &&
+      !window.confirm(
+        proposal.target.kind === 'paragraph'
+          ? "You've edited this paragraph since the rewrite was written. Replace your edits with the rewrite?"
+          : "You've edited the letter since this was written. Replace its salutation, body and closing with it?"
+      )
+    ) {
+      return false;
+    }
+    handleChange({ ...letter, data: applyLetterProposal(letter.data, proposal) });
+    handleAiReject(letterId, target);
+    return true;
+  }
+
+  // Keeps a paragraph proposal on its paragraph when paragraphs move (a
+  // drag, a removal, one added above): each change to a letter is checked
+  // against the data the proposal was last placed against (anchorData),
+  // which then advances, so every check resolves a single change (see
+  // relocateParagraph). One whose paragraph is gone is dropped.
+  useEffect(() => {
+    if (!letters) return;
+    const moves = [];
+    const dropped = [];
+    for (const [key, entry] of Object.entries(aiEntries)) {
+      if (entry.status !== 'ready' || entry.target.kind !== 'paragraph') continue;
+      const letter = letters.find((l) => l.id === entry.letterId);
+      if (!letter || (entry.proposal.anchorData ?? entry.proposal.baseData) === letter.data) continue;
+      const target = relocateParagraph(entry.proposal, letter.data);
+      if (target === null) dropped.push(key);
+      else moves.push({ key, entry, target, anchorData: letter.data });
+    }
+    if (!moves.length && !dropped.length) return;
+    setAiEntries((prev) => {
+      const next = { ...prev };
+      for (const key of dropped) delete next[key];
+      for (const { key } of moves) delete next[key];
+      for (const { entry, target, anchorData } of moves) {
+        const newKey = letterProposalKey(entry.letterId, target);
+        // Two proposals can't share a paragraph; the one already there wins.
+        if (next[newKey]) continue;
+        const origin = entry.proposal.origin || entry.proposal.target;
+        next[newKey] = { ...entry, target, proposal: { ...entry.proposal, target, origin, anchorData } };
+      }
+      return next;
+    });
+  }, [letters, aiEntries]);
 
   // Rendered by the server on request, so it's fetched rather than linked:
   // a render takes a few seconds, and an error is shown here instead of
@@ -196,6 +332,31 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
 
   // The one picked, or the first (none picked yet, or it was deleted).
   const selected = letters.find((l) => l.id === selectedId) || letters[0] || null;
+
+  // The selected letter's AI writing, for its form and the preview.
+  const selectedEntries = selected
+    ? Object.fromEntries(
+        Object.values(aiEntries)
+          .filter((entry) => entry.letterId === selected.id)
+          .map((entry) => [letterTargetKey(entry.target), entry])
+      )
+    : {};
+  const readyProposals = Object.values(selectedEntries)
+    .filter((entry) => entry.status === 'ready')
+    .map((entry) => entry.proposal);
+  const previewed = selected ? previewedLetterProposals(selected.data, readyProposals) : [];
+  const ai =
+    selected && aiSettings?.available
+      ? {
+          entries: selectedEntries,
+          previewedKeys: new Set(previewed.map((p) => letterTargetKey(p.target))),
+          tailoring: resume.tailoring || null,
+          briefLimits: aiSettings.briefLimits,
+          onRequest: (target, request) => handleAiRequest(selected.id, target, request),
+          onAccept: (target) => handleAiAccept(selected.id, target),
+          onReject: (target) => handleAiReject(selected.id, target),
+        }
+      : null;
 
   return (
     <div className="ed-shell">
@@ -268,7 +429,7 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
                     Delete
                   </button>
                 </div>
-                <CoverLetterForm key={selected.id} letter={selected} headerName={header?.name} onChange={handleChange} />
+                <CoverLetterForm key={selected.id} letter={selected} headerName={header?.name} onChange={handleChange} ai={ai} />
               </div>
             </section>
           )}
@@ -276,9 +437,20 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
         <div className="ed-right-pane" style={{ borderLeft: '1px solid var(--line)' }}>
           {selected ? (
             <>
-              <div className="ed-preview-label">Preview — this resume's draft header, colors and fonts</div>
+              <div className="ed-preview-label">
+                {previewed.length
+                  ? 'Previewing the AI’s suggestion (outlined): not saved until you accept it'
+                  : "Preview — this resume's draft header, colors and fonts"}
+              </div>
               <div className="ed-preview-frame">
-                <CoverLetterView header={header} site={site} letter={selected.data} today={letterToday()} mode="preview" />
+                <CoverLetterView
+                  header={header}
+                  site={site}
+                  letter={previewed.length ? previewLetterData(selected.data, previewed) : selected.data}
+                  today={letterToday()}
+                  mode="preview"
+                  highlighted={previewed.length > 0}
+                />
               </div>
             </>
           ) : (

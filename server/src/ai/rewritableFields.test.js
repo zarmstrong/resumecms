@@ -11,6 +11,7 @@ import {
   targetKey,
   textSimilarity,
 } from './rewritableFields.js';
+import { letterOutputSchema } from './letterWriting.js';
 
 const bullet = (text, flags = {}, children = []) => ({ text, visibleWeb: true, visiblePrint: true, children, ...flags });
 
@@ -258,6 +259,8 @@ test('output schemas satisfy strict structured-output rules', () => {
   check(outputSchema('experience', { kind: 'bullet', path: [0] }), 'experience/bullet [0]');
   check(outputSchema('experience', { kind: 'bullet', path: [0, 0] }), 'experience/bullet [0,0]');
   check(outputSchema('custom', { kind: 'item', index: 0 }), 'custom/item');
+  check(letterOutputSchema(), 'cover letter');
+  check(letterOutputSchema({ kind: 'paragraph', index: 0 }), 'cover letter/paragraph');
 });
 
 test('output schemas list only the target\'s fields', () => {

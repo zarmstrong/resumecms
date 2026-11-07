@@ -123,6 +123,15 @@ export function resumeApi(resumeId) {
     updateCoverLetter: (id, patch) =>
       request(`${prefix}/cover-letters/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(patch) }),
     deleteCoverLetter: (id) => request(`${prefix}/cover-letters/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    // AI writing for a letter (letters/letterAi.js): a proposal for the
+    // whole letter or one paragraph (`target`), written from `data` (what
+    // the editor shows) and the resume; nothing is saved. `brief` is
+    // optional; without one, a letter with a body needs an instruction.
+    rewriteCoverLetter: (id, { data, target, instruction, brief }) =>
+      request(`${prefix}/cover-letters/${encodeURIComponent(id)}/rewrite`, {
+        method: 'POST',
+        body: JSON.stringify({ data, target, instruction, brief: brief || undefined }),
+      }),
     // Rendered on request (a cached render when nothing changed).
     coverLetterPdfPath: (id) => `${BASE}${prefix}/cover-letters/${encodeURIComponent(id)}/letter.pdf`,
   };
