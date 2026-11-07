@@ -10,7 +10,9 @@ import './letter.css';
 // it: that arranges blocks, and a letter has none. `letter` is the
 // letter's data, `today` the date a letter without one shows.
 // mode: 'print' (the PDF renderer's /print/letter) | 'preview' (the editor).
-export function CoverLetterView({ header, site, letter, today, mode = 'preview' }) {
+// `highlighted` (preview only) outlines the body while it shows an AI
+// proposal that isn't saved yet.
+export function CoverLetterView({ header, site, letter, today, mode = 'preview', highlighted = false }) {
   const { colors, style } = resumePageStyle(site);
   usePrintBackground(mode, colors.background);
   const parts = letterParts(letter, header, today);
@@ -18,7 +20,7 @@ export function CoverLetterView({ header, site, letter, today, mode = 'preview' 
   return (
     <div className={`r-page r-mode-${mode} r-letter`} style={style}>
       <HeaderBlock header={header} showActions={false} template={normalizeTemplate(site)} />
-      <div className="r-letter-body">
+      <div className={`r-letter-body${highlighted && mode === 'preview' ? ' r-block-ai-preview' : ''}`}>
         <p className="r-letter-date">{parts.date}</p>
         {parts.recipient.length > 0 && (
           <address className="r-letter-recipient">

@@ -10,6 +10,7 @@ import { AiError } from '../ai/providers.js';
 import { MAX_INSTRUCTION_LENGTH, rewriteBlock } from '../ai/rewrite.js';
 import { hasRewritableShape } from '../ai/rewritableFields.js';
 import { normalizeBrief, resumeOutline } from '../ai/brief.js';
+import { hasLetterShape, rewriteLetter } from '../ai/letterWriting.js';
 
 const router = Router();
 
@@ -150,6 +151,58 @@ async function rewrite(req, res, storeFor) {
     if (err instanceof AiError) return res.status(err.status).json({ error: err.message });
     console.error('AI rewrite failed:', err);
     res.status(500).json({ error: 'AI rewrite failed unexpectedly.' });
+  }
+}
+
+// A cover letter's AI writing (issue #71, letterWriting.js), at POST
+// /api/resumes/:resumeId/cover-letters/:letterId/rewrite: drafting the whole
+// letter (`target` omitted or { kind: 'letter' }) or rewriting one paragraph
+// ({ kind: 'paragraph', index }). Like a block rewrite it returns a
+// proposal and writes nothing, and `brief` is optional; it reads the
+// resume's draft blocks and header as context. Same two rate limiters, so
+// a draft with a brief counts as tailoring.
+export function letterRewriteHandlers(storeFor) {
+  return [rewriteLimiter, tailorLimiter, (req, res) => rewriteLetterRoute(req, res, storeFor)];
+}
+
+async function rewriteLetterRoute(req, res, storeFor) {
+  const { data, target } = req.body || {};
+  const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
+  let brief = null;
+  let letter;
+  let blocks;
+  let header;
+  try {
+    if (hasBrief(req)) brief = normalizeBrief(req.body.brief);
+    const resumeStore = storeFor(req);
+    letter = resumeStore.getCoverLetter(req.params.letterId);
+    blocks = resumeStore.listBlocks();
+    header = resumeStore.getHeader();
+  } catch (err) {
+    return sendError(res, err);
+  }
+
+  const settings = normalizeAiSettings(getSetting('ai'));
+  if (!publicAiSettings(settings).available) {
+    return res.status(409).json({ error: 'AI writing is not set up. Add an API key in Account Settings.' });
+  }
+
+  // As for a block: write from what the editor shows (its save may still
+  // be on its debounce), falling back to the stored letter when the copy
+  // sent is malformed, except under a paragraph target, which is an index
+  // into the copy sent.
+  const clientCopyUsable = hasLetterShape(data);
+  if (!clientCopyUsable && data !== undefined && target?.kind === 'paragraph') {
+    return res.status(400).json({ error: 'The letter sent with this rewrite is malformed. Reload and try again.' });
+  }
+  const baseData = clientCopyUsable ? data : letter.data;
+  try {
+    const proposal = await rewriteLetter({ data: baseData, header, blocks, instruction, settings, target, brief });
+    res.json({ proposal: { letterId: letter.id, baseData, ...proposal } });
+  } catch (err) {
+    if (err instanceof AiError) return res.status(err.status).json({ error: err.message });
+    console.error('AI cover letter writing failed:', err);
+    res.status(500).json({ error: 'AI writing failed unexpectedly.' });
   }
 }
 

@@ -21,7 +21,7 @@ test("every one of a resume's calls goes under /api/resumes/:id, the id escaped"
   const rapi = resumeApi('a b');
   // (coverLetterPdfPath only builds a link)
   const calls = Object.entries(rapi).filter(([name, value]) => typeof value === 'function' && name !== 'coverLetterPdfPath');
-  assert.ok(calls.length >= 17);
+  assert.ok(calls.length >= 18);
   for (const [, call] of calls) await call('x', {}, null, undefined, undefined);
   assert.equal(requests.length, calls.length);
   for (const { url } of requests) assert.ok(url.startsWith('/api/resumes/a%20b/'), url);

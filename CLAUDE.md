@@ -217,8 +217,25 @@ that endpoint 404s. The server sends the date to show (`letterToday()`,
 mirrored client-side in `letterParts.js`) so the PDF and its cache key
 agree. In the editor, `?page=letters` (with the resume's `?resume=`) mounts
 `CoverLettersPage` keyed by resume id, with its own save queue flushed
-before switching, Back, Duplicate, Download PDF and logout. AI drafting is
-not built yet.
+before switching, Back, Duplicate, Download PDF and logout.
+
+AI writing for a letter is `server/src/ai/letterWriting.js`, behind `POST
+…/cover-letters/:letterId/rewrite` (`letterRewriteHandlers()` in
+`routes/ai.js`, sharing its two rate limiters). It's a rewrite like a
+block's, apart from it: its own targets (`letter`: salutation, body and
+closing, drafted from scratch when the body is empty; `paragraph` by
+index), its own prompt, schema and merge, and it never touches recipient,
+date, address or signature. It reads the resume's draft blocks through
+`letterResumeContext()`, which leaves out every block and bullet hidden on
+both web and print (shown anywhere is enough), and the header's name and
+title only; keep both if you add fields. Its output schemas are in
+`rewritableFields.test.js`'s strict-mode check. Client-side,
+`letters/letterAi.js` mirrors the target key and holds the proposal
+helpers (`relocateParagraph()` follows a paragraph like `relocateTarget()`
+follows a bullet, reusing its `lcsPairs()`), `CoverLettersPage` holds the
+proposals by `(letterId, target)` and saves an accepted one through its
+save queue, and `editor/LetterAiPanels.jsx` has the two panels (the brief
+fields are `TailorModal.jsx`'s `BriefFields`).
 
 ### Landing page
 

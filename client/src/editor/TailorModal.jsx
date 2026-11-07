@@ -24,10 +24,11 @@ export function tailorCount(form, blocks) {
   return blocks ? tailorItems(blocks, form.types).length : null;
 }
 
-export function TailorFields({ form, onChange, limits, idPrefix, disabled = false }) {
+// The brief's own fields: who it's for, the posting and extra guidance.
+// Also used by a cover letter's AI draft (editor/LetterAiPanels.jsx), with
+// `form` holding just those three.
+export function BriefFields({ form, onChange, limits, idPrefix, disabled = false }) {
   const set = (key) => (e) => onChange({ ...form, [key]: e.target.value });
-  const toggle = (type) => (e) =>
-    onChange({ ...form, types: e.target.checked ? [...form.types, type] : form.types.filter((t) => t !== type) });
   return (
     <>
       <div className="ed-field">
@@ -73,6 +74,16 @@ export function TailorFields({ form, onChange, limits, idPrefix, disabled = fals
           disabled={disabled}
         />
       </div>
+    </>
+  );
+}
+
+export function TailorFields({ form, onChange, limits, idPrefix, disabled = false }) {
+  const toggle = (type) => (e) =>
+    onChange({ ...form, types: e.target.checked ? [...form.types, type] : form.types.filter((t) => t !== type) });
+  return (
+    <>
+      <BriefFields form={form} onChange={onChange} limits={limits} idPrefix={idPrefix} disabled={disabled} />
       <fieldset className="ed-field ed-tailor-types" disabled={disabled}>
         <legend>Sections to tailor</legend>
         {TAILOR_TYPES.map(({ type, label }) => (
