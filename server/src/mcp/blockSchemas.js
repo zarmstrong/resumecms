@@ -214,11 +214,42 @@ export const SITE_SCHEMA = {
   },
 };
 
+// The install's landing page (issue #70); landingFields.js checks it and
+// holds the caps.
+export const LANDING_SCHEMA = {
+  description:
+    'The optional home page at / (a singleton for the whole install, not part of any resume). Checked strictly on write: unknown keys, wrong types, over-long values and non-http/https/mailto links are a 400.',
+  properties: {
+    headline: { type: 'string', description: 'Usually your name' },
+    subheadline: { type: 'string' },
+    intro: { type: 'string', description: 'Plain text; a blank line starts a new paragraph' },
+    photo: { enum: ['resume', 'custom', 'none'], description: "'resume' = the default resume's published header photo" },
+    photoUrl: { type: 'string', description: "base64 data: URL (JPEG, PNG or WebP), used when photo is 'custom'" },
+    links: {
+      type: 'array',
+      items: { type: 'object', properties: HEADER_SCHEMA.properties.links.items.properties },
+    },
+    resumes: {
+      type: 'array',
+      description: 'Cards linking to resumes, in order; only public, published ones are shown',
+      items: {
+        type: 'object',
+        properties: {
+          resumeId: { type: 'string' },
+          label: { type: 'string', description: "Card title; '' uses the resume's published header title" },
+          blurb: { type: 'string' },
+        },
+      },
+    },
+  },
+};
+
 export const BLOCK_SCHEMAS = {
   common: COMMON,
   blocks: BLOCK_DATA_SCHEMAS,
   header: HEADER_SCHEMA,
   site: SITE_SCHEMA,
+  landing: LANDING_SCHEMA,
 };
 
 export function blockSchemaFor(type) {

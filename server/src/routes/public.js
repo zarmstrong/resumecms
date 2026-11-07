@@ -31,6 +31,24 @@ router.get('/resume', handle((req, res) => {
   res.json(published);
 }));
 
+// What `/` shows on this host (issue #70): the published landing page when
+// it's switched on and this host isn't one of a resume's domains (see the
+// store's landingForHost), otherwise the same resume /api/public/resume
+// would send. One request either way, so the page never shows the resume
+// first and then swaps to the landing page. Only `/` asks for this, and
+// it's never the PDF renderer's page (that one loads /print), so the
+// render cookie doesn't come into it.
+router.get('/home', handle((req, res) => {
+  res.set('Cache-Control', REVALIDATE);
+  res.vary(HOST_HEADERS);
+  const landing = store.landingForHost(req.hostname);
+  if (landing) {
+    res.json({ kind: 'landing', landing });
+    return;
+  }
+  res.json({ kind: 'resume', resume: store.forHost(req.hostname).getPublishedResume('web') });
+}));
+
 // A public, published resume by its link name, for /r/<slug>. Unlisted: no
 // page links to it, and X-Robots-Tag keeps it out of search results.
 router.get('/resumes/:slug', handle((req, res) => {

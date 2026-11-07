@@ -15,9 +15,11 @@ export function pickResume(resumes, requestedId) {
 // window.location (or anything with protocol, port and origin); a domain
 // keeps the editor's own scheme and port, which is what a dev server on
 // *.localhost needs and a production one (no port) doesn't notice.
-export function publicUrl(resume, location) {
+// `landingShown`: the landing page holds `/` (issue #70), so the default
+// resume is at /resume.
+export function publicUrl(resume, location, { landingShown = false } = {}) {
   if (!resume.publishedAt) return null;
-  if (resume.isDefault) return `${location.origin}/`;
+  if (resume.isDefault) return `${location.origin}/${landingShown ? 'resume' : ''}`;
   if (!resume.isPublic) return null;
   if (resume.hostnames?.length) {
     return `${location.protocol}//${resume.hostnames[0]}${location.port ? `:${location.port}` : ''}/`;
@@ -60,4 +62,14 @@ export function resumePatch(resume, form) {
   const isPublic = hostnames.length > 0 || form.isPublic;
   if (isPublic !== resume.isPublic) patch.isPublic = isPublic;
   return patch;
+}
+
+// The switcher's entry for the landing page (issue #70), next to the
+// resumes; a resume id is a UUID, so it can't collide.
+export const LANDING_PAGE = 'landing';
+
+// What the landing page's status means for visitors: whether `/` shows it
+// (on this, the main domain). `status` is { enabled, publishedAt }.
+export function landingShown(status) {
+  return Boolean(status?.enabled && status?.publishedAt);
 }

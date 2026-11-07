@@ -10,7 +10,8 @@ import { pdfUrl } from '../resume/pdfUrl.js';
 import { BLOCK_TYPE_LABELS, defaultDataForType } from './blockDefaults.js';
 import { createBlockReorderItems } from './blockDrag.js';
 import { createSaveQueue } from './saveQueue.js';
-import { publicUrl, resumeLabel } from './resumeLinks.js';
+import { publicUrl } from './resumeLinks.js';
+import { ResumeSelect } from './ResumeSelect.jsx';
 import { NewResumeModal, ResumeSettingsModal } from './ResumeModals.jsx';
 import { TailorModal } from './TailorModal.jsx';
 import { createTailorRun, tailorItems } from './tailorRun.js';
@@ -60,8 +61,18 @@ function timeAgo(iso) {
 // `onSwitch(id, list?, tailor?)` opens another resume, `onResumesChanged()`
 // reloads the list (resolving with it). `pendingTailor` is a tailoring run
 // to start once this has loaded (a copy made with "Tailor the copy"), and
-// `onPendingTailorTaken()` says it has been.
-export function EditorPage({ resume, resumes, onSwitch, pendingTailor, onPendingTailorTaken, onResumesChanged, onLogout }) {
+// `onPendingTailorTaken()` says it has been. `landingShown`: the landing
+// page holds `/` (issue #70), so the default resume is at /resume.
+export function EditorPage({
+  resume,
+  resumes,
+  onSwitch,
+  pendingTailor,
+  onPendingTailorTaken,
+  onResumesChanged,
+  landingShown = false,
+  onLogout,
+}) {
   const rapi = useMemo(() => resumeApi(resume.id), [resume.id]);
   const saves = useMemo(() => createSaveQueue({ delayMs: SAVE_DEBOUNCE_MS }), []);
   const [newResumeOpen, setNewResumeOpen] = useState(false);
@@ -701,25 +712,13 @@ export function EditorPage({ resume, resumes, onSwitch, pendingTailor, onPending
   if (loading) return <div className="ed-loading">Loading editor…</div>;
 
   const defaultResume = resumes.find((r) => r.isDefault) || resume;
-  const viewUrl = publicUrl(resume, window.location);
+  const viewUrl = publicUrl(resume, window.location, { landingShown });
 
   return (
     <div className="ed-shell" style={resizingPane ? { cursor: 'col-resize', userSelect: 'none' } : undefined}>
       <header className="ed-topbar">
         <div className="ed-resume-switcher">
-          <select
-            className="ed-input ed-resume-select"
-            aria-label="Resume"
-            value={resume.id}
-            onChange={(e) => handleSwitch(e.target.value)}
-            disabled={switching}
-          >
-            {resumes.map((r) => (
-              <option key={r.id} value={r.id}>
-                {resumeLabel(r)}
-              </option>
-            ))}
-          </select>
+          <ResumeSelect resumes={resumes} value={resume.id} onChange={handleSwitch} disabled={switching} />
           <button className="ed-btn ed-btn-ghost" onClick={() => setResumeSettingsOpen(true)} disabled={switching}>
             Resume settings
           </button>
@@ -1000,6 +999,7 @@ export function EditorPage({ resume, resumes, onSwitch, pendingTailor, onPending
         <ResumeSettingsModal
           resume={resume}
           defaultResume={defaultResume}
+          landingShown={landingShown}
           onChanged={onResumesChanged}
           onDeleted={handleResumeDeleted}
           onClose={() => setResumeSettingsOpen(false)}

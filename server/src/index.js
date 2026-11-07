@@ -11,6 +11,7 @@ import { mountClient } from './clientStatic.js';
 import aiRoutes from './routes/ai.js';
 import authRoutes from './routes/auth.js';
 import blockRoutes from './routes/blocks.js';
+import landingRoutes from './routes/landing.js';
 import mcpRoutes from './routes/mcp.js';
 import publicRoutes from './routes/public.js';
 import pdfRoutes from './routes/pdf.js';
@@ -51,17 +52,18 @@ app.use(
 
 // NOTE: mount order matters here. Express matches app.use() by path prefix,
 // so more specific routes ('/api/public', '/api/auth/totp', '/api/ai',
-// '/api/resumes') must be
+// '/api/resumes', '/api/landing') must be
 // registered before the broader '/api' mount below — otherwise those
 // requests would first hit blockRoutes' unconditional requireAuth
 // middleware (which runs for anything under '/api' regardless of whether a
 // route further down actually matches) and get rejected there instead.
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/totp', totpRoutes); // /api/auth/totp/status, /setup, /confirm, /disable (auth-gated)
-app.use('/api/public', publicRoutes); // /api/public/resume, /api/public/resumes/:slug
+app.use('/api/public', publicRoutes); // /api/public/resume, /api/public/home, /api/public/resumes/:slug
 app.use('/api/public', pdfRoutes); // /api/public/resume.pdf, /api/public/resumes/:slug/resume.pdf
 app.use('/api/ai', aiRoutes); // /api/ai/settings, /api/ai/rewrite (auth-gated)
 app.use('/api/resumes', resumeRoutes); // /api/resumes[/:id], plus every editor route under /api/resumes/:id/ (auth-gated)
+app.use('/api/landing', landingRoutes); // /api/landing, /status, /publish, /discard-draft, /enabled (auth-gated)
 app.use('/api', blockRoutes); // /api/header, /api/site, /api/blocks... (auth-gated)
 app.use('/api', publishRoutes); // /api/publish, /api/publish/status, /api/discard-draft (auth-gated)
 

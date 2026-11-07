@@ -1,0 +1,132 @@
+/* The landing page (issue #70). Takes its colors and fonts from the default
+   resume's site settings through the same --r-* properties resume.css uses. */
+.l-page {
+  min-height: 100vh;
+  font-family: var(--font-resume);
+  font-size: var(--r-font-size, 16px);
+  color: var(--r-text, var(--ink));
+  background: var(--r-bg, var(--panel));
+  line-height: 1.55;
+}
+
+.l-preview {
+  min-height: 100%;
+}
+
+.l-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 72px 24px 96px;
+}
+
+.l-hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.l-photo {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.l-headline {
+  font-family: var(--r-name-font, inherit);
+  font-size: 2.5em;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  margin: 0;
+}
+
+.l-subheadline {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.2em;
+  color: var(--r-accent, var(--slate));
+  margin: 6px 0 0;
+}
+
+.l-intro {
+  margin: 0 0 1em;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.l-links {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  padding: 0;
+  margin: 28px 0 40px;
+}
+
+.l-links a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);
+  overflow-wrap: anywhere;
+}
+
+.l-links a:hover {
+  border-bottom-color: var(--r-accent, var(--ink));
+}
+
+.l-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.l-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 18%, transparent);
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.l-card:hover,
+.l-card:focus-visible {
+  border-color: var(--r-accent, var(--ink));
+  transform: translateY(-1px);
+}
+
+.l-card-label {
+  font-weight: 600;
+  font-size: 1.1em;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-card-blurb {
+  font-size: 0.95em;
+}
+
+.l-card-cta {
+  margin-top: auto;
+  padding-top: 6px;
+  font-size: 0.9em;
+  color: var(--r-accent, var(--slate));
+}
+
+@media (max-width: 560px) {
+  .l-main {
+    padding: 40px 16px 64px;
+  }
+  .l-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .l-headline {
+    font-size: 2em;
+  }
+}

@@ -16,10 +16,12 @@ const EXPECTED_TOOLS = [
   'delete_block',
   'delete_resume',
   'discard_draft',
+  'discard_landing_draft',
   'get_block',
   'get_block_schemas',
   'get_draft',
   'get_header',
+  'get_landing_page',
   'get_publish_status',
   'get_published_resume',
   'get_resume',
@@ -28,14 +30,18 @@ const EXPECTED_TOOLS = [
   'list_resumes',
   'move_block',
   'publish',
+  'publish_landing_page',
   'reorder_blocks',
+  'set_landing_page_enabled',
   'update_block',
   'update_header',
+  'update_landing_page',
   'update_resume',
   'update_site_settings',
 ];
 
 const RESUME_TOOLS = ['create_resume', 'delete_resume', 'get_resume', 'list_resumes', 'update_resume'];
+const LANDING_TOOLS = ['discard_landing_draft', 'get_landing_page', 'publish_landing_page', 'set_landing_page_enabled', 'update_landing_page'];
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -130,6 +136,13 @@ function fakeStore() {
     publish: async () => { calls.push(['publish']); return { publishedAt: '2026-01-01T00:00:00.000Z' }; },
     discardDraft: () => { calls.push(['discardDraft']); return { header, site, blocks: ordered() }; },
     getPublishedResume: (mode) => ({ header, site, blocks: [], mode }),
+    getLanding: () => ({ headline: 'Zed' }),
+    getLandingStatus: () => ({ enabled: false, publishedAt: null, isDirty: false }),
+    getLandingContext: () => ({ photoUrl: '', site, resumes: [] }),
+    setLanding: (patch, opts) => { calls.push(['setLanding', patch, opts]); return { headline: 'Zed', ...patch }; },
+    publishLanding: () => { calls.push(['publishLanding']); return { enabled: false, publishedAt: '2026-01-01T00:00:00.000Z', isDirty: false }; },
+    discardLandingDraft: () => { calls.push(['discardLandingDraft']); return { headline: 'Zed' }; },
+    setLandingEnabled: (enabled) => { calls.push(['setLandingEnabled', enabled]); return { enabled, publishedAt: null, isDirty: false }; },
   };
 }
 
@@ -338,14 +351,14 @@ test('every tool call leaves an audit log line', async (t) => {
   }
 });
 
-test('every content tool takes an optional resumeId; the resume tools and get_block_schemas do not', async (t) => {
+test('every content tool takes an optional resumeId; the resume and landing page tools and get_block_schemas do not', async (t) => {
   const { client, close } = await connect(fakeStore());
   t.after(close);
   const { tools } = await client.listTools();
   for (const tool of tools) {
     const { properties = {}, required = [] } = tool.inputSchema;
-    if (tool.name === 'get_block_schemas') {
-      assert.equal(properties.resumeId, undefined);
+    if (tool.name === 'get_block_schemas' || LANDING_TOOLS.includes(tool.name)) {
+      assert.equal(properties.resumeId, undefined, tool.name);
     } else if (RESUME_TOOLS.includes(tool.name)) {
       const takesOne = !['list_resumes', 'create_resume'].includes(tool.name);
       assert.equal(required.includes('resumeId'), takesOne, tool.name);
@@ -435,4 +448,35 @@ test('the resume tools hand the store exactly what was sent', async (t) => {
 
   assert.deepEqual((await call('delete_resume', { resumeId: 'sales' })).json, { deleted: 'sales' });
   assert.deepEqual(store.calls.at(-1), ['deleteResume', 'sales']);
+});
+
+test('landing page tools: merge-update, publish, discard, enable', async (t) => {
+  const store = fakeStore();
+  const { call, close } = await connect(store);
+  t.after(close);
+
+  const got = (await call('get_landing_page')).json;
+  assert.deepEqual(Object.keys(got).sort(), ['context', 'landing', 'status']);
+
+  const links = [{ type: 'github', label: 'gh', url: 'https://github.com/zed' }];
+  await call('update_landing_page', { headline: 'Hi', intro: null, links });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi', intro: null, links }, { merge: true }]);
+  // a resumeId isn't a landing page field (the page belongs to the install)
+  await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi' }, { merge: true }]);
+
+  const callsBefore = store.calls.length;
+  const nothing = await call('update_landing_page', {});
+  assert.match(nothing.text, /\[400\] Nothing to update/);
+  assert.equal(store.calls.length, callsBefore);
+  assert.equal((await call('update_landing_page', { photo: 'gravatar' })).isError, true);
+
+  assert.ok((await call('publish_landing_page')).json.publishedAt);
+  assert.deepEqual((await call('discard_landing_draft')).json, { landing: { headline: 'Zed' } });
+  assert.equal((await call('set_landing_page_enabled', { enabled: true })).json.enabled, true);
+  assert.deepEqual(store.calls.at(-1), ['setLandingEnabled', true]);
+  assert.equal((await call('set_landing_page_enabled', {})).isError, true);
+
+  const schemas = (await call('get_block_schemas')).json;
+  assert.ok(schemas.landing.properties.resumes);
 });
