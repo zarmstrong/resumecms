@@ -181,3 +181,10 @@ a.l-item-title:hover {
     font-size: 2em;
   }
 }
+
+/* The editor's preview: a part showing an AI suggestion not saved yet (the
+   resume preview's .r-block-ai-preview). */
+.l-ai-preview {
+  outline: 2px dashed #2f6f4e;
+  outline-offset: 4px;
+}

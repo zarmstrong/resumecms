@@ -3,7 +3,8 @@
 // resolveLanding() in server/src/landingFields.js (which is what the public
 // site actually gets); `context` is the `context` GET /api/landing returns:
 // { photoUrl, site, resumes: [{ id, href, title }] }, the resumes a card can
-// link to right now.
+// link to right now. With `withIds`, each section keeps its id, which
+// the server never sends: the editor's preview outlines a section by it.
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:'];
 
@@ -15,7 +16,7 @@ function isSafeUrl(url) {
   }
 }
 
-export function resolveLanding(landing, context) {
+export function resolveLanding(landing, context, { withIds = false } = {}) {
   const targets = new Map((context?.resumes || []).map((r) => [r.id, r]));
   const photoUrl = landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context?.photoUrl || '' : '';
   return {
@@ -24,7 +25,7 @@ export function resolveLanding(landing, context) {
     photoUrl,
     sections: landing.sections.flatMap((section) => {
       const shown = resolveSection(section, targets);
-      return shown ? [{ kind: section.kind, title: section.title, ...shown }] : [];
+      return shown ? [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...shown }] : [];
     }),
     site: context?.site ?? null,
   };

@@ -3,6 +3,7 @@ import { store } from '../store.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { handle } from './sendError.js';
 import { LANDING_LIMITS } from '../landingFields.js';
+import { landingRewriteHandlers } from './ai.js';
 
 // The editor's routes for the landing page (issue #70), thin wrappers over
 // the store (landingStore.js) like the rest. Mounted at /api/landing before
@@ -43,6 +44,10 @@ router.post('/discard-draft', handle((req, res) => {
   const landing = store.discardLandingDraft();
   res.json({ landing, status: store.getLandingStatus() });
 }));
+
+// { landing?, target, instruction } → proposals for review; saves nothing.
+// See landingRewriteHandlers in routes/ai.js.
+router.post('/rewrite', ...landingRewriteHandlers());
 
 // { enabled } — takes effect at once; see the store's setLandingEnabled.
 router.put('/enabled', handle((req, res) => {

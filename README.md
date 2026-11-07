@@ -194,6 +194,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it) |
 | `POST /api/landing/discard-draft` | restore the landing page draft from its last published snapshot |
 | `PUT /api/landing/enabled` | `{ enabled }`: takes effect at once, and only shows the page once it's been published |
+| `POST /api/landing/rewrite` | `{ landing?, target, instruction }` → `{ target, proposals: [{ target, before, after }], explanation }`: an AI rewrite of one spot on the landing page, for review; saves nothing. `target` is `{ kind: 'headline' }`, `{ kind: 'subheadline' }`, `{ kind: 'text', sectionId }`, `{ kind: 'item', sectionId, index }` (the item's text), `{ kind: 'card', sectionId, resumeId }` (the card's blurb) or `{ kind: 'intro', sectionId }` (headline, subheadline and that text section at once; `instruction` may be empty). `landing` is the editor's copy of the draft, checked like a `PUT`; without it the stored draft is used. Counts against the same rate limit as `POST /api/ai/rewrite`. See [AI rewrites](#ai-rewrites) |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, a tailoring brief's caps (`briefLimits`), and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense?, brief? }` → `{ proposal }` for review; saves nothing. `brief` (`{ audience, posting?, guidance? }`, see [AI rewrites](#ai-rewrites)) tailors the rewrite; with one, `instruction` may be empty. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
@@ -568,8 +569,9 @@ becomes optional.
 - Only the block's prose is sent and can change. Dates, URLs,
   company/institution names, visibility flags, and block styling are
   always kept from the original. Education blocks aren't rewritable.
-  Your header and contact details are never sent (a cover letter's AI
-  writing sends your name and title; see [Cover letters](#cover-letters)).
+  Your header and contact details are never sent with a block (a cover
+  letter's AI writing sends your name and title; see [Cover
+  letters](#cover-letters)).
 - Bullets hidden from web or print **are** sent along with the rest of
   their block, so the AI can rewrite them too. The rewrite panel says how
   many hidden bullets a block has before you send it. Don't rely on
@@ -650,6 +652,31 @@ API keys are stored in plain text in the same SQLite database, like the
 TOTP secret, so anyone with a copy of your data directory has them. The
 API never sends a key back to the browser, only its last four
 characters. Adding or removing a key requires your current password.
+
+#### On the landing page
+
+The [landing page](#a-landing-page-at-) editor has the same ✨ panels
+under the headline, the subheadline, each text section, each list item's
+text and each resume card's blurb, and **Draft headline and intro from my
+resume** at the top, which writes the headline, subheadline and first text
+section in one go. Each suggestion opens under its own field with a diff,
+shows outlined in the preview, and is accepted or discarded on its own (or
+all at once from the banner over the preview). Accepting saves a draft
+edit; publish the landing page to make it live. Item titles, links, card
+titles, section headings and the photo are never rewritten.
+
+The landing page is public, so the AI only draws on what's already public:
+the rest of the page's text (link labels but not
+the addresses, and never the photo), and an outline of a
+resume taken from its **published** version (never its draft), and only
+while it's public. That outline is the published header's name and title,
+the summary, job titles, companies and dates, skills, and education, from
+blocks shown on the web; no bullets, contact details or links, and never a
+resume's name in the editor or its tailoring brief. A card's blurb draws
+on the card's own resume (the ✨ button only shows once it's public and
+published); everything else on the default resume. The AI follows the
+voice already on the page, and writes in the first person when there's
+none yet.
 
 ## What's intentionally out of scope (v1)
 

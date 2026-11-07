@@ -1,5 +1,7 @@
 import { PhotoUpload } from './PhotoUpload.jsx';
 import { LinksEditor } from './LinksEditor.jsx';
+import { LandingAiPanel } from './LandingAiPanel.jsx';
+import { introSectionId } from './landingAi.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
 // SECTION_KINDS), what each is called here, and what a new one starts with.
@@ -76,11 +78,18 @@ function cardStatus(resumeId, resumes, context) {
   return 'Not shown until it is published';
 }
 
+// A field's ✨ panel, or nothing while AI rewrites aren't set up.
+function AiField({ ai, ...props }) {
+  return ai?.available ? <LandingAiPanel ai={ai} {...props} /> : null;
+}
+
 // The landing page's fields (issue #70). `landing` is the draft, `context`
-// and `limits` come from GET /api/landing, `resumes` is the editor's list.
-export function LandingForm({ landing, resumes, context, limits, onChange }) {
+// and `limits` come from GET /api/landing, `resumes` is the editor's list,
+// `ai` is LandingEditorPage's AI rewrite state and handlers (issue #73).
+export function LandingForm({ landing, resumes, context, limits, onChange, ai }) {
   const set = (patch) => onChange({ ...landing, ...patch });
   const sections = landing.sections;
+  const introId = introSectionId(landing);
   const setSections = (next) => set({ sections: next });
   const setSection = (i, patch) => setSections(sections.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
   const removeSection = (i) => {
@@ -94,6 +103,9 @@ export function LandingForm({ landing, resumes, context, limits, onChange }) {
 
   return (
     <div className="ed-form">
+      {introId && (
+        <AiField ai={ai} target={{ kind: 'intro', sectionId: introId }} label="✨ Draft headline and intro from my resume" />
+      )}
       <label className="ed-field">
         <span>Headline</span>
         <input
@@ -104,6 +116,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange }) {
           placeholder="Your name"
         />
       </label>
+      <AiField ai={ai} target={{ kind: 'headline' }} current={landing.headline} />
       <label className="ed-field">
         <span>Subheadline</span>
         <input
@@ -114,6 +127,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange }) {
           placeholder="e.g. Site reliability engineer"
         />
       </label>
+      <AiField ai={ai} target={{ kind: 'subheadline' }} current={landing.subheadline} />
 
       <div className="ed-field">
         <span>Photo</span>
@@ -159,6 +173,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange }) {
               resumes={resumes}
               context={context}
               limits={limits}
+              ai={ai}
             />
           </div>
         ))}
@@ -177,7 +192,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange }) {
   );
 }
 
-function SectionFields({ section, onChange, resumes, context, limits }) {
+function SectionFields({ section, onChange, resumes, context, limits, ai }) {
   switch (section.kind) {
     case 'text':
       return (
@@ -192,20 +207,31 @@ function SectionFields({ section, onChange, resumes, context, limits }) {
             aria-label="Text"
           />
           <span className="ed-field-hint">Plain text. Leave a blank line to start a new paragraph.</span>
+          <AiField ai={ai} target={{ kind: 'text', sectionId: section.id }} current={section.body} />
         </>
       );
     case 'items':
-      return <ItemsFields items={section.items} onChange={(items) => onChange({ items })} limits={limits} />;
+      return <ItemsFields sectionId={section.id} items={section.items} onChange={(items) => onChange({ items })} limits={limits} ai={ai} />;
     case 'links':
       return <LinksEditor label={null} links={section.links} onChange={(links) => onChange({ links })} />;
     case 'resumes':
-      return <CardsFields cards={section.cards} onChange={(cards) => onChange({ cards })} resumes={resumes} context={context} limits={limits} />;
+      return (
+        <CardsFields
+          sectionId={section.id}
+          cards={section.cards}
+          onChange={(cards) => onChange({ cards })}
+          resumes={resumes}
+          context={context}
+          limits={limits}
+          ai={ai}
+        />
+      );
     default:
       return null;
   }
 }
 
-function ItemsFields({ items, onChange, limits }) {
+function ItemsFields({ sectionId, items, onChange, limits, ai }) {
   const setItem = (i, patch) => onChange(items.map((item, idx) => (idx === i ? { ...item, ...patch } : item)));
   return (
     <>
@@ -246,6 +272,7 @@ function ItemsFields({ items, onChange, limits }) {
             placeholder="A line or two about it (optional)"
             aria-label="Item text"
           />
+          <AiField ai={ai} target={{ kind: 'item', sectionId, index: i }} current={item.text} />
         </div>
       ))}
       {(!limits || items.length < limits.items) && (
@@ -257,7 +284,7 @@ function ItemsFields({ items, onChange, limits }) {
   );
 }
 
-function CardsFields({ cards, onChange, resumes, context, limits }) {
+function CardsFields({ sectionId, cards, onChange, resumes, context, limits, ai }) {
   const setCard = (i, patch) => onChange(cards.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
   const addable = resumes.filter((r) => !cards.some((c) => c.resumeId === r.id));
   const titleOf = (resumeId) => context.resumes.find((r) => r.id === resumeId)?.title;
@@ -299,6 +326,7 @@ function CardsFields({ cards, onChange, resumes, context, limits }) {
               placeholder="A line about this resume (optional)"
               aria-label="Card text"
             />
+            {!status && <AiField ai={ai} target={{ kind: 'card', sectionId, resumeId: card.resumeId }} current={card.blurb} />}
           </div>
         );
       })}

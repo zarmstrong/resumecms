@@ -307,7 +307,8 @@ it has its own save queue, flushed before a switch, publish, discard and
 logout. Its preview resolves the local draft with
 `client/src/landing/resolveLanding.js`, a mirror of the server's
 `resolveLanding()` (keep the two in step), against the `context` from
-`GET /api/landing`. While the page is shown (`landingShown()` in
+`GET /api/landing`. AI rewrites of its fields are described under "AI
+rewrites" below. While the page is shown (`landingShown()` in
 `resumeLinks.js`), `publicUrl()` gives the default resume's link as
 `/resume`.
 
@@ -541,6 +542,25 @@ loaded and takes it. A run stops when its page unmounts. "Accept all" saves
 `acceptAllPlan()` (`aiReview.js`): what the preview shows, minus
 whole-block proposals whose block was edited since, which the preview
 still shows but a bulk accept mustn't apply without asking.
+
+The landing page has its own rewrite (issue #73):
+`server/src/ai/landingRewrite.js`, served by `landingRewriteHandlers()` in
+`routes/ai.js` and mounted at `POST /api/landing/rewrite` by
+`routes/landing.js` (same `rewriteLimiter`). Every landing field it writes
+is one string, so a proposal is `{ target, before, after }`, and one
+request returns a list (an `intro` target writes headline, subheadline and
+a text section, three proposals). Targets are an allowlist
+(`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items by
+index. The page is public, so what the model sees is too: the route builds
+`landingProfile()` from `store.visibleResumeSnapshot()` (a resume's
+*published* snapshot, only while it's public; the card's resume for a
+blurb, the default otherwise), and the page context leaves out URLs, ids
+and the photo. Keep both if you add a target or a field to the profile.
+The editor copy it works on is checked by `store.checkLandingDraft()`. In
+the editor, `LandingEditorPage` holds the requests and proposals,
+`client/src/editor/landingAi.js` mirrors `landingSlice()` and follows an
+item's proposal when the item moves (`locateTarget()`), and each field's
+panel is `LandingAiPanel.jsx`.
 
 Output schemas must stay valid for both providers' strict structured-output
 modes. That means `additionalProperties: false` and every property in
