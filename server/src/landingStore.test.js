@@ -7,6 +7,7 @@ import Database from 'better-sqlite3';
 import { ensureSchema } from './schema.js';
 import { createResumeStore } from './resumeStore.js';
 import { migrateToResumes } from './resumeMigration.js';
+import { createSettings } from './settings.js';
 
 // The landing page (issue #70) through the real store over ':memory:', as
 // resumeStore.test.js does for resumes.
@@ -31,6 +32,8 @@ async function publicResume(store, name, slug) {
   return id;
 }
 
+const cardsOf = (landing) => landing.sections.find((s) => s.kind === 'resumes')?.cards;
+
 const status = (fn) => {
   try {
     fn();
@@ -47,7 +50,7 @@ test('before anything is saved, the draft comes from the published header', asyn
   const draft = store.getLanding();
   assert.equal(draft.headline, 'Jo');
   assert.equal(draft.subheadline, 'Engineer');
-  assert.deepEqual(draft.resumes, [{ resumeId: defaultId, label: '', blurb: '' }]);
+  assert.deepEqual(cardsOf(draft), [{ resumeId: defaultId, label: '', blurb: '' }]);
   assert.deepEqual(store.getLandingStatus(), { enabled: false, publishedAt: null, isDirty: false });
 });
 
@@ -72,13 +75,15 @@ test('saving marks the landing page dirty, publishing clears it, and neither tou
 test('discard before any publish is a 409; merge keeps the other fields', async () => {
   const { store } = await makeStore();
   assert.equal(status(() => store.discardLandingDraft()), 409);
-  store.setLanding({ headline: 'A', intro: 'B' });
-  const merged = store.setLanding({ headline: 'C', intro: null }, { merge: true });
+  store.setLanding({ headline: 'A', subheadline: 'B', sections: [{ id: 't', kind: 'text', body: 'Hi' }] });
+  const merged = store.setLanding({ headline: 'C', subheadline: null }, { merge: true });
   assert.equal(merged.headline, 'C');
-  assert.equal(merged.intro, '');
+  assert.equal(merged.subheadline, '');
+  assert.deepEqual(merged.sections, [{ id: 't', kind: 'text', title: '', body: 'Hi' }]);
   // REST replaces: what isn't sent is reset.
-  assert.equal(store.setLanding({ intro: 'only' }).headline, '');
-  assert.equal(status(() => store.setLanding({ links: [{ label: 'x', url: 'javascript:alert(1)' }] })), 400);
+  assert.equal(store.setLanding({ subheadline: 'only' }).headline, '');
+  const bad = { sections: [{ kind: 'links', links: [{ label: 'x', url: 'javascript:alert(1)' }] }] };
+  assert.equal(status(() => store.setLanding(bad)), 400);
 });
 
 test('the landing page shows only when enabled and published, and never on a resume domain', async () => {
@@ -111,13 +116,20 @@ test('cards are resolved at request time: private, unpublished and deleted resum
   const hiddenId = store.createResume({ name: 'Acme – tailored for Jane' }).id;
   store.setLanding({
     headline: 'Jo',
-    resumes: [{ resumeId: defaultId }, { resumeId: salesId, blurb: 'For sales' }, { resumeId: hiddenId, label: '' }],
+    sections: [
+      {
+        id: 'cards',
+        kind: 'resumes',
+        cards: [{ resumeId: defaultId }, { resumeId: salesId, blurb: 'For sales' }, { resumeId: hiddenId, label: '' }],
+      },
+      { id: 'more', kind: 'resumes', title: 'Also', cards: [{ resumeId: salesId }] },
+    ],
   });
   store.setLandingEnabled(true);
   store.publishLanding();
 
   let page = store.landingForHost('example.com');
-  assert.deepEqual(page.resumes, [
+  assert.deepEqual(cardsOf(page), [
     { label: 'Engineer', blurb: '', href: '/resume' },
     { label: 'Sales title', blurb: 'For sales', href: '/r/sales' },
   ]);
@@ -127,20 +139,26 @@ test('cards are resolved at request time: private, unpublished and deleted resum
   assert.equal(body.includes('tailored for Jane'), false);
 
   store.updateResume(salesId, { slug: 'sales-2026' });
-  assert.equal(store.landingForHost('example.com').resumes[1].href, '/r/sales-2026');
+  assert.equal(cardsOf(store.landingForHost('example.com'))[1].href, '/r/sales-2026');
 
   store.updateResume(salesId, { isPublic: false });
   page = store.landingForHost('example.com');
-  assert.deepEqual(page.resumes.map((c) => c.href), ['/resume']);
+  assert.deepEqual(cardsOf(page).map((c) => c.href), ['/resume']);
+  // The second section had only that card, so it goes, heading and all.
+  assert.equal(page.sections.length, 1);
 
   store.updateResume(salesId, { isPublic: true });
   store.deleteResume(salesId);
-  assert.deepEqual(store.landingForHost('example.com').resumes.map((c) => c.href), ['/resume']);
-  // The draft still holds the deleted resume's card and can still be saved.
+  assert.deepEqual(cardsOf(store.landingForHost('example.com')).map((c) => c.href), ['/resume']);
+  // The draft still holds the deleted resume's cards and can still be saved,
+  // even with one of them moved to another section.
   const draft = store.getLanding();
-  assert.equal(store.setLanding({ ...draft, headline: 'Still saves' }).resumes.length, 3);
+  const [first, second] = draft.sections;
+  const moved = { ...draft, sections: [{ ...first, cards: first.cards.filter((c) => c.resumeId !== salesId) }, { ...second, cards: [first.cards[1]] }] };
+  assert.equal(store.setLanding(moved).sections[1].cards[0].resumeId, salesId);
   // But a new card for an unknown id can't be added.
-  assert.equal(status(() => store.setLanding({ ...draft, resumes: [...draft.resumes, { resumeId: 'nope' }] })), 400);
+  const unknown = { ...draft, sections: [{ ...first, cards: [...first.cards, { resumeId: 'nope' }] }, second] };
+  assert.equal(status(() => store.setLanding(unknown)), 400);
 });
 
 test("the page reuses the default resume's published photo and look, never its draft", async () => {
@@ -155,4 +173,31 @@ test("the page reuses the default resume's published photo and look, never its d
   const context = store.getLandingContext();
   assert.equal(context.photoUrl, 'data:image/jpeg;base64,PUB');
   assert.equal(JSON.stringify(context).includes('DRAFT'), false);
+});
+
+test('a draft and snapshot stored before sections still read, publish and discard', async () => {
+  const { db, store, defaultId } = await makeStore();
+  const { setSetting } = createSettings(db);
+  const old = {
+    headline: 'Old',
+    subheadline: '',
+    intro: 'Hello',
+    photo: 'none',
+    photoUrl: '',
+    links: [{ label: 'gh', url: 'https://github.com/jo' }],
+    resumes: [{ resumeId: defaultId, label: 'Main', blurb: '' }],
+  };
+  setSetting('landing_draft', old);
+  setSetting('landing_published', { ...old, publishedAt: '2026-11-06T00:00:00.000Z' });
+  store.setLandingEnabled(true);
+
+  assert.deepEqual(store.landingForHost('example.com').sections.map((s) => s.kind), ['text', 'links', 'resumes']);
+  const draft = store.getLanding();
+  assert.deepEqual(draft.sections.map((s) => s.id), ['intro', 'links', 'resumes']);
+  assert.equal('intro' in draft, false);
+  // The editor sends back what it was given.
+  assert.deepEqual(store.setLanding(draft), draft);
+  assert.deepEqual(store.discardLandingDraft(), draft);
+  store.publishLanding();
+  assert.equal(store.landingForHost('example.com').sections[0].body, 'Hello');
 });

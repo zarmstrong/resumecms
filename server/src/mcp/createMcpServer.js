@@ -42,7 +42,7 @@ Content model: a resume is an ordered list of blocks ({ id, type, position, pare
 
 Draft vs published: every write tool changes the DRAFT only, of one resume. Nothing is visible on the public site or PDF until you call publish for that resume. get_publish_status reports whether unpublished changes exist; discard_draft throws the draft away. Prefer reading with get_draft (everything at once) and editing with update_block (which merges data keys) and move_block (which handles ordering for you).
 
-Landing page: the install can also have a short home page at / (a headline, an intro, a photo, links and cards linking to some of the resumes), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, and cards linking to some of the resumes), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -406,6 +406,23 @@ const landingCard = () =>
     label: z.string().optional().describe("Card title, e.g. \"Engineering\". Empty uses the resume's published header title (never its internal name)."),
     blurb: z.string().optional().describe('A line or two about this resume.'),
   });
+const landingItem = () =>
+  z.object({
+    title: z.string().optional().describe('e.g. a project name.'),
+    text: z.string().optional().describe('A line or two about it, plain text.'),
+    url: z.string().optional().describe('An optional http, https or mailto link for its title.'),
+  });
+const sectionBase = {
+  id: z.string().optional().describe("Keep an existing section's id from get_landing_page; omit it for a new section."),
+  title: z.string().optional().describe('Heading shown above the section; empty shows none.'),
+};
+const landingSection = () =>
+  z.discriminatedUnion('kind', [
+    z.object({ ...sectionBase, kind: z.literal('text'), body: z.string().optional().describe('Plain text; a blank line starts a new paragraph.') }),
+    z.object({ ...sectionBase, kind: z.literal('items'), items: z.array(landingItem()).optional() }),
+    z.object({ ...sectionBase, kind: z.literal('links'), links: z.array(landingLink()).optional() }),
+    z.object({ ...sectionBase, kind: z.literal('resumes'), cards: z.array(landingCard()).optional() }),
+  ]);
 
 const LANDING_TOOLS = [
   {
@@ -423,15 +440,17 @@ const LANDING_TOOLS = [
     config: {
       title: 'Update the landing page',
       description:
-        "Merges fields into the landing page's DRAFT: send only what changes (links and resumes are replaced as whole lists; null resets a field). Nothing is public until publish_landing_page. Returns the draft.",
+        "Merges fields into the landing page's DRAFT: send only what changes (sections is replaced as a whole list, so send every section to keep, in order; null resets a field). Nothing is public until publish_landing_page. Returns the draft.",
       inputSchema: {
         headline: z.string().nullable().optional().describe('Big heading, usually your name.'),
         subheadline: z.string().nullable().optional().describe('One line under it, e.g. a title.'),
-        intro: z.string().nullable().optional().describe('A few lines about yourself, plain text; a blank line starts a new paragraph.'),
         photo: z.enum(PHOTO_SOURCES).nullable().optional().describe("'resume' uses the default resume's published header photo, 'custom' uses photoUrl, 'none' shows none."),
         photoUrl: z.string().nullable().optional().describe("A base64 data: URL of a JPEG, PNG or WebP image, for photo: 'custom'."),
-        links: z.array(landingLink()).nullable().optional().describe('The complete list of links, in order.'),
-        resumes: z.array(landingCard()).nullable().optional().describe('The complete list of resume cards, in order.'),
+        sections: z
+          .array(landingSection())
+          .nullable()
+          .optional()
+          .describe('The complete list of sections, in the order they show under the headline. A section with nothing to show is left off the public page.'),
       },
       annotations: { ...mutating, idempotentHint: true },
     },

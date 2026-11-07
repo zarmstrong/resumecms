@@ -9,14 +9,14 @@ import {
   FONT_SIZE_CSS,
   fontCssFor,
 } from '../resume/siteColors.js';
-import { introParagraphs } from './resolveLanding.js';
+import { textParagraphs } from './resolveLanding.js';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
 // API sends (server/src/landingFields.js's resolveLanding(); the editor's
 // preview builds the same from its draft). It takes the default resume's
 // colors and fonts, so the two pages match. Everything is rendered as text:
-// the intro isn't markdown or HTML, and every href still goes through
+// a text section isn't markdown or HTML, and every href still goes through
 // safeHref() although the server only stores safe ones.
 export function LandingView({ landing, preview = false }) {
   const { site } = landing;
@@ -44,45 +44,77 @@ export function LandingView({ landing, preview = false }) {
           </div>
         </header>
 
-        {introParagraphs(landing.intro).map((paragraph, i) => (
-          <p key={i} className="l-intro">
-            {paragraph}
-          </p>
+        {landing.sections.map((section, i) => (
+          <section key={i} className={`l-section l-section-${section.kind}`}>
+            {section.title && <h2 className="l-section-title">{section.title}</h2>}
+            <SectionBody section={section} />
+          </section>
         ))}
-
-        {landing.links.length > 0 && (
-          <ul className="l-links">
-            {landing.links.map((link, i) => {
-              const external = !/^mailto:/i.test(link.url);
-              return (
-                <li key={i}>
-                  <a
-                    href={safeHref(link.url)}
-                    {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                  >
-                    <span className="r-link-badge">{linkGlyph(link)}</span>
-                    {link.label}
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        {landing.resumes.length > 0 && (
-          <nav className="l-cards" aria-label="Resumes">
-            {landing.resumes.map((card, i) => (
-              <a key={i} className="l-card" href={card.href}>
-                <span className="l-card-label">{card.label}</span>
-                {card.blurb && <span className="l-card-blurb">{card.blurb}</span>}
-                <span className="l-card-cta" aria-hidden="true">
-                  View resume →
-                </span>
-              </a>
-            ))}
-          </nav>
-        )}
       </main>
     </div>
   );
+}
+
+// Opens off-site links in a new tab; a mailto link opens the mail app as is.
+function linkProps(url) {
+  const external = !/^mailto:/i.test(url);
+  return { href: safeHref(url), ...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {}) };
+}
+
+function SectionBody({ section }) {
+  switch (section.kind) {
+    case 'text':
+      return textParagraphs(section.body).map((paragraph, i) => (
+        <p key={i} className="l-text">
+          {paragraph}
+        </p>
+      ));
+    case 'items':
+      return (
+        <ul className="l-items">
+          {section.items.map((item, i) => (
+            <li key={i} className="l-item">
+              {item.title &&
+                (item.url ? (
+                  <a className="l-item-title" {...linkProps(item.url)}>
+                    {item.title}
+                  </a>
+                ) : (
+                  <span className="l-item-title">{item.title}</span>
+                ))}
+              {item.text && <p className="l-item-text">{item.text}</p>}
+            </li>
+          ))}
+        </ul>
+      );
+    case 'links':
+      return (
+        <ul className="l-links">
+          {section.links.map((link, i) => (
+            <li key={i}>
+              <a {...linkProps(link.url)}>
+                <span className="r-link-badge">{linkGlyph(link)}</span>
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      );
+    case 'resumes':
+      return (
+        <nav className="l-cards" aria-label={section.title || 'Resumes'}>
+          {section.cards.map((card, i) => (
+            <a key={i} className="l-card" href={card.href}>
+              <span className="l-card-label">{card.label}</span>
+              {card.blurb && <span className="l-card-blurb">{card.blurb}</span>}
+              <span className="l-card-cta" aria-hidden="true">
+                View resume →
+              </span>
+            </a>
+          ))}
+        </nav>
+      );
+    default:
+      return null;
+  }
 }

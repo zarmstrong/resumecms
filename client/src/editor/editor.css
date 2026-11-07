@@ -1157,6 +1157,26 @@
 }
 
 /* ---- Landing page editor (issue #70) ------------------------------------- */
+.ed-landing-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.ed-landing-section .ed-landing-card {
+  margin-bottom: 0;
+  background: var(--panel);
+}
+
+.ed-landing-section > .ed-field {
+  margin: 0;
+}
+
 .ed-landing-card {
   display: flex;
   flex-direction: column;

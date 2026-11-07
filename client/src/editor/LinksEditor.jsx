@@ -2,8 +2,9 @@ import { LINK_TYPES, DEFAULT_LINK_TYPE, linkTypeConfig, inferLinkType } from '..
 
 // A list of { type, label, url } links: pick a type (which prefills an
 // empty label and URL), edit, add, remove. Used by the header form and the
-// landing page form.
-export function LinksEditor({ links, onChange }) {
+// landing page form (whose links section has a heading of its own, so it
+// passes `label={null}`).
+export function LinksEditor({ links, onChange, label = 'Links' }) {
   function setLink(i, patch) {
     const next = [...links];
     next[i] = { ...next[i], ...patch };
@@ -26,7 +27,7 @@ export function LinksEditor({ links, onChange }) {
 
   return (
     <div className="ed-field">
-      <span>Links</span>
+      {label && <span>{label}</span>}
       {links.map((link, i) => (
         <div className="ed-link-item" key={i}>
           <select className="ed-input" value={link.type || inferLinkType(link)} onChange={(e) => setLinkType(i, e.target.value)}>
