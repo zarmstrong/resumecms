@@ -20,7 +20,8 @@ export const REVALIDATE = 'no-cache';
 export const PDF = 'private, no-cache';
 
 // /api/public/resume as served to the PDF renderer (renderAccess.js): that
-// can be a private resume, so nothing may keep a copy of it.
+// can be a private resume, so nothing may keep a copy of it. Also
+// /api/public/letter, which only ever serves the renderer a cover letter.
 export const RENDER = 'private, no-store';
 
 // Not a cache policy, but sent alongside one on every unlisted public

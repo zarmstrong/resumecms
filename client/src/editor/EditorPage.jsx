@@ -63,6 +63,7 @@ function timeAgo(iso) {
 // to start once this has loaded (a copy made with "Tailor the copy"), and
 // `onPendingTailorTaken()` says it has been. `landingShown`: the landing
 // page holds `/` (issue #70), so the default resume is at /resume.
+// `onOpenLetters()` opens this resume's cover letters (issue #71).
 export function EditorPage({
   resume,
   resumes,
@@ -70,6 +71,7 @@ export function EditorPage({
   pendingTailor,
   onPendingTailorTaken,
   onResumesChanged,
+  onOpenLetters,
   landingShown = false,
   onLogout,
 }) {
@@ -724,6 +726,14 @@ export function EditorPage({
           </button>
           <button className="ed-btn ed-btn-ghost" onClick={() => setNewResumeOpen(true)} disabled={switching}>
             New resume
+          </button>
+          <button
+            className="ed-btn ed-btn-ghost"
+            onClick={() => afterSaving(onOpenLetters)}
+            disabled={switching}
+            title="Write cover letters that go with this resume"
+          >
+            Cover letters
           </button>
           {aiSettings?.available && (
             <button

@@ -1,0 +1,48 @@
+/* A cover letter (CoverLetterView.jsx) inside a resume's .r-page: the
+   resume's header above, the letter in its body font and colors. */
+
+.r-letter {
+  max-width: 820px;
+}
+
+.r-letter-body {
+  margin-top: 32px;
+}
+
+.r-letter-body p {
+  margin: 0 0 1em;
+}
+
+/* Typed line breaks inside a paragraph are kept. */
+.r-letter-body .r-letter-paragraph {
+  white-space: pre-line;
+}
+
+.r-letter-body .r-letter-date {
+  margin-bottom: 1.5em;
+}
+
+.r-letter-recipient {
+  font-style: normal;
+  margin-bottom: 1.5em;
+}
+
+.r-letter-signoff {
+  margin-top: 1.5em;
+  break-inside: avoid;
+}
+
+.r-letter-body .r-letter-closing {
+  margin-bottom: 2.5em;
+}
+
+.r-letter-body .r-letter-signature {
+  color: var(--r-heading, inherit);
+  font-weight: 600;
+}
+
+@media print {
+  .r-letter {
+    max-width: none;
+  }
+}

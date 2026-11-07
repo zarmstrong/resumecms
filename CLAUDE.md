@@ -104,7 +104,8 @@ stable `id`, a renameable `slug`, and exactly one `is_default` (a partial
 unique index allows at most one; the store never removes the last). Each
 resume owns its blocks (`blocks.resume_id`) and its `header`, `site`,
 `draft_meta`, `published_resume`, `pdf_meta` and `tailoring` rows in `resume_settings`
-(`RESUME_SETTING_KEYS`); the global `settings` table keeps only
+(`RESUME_SETTING_KEYS`), and its cover letters (see "Cover letters"
+below); the global `settings` table keeps only
 `credentials`, `totp`, `ai` and the landing page's keys (see "Landing
 page" below), and `db.js`'s `getSetting`/`setSetting`
 only ever see those.
@@ -183,6 +184,41 @@ Every boot also runs `adoptLegacyRows()`: blocks with no `resume_id`
 (written by a rolled-back pre-variant image) are attached to the default
 resume, and per-resume keys back in the global `settings` table are only
 warned about, never moved.
+
+### Cover letters
+
+Issue #71. A `cover_letters` table (`schema.js`): `id`, `resume_id`,
+`title` (internal), `data` (JSON), `pdf_key`. `coverLetterStore.js` holds
+the operations, composed into each resume's scoped store (so they're in
+`RESUME_METHODS` and on `forResume(id)`); pure checks are in
+`coverLetterFields.js`. Every query is scoped by `resume_id` like
+`blocks`'. A letter is private: no draft/publish, never in
+`published_resume`, and nothing calls `touchDraft()`. `data` is checked
+by a loose zod schema (`COVER_LETTER_DATA_VALIDATOR`) on create and on the
+(merged) result of an update; `COVER_LETTER_SCHEMA` in
+`mcp/blockSchemas.js` documents the same keys (a test compares them) and
+`CoverLetterForm.jsx` edits them, so change all three together.
+`deleteResume` deletes a resume's letters and their PDFs; `copyFrom` on a
+resume doesn't copy them. REST is `routes/coverLetters.js`, mounted only
+under `/api/resumes/:resumeId/`; the MCP tools are in `CONTENT_TOOLS`.
+
+A letter renders with its resume's *draft* header and site settings (it
+has no published version): `CoverLetterView` (`client/src/letters/`) uses
+the header template and `resumePageStyle()` (`resume/pageStyle.js`, shared
+with `ResumeView`), not the layout. Its PDF is rendered on request
+(`coverLetterPdf()`, behind `GET …/cover-letters/:letterId/letter.pdf`) on
+the same `withPdfLock` queue and timeout, written atomically to
+`<pdfDir>/letters/<letter id>.pdf`, and reused while `letterPdfKey()` of
+what it shows (data, header, site, and today's date if the letter has
+none) matches `pdf_key`. The renderer loads `/print/letter`, whose fetch of
+`/api/public/letter` is served the letter named by a second signed cookie
+(`RENDER_LETTER_COOKIE`, `renderTarget(cookie, 'letter')`); without one
+that endpoint 404s. The server sends the date to show (`letterToday()`,
+mirrored client-side in `letterParts.js`) so the PDF and its cache key
+agree. In the editor, `?page=letters` (with the resume's `?resume=`) mounts
+`CoverLettersPage` keyed by resume id, with its own save queue flushed
+before switching, Back, Duplicate, Download PDF and logout. AI drafting is
+not built yet.
 
 ### Landing page
 

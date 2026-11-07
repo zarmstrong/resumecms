@@ -67,6 +67,10 @@ export const api = {
   // public one at /r/<slug> when `slug` is given.
   getPublicResume: (mode, slug = null) =>
     request(slug ? `/public/resumes/${encodeURIComponent(slug)}?mode=${mode}` : `/public/resume?mode=${mode}`),
+
+  // The cover letter the PDF renderer's /print/letter page is rendering
+  // (its render cookie names it): { header, site, letter, today }.
+  getLetterForRender: () => request('/public/letter'),
 };
 
 // The editor's calls for one resume, all under /api/resumes/:id, so a call
@@ -110,5 +114,16 @@ export function resumeApi(resumeId) {
 
     // Behind login, so a private resume's PDF downloads too.
     pdfPath: `${BASE}${prefix}/resume.pdf`,
+
+    // Its cover letters (issue #71). updateCoverLetter's `data` replaces
+    // the letter's data whole.
+    listCoverLetters: () => request(`${prefix}/cover-letters`),
+    // {} for an empty one, { copyFrom: <letter id> } for a copy.
+    createCoverLetter: (input) => request(`${prefix}/cover-letters`, { method: 'POST', body: JSON.stringify(input) }),
+    updateCoverLetter: (id, patch) =>
+      request(`${prefix}/cover-letters/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(patch) }),
+    deleteCoverLetter: (id) => request(`${prefix}/cover-letters/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    // Rendered on request (a cached render when nothing changed).
+    coverLetterPdfPath: (id) => `${BASE}${prefix}/cover-letters/${encodeURIComponent(id)}/letter.pdf`,
   };
 }

@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { handle } from './sendError.js';
 import { createBlockRoutes } from './blocks.js';
 import { createPublishRoutes } from './publish.js';
+import { createCoverLetterRoutes } from './coverLetters.js';
 import { rewriteHandlers } from './ai.js';
 import { sendResumePdf } from './sendPdf.js';
 
@@ -50,6 +51,7 @@ router.get('/:resumeId/resume.pdf', (req, res) => {
 });
 
 router.post('/:resumeId/ai/rewrite', ...rewriteHandlers(forResume));
+router.use('/:resumeId', createCoverLetterRoutes(forResume));
 router.use('/:resumeId', createBlockRoutes(forResume));
 router.use('/:resumeId', createPublishRoutes(forResume));
 

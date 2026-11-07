@@ -12,13 +12,16 @@ import { BLOCK_TYPES, mergeShallow } from '../resumeStore.js';
 
 const EXPECTED_TOOLS = [
   'create_block',
+  'create_cover_letter',
   'create_resume',
   'delete_block',
+  'delete_cover_letter',
   'delete_resume',
   'discard_draft',
   'discard_landing_draft',
   'get_block',
   'get_block_schemas',
+  'get_cover_letter',
   'get_draft',
   'get_header',
   'get_landing_page',
@@ -27,6 +30,7 @@ const EXPECTED_TOOLS = [
   'get_resume',
   'get_site_settings',
   'list_blocks',
+  'list_cover_letters',
   'list_resumes',
   'move_block',
   'publish',
@@ -34,6 +38,7 @@ const EXPECTED_TOOLS = [
   'reorder_blocks',
   'set_landing_page_enabled',
   'update_block',
+  'update_cover_letter',
   'update_header',
   'update_landing_page',
   'update_resume',
@@ -143,6 +148,14 @@ function fakeStore() {
     publishLanding: () => { calls.push(['publishLanding']); return { enabled: false, publishedAt: '2026-01-01T00:00:00.000Z', isDirty: false }; },
     discardLandingDraft: () => { calls.push(['discardLandingDraft']); return { headline: 'Zed' }; },
     setLandingEnabled: (enabled) => { calls.push(['setLandingEnabled', enabled]); return { enabled, publishedAt: null, isDirty: false }; },
+    listCoverLetters: () => [{ id: 'l1', title: 'Acme', data: {} }],
+    getCoverLetter: (id) => {
+      if (id !== 'l1') throw httpError(404, 'Cover letter not found');
+      return { id, title: 'Acme', data: {} };
+    },
+    createCoverLetter: (input) => { calls.push(['createCoverLetter', input]); return { id: 'l2', ...input }; },
+    updateCoverLetter: (id, patch, opts) => { calls.push(['updateCoverLetter', id, patch, opts]); return { id, ...patch }; },
+    deleteCoverLetter: (id) => { calls.push(['deleteCoverLetter', id]); return { deleted: id }; },
   };
 }
 
@@ -482,4 +495,33 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
 
   const schemas = (await call('get_block_schemas')).json;
   assert.equal(schemas.landing.properties.sections.items.oneOf.length, 4);
+});
+
+test('cover letter tools: create, merge or replace on update, delete, scoped by resumeId', async (t) => {
+  const store = fakeStore();
+  const sales = fakeStore();
+  store.resumes.sales = sales;
+  const { call, close } = await connect(store);
+  t.after(close);
+
+  assert.equal((await call('list_cover_letters')).json.coverLetters[0].id, 'l1');
+  assert.match((await call('get_cover_letter', { letterId: 'nope' })).text, /^\[404\]/);
+
+  const data = { salutation: 'Dear Jane,', paragraphs: ['One', 'Two'] };
+  await call('create_cover_letter', { title: 'Acme', data, resumeId: 'sales' });
+  // the resumeId picked the store; it never reaches the letter
+  assert.deepEqual(sales.calls.at(-1), ['createCoverLetter', { title: 'Acme', data }]);
+
+  await call('update_cover_letter', { letterId: 'l1', data: { closing: null } });
+  assert.deepEqual(store.calls.at(-1), ['updateCoverLetter', 'l1', { data: { closing: null } }, { mergeData: true }]);
+  await call('update_cover_letter', { letterId: 'l1', title: 'Acme SRE', data, replaceData: true });
+  assert.deepEqual(store.calls.at(-1), ['updateCoverLetter', 'l1', { title: 'Acme SRE', data }, { mergeData: false }]);
+
+  const callsBefore = store.calls.length;
+  assert.match((await call('update_cover_letter', { letterId: 'l1' })).text, /\[400\] Nothing to update/);
+  assert.match((await call('update_cover_letter', { letterId: 'l1', replaceData: true })).text, /\[400\] replaceData/);
+  assert.equal(store.calls.length, callsBefore);
+
+  assert.deepEqual((await call('delete_cover_letter', { letterId: 'l1' })).json, { deleted: 'l1' });
+  assert.ok((await call('get_block_schemas')).json.coverLetter.properties.paragraphs);
 });

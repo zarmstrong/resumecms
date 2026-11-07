@@ -42,6 +42,8 @@ Content model: a resume is an ordered list of blocks ({ id, type, position, pare
 
 Draft vs published: every write tool changes the DRAFT only, of one resume. Nothing is visible on the public site or PDF until you call publish for that resume. get_publish_status reports whether unpublished changes exist; discard_draft throws the draft away. Prefer reading with get_draft (everything at once) and editing with update_block (which merges data keys) and move_block (which handles ordering for you).
 
+Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
+
 Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, and cards linking to some of the resumes), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
@@ -78,7 +80,7 @@ const SCHEMA_TOOL = {
   config: {
     title: 'Describe block data shapes',
     description:
-      'Documents the `data` shape of each block type (and the header and site-settings objects). These shapes come from the editor UI. The server type-checks the documented block keys on write (a wrong kind of value, e.g. bullets as a string, is a 400) but not enum values or unknown keys, and stores the header and site settings as-is — so follow the shapes to keep the editor and templates rendering correctly.',
+      'Documents the `data` shape of each block type (and the header, site-settings, landing page and cover letter objects). These shapes come from the editor UI. The server type-checks the documented block keys on write (a wrong kind of value, e.g. bullets as a string, is a 400) but not enum values or unknown keys, and stores the header and site settings as-is — so follow the shapes to keep the editor and templates rendering correctly.',
     inputSchema: {
       type: BLOCK_TYPE_ENUM.optional().describe('Return only this block type (omit for everything, including header and site).'),
     },
@@ -311,6 +313,76 @@ const CONTENT_TOOLS = [
       annotations: destructive,
     },
     run: (store) => store.discardDraft(),
+  },
+
+  // ---- cover letters (issue #71) -------------------------------------------
+  {
+    name: 'list_cover_letters',
+    config: {
+      title: 'List cover letters',
+      description:
+        "Returns the resume's cover letters, oldest first: { id, resumeId, title, data, createdAt, updatedAt }. See get_block_schemas (coverLetter) for the shape of data.",
+      annotations: readOnly,
+    },
+    run: (store) => ({ coverLetters: store.listCoverLetters() }),
+  },
+  {
+    name: 'get_cover_letter',
+    config: {
+      title: 'Get one cover letter',
+      description: 'Returns one of the resume\'s cover letters by id.',
+      inputSchema: { letterId: z.string().describe('Cover letter id.') },
+      annotations: readOnly,
+    },
+    run: (store, { letterId }) => ({ coverLetter: store.getCoverLetter(letterId) }),
+  },
+  {
+    name: 'create_cover_letter',
+    config: {
+      title: 'Create a cover letter',
+      description:
+        "Adds a cover letter to the resume. It's drawn under that resume's header in its look, and is private (never published, no draft/publish step). Send data (see get_block_schemas, coverLetter) to write it in one call, or omit it to start from an empty letter; or copyFrom another letter of the same resume to duplicate it. Write only what the resume supports: no skill, job or claim it doesn't have. Returns the letter.",
+      inputSchema: {
+        title: z.string().optional().describe('Internal name shown in the editor, e.g. "Acme SRE". Defaults to "Cover letter" (or "<source> (copy)").'),
+        data: jsonObject().optional().describe('The letter; see get_block_schemas (coverLetter).'),
+        copyFrom: z.string().optional().describe('Id of a cover letter of this resume to copy. Not together with data.'),
+      },
+      annotations: mutating,
+    },
+    run: (store, args) => ({ coverLetter: store.createCoverLetter(args) }),
+  },
+  {
+    name: 'update_cover_letter',
+    config: {
+      title: 'Update a cover letter',
+      description:
+        "Edits a cover letter. `data` is shallow-merged into the letter's data by default: only the keys you send change, a key set to null is REMOVED, and paragraphs is replaced as a whole list (send every paragraph, in order). Pass replaceData: true to replace the whole data object instead. At least one of title or data is required.",
+      inputSchema: {
+        letterId: z.string().describe('Cover letter id.'),
+        title: z.string().optional().describe('New internal name.'),
+        data: jsonObject().optional().describe('Keys to merge into data (or the full data when replaceData is true).'),
+        replaceData: z.boolean().optional().describe('Replace the whole data object instead of merging. Requires data. Default false.'),
+      },
+      annotations: { ...mutating, idempotentHint: true },
+    },
+    run: (store, { letterId, title, data, replaceData }) => {
+      if (replaceData && data === undefined) throw httpError(400, 'replaceData: true requires data');
+      const patch = {};
+      if (title !== undefined) patch.title = title;
+      if (data !== undefined) patch.data = data;
+      if (Object.keys(patch).length === 0) throw httpError(400, 'Nothing to update: send at least one of title or data');
+      return { coverLetter: store.updateCoverLetter(letterId, patch, { mergeData: !replaceData }) };
+    },
+  },
+  {
+    name: 'delete_cover_letter',
+    config: {
+      title: 'Delete a cover letter',
+      description: 'Permanently deletes one of the resume\'s cover letters, with its PDF.',
+      inputSchema: { letterId: z.string().describe('Cover letter id.') },
+      annotations: destructive,
+    },
+    run: (store, { letterId }) => store.deleteCoverLetter(letterId),
   },
 ];
 
