@@ -49,7 +49,7 @@ export const PHOTO_SOURCES = ['resume', 'custom', 'none'];
 
 // The header's link types (client/src/resume/linkTypes.js), which only pick
 // the badge a link is drawn with.
-export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'custom'];
+export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'];
 
 export const SECTION_KINDS = ['text', 'items', 'links', 'resumes'];
 
@@ -65,7 +65,7 @@ const LINK_FIELDS = ['type', 'label', 'url'];
 const CARD_FIELDS = ['resumeId', 'label', 'blurb'];
 const SECTION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
-const SAFE_SCHEMES = ['http:', 'https:', 'mailto:'];
+const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 const PHOTO_DATA_URL = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 export function emptyLanding() {
@@ -147,7 +147,7 @@ function checkLink(link, label) {
     if (!LINK_TYPES.includes(link.type)) throw httpError(400, `${label}.type must be one of ${LINK_TYPES.join(', ')}`);
     out.type = link.type;
   }
-  if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https or mailto link`);
+  if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
   return out;
 }
 
@@ -184,7 +184,7 @@ function checkItem(item, label) {
     text: checkString(item.text ?? '', LANDING_LIMITS.itemText, `${label}.text`),
     url: checkString(item.url ?? '', LANDING_LIMITS.url, `${label}.url`),
   };
-  if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https or mailto link`);
+  if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
   return out;
 }
 
@@ -259,16 +259,34 @@ export function mergeLandingPatch(current, patch) {
   return out;
 }
 
+// A phone number as typed as a tel: URL, or '' when it has no digits to
+// dial. Mirrors telHref() in client/src/resume/safeUrl.js, which the
+// header templates link the phone number with.
+export function telUrl(phone) {
+  const text = typeof phone === 'string' ? phone.trim() : '';
+  // No two quantifiers here can take the same characters, so a long run of
+  // spaces can't make the match backtrack for seconds.
+  const ext = text.match(/(?:ext\.?|x|#)\s*(\d+)$/i);
+  const number = ext ? text.slice(0, ext.index) : text;
+  const digits = number.replace(/\D/g, '');
+  if (!digits || /[a-z#]/i.test(number)) return '';
+  return `tel:${number.startsWith('+') ? '+' : ''}${digits}${ext ? `;ext=${ext[1]}` : ''}`;
+}
+
 // A first draft for an install that has never saved one, from the default
 // resume's *published* header (never its draft, so nothing unpublished is
 // carried over): its name and title, an empty text section to write an
-// intro in, its links, and a card for it. The header
+// intro in, its email, phone and links, and a card for it. The header
 // isn't validated when it's saved, so only what passes the landing page's
 // own rules is taken.
 export function initialLanding(defaultResumeId, publishedHeader) {
   const header = isPlainObject(publishedHeader) ? publishedHeader : {};
   const text = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
-  const links = (Array.isArray(header.links) ? header.links : [])
+  const contact = [
+    { type: 'email', label: text(header.email, LANDING_LIMITS.linkLabel).trim(), url: typeof header.email === 'string' && header.email.trim() ? `mailto:${header.email.trim()}` : '' },
+    { type: 'phone', label: text(header.phone, LANDING_LIMITS.linkLabel).trim(), url: telUrl(header.phone) },
+  ];
+  const links = [...contact, ...(Array.isArray(header.links) ? header.links : [])]
     .filter((link) => isPlainObject(link) && typeof link.url === 'string' && link.url !== '' && link.url.length <= LANDING_LIMITS.url && isSafeUrl(link.url))
     .slice(0, LANDING_LIMITS.links)
     .map((link) => ({

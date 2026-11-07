@@ -1,5 +1,5 @@
-import { ContactRow, HeadshotImage, HeaderActions } from '@resume/headerParts.jsx';
-import { safeHref } from '@resume/safeUrl.js';
+import { ContactRow, HeadshotImage, HeaderActions, PhoneText } from '@resume/headerParts.jsx';
+import { safeHref, linkProps } from '@resume/safeUrl.js';
 import { linkGlyph } from '@resume/linkTypes.js';
 
 export default function LabeledHeader({ header, showActions, onPrint, pdfHref }) {
@@ -22,12 +22,14 @@ export default function LabeledHeader({ header, showActions, onPrint, pdfHref })
               <a href={safeHref(`mailto:${header.email}`)}>{header.email}</a>
             </ContactRow>
           )}
-          {header.phone && <ContactRow label="p">{header.phone}</ContactRow>}
+          {header.phone && (
+            <ContactRow label="p">
+              <PhoneText phone={header.phone} />
+            </ContactRow>
+          )}
           {(header.links || []).map((link, i) => (
             <ContactRow key={i} label={linkGlyph(link)}>
-              <a href={safeHref(link.url)} target="_blank" rel="noreferrer">
-                {link.label}
-              </a>
+              <a {...linkProps(link.url)}>{link.label}</a>
             </ContactRow>
           ))}
         </div>

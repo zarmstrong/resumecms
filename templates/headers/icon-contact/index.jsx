@@ -1,5 +1,5 @@
-import { HeadshotImage, HeaderActions } from '@resume/headerParts.jsx';
-import { safeHref } from '@resume/safeUrl.js';
+import { HeadshotImage, HeaderActions, PhoneText } from '@resume/headerParts.jsx';
+import { safeHref, linkProps } from '@resume/safeUrl.js';
 import { linkGlyph } from '@resume/linkTypes.js';
 
 function IconContactItem({ glyph, children }) {
@@ -27,12 +27,14 @@ export default function IconContactHeader({ header, showActions, onPrint, pdfHre
                 <a href={safeHref(`mailto:${header.email}`)}>{header.email}</a>
               </IconContactItem>
             )}
-            {header.phone && <IconContactItem glyph="p">{header.phone}</IconContactItem>}
+            {header.phone && (
+              <IconContactItem glyph="p">
+                <PhoneText phone={header.phone} />
+              </IconContactItem>
+            )}
             {(header.links || []).map((link, i) => (
               <IconContactItem key={i} glyph={linkGlyph(link)}>
-                <a href={safeHref(link.url)} target="_blank" rel="noreferrer">
-                  {link.label}
-                </a>
+                <a {...linkProps(link.url)}>{link.label}</a>
               </IconContactItem>
             ))}
           </div>

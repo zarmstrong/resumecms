@@ -8,6 +8,7 @@ import {
   isSafeUrl,
   mergeLandingPatch,
   resolveLanding,
+  telUrl,
   upgradeLanding,
   validateLanding,
 } from './landingFields.js';
@@ -83,14 +84,14 @@ test('validateLanding rejects unknown keys, wrong types and oversized values', (
 });
 
 test('link URLs may not use a script-running scheme, however it is spelled', () => {
-  for (const url of ['javascript:alert(1)', 'JavaScript:alert(1)', ' javascript:alert(1)', 'java\tscript:alert(1)', 'java\nscript:x', 'data:text/html,<script>x</script>', 'vbscript:x', 'tel:123']) {
+  for (const url of ['javascript:alert(1)', 'JavaScript:alert(1)', ' javascript:alert(1)', 'java\tscript:alert(1)', 'java\nscript:x', 'data:text/html,<script>x</script>', 'vbscript:x', 'sms:123']) {
     assert.equal(isSafeUrl(url), false, url);
     assert.equal(status(() => validateLanding(linksSection([{ label: 'a', url }]), known())), 400, url);
     const item = { sections: [{ id: 'i', kind: 'items', items: [{ title: 'a', url }] }] };
     assert.equal(status(() => validateLanding(item, known())), 400, url);
   }
   // A half-typed or relative URL resolves against the page, like an href.
-  for (const url of ['', 'h', 'https:', 'https://example.com', 'mailto:me@example.com', 'example.com/me', '//example.com']) {
+  for (const url of ['', 'h', 'https:', 'https://example.com', 'mailto:me@example.com', 'tel:+15555550100', 'TEL:555', 'example.com/me', '//example.com']) {
     assert.equal(isSafeUrl(url), true, url);
   }
   // One the parser rejects (half typed) saves, but is never shown.
@@ -105,6 +106,35 @@ test('link URLs may not use a script-running scheme, however it is spelled', () 
       { kind: 'items', title: '', items: [{ title: 'P', text: '', url: '' }] },
     ]);
   }
+});
+
+test('email and phone links save, show and keep their type', () => {
+  const links = [
+    { type: 'email', label: 'jo@example.com', url: 'mailto:jo@example.com' },
+    { type: 'phone', label: '+1 555 555 0100', url: 'tel:+15555550100' },
+  ];
+  const draft = validateLanding(
+    { sections: [{ id: 'l', kind: 'links', links }, { id: 'i', kind: 'items', items: [{ title: 'Call', url: 'tel:+15555550100' }] }] },
+    known()
+  );
+  assert.deepEqual(draft.sections[0].links, links);
+  assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections, [
+    { kind: 'links', title: '', links },
+    { kind: 'items', title: '', items: [{ title: 'Call', text: '', url: 'tel:+15555550100' }] },
+  ]);
+  assert.equal(status(() => validateLanding(linksSection([{ type: 'fax', label: 'a', url: 'tel:1' }]), known())), 400);
+});
+
+test('telUrl dials the digits of a number as typed, with its extension', () => {
+  assert.equal(telUrl('+1 (555) 555-0100'), 'tel:+15555550100');
+  assert.equal(telUrl('555.555.0100'), 'tel:5555550100');
+  assert.equal(telUrl('+44 20 7946 0958 ext. 12'), 'tel:+442079460958;ext=12');
+  assert.equal(telUrl('555-0100 x7'), 'tel:5550100;ext=7');
+  for (const phone of ['', '   ', '+', 'call me', null, undefined, 5]) assert.equal(telUrl(phone), '', String(phone));
+  // The header's phone isn't validated: a long run of spaces mustn't stall it.
+  const start = Date.now();
+  for (const phone of [`${' '.repeat(20000)}a`, `${'x '.repeat(10000)}a`, `#${' '.repeat(20000)}a`]) assert.equal(telUrl(phone), '');
+  assert.ok(Date.now() - start < 500);
 });
 
 test('photoUrl must be an inline JPEG, PNG or WebP image', () => {
@@ -201,6 +231,24 @@ test('initialLanding takes only what the landing page allows from the published 
   // It's a valid draft as it stands.
   assert.deepEqual(validateLanding(draft, known('main')), draft);
   assert.deepEqual(initialLanding('main', null).sections.map((s) => s.kind), ['text', 'resumes']);
+});
+
+test("initialLanding starts the links with the header's email and phone", () => {
+  const header = { email: ' jo@example.com ', phone: '+1 (555) 555-0100', links: [{ type: 'github', label: 'gh', url: 'https://github.com/jo' }] };
+  const draft = initialLanding('main', header);
+  assert.deepEqual(draft.sections[1].links, [
+    { type: 'email', label: 'jo@example.com', url: 'mailto:jo@example.com' },
+    { type: 'phone', label: '+1 (555) 555-0100', url: 'tel:+15555550100' },
+    { type: 'github', label: 'gh', url: 'https://github.com/jo' },
+  ]);
+  assert.deepEqual(validateLanding(draft, known('main')), draft);
+  // A phone with nothing to dial, a blank email, or one too many links.
+  const many = Array.from({ length: LANDING_LIMITS.links }, (_, i) => ({ label: `l${i}`, url: `https://x.example/${i}` }));
+  const links = initialLanding('main', { email: ' ', phone: 'ask me', links: many }).sections[1].links;
+  assert.deepEqual(links, many.map((l) => ({ ...l })));
+  const capped = initialLanding('main', { email: 'jo@example.com', links: many }).sections[1].links;
+  assert.equal(capped.length, LANDING_LIMITS.links);
+  assert.equal(capped[0].type, 'email');
 });
 
 test('resolveLanding shows only available resumes, without ids or internal names', () => {

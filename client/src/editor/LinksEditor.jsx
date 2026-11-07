@@ -1,7 +1,8 @@
-import { LINK_TYPES, DEFAULT_LINK_TYPE, linkTypeConfig, inferLinkType } from '../resume/linkTypes.js';
+import { LINK_TYPES, DEFAULT_LINK_TYPE, linkTypeConfig, inferLinkType, followLabelUrl } from '../resume/linkTypes.js';
 
 // A list of { type, label, url } links: pick a type (which prefills an
-// empty label and URL), edit, add, remove. Used by the header form and the
+// empty label and URL), edit, add, remove. An email or phone link's URL is
+// built from its label as it's typed, until the URL is edited by hand. Used by the header form and the
 // landing page form (whose links section has a heading of its own, so it
 // passes `label={null}`).
 export function LinksEditor({ links, onChange, label = 'Links' }) {
@@ -16,49 +17,63 @@ export function LinksEditor({ links, onChange, label = 'Links' }) {
   function removeLink(i) {
     onChange(links.filter((_, idx) => idx !== i));
   }
+  function setLabel(i, label) {
+    const url = followLabelUrl(links[i], label);
+    setLink(i, url === undefined ? { label } : { label, url });
+  }
   function setLinkType(i, type) {
     const link = links[i];
     const cfg = linkTypeConfig(type);
     const patch = { type };
     if (!link.label) patch.label = cfg.defaultLabel;
-    if (!link.url) patch.url = cfg.defaultUrl;
+    if (!link.url) patch.url = link.label && cfg.urlFromLabel ? cfg.urlFromLabel(link.label) : cfg.defaultUrl;
     setLink(i, patch);
   }
 
   return (
     <div className="ed-field">
       {label && <span>{label}</span>}
-      {links.map((link, i) => (
-        <div className="ed-link-item" key={i}>
-          <select className="ed-input" value={link.type || inferLinkType(link)} onChange={(e) => setLinkType(i, e.target.value)}>
-            {LINK_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          <div className="ed-field-row">
-            <input
-              className="ed-input ed-input-flex"
-              value={link.label || ''}
-              onChange={(e) => setLink(i, { label: e.target.value })}
-              placeholder="Label, e.g. linkedin.com/in/you"
-            />
-            <input
-              className="ed-input ed-input-flex"
-              value={link.url || ''}
-              onChange={(e) => setLink(i, { url: e.target.value })}
-              placeholder="https://…"
-            />
-            <button type="button" className="ed-icon-btn" onClick={() => removeLink(i)} aria-label="Remove link">
-              ✕
-            </button>
+      {links.map((link, i) => {
+        const type = inferLinkType(link);
+        const placeholders = PLACEHOLDERS[type] || PLACEHOLDERS.default;
+        return (
+          <div className="ed-link-item" key={i}>
+            <select className="ed-input" value={link.type || type} onChange={(e) => setLinkType(i, e.target.value)}>
+              {LINK_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <div className="ed-field-row">
+              <input
+                className="ed-input ed-input-flex"
+                value={link.label || ''}
+                onChange={(e) => setLabel(i, e.target.value)}
+                placeholder={placeholders.label}
+              />
+              <input
+                className="ed-input ed-input-flex"
+                value={link.url || ''}
+                onChange={(e) => setLink(i, { url: e.target.value })}
+                placeholder={placeholders.url}
+              />
+              <button type="button" className="ed-icon-btn" onClick={() => removeLink(i)} aria-label="Remove link">
+                ✕
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       <button type="button" className="ed-btn ed-btn-ghost" onClick={addLink}>
         + Add link
       </button>
     </div>
   );
 }
+
+const PLACEHOLDERS = {
+  email: { label: 'Email address, e.g. you@example.com', url: 'mailto:…' },
+  phone: { label: 'Phone number, e.g. +1 555 555 0100', url: 'tel:…' },
+  default: { label: 'Label, e.g. linkedin.com/in/you', url: 'https://…' },
+};

@@ -1,4 +1,4 @@
-import { safeHref } from '../resume/safeUrl.js';
+import { linkProps } from '../resume/safeUrl.js';
 import { linkGlyph } from '../resume/linkTypes.js';
 import {
   normalizeSiteColors,
@@ -17,7 +17,7 @@ import './landing.css';
 // preview builds the same from its draft). It takes the default resume's
 // colors and fonts, so the two pages match. Everything is rendered as text:
 // a text section isn't markdown or HTML, and every href still goes through
-// safeHref() although the server only stores safe ones. `highlightIds`
+// safeHref() (by way of linkProps()) although the server only stores safe ones. `highlightIds`
 // (editor preview only) outlines the parts an AI suggestion is shown in:
 // 'hero' for the headline and subheadline, otherwise a section's id (the
 // preview resolves its draft `withIds`).
@@ -59,12 +59,6 @@ export function LandingView({ landing, preview = false, highlightIds = null }) {
       </main>
     </div>
   );
-}
-
-// Opens off-site links in a new tab; a mailto link opens the mail app as is.
-function linkProps(url) {
-  const external = !/^mailto:/i.test(url);
-  return { href: safeHref(url), ...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {}) };
 }
 
 function SectionBody({ section }) {

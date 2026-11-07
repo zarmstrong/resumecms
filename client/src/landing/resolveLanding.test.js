@@ -16,6 +16,7 @@ const draft = {
       title: 'Elsewhere',
       links: [
         { type: 'github', label: '', url: 'https://github.com/jo' },
+        { type: 'phone', label: '+1 555 555 0100', url: 'tel:+15555550100' },
         { label: 'half typed', url: '' },
         { label: 'bad', url: 'java\tscript:alert(1)' },
       ],
@@ -38,7 +39,14 @@ test('the preview resolves the draft like the server does', () => {
   const out = resolveLanding(draft, context);
   assert.deepEqual(out.sections, [
     { kind: 'text', title: '', body: 'Hi' },
-    { kind: 'links', title: 'Elsewhere', links: [{ type: 'github', label: 'https://github.com/jo', url: 'https://github.com/jo' }] },
+    {
+      kind: 'links',
+      title: 'Elsewhere',
+      links: [
+        { type: 'github', label: 'https://github.com/jo', url: 'https://github.com/jo' },
+        { type: 'phone', label: '+1 555 555 0100', url: 'tel:+15555550100' },
+      ],
+    },
     { kind: 'items', title: 'Projects', items: [{ title: 'Tool', text: '', url: '' }] },
     { kind: 'resumes', title: '', cards: [{ label: 'Engineer', blurb: 'b', href: '/resume' }] },
   ]);

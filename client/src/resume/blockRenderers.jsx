@@ -1,5 +1,5 @@
 import { normalizeBullet } from './bulletUtils.js';
-import { safeHref } from './safeUrl.js';
+import { safeHref, linkProps } from './safeUrl.js';
 import { headingFontSize } from './blockStyle.js';
 
 // Joins whichever of the two date fields is actually filled in — no
@@ -143,7 +143,7 @@ function CustomItemBody({ item }) {
       );
     case 'link':
       return safeHref(item.url) ? (
-        <a className="r-custom-item-body" href={safeHref(item.url)} target="_blank" rel="noreferrer">
+        <a className="r-custom-item-body" {...linkProps(item.url)}>
           {item.label || item.url}
         </a>
       ) : item.label ? (

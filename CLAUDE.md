@@ -258,11 +258,15 @@ every save, under `express.json()`'s 2 MB limit, so images would need
 storage of their own first. It's checked far more
 strictly than the header, because all of it is shown to every visitor:
 unknown keys, wrong types and values over `LANDING_LIMITS` are a 400, a
-link (or item URL) with any scheme but http/https/mailto is too (the client's
+link (or item URL) with any scheme but http/https/mailto/tel is too (the client's
 `safeHref()` rule, run through the WHATWG parser so `java\tscript:` is
 caught; a URL the parser rejects outright, like a half-typed `https://`,
 saves but is never shown), and `photoUrl` has to be
-a base64 JPEG/PNG/WebP `data:` URL. A new card must name an existing
+a base64 JPEG/PNG/WebP `data:` URL. A link's `type` only picks its badge;
+its names are `LINK_TYPES`, kept in step with the catalog in
+`client/src/resume/linkTypes.js` and the header enum in
+`mcp/blockSchemas.js`, and `telUrl()` (a fresh draft's phone link) mirrors
+the client's `telHref()`. A new card must name an existing
 resume, but a card already in the draft may outlive its resume, so a
 deletion doesn't make the draft unsavable. Publishing it is separate from
 publishing any resume, and `landing_enabled` isn't drafted: it takes
