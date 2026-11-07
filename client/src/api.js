@@ -58,6 +58,11 @@ export const api = {
   publishLanding: () => request('/landing/publish', { method: 'POST' }),
   discardLandingDraft: () => request('/landing/discard-draft', { method: 'POST' }),
   setLandingEnabled: (enabled) => request('/landing/enabled', { method: 'PUT', body: JSON.stringify({ enabled }) }),
+  // An AI rewrite of one spot on the landing page (issue #73): the draft as
+  // the editor has it, without its photo (landingAi.js's rewriteCopy). Saves
+  // nothing; resolves with { target, proposals, explanation }.
+  landingRewrite: (landing, target, instruction) =>
+    request('/landing/rewrite', { method: 'POST', body: JSON.stringify({ landing, target, instruction }) }),
 
   // What `/` shows on this host: { kind: 'landing', landing } or
   // { kind: 'resume', resume }.

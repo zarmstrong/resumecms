@@ -17,8 +17,11 @@ import './landing.css';
 // preview builds the same from its draft). It takes the default resume's
 // colors and fonts, so the two pages match. Everything is rendered as text:
 // a text section isn't markdown or HTML, and every href still goes through
-// safeHref() although the server only stores safe ones.
-export function LandingView({ landing, preview = false }) {
+// safeHref() although the server only stores safe ones. `highlightIds`
+// (editor preview only) outlines the parts an AI suggestion is shown in:
+// 'hero' for the headline and subheadline, otherwise a section's id (the
+// preview resolves its draft `withIds`).
+export function LandingView({ landing, preview = false, highlightIds = null }) {
   const { site } = landing;
   const colors = normalizeSiteColors(site);
   const style = {
@@ -36,7 +39,7 @@ export function LandingView({ landing, preview = false }) {
   return (
     <div className={`l-page${preview ? ' l-preview' : ''}`} style={style}>
       <main className="l-main">
-        <header className="l-hero">
+        <header className={`l-hero${highlightIds?.has('hero') ? ' l-ai-preview' : ''}`}>
           {landing.photoUrl && <img className="l-photo" src={landing.photoUrl} alt="" />}
           <div>
             {landing.headline && <h1 className="l-headline">{landing.headline}</h1>}
@@ -45,7 +48,10 @@ export function LandingView({ landing, preview = false }) {
         </header>
 
         {landing.sections.map((section, i) => (
-          <section key={i} className={`l-section l-section-${section.kind}`}>
+          <section
+            key={section.id ?? i}
+            className={`l-section l-section-${section.kind}${highlightIds?.has(section.id) ? ' l-ai-preview' : ''}`}
+          >
             {section.title && <h2 className="l-section-title">{section.title}</h2>}
             <SectionBody section={section} />
           </section>

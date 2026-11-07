@@ -11,6 +11,7 @@ import { MAX_INSTRUCTION_LENGTH, rewriteBlock } from '../ai/rewrite.js';
 import { hasRewritableShape } from '../ai/rewritableFields.js';
 import { normalizeBrief, resumeOutline } from '../ai/brief.js';
 import { hasLetterShape, rewriteLetter } from '../ai/letterWriting.js';
+import { landingProfile, rewriteLanding } from '../ai/landingRewrite.js';
 
 const router = Router();
 
@@ -207,5 +208,58 @@ async function rewriteLetterRoute(req, res, storeFor) {
 }
 
 router.post('/rewrite', ...rewriteHandlers(() => store));
+
+// The landing page's rewrite (issue #73, ai/landingRewrite.js), mounted by
+// routes/landing.js at POST /api/landing/rewrite behind its requireAuth. It
+// counts against the same rewriteLimiter as a block's. Returns
+// { target, proposals: [{ target, before, after }], explanation } and saves
+// nothing: the editor saves an accepted proposal through PUT /api/landing.
+//
+// `landing` is the editor's copy of the draft (ahead of the stored one by a
+// debounce, like a block's `data`), checked as a save would check it; the
+// editor leaves its photo out. Without one, the stored draft is used.
+//
+// There's no tailoring here, so a `brief` is refused before the limiter,
+// which skips any request with one (it's tailorLimiter's to count).
+export function landingRewriteHandlers() {
+  return [refuseBrief, rewriteLimiter, landingRewrite];
+}
+
+function refuseBrief(req, res, next) {
+  if (hasBrief(req)) return res.status(400).json({ error: 'A landing page rewrite takes no brief.' });
+  next();
+}
+
+async function landingRewrite(req, res) {
+  const { landing: copy, target } = req.body || {};
+  const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
+  if (instruction.length > MAX_INSTRUCTION_LENGTH) {
+    return res.status(400).json({ error: `Instructions are limited to ${MAX_INSTRUCTION_LENGTH} characters.` });
+  }
+  let landing;
+  let profile;
+  try {
+    landing = copy === undefined ? store.getLanding() : store.checkLandingDraft(copy);
+    // A blurb is about its card's resume; everything else about the person,
+    // whose resume is the default. Either only while it's public and
+    // published (visibleResumeSnapshot), never from a draft.
+    const aboutId = target?.kind === 'card' && typeof target.resumeId === 'string' ? target.resumeId : undefined;
+    profile = landingProfile(store.visibleResumeSnapshot(aboutId));
+  } catch (err) {
+    return sendError(res, err);
+  }
+
+  const settings = normalizeAiSettings(getSetting('ai'));
+  if (!publicAiSettings(settings).available) {
+    return res.status(409).json({ error: 'AI rewriting is not set up. Add an API key in Account Settings.' });
+  }
+  try {
+    res.json(await rewriteLanding({ landing, target, instruction, settings, profile }));
+  } catch (err) {
+    if (err instanceof AiError) return res.status(err.status).json({ error: err.message });
+    console.error('AI landing rewrite failed:', err);
+    res.status(500).json({ error: 'AI rewrite failed unexpectedly.' });
+  }
+}
 
 export default router;

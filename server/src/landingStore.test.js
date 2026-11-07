@@ -201,3 +201,33 @@ test('a draft and snapshot stored before sections still read, publish and discar
   store.publishLanding();
   assert.equal(store.landingForHost('example.com').sections[0].body, 'Hello');
 });
+
+test('checkLandingDraft validates like a save but stores nothing', async () => {
+  const { store } = await makeStore();
+  const before = store.getLandingStatus();
+  const checked = store.checkLandingDraft({ headline: 'Copy', sections: [{ kind: 'text', body: 'Hi' }] });
+  assert.equal(checked.headline, 'Copy');
+  assert.equal(checked.sections[0].kind, 'text');
+  assert.equal(store.getLanding().headline, 'Jo');
+  assert.deepEqual(store.getLandingStatus(), before);
+  assert.equal(status(() => store.checkLandingDraft({ headline: 1 })), 400);
+  assert.equal(status(() => store.checkLandingDraft({ sections: [{ kind: 'resumes', cards: [{ resumeId: 'nope' }] }] })), 400);
+});
+
+test('visibleResumeSnapshot only returns a public, published resume', async () => {
+  const { store, defaultId } = await makeStore();
+  // The default is public and published: its snapshot, not its draft.
+  store.setHeader({ name: 'Unpublished name' });
+  assert.equal(store.visibleResumeSnapshot().header.name, 'Jo');
+  assert.equal(store.visibleResumeSnapshot(defaultId).header.name, 'Jo');
+
+  const publicId = await publicResume(store, 'Sales', 'sales');
+  assert.equal(store.visibleResumeSnapshot(publicId).header.title, 'Sales title');
+  store.updateResume(publicId, { isPublic: false });
+  assert.equal(store.visibleResumeSnapshot(publicId), null);
+
+  const { id: unpublished } = store.createResume({ name: 'Draft', slug: 'draft' });
+  store.updateResume(unpublished, { isPublic: true });
+  assert.equal(store.visibleResumeSnapshot(unpublished), null);
+  assert.equal(store.visibleResumeSnapshot('missing'), null);
+});

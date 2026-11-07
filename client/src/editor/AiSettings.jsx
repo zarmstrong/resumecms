@@ -168,7 +168,8 @@ export function AiSettings({ onChange, onDirtyChange }) {
         )}
         <span className="ed-field-hint">
           Stored in this site's database and never shown again. The selected blocks' text is sent to the provider
-          when you rewrite, including bullets hidden from web or print; your header and contact details are not.
+          when you rewrite, including bullets hidden from web or print; your header and contact details are not. A
+          landing page rewrite sends that page and an outline of a published resume, with its name and title.
         </span>
       </div>
 

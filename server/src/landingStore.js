@@ -48,13 +48,21 @@ export function createLandingStore({ db, defaultResumeId }) {
   // name a resume deleted since, a new one must name one that exists.
   function setLanding(input, { merge = false } = {}) {
     const current = getLanding();
-    const next = validateLanding(merge ? mergeLandingPatch(current, input) : input ?? {}, {
-      knownResumeIds: knownResumeIds(),
-      previousResumeIds: cardResumeIds(current),
-    });
+    const next = checkLanding(merge ? mergeLandingPatch(current, input) : input ?? {}, current);
     setSetting('landing_draft', next);
     touchLanding();
     return next;
+  }
+
+  function checkLanding(input, current) {
+    return validateLanding(input, { knownResumeIds: knownResumeIds(), previousResumeIds: cardResumeIds(current) });
+  }
+
+  // `input` checked as setLanding() would check it, without saving it: the
+  // editor's copy of the draft, which an AI rewrite (routes/ai.js) works on
+  // since it can be a debounce ahead of the stored one.
+  function checkLandingDraft(input) {
+    return checkLanding(input ?? {}, getLanding());
   }
 
   // Same rule as a resume's (see resumeStore.js's isDirty): publish clears
@@ -135,6 +143,15 @@ export function createLandingStore({ db, defaultResumeId }) {
     return { photoUrl, site, resumes: [...resumes].map(([id, target]) => ({ id, ...target })) };
   }
 
+  // A resume's published snapshot, but only while a visitor may see it
+  // (public and published), for an AI rewrite of the landing page to draw
+  // on: what the page then says about it is no more than the resume itself
+  // already shows. Null otherwise. Defaults to the default resume.
+  function visibleResumeSnapshot(resumeId = defaultResumeId()) {
+    const row = db.prepare('SELECT 1 FROM resumes WHERE id = ? AND is_public = 1').get(resumeId);
+    return (row && publishedResumeOf(resumeId)) || null;
+  }
+
   // The published landing page `hostname` shows at `/`, or null when it
   // shows a resume there: the feature is off, nothing is published, or the
   // host is one of a resume's domains. Any mapping counts, published or
@@ -157,6 +174,8 @@ export function createLandingStore({ db, defaultResumeId }) {
     discardLandingDraft,
     setLandingEnabled,
     getLandingContext,
+    checkLandingDraft,
+    visibleResumeSnapshot,
     landingForHost,
   };
 }
