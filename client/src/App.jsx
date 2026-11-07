@@ -4,6 +4,7 @@ import { api } from './api.js';
 import { PublicResumePage } from './resume/PublicResumePage.jsx';
 import { TemplatePreviewPage } from './resume/TemplatePreviewPage.jsx';
 import { HomePage, ResumeRoute } from './landing/HomePage.jsx';
+import { LetterPrintPage } from './letters/LetterPrintPage.jsx';
 import { LoginPage } from './editor/LoginPage.jsx';
 import { ResumesEditor } from './editor/ResumesEditor.jsx';
 import './editor/editor.css';
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/resume" element={<ResumeRoute />} />
         <Route path="/print" element={<PublicResumePage mode="print" />} />
+        <Route path="/print/letter" element={<LetterPrintPage />} />
         <Route path="/r/:slug" element={<SlugResumePage />} />
         <Route path="/template-preview" element={<TemplatePreviewPage />} />
         <Route path="/template-preview/preset/:id" element={<TemplatePreviewPage />} />

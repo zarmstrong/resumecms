@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { EditorPage } from './EditorPage.jsx';
 import { LandingEditorPage } from './LandingEditorPage.jsx';
-import { LANDING_PAGE, landingShown, pickResume } from './resumeLinks.js';
+import { CoverLettersPage } from './CoverLettersPage.jsx';
+import { LANDING_PAGE, LETTERS_PAGE, editorParams, landingShown, pickResume } from './resumeLinks.js';
 
 // The editor for whichever resume `?resume=<id>` names (issue #53), the
 // default when it names none or one that's gone. EditorPage is keyed by
@@ -11,7 +12,8 @@ import { LANDING_PAGE, landingShown, pickResume } from './resumeLinks.js';
 // resume (its AI proposals, a debounce timer, a response still in flight)
 // can land on the next. EditorPage flushes its waiting saves before it
 // asks to switch, and again on unmount for a switch it didn't start (the
-// browser's back button).
+// browser's back button). A resume's cover letters (issue #71) are its
+// ?page=letters, mounted the same way.
 export function ResumesEditor({ onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [resumes, setResumes] = useState(null);
@@ -47,8 +49,11 @@ export function ResumesEditor({ onLogout }) {
     api.landingStatus().then(setLandingStatus, () => {});
   }, []);
 
-  // The landing page has its own editor, at ?page=landing.
-  const onLandingPage = searchParams.get('page') === LANDING_PAGE;
+  // The landing page has its own editor, at ?page=landing; a resume's
+  // cover letters are at ?page=letters (with its ?resume=).
+  const page = searchParams.get('page');
+  const onLandingPage = page === LANDING_PAGE;
+  const onLettersPage = page === LETTERS_PAGE;
   const requestedId = searchParams.get('resume');
   const current = resumes && pickResume(resumes, requestedId);
 
@@ -75,10 +80,11 @@ export function ResumesEditor({ onLogout }) {
       if (target) setResumes((shownList) => (shownList.some((r) => r.id === id) ? shownList : list));
       pendingShown.current = false;
       setPendingTailor(tailor && target ? { resumeId: id, ...tailor } : null);
-      setSearchParams(target && !target.isDefault ? { resume: id } : {});
+      setSearchParams(editorParams(target));
     },
     [resumes, setSearchParams]
   );
+  const openLetters = useCallback((resume) => setSearchParams(editorParams(resume, LETTERS_PAGE)), [setSearchParams]);
   const takePendingTailor = useCallback(() => setPendingTailor(null), []);
   const currentId = current?.id;
   useEffect(() => {
@@ -92,15 +98,28 @@ export function ResumesEditor({ onLogout }) {
   useEffect(() => {
     if (onLandingPage) return;
     if (current && requestedId && (requestedId !== current.id || current.isDefault)) {
-      setSearchParams({}, { replace: true });
+      setSearchParams(editorParams(current, onLettersPage ? LETTERS_PAGE : null), { replace: true });
     }
-  }, [current, requestedId, setSearchParams, onLandingPage]);
+  }, [current, requestedId, setSearchParams, onLandingPage, onLettersPage]);
 
   if (error) return <div className="ed-loading">Couldn't load your resumes: {error}</div>;
   if (!current) return <div className="ed-loading">Loading editor…</div>;
 
   if (onLandingPage) {
     return <LandingEditorPage resumes={resumes} onSwitch={switchTo} onStatus={setLandingStatus} onLogout={onLogout} />;
+  }
+
+  if (onLettersPage) {
+    return (
+      <CoverLettersPage
+        key={current.id}
+        resume={current}
+        resumes={resumes}
+        onSwitch={switchTo}
+        onBack={() => switchTo(current.id)}
+        onLogout={onLogout}
+      />
+    );
   }
 
   return (
@@ -112,6 +131,7 @@ export function ResumesEditor({ onLogout }) {
       pendingTailor={pendingTailor?.resumeId === current.id ? pendingTailor : null}
       onPendingTailorTaken={takePendingTailor}
       onResumesChanged={reload}
+      onOpenLetters={() => openLetters(current)}
       landingShown={landingShown(landingStatus)}
       onLogout={onLogout}
     />

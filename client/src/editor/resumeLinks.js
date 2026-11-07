@@ -68,6 +68,19 @@ export function resumePatch(resume, form) {
 // resumes; a resume id is a UUID, so it can't collide.
 export const LANDING_PAGE = 'landing';
 
+// A resume's cover letters (issue #71) have their own page in the editor,
+// ?page=letters next to the resume's own ?resume=<id>.
+export const LETTERS_PAGE = 'letters';
+
+// The editor's search params for `resume` (its own editor, or with `page`
+// one of its pages): the default resume needs no ?resume=.
+export function editorParams(resume, page = null) {
+  const params = {};
+  if (page) params.page = page;
+  if (resume && !resume.isDefault) params.resume = resume.id;
+  return params;
+}
+
 // What the landing page's status means for visitors: whether `/` shows it
 // (on this, the main domain). `status` is { enabled, publishedAt }.
 export function landingShown(status) {

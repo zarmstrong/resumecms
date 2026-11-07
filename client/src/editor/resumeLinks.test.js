@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHostnames, pickResume, publicUrl, resumeLabel, resumePatch } from './resumeLinks.js';
+import { LETTERS_PAGE, editorParams, parseHostnames, pickResume, publicUrl, resumeLabel, resumePatch } from './resumeLinks.js';
 
 const resume = (fields) => ({
   id: 'r',
@@ -81,4 +81,11 @@ test("the default's Public checkbox never counts, even unticked from before it w
   const form = { name: 'Main', slug: 'main', isPublic: false, hostnames: '' };
   assert.deepEqual(resumePatch(main, form), {});
   assert.deepEqual(resumePatch(main, { ...form, name: 'Main CV' }), { name: 'Main CV' });
+});
+
+test('editor params name the resume unless it is the default, and the page when there is one', () => {
+  assert.deepEqual(editorParams(main), {});
+  assert.deepEqual(editorParams(main, LETTERS_PAGE), { page: 'letters' });
+  assert.deepEqual(editorParams({ id: 'r2', isDefault: false }), { resume: 'r2' });
+  assert.deepEqual(editorParams({ id: 'r2', isDefault: false }, LETTERS_PAGE), { page: 'letters', resume: 'r2' });
 });

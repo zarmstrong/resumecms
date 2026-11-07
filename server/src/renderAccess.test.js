@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RENDER_COOKIE, renderCookieValue, renderTarget } from './renderAccess.js';
+import { RENDER_COOKIE, RENDER_LETTER_COOKIE, renderCookieValue, renderTarget } from './renderAccess.js';
 
 const id = '3acde287-8bac-4b34-9408-82ee84488704';
 
@@ -27,4 +27,13 @@ test('anything else names no resume', () => {
   ]) {
     assert.equal(renderTarget(header), null, String(header));
   }
+});
+
+test("a letter's render cookie names its letter, and the two kinds don't stand in for each other", () => {
+  const letter = renderCookieValue(id, 'letter');
+  assert.equal(renderTarget(`${RENDER_LETTER_COOKIE}=${letter}`, 'letter'), id);
+  assert.equal(renderTarget(`${RENDER_LETTER_COOKIE}=${letter}`), null);
+  assert.equal(renderTarget(`${RENDER_COOKIE}=${letter}`), null);
+  assert.equal(renderTarget(`${RENDER_LETTER_COOKIE}=${renderCookieValue(id)}`, 'letter'), null);
+  assert.equal(renderTarget(`${RENDER_COOKIE}=${renderCookieValue(id)}`, 'letter'), null);
 });

@@ -6,7 +6,8 @@
 // server/src/blockData.js — its keys must match BLOCK_DATA_SCHEMAS below
 // (blockData.test.js enforces that), so change both together — but not
 // enum values or unknown keys; the header and site settings are stored
-// as-is. Keep this in step with the forms when fields or options change.
+// as-is. Keep this in step with the forms when fields or options change
+// (COVER_LETTER_SCHEMA with CoverLetterForm.jsx and coverLetterFields.js).
 
 const SPACING = ['', 'none', 'xsmall', 'small', 'medium', 'large', 'xlarge'];
 
@@ -290,12 +291,42 @@ export const LANDING_SCHEMA = {
   },
 };
 
+// A cover letter's `data` (issue #71); coverLetterFields.js type-checks
+// these keys (its COVER_LETTER_DATA_VALIDATOR must list the same ones).
+export const COVER_LETTER_SCHEMA = {
+  description:
+    "A cover letter's `data`. It belongs to one resume and is drawn under that resume's header, in its colors and fonts. Every key is optional and type-checked on write (a wrong kind of value is a 400). Private: never published.",
+  properties: {
+    date: { type: 'string', description: "Shown as written, e.g. \"March 3, 2026\"; '' shows the date it's exported" },
+    recipientName: { type: 'string', description: 'e.g. "Jane Smith"' },
+    recipientTitle: { type: 'string', description: 'e.g. "Engineering Manager"' },
+    company: { type: 'string' },
+    address: { type: 'string', description: "The recipient's address, one line per line (\\n between them)" },
+    salutation: { type: 'string', description: 'e.g. "Dear Ms. Smith,"' },
+    paragraphs: { type: 'array', items: { type: 'string' }, description: 'The body, one plain-text string per paragraph, in order' },
+    closing: { type: 'string', description: 'e.g. "Sincerely,"' },
+    signature: { type: 'string', description: "The name it's signed with; '' uses the resume header's name" },
+  },
+  example: {
+    date: '',
+    recipientName: 'Jane Smith',
+    recipientTitle: 'Engineering Manager',
+    company: 'Acme',
+    address: '1 Main St\nSpringfield',
+    salutation: 'Dear Ms. Smith,',
+    paragraphs: ['I am writing to apply for…', 'At my last role I…'],
+    closing: 'Sincerely,',
+    signature: '',
+  },
+};
+
 export const BLOCK_SCHEMAS = {
   common: COMMON,
   blocks: BLOCK_DATA_SCHEMAS,
   header: HEADER_SCHEMA,
   site: SITE_SCHEMA,
   landing: LANDING_SCHEMA,
+  coverLetter: COVER_LETTER_SCHEMA,
 };
 
 export function blockSchemaFor(type) {

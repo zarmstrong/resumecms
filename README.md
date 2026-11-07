@@ -20,6 +20,9 @@ exact same components.
   the PDF export; you generally won't visit this directly).
 - **Download PDF** — server-generates a real PDF on demand via headless
   Chromium, from the same markup as the print view.
+- **Cover letters** — private letters kept next to each resume, drawn under
+  its header in its look, downloadable as PDF or copied as plain text (see
+  "Cover letters" below).
 
 ## How content is modeled
 
@@ -176,8 +179,12 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/resumes` | `{ name, slug?, copyFrom?, tailoring? }` → a new private, unpublished resume. With `copyFrom` (a resume id) it starts as a copy of that resume's draft, and keeps its `tailoring` unless one (or null) is sent; without it, with the default resume's header and site settings and no blocks. `slug` (lowercase letters, digits and dashes) defaults to one made from the name; a taken one is a 409 |
 | `GET /api/resumes/:id` | one resume, same shape as the list |
 | `PATCH /api/resumes/:id` | any of `{ name, slug, isPublic, isDefault: true, hostnames, tailoring }`. `tailoring` replaces the brief (null removes it); it's a note, not a draft change, and never published. Only a published resume can become the default, the default is always public, and there's no un-defaulting: make another resume the default instead. `hostnames` replaces the resume's domains (see [Showing a resume on its own domain](#showing-a-resume-on-its-own-domain)): giving it any makes it public, making it private removes them, and a domain another resume has is a 409 |
-| `DELETE /api/resumes/:id` | delete a resume with its blocks, settings, domains and PDF; the default can't be deleted (409) |
+| `DELETE /api/resumes/:id` | delete a resume with its blocks, settings, domains, cover letters and PDFs; the default can't be deleted (409) |
 | `GET /api/resumes/:id/resume.pdf` | download any resume's last rendered PDF, private ones included |
+| `GET /api/resumes/:id/cover-letters` | that resume's [cover letters](#cover-letters), oldest first: `{ id, resumeId, title, data, createdAt, updatedAt }` |
+| `POST /api/resumes/:id/cover-letters` | `{ title?, data? }` (an empty letter when `data` is left out) or `{ title?, copyFrom: <letter id> }` (a copy of another of its letters). `data`'s keys are type-checked (`paragraphs` must be an array of strings); an unknown field is a 400 |
+| `GET/PUT/DELETE /api/resumes/:id/cover-letters/:letterId` | one letter. `PUT` takes `{ title?, data? }`, `data` replaced whole. A letter of another resume is a 404 |
+| `GET /api/resumes/:id/cover-letters/:letterId/letter.pdf` | the letter as a PDF download, rendered on request and reused until the letter or its resume's header or site settings change |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`) for that resume. The unprefixed ones act on whichever resume is the default |
 | `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, photo, photoUrl, sections }`, each section `{ id, kind, title, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url }]`), `links` (`links`) or `resumes` (`cards: [{ resumeId, label, blurb }]`)), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card can link to (public and published). Before the first save the draft is built from the default resume's published header |
 | `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL that isn't `http`/`https`/`mailto`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card for an unknown resume are all a 400 |
@@ -193,6 +200,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/public/home` | public, what `/` shows on this host: `{ kind: 'landing', landing }` when the landing page is enabled, published and the host isn't one of a resume's `hostnames`, otherwise `{ kind: 'resume', resume }` (the same as `/api/public/resume?mode=web`). Cards only list public, published resumes, by link (`/resume` for the default, `/r/<slug>` otherwise), never by id or internal name. Sent with `Vary: Host, X-Forwarded-Host` |
 | `GET /api/public/resumes/:slug?mode=web\|print` | public, the same for a resume by its link name; 404 unless that resume is public and published. Sent with `X-Robots-Tag: noindex` |
 | `GET /api/public/resumes/:slug/resume.pdf` | public, its PDF, on the same terms |
+| `GET /api/public/letter` | the PDF renderer's own: the cover letter its signed render cookie names; a 404 to anyone else |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
 
 ## MCP server
@@ -232,7 +240,7 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 
 | Tool | What it does |
 |---|---|
-| `get_block_schemas` | documents each block type's `data` shape plus the header and site-settings objects (`type` narrows it to one block type); the documented block keys are type-checked on write, so a wrong-kind value (`bullets` as a string) is a 400 |
+| `get_block_schemas` | documents each block type's `data` shape plus the header, site-settings, landing page and cover letter objects (`type` narrows it to one block type); the documented block keys are type-checked on write, so a wrong-kind value (`bullets` as a string) is a 400 |
 | `get_draft` | the whole draft in one call: `{ header, site, blocks }` in display order, hidden blocks included |
 | `list_blocks`, `get_block` | draft blocks in display order / one block by id |
 | `create_block` | `{ type, data?, parentId? }` — appended to the end of its sibling group |
@@ -249,7 +257,11 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 | `list_resumes`, `get_resume` | every resume (the default first) / one, by `resumeId`, with its slug, visibility, domains and publish status, as `GET /api/resumes` returns them |
 | `create_resume` | `{ name, slug?, copyFrom?, tailoring? }` — a new private, unpublished resume; `copyFrom` copies that resume's draft, and its `tailoring` unless one (or null) is sent |
 | `update_resume` | `{ resumeId, name?, slug?, isPublic?, isDefault?, hostnames?, tailoring? }` — send only what changes, with the same rules as `PATCH /api/resumes/:id` (`hostnames` replaces the list and makes the resume public; only a published resume can become the default; `tailoring` records the brief a resume is tailored for, null removes it) |
-| `delete_resume` | `{ resumeId }` — deletes a resume with its blocks, domains and PDF; the default can't be deleted |
+| `delete_resume` | `{ resumeId }` — deletes a resume with its blocks, domains, cover letters and PDFs; the default can't be deleted |
+| `list_cover_letters`, `get_cover_letter` | the resume's cover letters / one, by `letterId` |
+| `create_cover_letter` | `{ title?, data?, copyFrom? }` — a new letter (empty unless `data` is sent), or a copy of another of the resume's letters |
+| `update_cover_letter` | `{ letterId, title?, data?, replaceData? }` — `data` is **merged** like `update_block`'s (`paragraphs` is replaced whole); `replaceData: true` replaces it, matching the `PUT` route |
+| `delete_cover_letter` | `{ letterId }` — deletes the letter and its PDF |
 | `get_landing_page` | the landing page draft, its status and its context, as `GET /api/landing` returns them |
 | `update_landing_page` | merge fields into the landing page draft (`sections` is replaced whole; a section sent without an `id` is new; `null` resets a field), with the same checks as `PUT /api/landing` |
 | `publish_landing_page`, `discard_landing_draft` | publish the landing page draft / restore it from its last published snapshot |
@@ -403,6 +415,25 @@ What visitors see:
 - A domain mapped to a resume keeps showing that resume, landing page or
   not. The landing page only replaces the default resume on hosts that
   aren't one of a resume's domains.
+
+### Cover letters
+
+Each resume can keep cover letters: open **Cover letters** in the editor's
+top bar. A letter has a date (left blank, it shows the day you export it),
+the recipient's name, title, company and address, a salutation, its
+paragraphs (drag a paragraph's handle, or press Up/Down on it, to reorder),
+a closing and a signature (blank signs with your header's name). It's drawn
+under the resume's header, in its colors and fonts, as the resume stands
+in the editor (its draft).
+
+Letters are private working documents: they're never published or shown
+on the public site, and editing one doesn't count as an unpublished change
+to the resume. **Download PDF** renders one on the spot (the render is
+kept, so a second download is instant until something in it changes);
+**Copy text** copies it from the salutation to the signature, for
+application forms that only take a text box. Copying a resume doesn't
+copy its letters; deleting one deletes them. MCP clients can write them
+too (`create_cover_letter` and friends), from a job posting of their own.
 
 ### Caching and CDNs
 

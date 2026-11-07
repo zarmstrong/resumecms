@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { httpError } from './httpError.js';
 import { assertBlockData, isValidBlockData } from './blockData.js';
 import { createResumeSettings } from './settings.js';
-import { pdfPathFor } from './pdfPaths.js';
+import { pdfPathFor, writePdfAtomically } from './pdfPaths.js';
 import { cloneBlockRows, slugify, uniqueSlug, validateName, validateSlug } from './resumeFields.js';
 import { normalizeHostnames, requestHostKey } from './hostnames.js';
 import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
@@ -12,10 +12,12 @@ import { findSplitSectionId } from './blockReorder.js';
 import { blocksForMode } from './publicBlocks.js';
 import { normalizeBrief } from './ai/brief.js';
 import { createLandingStore } from './landingStore.js';
+import { createCoverLetterStore, removeLetterPdf } from './coverLetterStore.js';
 
 // The single implementation of every content operation the editor's REST
 // routes and the MCP tools expose: blocks, header, site settings, publish
-// and discard. Routes and tools are thin wrappers over this. It's a factory
+// and discard, and each resume's cover letters (coverLetterStore.js).
+// Routes and tools are thin wrappers over this. It's a factory
 // over an injected database handle (plus the PDF renderer and output
 // directory) rather than a module that imports db.js, so
 // resumeStore.test.js can run the real SQL against a ':memory:' database;
@@ -109,11 +111,20 @@ const RESUME_METHODS = [
   'getPublishedResume',
   'getPdfFile',
   'currentDraft',
+  'listCoverLetters',
+  'getCoverLetter',
+  'createCoverLetter',
+  'updateCoverLetter',
+  'deleteCoverLetter',
+  'coverLetterPdf',
+  'coverLetterRenderContent',
 ];
 
-// `pdfDir` holds one rendered PDF per resume (pdfPathFor). `renderPdf` is
-// called as renderPdf({ signal, resumeId }).
-export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAULT_PDF_TIMEOUT_MS }) {
+// `pdfDir` holds one rendered PDF per resume (pdfPathFor), and the cover
+// letters' under letters/ (letterPdfPathFor). `renderPdf` is called as
+// renderPdf({ signal, resumeId }), `renderLetterPdf` as
+// renderLetterPdf({ signal, letterId }); without one, a letter's PDF is a 500.
+export function createResumeStore({ db, renderPdf, renderLetterPdf, pdfDir, pdfTimeoutMs = DEFAULT_PDF_TIMEOUT_MS }) {
   // ---- the PDF queue (shared by every resume) ------------------------------
 
   // Everything that writes a PDF file goes through this one queue, so two
@@ -136,6 +147,15 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
   function renderPdfBounded(resumeId) {
     return withTimeout(
       ({ signal }) => renderPdf({ signal, resumeId }),
+      pdfTimeoutMs,
+      `PDF render timed out after ${pdfTimeoutMs} ms and was abandoned`
+    );
+  }
+
+  function renderLetterPdfBounded(letterId) {
+    if (!renderLetterPdf) return Promise.reject(new Error('No cover letter renderer is configured'));
+    return withTimeout(
+      ({ signal }) => renderLetterPdf({ signal, letterId }),
       pdfTimeoutMs,
       `PDF render timed out after ${pdfTimeoutMs} ms and was abandoned`
     );
@@ -382,7 +402,7 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     return getResume(resumeId);
   }
 
-  // Removes a resume with its blocks, settings, domains and PDF. The default can't
+  // Removes a resume with its blocks, settings, domains, cover letters and PDFs. The default can't
   // go (make another one the default first), so there's always one. The
   // PDF goes straight away, not on the PDF queue (which could be busy with
   // another resume's render for a while): a render of this one that's still
@@ -395,8 +415,10 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     if (row.is_default === 1) {
       throw httpError(409, "The default resume can't be deleted: make another resume the default first");
     }
+    const letterIds = db.prepare('SELECT id FROM cover_letters WHERE resume_id = ?').all(resumeId).map((r) => r.id);
     db.transaction(() => {
       db.prepare('DELETE FROM blocks WHERE resume_id = ?').run(resumeId);
+      db.prepare('DELETE FROM cover_letters WHERE resume_id = ?').run(resumeId);
       db.prepare('DELETE FROM resume_settings WHERE resume_id = ?').run(resumeId);
       db.prepare('DELETE FROM resume_hosts WHERE resume_id = ?').run(resumeId);
       db.prepare('DELETE FROM resumes WHERE id = ?').run(resumeId);
@@ -407,6 +429,7 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     } catch (err) {
       console.error(`Could not remove the PDF of deleted resume ${resumeId}:`, err);
     }
+    for (const letterId of letterIds) removeLetterPdf(pdfDir, letterId);
     return { deleted: resumeId };
   }
 
@@ -446,6 +469,15 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     };
   }
 
+  // What the PDF renderer's /print/letter page shows (via
+  // /api/public/letter, for a request carrying the letter's render cookie):
+  // any resume's letter by its id, with that resume's header and look.
+  function letterForRender(letterId) {
+    const row = typeof letterId === 'string' && db.prepare('SELECT resume_id FROM cover_letters WHERE id = ?').get(letterId);
+    if (!row) throw httpError(404, 'Cover letter not found');
+    return scopedStore(row.resume_id).coverLetterRenderContent(letterId);
+  }
+
   const delegates = Object.fromEntries(
     RESUME_METHODS.map((name) => [name, (...args) => scopedStore(defaultResumeId())[name](...args)])
   );
@@ -459,6 +491,7 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
     forResume,
     forHost,
     forPublicSlug,
+    letterForRender,
     defaultResumeId,
     ensurePdfs,
     listResumes,
@@ -473,6 +506,15 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
   function createScopedStore(resumeId) {
     const { getSetting, setSetting, touchDraft } = createResumeSettings(db, resumeId);
     const pdfPath = pdfPathFor(pdfDir, resumeId);
+    const letters = createCoverLetterStore({
+      db,
+      resumeId,
+      getSetting,
+      withPdfLock,
+      renderLetterPdf: renderLetterPdfBounded,
+      mergeShallow,
+      pdfDir,
+    });
 
     // A render waits on the shared PDF queue, so its resume can be deleted
     // before or while it runs (deleteResume). Checked on both sides of the
@@ -837,19 +879,8 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
       };
     }
 
-    // Write to a sibling temp file and rename it into place, so a download
-    // overlapping a publish never reads a half-written PDF and a crash
-    // mid-write can't leave a truncated file that looks valid.
     function writePdf(buffer) {
-      fs.mkdirSync(pdfDir, { recursive: true });
-      const tmp = `${pdfPath}.${process.pid}.${Date.now()}.tmp`;
-      try {
-        fs.writeFileSync(tmp, buffer);
-        fs.renameSync(tmp, pdfPath);
-      } catch (err) {
-        fs.rmSync(tmp, { force: true });
-        throw err;
-      }
+      writePdfAtomically(pdfPath, buffer);
     }
 
     // The snapshot is taken synchronously, before anything is queued, so a
@@ -1001,6 +1032,7 @@ export function createResumeStore({ db, renderPdf, pdfDir, pdfTimeoutMs = DEFAUL
       getPublishedResume,
       getPdfFile,
       currentDraft,
+      ...letters,
     };
   }
 }

@@ -15,27 +15,39 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 // the renderer, which runs in this same process, can mint one.
 export const RENDER_COOKIE = 'resumecms_render';
 
+// The same for a cover letter (issue #71): /print/letter fetches
+// /api/public/letter, which serves the letter this cookie names, and
+// nothing at all to a request without one. A cookie of its own, signed over
+// a different input, so neither kind can stand in for the other.
+export const RENDER_LETTER_COOKIE = 'resumecms_render_letter';
+
+const COOKIE_NAMES = { resume: RENDER_COOKIE, letter: RENDER_LETTER_COOKIE };
+
 // Set on the response to a request with a valid render cookie, naming the
 // resume it served. The renderer checks it before keeping a PDF, so if the
 // cookie ever stops reaching the server (a Puppeteer change in how cookies
 // for 127.0.0.1 are stored, say), renders fail loudly instead of quietly
 // filing the default resume's content under another resume's name.
 export const RENDERED_RESUME_HEADER = 'X-ResumeCMS-Resume';
+// And the cover letter /api/public/letter served.
+export const RENDERED_LETTER_HEADER = 'X-ResumeCMS-Letter';
 
 const key = randomBytes(32);
 
-function sign(resumeId) {
-  return createHmac('sha256', key).update(resumeId).digest('base64url');
+// `kind` is 'resume' or 'letter'.
+function sign(id, kind) {
+  return createHmac('sha256', key).update(`${kind}:${id}`).digest('base64url');
 }
 
-export function renderCookieValue(resumeId) {
-  return `${resumeId}.${sign(resumeId)}`;
+export function renderCookieValue(id, kind = 'resume') {
+  return `${id}.${sign(id, kind)}`;
 }
 
-// The resume id a request's Cookie header vouches for, or null.
-export function renderTarget(cookieHeader) {
+// The resume id (with kind 'letter', the cover letter id) a request's
+// Cookie header vouches for, or null.
+export function renderTarget(cookieHeader, kind = 'resume') {
   if (typeof cookieHeader !== 'string') return null;
-  const prefix = `${RENDER_COOKIE}=`;
+  const prefix = `${COOKIE_NAMES[kind]}=`;
   const raw = cookieHeader
     .split(';')
     .map((part) => part.trim())
@@ -44,9 +56,9 @@ export function renderTarget(cookieHeader) {
   if (!raw) return null;
   const dot = raw.lastIndexOf('.');
   if (dot <= 0) return null;
-  const resumeId = raw.slice(0, dot);
+  const id = raw.slice(0, dot);
   const given = Buffer.from(raw.slice(dot + 1));
-  const expected = Buffer.from(sign(resumeId));
+  const expected = Buffer.from(sign(id, kind));
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
-  return resumeId;
+  return id;
 }

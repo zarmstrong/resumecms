@@ -1,5 +1,11 @@
 import puppeteer from 'puppeteer';
-import { RENDER_COOKIE, RENDERED_RESUME_HEADER, renderCookieValue } from './renderAccess.js';
+import {
+  RENDER_COOKIE,
+  RENDER_LETTER_COOKIE,
+  RENDERED_LETTER_HEADER,
+  RENDERED_RESUME_HEADER,
+  renderCookieValue,
+} from './renderAccess.js';
 
 // Renders a PDF and returns its bytes; the store decides where they go
 // (see pdfPaths.js and resumeStore.js's writePdf).
@@ -55,10 +61,41 @@ function untilAborted(promise, signal) {
 // which is how /print's fetch of /api/public/resume gets this resume, public
 // or not, instead of the default; the context is thrown away afterwards, so
 // no cookie or cache carries over to the next render.
-export async function renderResumePdf({ signal, resumeId } = {}) {
+export function renderResumePdf({ signal, resumeId } = {}) {
+  return renderPage({
+    signal,
+    pagePath: '/print',
+    cookie: resumeId ? { name: RENDER_COOKIE, value: renderCookieValue(resumeId) } : null,
+    apiPath: '/api/public/resume',
+    servedHeader: RENDERED_RESUME_HEADER,
+    expectedId: resumeId,
+    describeServed: (servedId) =>
+      `/print was served ${servedId ? `resume ${servedId}` : 'the default resume'} instead of ${resumeId}`,
+  });
+}
+
+// A cover letter (issue #71), the same way: /print/letter, whose fetch of
+// /api/public/letter is served the letter its cookie names. That endpoint
+// serves nothing without one, so there's no default to fall back on.
+export function renderLetterPdf({ signal, letterId }) {
+  return renderPage({
+    signal,
+    pagePath: '/print/letter',
+    cookie: { name: RENDER_LETTER_COOKIE, value: renderCookieValue(letterId, 'letter') },
+    apiPath: '/api/public/letter',
+    servedHeader: RENDERED_LETTER_HEADER,
+    expectedId: letterId,
+    describeServed: (servedId) => `/print/letter was served ${servedId ? `letter ${servedId}` : 'no letter'} instead of ${letterId}`,
+  });
+}
+
+// Loads `pagePath` with `cookie` set and prints it, once the page has
+// said it's ready and `apiPath`'s response named `expectedId` in its
+// `servedHeader` (a page that got the wrong content is no PDF of ours).
+async function renderPage({ signal, pagePath, cookie, apiPath, servedHeader, expectedId, describeServed }) {
   const port = process.env.PORT || 4000;
   const host = '127.0.0.1';
-  const printUrl = `http://${host}:${port}/print`;
+  const printUrl = `http://${host}:${port}${pagePath}`;
 
   signal?.throwIfAborted();
   const launch = getBrowser();
@@ -68,27 +105,20 @@ export async function renderResumePdf({ signal, resumeId } = {}) {
   try {
     const browser = await untilAborted(launch, signal);
     context = await untilAborted(browser.createBrowserContext(), signal);
-    if (resumeId) {
-      await untilAborted(
-        context.setCookie({ name: RENDER_COOKIE, value: renderCookieValue(resumeId), domain: host, path: '/', httpOnly: true }),
-        signal
-      );
+    if (cookie) {
+      await untilAborted(context.setCookie({ ...cookie, domain: host, path: '/', httpOnly: true }), signal);
     }
     const page = await untilAborted(context.newPage(), signal);
-    // Which resume /api/public/resume says it served this page (see
-    // RENDERED_RESUME_HEADER); a page that got the wrong one is no PDF of ours.
-    let servedResumeId = null;
+    let servedId = null;
     page.on('response', (response) => {
-      if (new URL(response.url()).pathname === '/api/public/resume') {
-        servedResumeId = response.headers()[RENDERED_RESUME_HEADER.toLowerCase()] ?? null;
+      if (new URL(response.url()).pathname === apiPath) {
+        servedId = response.headers()[servedHeader.toLowerCase()] ?? null;
       }
     });
     await untilAborted(page.goto(printUrl, { waitUntil: 'networkidle0' }), signal);
-    // The client app sets this flag once the resume data has fetched and rendered.
+    // The client app sets this flag once the data has fetched and rendered.
     await untilAborted(page.waitForFunction('window.__PDF_READY__ === true', { timeout: 15000 }), signal);
-    if (resumeId && servedResumeId !== resumeId) {
-      throw new Error(`/print was served ${servedResumeId ? `resume ${servedResumeId}` : 'the default resume'} instead of ${resumeId}`);
-    }
+    if (expectedId && servedId !== expectedId) throw new Error(describeServed(servedId));
 
     const pdfBytes = await untilAborted(
       page.pdf({

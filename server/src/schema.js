@@ -78,4 +78,22 @@ export function ensureSchema(db) {
     db.exec('ALTER TABLE blocks ADD COLUMN resume_id TEXT');
   }
   db.exec('CREATE INDEX IF NOT EXISTS blocks_by_group ON blocks (resume_id, parent_id, position)');
+
+  // Cover letters (issue #71): private working documents, each belonging to
+  // one resume, whose header and look it shares. Not drafted or published.
+  // `data` is the letter itself (coverLetterFields.js); `pdf_key` says what
+  // the cached PDF under pdf/letters/ was rendered from (coverLetterStore.js),
+  // NULL while there's none.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cover_letters (
+      id TEXT PRIMARY KEY,
+      resume_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      data TEXT NOT NULL,
+      pdf_key TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS cover_letters_by_resume ON cover_letters (resume_id, created_at);
+  `);
 }

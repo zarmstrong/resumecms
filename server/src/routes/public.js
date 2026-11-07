@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { store } from '../store.js';
 import { NOINDEX, REVALIDATE, RENDER } from '../cacheHeaders.js';
-import { RENDERED_RESUME_HEADER, renderTarget } from '../renderAccess.js';
+import { RENDERED_LETTER_HEADER, RENDERED_RESUME_HEADER, renderTarget } from '../renderAccess.js';
+import { httpError } from '../httpError.js';
 import { handle } from './sendError.js';
 import { HOST_HEADERS } from '../hostnames.js';
 
@@ -47,6 +48,19 @@ router.get('/home', handle((req, res) => {
     return;
   }
   res.json({ kind: 'resume', resume: store.forHost(req.hostname).getPublishedResume('web') });
+}));
+
+// A cover letter, for the PDF renderer's /print/letter page only (issue
+// #71): the letter its render cookie names (see renderAccess.js), with its
+// resume's header and look. Letters are never public, so a request without
+// a valid cookie gets a 404, the same as an unknown path.
+router.get('/letter', handle((req, res) => {
+  res.set('Cache-Control', RENDER);
+  const letterId = renderTarget(req.headers.cookie, 'letter');
+  if (!letterId) throw httpError(404, 'Not found');
+  const content = store.letterForRender(letterId);
+  res.set(RENDERED_LETTER_HEADER, letterId);
+  res.json(content);
 }));
 
 // A public, published resume by its link name, for /r/<slug>. Unlisted: no

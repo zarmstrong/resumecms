@@ -19,12 +19,14 @@ function recordFetch(t) {
 test("every one of a resume's calls goes under /api/resumes/:id, the id escaped", async (t) => {
   const requests = recordFetch(t);
   const rapi = resumeApi('a b');
-  const calls = Object.entries(rapi).filter(([, value]) => typeof value === 'function');
-  assert.ok(calls.length >= 13);
+  // (coverLetterPdfPath only builds a link)
+  const calls = Object.entries(rapi).filter(([name, value]) => typeof value === 'function' && name !== 'coverLetterPdfPath');
+  assert.ok(calls.length >= 17);
   for (const [, call] of calls) await call('x', {}, null, undefined, undefined);
   assert.equal(requests.length, calls.length);
   for (const { url } of requests) assert.ok(url.startsWith('/api/resumes/a%20b/'), url);
   assert.equal(rapi.pdfPath, '/api/resumes/a%20b/resume.pdf');
+  assert.equal(rapi.coverLetterPdfPath('l/1'), '/api/resumes/a%20b/cover-letters/l%2F1/letter.pdf');
 });
 
 test('the resume calls and the public slug reach the right routes', async (t) => {
