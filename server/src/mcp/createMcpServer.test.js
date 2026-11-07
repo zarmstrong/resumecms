@@ -459,8 +459,11 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   assert.deepEqual(Object.keys(got).sort(), ['context', 'landing', 'status']);
 
   const links = [{ type: 'github', label: 'gh', url: 'https://github.com/zed' }];
-  await call('update_landing_page', { headline: 'Hi', intro: null, links });
-  assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi', intro: null, links }, { merge: true }]);
+  const sections = [{ kind: 'text', body: 'Hello' }, { id: 'l', kind: 'links', title: 'Find me', links }];
+  await call('update_landing_page', { headline: 'Hi', subheadline: null, sections });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi', subheadline: null, sections }, { merge: true }]);
+  // a section's kind picks its fields
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'html', body: '<b>' }] })).isError, true);
   // a resumeId isn't a landing page field (the page belongs to the install)
   await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi' }, { merge: true }]);
@@ -478,5 +481,5 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   assert.equal((await call('set_landing_page_enabled', {})).isError, true);
 
   const schemas = (await call('get_block_schemas')).json;
-  assert.ok(schemas.landing.properties.resumes);
+  assert.equal(schemas.landing.properties.sections.items.oneOf.length, 4);
 });

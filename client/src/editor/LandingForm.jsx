@@ -1,6 +1,71 @@
 import { PhotoUpload } from './PhotoUpload.jsx';
 import { LinksEditor } from './LinksEditor.jsx';
 
+// The kinds of section the landing page can hold (server/src/landingFields.js's
+// SECTION_KINDS), what each is called here, and what a new one starts with.
+const SECTION_KINDS = [
+  { kind: 'text', label: 'Text', addLabel: 'Text', empty: () => ({ body: '' }) },
+  { kind: 'items', label: 'List', addLabel: 'List (e.g. projects)', empty: () => ({ items: [emptyItem()] }) },
+  { kind: 'links', label: 'Links', addLabel: 'Links', empty: () => ({ links: [] }) },
+  { kind: 'resumes', label: 'Resume cards', addLabel: 'Resume cards', empty: () => ({ cards: [] }) },
+];
+const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
+
+function emptyItem() {
+  return { title: '', text: '', url: '' };
+}
+
+// Only tells sections apart (React keys, and the server keeps it); not
+// crypto.randomUUID(), which a plain-http install's browser doesn't have.
+function newSectionId() {
+  return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function hasContent(section) {
+  if (section.title.trim()) return true;
+  switch (section.kind) {
+    case 'text':
+      return Boolean(section.body.trim());
+    case 'items':
+      return section.items.some((item) => item.title.trim() || item.text.trim() || item.url.trim());
+    case 'links':
+      return section.links.length > 0;
+    case 'resumes':
+      return section.cards.length > 0;
+    default:
+      return false;
+  }
+}
+
+function moved(list, i, delta) {
+  const next = [...list];
+  [next[i], next[i + delta]] = [next[i + delta], next[i]];
+  return next;
+}
+
+// ↑ ↓ ✕ for one entry of a list.
+function RowActions({ index, count, onMove, onRemove, what }) {
+  return (
+    <span className="ed-landing-card-actions">
+      <button type="button" className="ed-icon-btn" onClick={() => onMove(-1)} disabled={index === 0} aria-label={`Move ${what} up`}>
+        ↑
+      </button>
+      <button
+        type="button"
+        className="ed-icon-btn"
+        onClick={() => onMove(1)}
+        disabled={index === count - 1}
+        aria-label={`Move ${what} down`}
+      >
+        ↓
+      </button>
+      <button type="button" className="ed-icon-btn" onClick={onRemove} aria-label={`Remove ${what}`}>
+        ✕
+      </button>
+    </span>
+  );
+}
+
 // Where a card's resume stands for visitors: shown, or why not. `context`
 // lists the resumes a card can link to now (public and published).
 function cardStatus(resumeId, resumes, context) {
@@ -15,15 +80,17 @@ function cardStatus(resumeId, resumes, context) {
 // and `limits` come from GET /api/landing, `resumes` is the editor's list.
 export function LandingForm({ landing, resumes, context, limits, onChange }) {
   const set = (patch) => onChange({ ...landing, ...patch });
-  const cards = landing.resumes;
-  const setCard = (i, patch) => set({ resumes: cards.map((c, idx) => (idx === i ? { ...c, ...patch } : c)) });
-  const moveCard = (i, delta) => {
-    const next = [...cards];
-    [next[i], next[i + delta]] = [next[i + delta], next[i]];
-    set({ resumes: next });
+  const sections = landing.sections;
+  const setSections = (next) => set({ sections: next });
+  const setSection = (i, patch) => setSections(sections.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  const removeSection = (i) => {
+    if (hasContent(sections[i]) && !window.confirm(`Remove this ${kindLabel(sections[i].kind).toLowerCase()} section?`)) return;
+    setSections(sections.filter((_, idx) => idx !== i));
   };
-  const addable = resumes.filter((r) => !cards.some((c) => c.resumeId === r.id));
-  const titleOf = (resumeId) => context.resumes.find((r) => r.id === resumeId)?.title;
+  const addSection = (kind) => {
+    const config = SECTION_KINDS.find((k) => k.kind === kind);
+    setSections([...sections, { id: newSectionId(), kind, title: '', ...config.empty() }]);
+  };
 
   return (
     <div className="ed-form">
@@ -47,18 +114,6 @@ export function LandingForm({ landing, resumes, context, limits, onChange }) {
           placeholder="e.g. Site reliability engineer"
         />
       </label>
-      <label className="ed-field">
-        <span>Intro</span>
-        <textarea
-          className="ed-input"
-          rows={5}
-          value={landing.intro}
-          maxLength={limits?.intro}
-          onChange={(e) => set({ intro: e.target.value })}
-          placeholder="A few lines about yourself."
-        />
-        <span className="ed-field-hint">Plain text. Leave a blank line to start a new paragraph.</span>
-      </label>
 
       <div className="ed-field">
         <span>Photo</span>
@@ -75,83 +130,194 @@ export function LandingForm({ landing, resumes, context, limits, onChange }) {
         <PhotoUpload label="Landing page photo" value={landing.photoUrl} onChange={(photoUrl) => set({ photoUrl })} />
       )}
 
-      <LinksEditor links={landing.links} onChange={(links) => set({ links })} />
-
       <div className="ed-field">
-        <span>Resumes</span>
-        <span className="ed-field-hint">
-          Cards linking to your resumes. Only public, published ones are shown; the default links to /resume.
-        </span>
-        {cards.map((card, i) => {
-          const resume = resumes.find((r) => r.id === card.resumeId);
-          const status = cardStatus(card.resumeId, resumes, context);
-          return (
-            <div className="ed-landing-card" key={card.resumeId}>
-              <div className="ed-landing-card-head">
-                <strong>{resume ? resume.name : 'Deleted resume'}</strong>
-                <span className="ed-landing-card-actions">
-                  <button type="button" className="ed-icon-btn" onClick={() => moveCard(i, -1)} disabled={i === 0} aria-label="Move up">
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="ed-icon-btn"
-                    onClick={() => moveCard(i, 1)}
-                    disabled={i === cards.length - 1}
-                    aria-label="Move down"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    className="ed-icon-btn"
-                    onClick={() => set({ resumes: cards.filter((_, idx) => idx !== i) })}
-                    aria-label="Remove card"
-                  >
-                    ✕
-                  </button>
-                </span>
-              </div>
-              {status && <span className="ed-field-hint ed-landing-card-status">{status}</span>}
-              <input
-                className="ed-input"
-                value={card.label}
-                maxLength={limits?.cardLabel}
-                onChange={(e) => setCard(i, { label: e.target.value })}
-                placeholder={titleOf(card.resumeId) || 'Card title, e.g. Engineering'}
-                aria-label="Card title"
-              />
-              <textarea
-                className="ed-input"
-                rows={2}
-                value={card.blurb}
-                maxLength={limits?.blurb}
-                onChange={(e) => setCard(i, { blurb: e.target.value })}
-                placeholder="A line about this resume (optional)"
-                aria-label="Card text"
+        <span>Sections</span>
+        <span className="ed-field-hint">Shown in this order under the headline. One with nothing to show is left off the page.</span>
+        {sections.map((section, i) => (
+          <div className="ed-landing-section" key={section.id}>
+            <div className="ed-landing-card-head">
+              <strong>{kindLabel(section.kind)}</strong>
+              <RowActions
+                index={i}
+                count={sections.length}
+                onMove={(delta) => setSections(moved(sections, i, delta))}
+                onRemove={() => removeSection(i)}
+                what="section"
               />
             </div>
-          );
-        })}
-        {addable.length > 0 && (!limits || cards.length < limits.resumes) && (
-          <select
-            className="ed-input"
-            value=""
-            onChange={(e) => e.target.value && set({ resumes: [...cards, { resumeId: e.target.value, label: '', blurb: '' }] })}
-            aria-label="Add a resume card"
-          >
-            <option value="">+ Add a resume…</option>
-            {addable.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
+            <input
+              className="ed-input"
+              value={section.title}
+              maxLength={limits?.sectionTitle}
+              onChange={(e) => setSection(i, { title: e.target.value })}
+              placeholder="Heading (optional)"
+              aria-label="Section heading"
+            />
+            <SectionFields
+              section={section}
+              onChange={(patch) => setSection(i, patch)}
+              resumes={resumes}
+              context={context}
+              limits={limits}
+            />
+          </div>
+        ))}
+        {(!limits || sections.length < limits.sections) && (
+          <select className="ed-input" value="" onChange={(e) => e.target.value && addSection(e.target.value)} aria-label="Add a section">
+            <option value="">+ Add a section…</option>
+            {SECTION_KINDS.map((k) => (
+              <option key={k.kind} value={k.kind}>
+                {k.addLabel}
               </option>
             ))}
           </select>
         )}
-        <span className="ed-field-hint">
-          A card without a title uses the resume's published header title, never its name here.
-        </span>
       </div>
     </div>
+  );
+}
+
+function SectionFields({ section, onChange, resumes, context, limits }) {
+  switch (section.kind) {
+    case 'text':
+      return (
+        <>
+          <textarea
+            className="ed-input"
+            rows={5}
+            value={section.body}
+            maxLength={limits?.text}
+            onChange={(e) => onChange({ body: e.target.value })}
+            placeholder="A few lines about yourself."
+            aria-label="Text"
+          />
+          <span className="ed-field-hint">Plain text. Leave a blank line to start a new paragraph.</span>
+        </>
+      );
+    case 'items':
+      return <ItemsFields items={section.items} onChange={(items) => onChange({ items })} limits={limits} />;
+    case 'links':
+      return <LinksEditor label={null} links={section.links} onChange={(links) => onChange({ links })} />;
+    case 'resumes':
+      return <CardsFields cards={section.cards} onChange={(cards) => onChange({ cards })} resumes={resumes} context={context} limits={limits} />;
+    default:
+      return null;
+  }
+}
+
+function ItemsFields({ items, onChange, limits }) {
+  const setItem = (i, patch) => onChange(items.map((item, idx) => (idx === i ? { ...item, ...patch } : item)));
+  return (
+    <>
+      {items.map((item, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Item {i + 1}</span>
+            <RowActions
+              index={i}
+              count={items.length}
+              onMove={(delta) => onChange(moved(items, i, delta))}
+              onRemove={() => onChange(items.filter((_, idx) => idx !== i))}
+              what="item"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={item.title}
+            maxLength={limits?.itemTitle}
+            onChange={(e) => setItem(i, { title: e.target.value })}
+            placeholder="Title, e.g. a project's name"
+            aria-label="Item title"
+          />
+          <input
+            className="ed-input"
+            value={item.url}
+            maxLength={limits?.url}
+            onChange={(e) => setItem(i, { url: e.target.value })}
+            placeholder="Link for the title (optional), https://…"
+            aria-label="Item link"
+          />
+          <textarea
+            className="ed-input"
+            rows={2}
+            value={item.text}
+            maxLength={limits?.itemText}
+            onChange={(e) => setItem(i, { text: e.target.value })}
+            placeholder="A line or two about it (optional)"
+            aria-label="Item text"
+          />
+        </div>
+      ))}
+      {(!limits || items.length < limits.items) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...items, emptyItem()])}>
+          + Add item
+        </button>
+      )}
+    </>
+  );
+}
+
+function CardsFields({ cards, onChange, resumes, context, limits }) {
+  const setCard = (i, patch) => onChange(cards.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const addable = resumes.filter((r) => !cards.some((c) => c.resumeId === r.id));
+  const titleOf = (resumeId) => context.resumes.find((r) => r.id === resumeId)?.title;
+  return (
+    <>
+      <span className="ed-field-hint">
+        Cards linking to your resumes. Only public, published ones are shown; the default links to /resume.
+      </span>
+      {cards.map((card, i) => {
+        const resume = resumes.find((r) => r.id === card.resumeId);
+        const status = cardStatus(card.resumeId, resumes, context);
+        return (
+          <div className="ed-landing-card" key={card.resumeId}>
+            <div className="ed-landing-card-head">
+              <strong>{resume ? resume.name : 'Deleted resume'}</strong>
+              <RowActions
+                index={i}
+                count={cards.length}
+                onMove={(delta) => onChange(moved(cards, i, delta))}
+                onRemove={() => onChange(cards.filter((_, idx) => idx !== i))}
+                what="card"
+              />
+            </div>
+            {status && <span className="ed-field-hint ed-landing-card-status">{status}</span>}
+            <input
+              className="ed-input"
+              value={card.label}
+              maxLength={limits?.cardLabel}
+              onChange={(e) => setCard(i, { label: e.target.value })}
+              placeholder={titleOf(card.resumeId) || 'Card title, e.g. Engineering'}
+              aria-label="Card title"
+            />
+            <textarea
+              className="ed-input"
+              rows={2}
+              value={card.blurb}
+              maxLength={limits?.blurb}
+              onChange={(e) => setCard(i, { blurb: e.target.value })}
+              placeholder="A line about this resume (optional)"
+              aria-label="Card text"
+            />
+          </div>
+        );
+      })}
+      {addable.length > 0 && (!limits || cards.length < limits.cards) && (
+        <select
+          className="ed-input"
+          value=""
+          onChange={(e) => e.target.value && onChange([...cards, { resumeId: e.target.value, label: '', blurb: '' }])}
+          aria-label="Add a resume card"
+        >
+          <option value="">+ Add a resume…</option>
+          {addable.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+      )}
+      <span className="ed-field-hint">A card without a title uses the resume's published header title, never its name here.</span>
+    </>
   );
 }

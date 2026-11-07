@@ -192,12 +192,20 @@ install, not to a resume, so it lives in the global `settings` table:
 `lastEditedAt`, bumped by `touchLanding()`) and `landing_enabled`.
 `server/src/landingStore.js` holds the operations and is composed into the
 store by `createResumeStore()`; validation and the public shape are pure, in
-`landingFields.js`. It's a fixed set of fields, not blocks:
-`{ headline, subheadline, intro, photo, photoUrl, links, resumes }`, the
-last being cards `{ resumeId, label, blurb }`. It's checked far more
+`landingFields.js`. It isn't blocks: `{ headline, subheadline, photo,
+photoUrl, sections }`, where `sections` is an ordered list of
+`{ id, kind, title, ... }` with only the fields of its kind
+(`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url }]`),
+`links` and `resumes` (cards `{ resumeId, label, blurb }`). The `id` is
+for the editor only and never leaves the server publicly. A draft or
+snapshot stored before sections (`intro`/`links`/`resumes` as fields) is
+read through `upgradeLanding()`, with fixed ids, until the next save or
+publish. There's no image section: the editor PUTs the whole draft on
+every save, under `express.json()`'s 2 MB limit, so images would need
+storage of their own first. It's checked far more
 strictly than the header, because all of it is shown to every visitor:
 unknown keys, wrong types and values over `LANDING_LIMITS` are a 400, a
-link with any scheme but http/https/mailto is too (the client's
+link (or item URL) with any scheme but http/https/mailto is too (the client's
 `safeHref()` rule, run through the WHATWG parser so `java\tscript:` is
 caught; a URL the parser rejects outright, like a half-typed `https://`,
 saves but is never shown), and `photoUrl` has to be
@@ -214,9 +222,14 @@ unpublished or deleted after the publish off the page, and keeps a renamed
 one's link working. Cards carry an `href` (`/resume` for the default,
 `/r/<slug>` otherwise) and a label, never a resume id or its internal
 `name` (which can say who it was tailored for); an empty label uses the
-resume's published header title. The photo (`photo: 'resume'`) and the
+resume's published header title. A section left with nothing to show
+(no text, no item, every card's resume hidden) is dropped, heading and
+all. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
-its draft. Keep both properties if you add fields.
+its draft. Keep both properties if you add fields or section kinds; a new
+kind needs `SECTION_FIELDS`, `checkSection()`, `resolveSection()` (both
+copies), the MCP `landingSection()` union, `LANDING_SCHEMA`, and a case in
+`LandingForm`'s `SectionFields` and `LandingView`'s `SectionBody`.
 
 `GET /api/public/home` is what `/` loads: `{ kind: 'landing' }` from
 `landingForHost()` when it's enabled, published and the host isn't in
@@ -227,7 +240,8 @@ load never shows the resume and then swaps. It sends `REVALIDATE` and
 `HOST_HEADERS`. The editor's routes are in `routes/landing.js`
 (`/api/landing`, mounted before the catch-all `/api`), and the MCP tools
 are `LANDING_TOOLS` in `createMcpServer.js` (no `resumeId`;
-`update_landing_page` merges via `mergeLandingPatch()`).
+`update_landing_page` merges via `mergeLandingPatch()`, `sections` as a
+whole list).
 
 On the client, `/` is `HomePage` (`client/src/landing/HomePage.jsx`), which
 renders `LandingView` or the resume from that one response, and `/resume`

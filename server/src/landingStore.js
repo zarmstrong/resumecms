@@ -1,7 +1,7 @@
 import { httpError } from './httpError.js';
 import { createSettings, createResumeSettings } from './settings.js';
 import { requestHostKey } from './hostnames.js';
-import { initialLanding, mergeLandingPatch, resolveLanding, validateLanding } from './landingFields.js';
+import { cardResumeIds, initialLanding, mergeLandingPatch, resolveLanding, upgradeLanding, validateLanding } from './landingFields.js';
 
 // The landing page's storage and publishing (issue #70), composed into the
 // resume store by createResumeStore() — the editor's routes and the MCP
@@ -9,6 +9,8 @@ import { initialLanding, mergeLandingPatch, resolveLanding, validateLanding } fr
 // install, not to one resume, so it lives in the global `settings` table:
 //   landing_draft     — what the editor writes (absent until first saved)
 //   landing_published — the snapshot the public site reads, plus publishedAt
+// (both read through upgradeLanding(), so one saved before sections still
+// reads as sections; the next save or publish stores the new shape)
 //   landing_meta      — { lastEditedAt }, the landing page's own touchDraft()
 //   landing_enabled   — whether `/` may show it at all; not drafted, it
 //                       takes effect at once (and does nothing until a
@@ -34,7 +36,7 @@ export function createLandingStore({ db, defaultResumeId }) {
   }
 
   function getLanding() {
-    const stored = getSetting('landing_draft');
+    const stored = upgradeLanding(getSetting('landing_draft'));
     if (stored) return stored;
     const defaultId = defaultResumeId();
     return initialLanding(defaultId, publishedResumeOf(defaultId)?.header);
@@ -48,7 +50,7 @@ export function createLandingStore({ db, defaultResumeId }) {
     const current = getLanding();
     const next = validateLanding(merge ? mergeLandingPatch(current, input) : input ?? {}, {
       knownResumeIds: knownResumeIds(),
-      previousResumeIds: new Set(current.resumes.map((card) => card.resumeId)),
+      previousResumeIds: cardResumeIds(current),
     });
     setSetting('landing_draft', next);
     touchLanding();
@@ -83,7 +85,7 @@ export function createLandingStore({ db, defaultResumeId }) {
   }
 
   function discardLandingDraft() {
-    const published = getSetting('landing_published');
+    const published = upgradeLanding(getSetting('landing_published'));
     if (!published) throw httpError(409, 'The landing page has not been published yet');
     const { publishedAt, ...draft } = published;
     db.transaction(() => {
@@ -140,7 +142,7 @@ export function createLandingStore({ db, defaultResumeId }) {
   // own domain shows.
   function landingForHost(hostname) {
     if (getSetting('landing_enabled') !== true) return null;
-    const published = getSetting('landing_published');
+    const published = upgradeLanding(getSetting('landing_published'));
     if (!published) return null;
     const key = requestHostKey(hostname);
     if (key && db.prepare('SELECT 1 FROM resume_hosts WHERE hostname = ?').get(key)) return null;

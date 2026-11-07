@@ -216,29 +216,75 @@ export const SITE_SCHEMA = {
 
 // The install's landing page (issue #70); landingFields.js checks it and
 // holds the caps.
+const LANDING_SECTION_BASE = {
+  id: { type: 'string', description: 'Tells sections apart; omit for a new section, keep for an existing one' },
+  title: { type: 'string', description: "Heading above the section; '' shows none" },
+};
+
 export const LANDING_SCHEMA = {
   description:
     'The optional home page at / (a singleton for the whole install, not part of any resume). Checked strictly on write: unknown keys, wrong types, over-long values and non-http/https/mailto links are a 400.',
   properties: {
     headline: { type: 'string', description: 'Usually your name' },
     subheadline: { type: 'string' },
-    intro: { type: 'string', description: 'Plain text; a blank line starts a new paragraph' },
     photo: { enum: ['resume', 'custom', 'none'], description: "'resume' = the default resume's published header photo" },
     photoUrl: { type: 'string', description: "base64 data: URL (JPEG, PNG or WebP), used when photo is 'custom'" },
-    links: {
+    sections: {
       type: 'array',
-      items: { type: 'object', properties: HEADER_SCHEMA.properties.links.items.properties },
-    },
-    resumes: {
-      type: 'array',
-      description: 'Cards linking to resumes, in order; only public, published ones are shown',
+      description: 'Shown in order under the headline; one with nothing to show is left out. Each has the fields of its kind only',
       items: {
-        type: 'object',
-        properties: {
-          resumeId: { type: 'string' },
-          label: { type: 'string', description: "Card title; '' uses the resume's published header title" },
-          blurb: { type: 'string' },
-        },
+        oneOf: [
+          {
+            type: 'object',
+            properties: { ...LANDING_SECTION_BASE, kind: { const: 'text' }, body: { type: 'string', description: 'Plain text; a blank line starts a new paragraph' } },
+          },
+          {
+            type: 'object',
+            description: 'A list of entries, e.g. projects',
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'items' },
+              items: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string' },
+                    text: { type: 'string', description: 'Plain text' },
+                    url: { type: 'string', description: 'Optional http, https or mailto link for the title' },
+                  },
+                },
+              },
+            },
+          },
+          {
+            type: 'object',
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'links' },
+              links: { type: 'array', items: { type: 'object', properties: HEADER_SCHEMA.properties.links.items.properties } },
+            },
+          },
+          {
+            type: 'object',
+            description: 'Cards linking to resumes, in order; only public, published ones are shown',
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'resumes' },
+              cards: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    resumeId: { type: 'string' },
+                    label: { type: 'string', description: "Card title; '' uses the resume's published header title" },
+                    blurb: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        ],
       },
     },
   },

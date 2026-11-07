@@ -179,8 +179,8 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `DELETE /api/resumes/:id` | delete a resume with its blocks, settings, domains and PDF; the default can't be deleted (409) |
 | `GET /api/resumes/:id/resume.pdf` | download any resume's last rendered PDF, private ones included |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`) for that resume. The unprefixed ones act on whichever resume is the default |
-| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, intro, photo, photoUrl, links, resumes }`), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card can link to (public and published). Before the first save the draft is built from the default resume's published header |
-| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link that isn't `http`/`https`/`mailto`, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card for an unknown resume are all a 400 |
+| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, photo, photoUrl, sections }`, each section `{ id, kind, title, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url }]`), `links` (`links`) or `resumes` (`cards: [{ resumeId, label, blurb }]`)), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card can link to (public and published). Before the first save the draft is built from the default resume's published header |
+| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL that isn't `http`/`https`/`mailto`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card for an unknown resume are all a 400 |
 | `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
 | `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it) |
 | `POST /api/landing/discard-draft` | restore the landing page draft from its last published snapshot |
@@ -251,7 +251,7 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 | `update_resume` | `{ resumeId, name?, slug?, isPublic?, isDefault?, hostnames?, tailoring? }` — send only what changes, with the same rules as `PATCH /api/resumes/:id` (`hostnames` replaces the list and makes the resume public; only a published resume can become the default; `tailoring` records the brief a resume is tailored for, null removes it) |
 | `delete_resume` | `{ resumeId }` — deletes a resume with its blocks, domains and PDF; the default can't be deleted |
 | `get_landing_page` | the landing page draft, its status and its context, as `GET /api/landing` returns them |
-| `update_landing_page` | merge fields into the landing page draft (`links` and `resumes` are replaced whole, `null` resets a field), with the same checks as `PUT /api/landing` |
+| `update_landing_page` | merge fields into the landing page draft (`sections` is replaced whole; a section sent without an `id` is new; `null` resets a field), with the same checks as `PUT /api/landing` |
 | `publish_landing_page`, `discard_landing_draft` | publish the landing page draft / restore it from its last published snapshot |
 | `set_landing_page_enabled` | `{ enabled }` — switches the landing page at `/` on or off, at once |
 
@@ -373,8 +373,12 @@ resumes with a domain of their own are meant to show up in search.
 ### A landing page at `/`
 
 By default `/` is your default resume. You can put a short home page
-there instead: a headline, a few lines about yourself, a photo, links, and
-cards linking to whichever resumes you choose. Open **Landing page** from
+there instead: a headline and a photo, then whatever sections you add, in
+the order you choose: text (a few lines about yourself, a "Now" note), a
+list such as projects (each with a title, a line of text and an optional
+link), links, and cards linking to whichever resumes you choose. Each
+section can have a heading of its own, and one with nothing to show is
+left off the page. Open **Landing page** from
 the editor's resume switcher, fill it in, **Publish** it, and tick
 **Show at /**. The default resume then lives at `/resume`; `/r/<link name>`,
 `/print` and every PDF link stay where they were. Untick it and `/` is the
@@ -393,8 +397,9 @@ What visitors see:
   once, without republishing. A card's title is the one you give it, or
   else that resume's published header title, never its name in the editor
   (which may say who it was tailored for).
-- Links must be `http`, `https` or `mailto`, and the intro is plain text
-  (a blank line starts a new paragraph), never HTML or markdown.
+- Links (and a list item's link) must be `http`, `https` or `mailto`, and
+  text is plain text (a blank line starts a new paragraph), never HTML or
+  markdown.
 - A domain mapped to a resume keeps showing that resume, landing page or
   not. The landing page only replaces the default resume on hosts that
   aren't one of a resume's domains.
