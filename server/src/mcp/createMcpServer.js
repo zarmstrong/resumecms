@@ -470,7 +470,7 @@ const landingLink = () =>
   z.object({
     type: z.enum(LINK_TYPES).optional().describe('Picks the badge it is drawn with; omit for a plain link.'),
     label: z.string().describe('Display text, e.g. "github.com/you".'),
-    url: z.string().describe('An http, https or mailto URL.'),
+    url: z.string().describe('An http, https, mailto or tel URL (an email link is mailto:you@example.com, a phone link tel:+15555550100).'),
   });
 const landingCard = () =>
   z.object({
@@ -482,7 +482,7 @@ const landingItem = () =>
   z.object({
     title: z.string().optional().describe('e.g. a project name.'),
     text: z.string().optional().describe('A line or two about it, plain text.'),
-    url: z.string().optional().describe('An optional http, https or mailto link for its title.'),
+    url: z.string().optional().describe('An optional http, https, mailto or tel link for its title.'),
   });
 const sectionBase = {
   id: z.string().optional().describe("Keep an existing section's id from get_landing_page; omit it for a new section."),

@@ -167,9 +167,9 @@ export const HEADER_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          type: { enum: ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'custom'] },
-          label: { type: 'string', description: 'Display text, e.g. "github.com/you"' },
-          url: { type: 'string', description: 'https URL' },
+          type: { enum: ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'] },
+          label: { type: 'string', description: 'Display text, e.g. "github.com/you", or the address/number for an email/phone link' },
+          url: { type: 'string', description: 'https URL; mailto:you@example.com for an email link, tel:+15555550100 for a phone link' },
         },
       },
     },
@@ -224,7 +224,7 @@ const LANDING_SECTION_BASE = {
 
 export const LANDING_SCHEMA = {
   description:
-    'The optional home page at / (a singleton for the whole install, not part of any resume). Checked strictly on write: unknown keys, wrong types, over-long values and non-http/https/mailto links are a 400.',
+    'The optional home page at / (a singleton for the whole install, not part of any resume). Checked strictly on write: unknown keys, wrong types, over-long values and links other than http/https/mailto/tel are a 400.',
   properties: {
     headline: { type: 'string', description: 'Usually your name' },
     subheadline: { type: 'string' },
@@ -252,7 +252,7 @@ export const LANDING_SCHEMA = {
                   properties: {
                     title: { type: 'string' },
                     text: { type: 'string', description: 'Plain text' },
-                    url: { type: 'string', description: 'Optional http, https or mailto link for the title' },
+                    url: { type: 'string', description: 'Optional http, https, mailto or tel link for the title' },
                   },
                 },
               },

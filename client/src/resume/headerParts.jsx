@@ -2,7 +2,7 @@
 // see templates/headers/*/index.jsx). Centralized here so every header
 // reuses the same safe-link handling and contact markup instead of each
 // reimplementing it.
-import { safeHref } from './safeUrl.js';
+import { safeHref, linkProps, telHref } from './safeUrl.js';
 import { linkGlyph } from './linkTypes.js';
 
 export function ContactRow({ label, children }) {
@@ -25,16 +25,33 @@ export function ContactInline({ header, className }) {
           <a href={safeHref(`mailto:${header.email}`)}>{header.email}</a>
         </span>
       )}
-      {header.phone && <span>{header.phone}</span>}
+      {header.phone && (
+        <span>
+          <PhoneText phone={header.phone} />
+        </span>
+      )}
       {(header.links || []).map((link, i) => (
         <span key={i}>
           <span className="r-link-badge">{linkGlyph(link)}</span>
-          <a href={safeHref(link.url)} target="_blank" rel="noreferrer">
-            {link.label}
-          </a>
+          <a {...linkProps(link.url)}>{link.label}</a>
         </span>
       ))}
     </div>
+  );
+}
+
+// The header's phone number as typed, linked to the dialer when it has
+// digits to dial.
+export function PhoneText({ phone, className }) {
+  const href = telHref(phone);
+  return href ? (
+    <a className={className} href={href}>
+      {phone}
+    </a>
+  ) : className ? (
+    <span className={className}>{phone}</span>
+  ) : (
+    phone
   );
 }
 

@@ -1,5 +1,5 @@
-import { HeadshotImage, HeaderActions } from '@resume/headerParts.jsx';
-import { safeHref } from '@resume/safeUrl.js';
+import { HeadshotImage, HeaderActions, PhoneText } from '@resume/headerParts.jsx';
+import { safeHref, linkProps } from '@resume/safeUrl.js';
 import { linkGlyph } from '@resume/linkTypes.js';
 
 export default function ChipLinksHeader({ header, showActions, onPrint, pdfHref }) {
@@ -18,15 +18,9 @@ export default function ChipLinksHeader({ header, showActions, onPrint, pdfHref 
                 {header.email}
               </a>
             )}
-            {header.phone && <span className="r-contact-chip">{header.phone}</span>}
+            {header.phone && <PhoneText className="r-contact-chip" phone={header.phone} />}
             {(header.links || []).map((link, i) => (
-              <a
-                key={i}
-                className="r-contact-chip"
-                href={safeHref(link.url)}
-                target="_blank"
-                rel="noreferrer"
-              >
+              <a key={i} className="r-contact-chip" {...linkProps(link.url)}>
                 {linkGlyph(link)} {link.label}
               </a>
             ))}

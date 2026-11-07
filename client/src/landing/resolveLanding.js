@@ -6,7 +6,7 @@
 // link to right now. With `withIds`, each section keeps its id, which
 // the server never sends: the editor's preview outlines a section by it.
 
-const SAFE_SCHEMES = ['http:', 'https:', 'mailto:'];
+const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 
 function isSafeUrl(url) {
   try {
