@@ -145,7 +145,7 @@ const CONTENT_TOOLS = [
     config: {
       title: 'Get publish status',
       description:
-        'Returns { publishedAt, isDirty, pdfStale, pdfVersion }. isDirty is true when the draft has changes that are not yet published; pdfStale is true when the PDF on disk was not rendered from the current published snapshot (a publish whose PDF render failed) — a successful publish fixes it. pdfVersion identifies the PDF file currently on disk (null if none).',
+        'Returns { publishedAt, isDirty, pdfStale, pdfVersion, pdfPending }. isDirty is true when the draft has changes that are not yet published; pdfStale is true when the PDF on disk was not rendered from the current published snapshot (a publish whose PDF render failed, or one still rendering) — a successful publish fixes it. pdfVersion identifies the PDF file currently on disk (null if none). pdfPending is true while a PDF render for this resume is queued or running; once it is false, pdfStale says whether the render worked.',
       annotations: readOnly,
     },
     run: (store) => store.getPublishStatus(),
@@ -300,7 +300,7 @@ const CONTENT_TOOLS = [
     config: {
       title: 'Publish the draft',
       description:
-        'Makes the current DRAFT live: snapshots it for the public site and re-renders the PDF (this can take several seconds). If the response says the PDF render failed, the site content is already live and get_publish_status reports pdfStale: true; a later publish re-renders it.',
+        'Makes the current DRAFT live: snapshots it for the public site and re-renders the PDF (this can take several seconds). Returns { publishedAt, pdfVersion, pdfPending }. If the response says the PDF render failed, the site content is already live and get_publish_status reports pdfStale: true; a later publish re-renders it. pdfPending: true means the site is live but the PDF is still rendering (it waited behind a slow render); check get_publish_status until pdfPending is false, and don\'t publish again for it.',
       annotations: { ...mutating, idempotentHint: true },
     },
     run: (store) => store.publish(),

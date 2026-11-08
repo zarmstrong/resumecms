@@ -73,6 +73,13 @@ export function mergeShallow(base, patch, label) {
 // every later publish (and the boot render) until a restart.
 export const DEFAULT_PDF_TIMEOUT_MS = 90_000;
 
+// How long publish() holds its caller for the PDF before answering with
+// pdfPending instead. A render normally takes a second or two; one stuck
+// behind a hung render could take two full timeouts, longer than a reverse
+// proxy waits, and a dropped connection reads as a failed publish that in
+// fact took effect.
+export const DEFAULT_PUBLISH_WAIT_MS = 20_000;
+
 // Runs `fn({ signal })` and gives up after `ms`: the signal is aborted (so
 // the renderer can tear down whatever is wedged) and the returned promise
 // rejects, whatever `fn` goes on to do.
@@ -124,7 +131,14 @@ const RESUME_METHODS = [
 // letters' under letters/ (letterPdfPathFor). `renderPdf` is called as
 // renderPdf({ signal, resumeId }), `renderLetterPdf` as
 // renderLetterPdf({ signal, letterId }); without one, a letter's PDF is a 500.
-export function createResumeStore({ db, renderPdf, renderLetterPdf, pdfDir, pdfTimeoutMs = DEFAULT_PDF_TIMEOUT_MS }) {
+export function createResumeStore({
+  db,
+  renderPdf,
+  renderLetterPdf,
+  pdfDir,
+  pdfTimeoutMs = DEFAULT_PDF_TIMEOUT_MS,
+  publishWaitMs = DEFAULT_PUBLISH_WAIT_MS,
+}) {
   // ---- the PDF queue (shared by every resume) ------------------------------
 
   // Everything that writes a PDF file goes through this one queue, so two
@@ -137,6 +151,20 @@ export function createResumeStore({ db, renderPdf, renderLetterPdf, pdfDir, pdfT
     const result = pdfChain.then(fn);
     pdfChain = result.catch(() => {});
     return result;
+  }
+
+  // How many of each resume's renders are queued or running, for
+  // getPublishStatus().pdfPending. In memory: a restart drops the queue too.
+  const pdfRendersQueued = new Map();
+  function trackRender(resumeId, render) {
+    pdfRendersQueued.set(resumeId, (pdfRendersQueued.get(resumeId) ?? 0) + 1);
+    const done = () => {
+      const left = pdfRendersQueued.get(resumeId) - 1;
+      if (left > 0) pdfRendersQueued.set(resumeId, left);
+      else pdfRendersQueued.delete(resumeId);
+    };
+    render.then(done, done);
+    return render;
   }
 
   // Bounded by pdfTimeoutMs so a Chromium that never settles releases the
@@ -876,6 +904,9 @@ export function createResumeStore({ db, renderPdf, renderLetterPdf, pdfDir, pdfT
         isDirty: isDirty(),
         pdfStale: pdfStale(published),
         pdfVersion: pdfVersion(),
+        // A render for this resume is queued or running. pdfStale is about
+        // what's on disk now, so it stays true meanwhile after a publish.
+        pdfPending: pdfRendersQueued.has(resumeId),
       };
     }
 
@@ -894,6 +925,11 @@ export function createResumeStore({ db, renderPdf, renderLetterPdf, pdfDir, pdfT
     // publish). The error says so — a caller shouldn't retry a publish that
     // already took effect — and getPublishStatus() reports pdfStale until a
     // later publish renders successfully.
+    //
+    // The caller waits for the render for at most publishWaitMs. Past that
+    // (a render stuck behind a hung one), the answer is { pdfPending: true }
+    // and the render finishes on the queue: getPublishStatus() reports
+    // pdfPending until it does, then pdfStale says whether it worked.
     function publish() {
       const previous = getSetting('published_resume');
       if (!getSetting('pdf_meta')) {
@@ -907,24 +943,44 @@ export function createResumeStore({ db, renderPdf, renderLetterPdf, pdfDir, pdfT
       // Everything edited so far is in the snapshot; whatever touchDraft()
       // records from here on is a new, unpublished edit (see isDirty).
       setSetting('draft_meta', { lastEditedAt: null });
-      return withPdfLock(async () => {
-        if (!stillExists()) throw httpError(404, 'Resume not found');
-        let pdf;
-        try {
-          pdf = await renderPdfBounded(resumeId);
-        } catch (cause) {
-          const err = httpError(500, 'Published, but the PDF render failed — the site is updated, the PDF is not');
-          err.cause = cause;
-          throw err;
-        }
-        if (!stillExists()) throw httpError(404, 'Resume not found');
-        writePdf(pdf);
-        // The render read whatever snapshot was current while it ran, which
-        // is this one or a newer one; a newer publish is queued behind us and
-        // will record itself when its own render lands.
-        setSetting('pdf_meta', { renderedFor: publishedAt });
-        return { publishedAt, pdfVersion: pdfVersion() };
+      const render = trackRender(
+        resumeId,
+        withPdfLock(async () => {
+          if (!stillExists()) throw httpError(404, 'Resume not found');
+          let pdf;
+          try {
+            pdf = await renderPdfBounded(resumeId);
+          } catch (cause) {
+            const err = httpError(500, 'Published, but the PDF render failed — the site is updated, the PDF is not');
+            err.cause = cause;
+            throw err;
+          }
+          if (!stillExists()) throw httpError(404, 'Resume not found');
+          writePdf(pdf);
+          // The render read whatever snapshot was current while it ran, which
+          // is this one or a newer one; a newer publish is queued behind us and
+          // will record itself when its own render lands.
+          setSetting('pdf_meta', { renderedFor: publishedAt });
+          return { publishedAt, pdfVersion: pdfVersion(), pdfPending: false };
+        })
+      );
+
+      let timer;
+      const stillRendering = new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), publishWaitMs);
+        timer.unref?.();
       });
+      return Promise.race([render, stillRendering])
+        .then((result) => {
+          if (result) return result;
+          // Nobody is waiting for it any more, so its failure is only logged
+          // (a resume deleted meanwhile is no failure).
+          render.catch((err) => {
+            if (err.status !== 404) console.error(`PDF render for resume ${resumeId} failed after publish answered:`, err.cause ?? err);
+          });
+          return { publishedAt, pdfVersion: pdfVersion(), pdfPending: true };
+        })
+        .finally(() => clearTimeout(timer));
     }
 
     // Renders a PDF for the current published snapshot if none exists yet
@@ -933,14 +989,17 @@ export function createResumeStore({ db, renderPdf, renderLetterPdf, pdfDir, pdfT
     // in-flight publish, and skipped if one has written the file meanwhile,
     // so it can never overwrite a fresher render.
     function ensurePdf() {
-      return withPdfLock(async () => {
-        if (!stillExists() || fs.existsSync(pdfPath)) return { rendered: false };
-        const pdf = await renderPdfBounded(resumeId);
-        if (!stillExists()) return { rendered: false };
-        writePdf(pdf);
-        setSetting('pdf_meta', { renderedFor: getSetting('published_resume')?.publishedAt ?? null });
-        return { rendered: true };
-      });
+      return trackRender(
+        resumeId,
+        withPdfLock(async () => {
+          if (!stillExists() || fs.existsSync(pdfPath)) return { rendered: false };
+          const pdf = await renderPdfBounded(resumeId);
+          if (!stillExists()) return { rendered: false };
+          writePdf(pdf);
+          setSetting('pdf_meta', { renderedFor: getSetting('published_resume')?.publishedAt ?? null });
+          return { rendered: true };
+        })
+      );
     }
 
     function discardDraft() {

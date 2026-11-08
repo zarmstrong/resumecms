@@ -94,6 +94,7 @@ test('after migrating, the store serves exactly what the install served before',
     isDirty: true,
     pdfStale: false,
     pdfVersion: store.getPublishStatus().pdfVersion,
+    pdfPending: false,
   });
   assert.ok(store.getPublishStatus().pdfVersion);
   assert.deepEqual(store.getPdfFile(), { path: pdfPathFor(pdfDir, id), name: 'Zed' });
