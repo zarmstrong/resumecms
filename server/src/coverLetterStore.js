@@ -26,9 +26,10 @@ import {
 // `pdf_key`, until the letter or its resume's header or look changes.
 //
 // `getSetting` is the resume's own (header, site). `withPdfLock`,
-// `renderLetterPdf(letterId)` (already bounded by the render timeout) and
-// `mergeShallow` are the resume store's.
-export function createCoverLetterStore({ db, resumeId, getSetting, withPdfLock, renderLetterPdf, mergeShallow, pdfDir }) {
+// `renderLetterPdf(letterId)` (already bounded by the render timeout),
+// `waitForPdf(work, late, what)` (the resume store's settleWithin, with
+// its wait) and `mergeShallow` are the resume store's.
+export function createCoverLetterStore({ db, resumeId, getSetting, withPdfLock, renderLetterPdf, waitForPdf, mergeShallow, pdfDir }) {
   function rowToLetter(row) {
     return {
       id: row.id,
@@ -135,9 +136,41 @@ export function createCoverLetterStore({ db, resumeId, getSetting, withPdfLock, 
   // The render reads the letter when it runs, so an edit landing meanwhile
   // can only leave the key older than the file: the next download renders
   // again, never the reverse.
+  //
+  // A download that waits longer than the store's PDF wait (a render stuck
+  // behind a hung one) is a 503 to try again; the render carries on, so
+  // the retry finds its file and key and is served at once. A request
+  // while the letter's render is still queued joins it instead of queueing
+  // another (it reads the letter when it starts, so it's as fresh), which
+  // keeps the editor's retries from stacking renders up behind a hung
+  // Chromium: at most one running and one queued per letter.
+  const queuedRenders = new Map();
   function coverLetterPdf(id) {
     existingLetterRow(id);
-    return withPdfLock(async () => {
+    let render = queuedRenders.get(id);
+    if (!render) {
+      render = queueRender(id);
+      queuedRenders.set(id, render);
+      // Dropped when it settles, in case it never started (a 404 before).
+      render.then(
+        () => queuedRenders.get(id) === render && queuedRenders.delete(id),
+        () => queuedRenders.get(id) === render && queuedRenders.delete(id)
+      );
+    }
+    return waitForPdf(
+      render,
+      () => {
+        throw httpError(503, 'The PDF is still rendering behind another one. Try again in a moment.');
+      },
+      `PDF render for cover letter ${id}`
+    );
+  }
+
+  function queueRender(id) {
+    const render = withPdfLock(async () => {
+      // Running now: a later request queues its own, which will see any
+      // edit made from here on.
+      if (queuedRenders.get(id) === render) queuedRenders.delete(id);
       const row = existingLetterRow(id);
       const content = renderContent(row);
       const key = letterPdfKey({ ...content, data: content.letter.data });
@@ -157,6 +190,7 @@ export function createCoverLetterStore({ db, resumeId, getSetting, withPdfLock, 
       db.prepare('UPDATE cover_letters SET pdf_key = ? WHERE id = ? AND resume_id = ?').run(key, id, resumeId);
       return file;
     });
+    return render;
   }
 
   // What /print/letter renders (via /api/public/letter): the letter, its

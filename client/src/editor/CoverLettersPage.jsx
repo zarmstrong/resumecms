@@ -17,6 +17,11 @@ import { ResumeSelect } from './ResumeSelect.jsx';
 import { createSaveQueue } from './saveQueue.js';
 
 const SAVE_DEBOUNCE_MS = 500;
+// A download stuck behind another render is a 503 after the server's wait
+// (about 20 s); it's asked for again this often, this many times, which
+// covers two full render timeouts before giving up.
+const PDF_RETRY_MS = 3000;
+const PDF_RETRIES = 10;
 
 const letterKey = (id) => `letter:${id}`;
 
@@ -277,13 +282,21 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
 
   // Rendered by the server on request, so it's fetched rather than linked:
   // a render takes a few seconds, and an error is shown here instead of
-  // leaving the editor for a JSON page.
+  // leaving the editor for a JSON page. A 503 means the render is still
+  // queued behind another one and carries on without us, so it's asked for
+  // again until it's done (or the page is closed).
   function handleDownload(letter) {
     return afterSaving(async () => {
       setRendering(true);
       setError(null);
       try {
-        const res = await fetch(rapi.coverLetterPdfPath(letter.id), { credentials: 'include' });
+        let res = await fetch(rapi.coverLetterPdfPath(letter.id), { credentials: 'include' });
+        for (let tries = 0; res.status === 503 && tries < PDF_RETRIES; tries += 1) {
+          await new Promise((resolve) => setTimeout(resolve, PDF_RETRY_MS));
+          if (!mountedRef.current) return;
+          res = await fetch(rapi.coverLetterPdfPath(letter.id), { credentials: 'include' });
+        }
+        if (!mountedRef.current) return;
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           throw new Error(body.error || `Request failed: ${res.status}`);

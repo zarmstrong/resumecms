@@ -7,6 +7,7 @@ import {
   mergeRewrite,
   normalizeTarget,
   outputSchema,
+  REWRITABLE_TYPES,
   rewriteInput,
   targetKey,
   textSimilarity,
@@ -254,7 +255,8 @@ test('output schemas satisfy strict structured-output rules', () => {
     }
     if (schema.type === 'array') check(schema.items, `${path}[]`);
   }
-  for (const type of ['heading', 'summary', 'skills_group', 'experience', 'custom']) check(outputSchema(type), type);
+  // Every rewritable type, so a new one is checked without being listed here.
+  for (const type of REWRITABLE_TYPES) check(outputSchema(type), type);
   check(outputSchema('experience', { kind: 'description' }), 'experience/description');
   check(outputSchema('experience', { kind: 'bullet', path: [0] }), 'experience/bullet [0]');
   check(outputSchema('experience', { kind: 'bullet', path: [0, 0] }), 'experience/bullet [0,0]');
