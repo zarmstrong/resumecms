@@ -38,7 +38,7 @@ const INSTRUCTIONS = `resumecms edits a single-user resume site that can hold se
 
 Resumes: list_resumes shows them. Every content tool takes an optional resumeId; without it, it acts on the DEFAULT resume (the one the main domain shows). A new resume (create_resume, optionally copying another's draft with copyFrom) is private and unpublished; update_resume makes it public, gives it domains, or makes it the default. To tailor a resume for an audience or a job posting, copy it, rewrite the copy's blocks yourself (emphasis and wording only: never add a skill, technology or claim the resume doesn't already support), and record the brief as its tailoring.
 
-Content model: a resume is an ordered list of blocks ({ id, type, position, parentId, visibleWeb, visiblePrint, data }). Types: heading, summary, skills_group, experience, education, custom. An experience, skills_group, education, or custom block may be nested one level under a heading via parentId; heading and summary are always top-level. Call get_block_schemas for each type's data shape — the server type-checks the documented keys (e.g. bullets must be an array) and rejects a mismatch with a 400, but doesn't check enum values or unknown keys.
+Content model: a resume is an ordered list of blocks ({ id, type, position, parentId, visibleWeb, visiblePrint, data }). Types: heading, summary, executive_summary, skills_group, experience, education, custom. An experience, skills_group, education, custom, or executive_summary block may be nested one level under a heading via parentId; heading and summary are always top-level. Call get_block_schemas for each type's data shape — the server type-checks the documented keys (e.g. bullets must be an array) and rejects a mismatch with a 400, but doesn't check enum values or unknown keys.
 
 Draft vs published: every write tool changes the DRAFT only, of one resume. Nothing is visible on the public site or PDF until you call publish for that resume. get_publish_status reports whether unpublished changes exist; discard_draft throws the draft away. Prefer reading with get_draft (everything at once) and editing with update_block (which merges data keys) and move_block (which handles ordering for you).
 
@@ -170,7 +170,7 @@ const CONTENT_TOOLS = [
     config: {
       title: 'Create a block',
       description:
-        'Adds a DRAFT block at the end of its sibling group (top level, or under the heading given by parentId). Only experience, skills_group, education, and custom blocks can be nested; parentId must be a top-level heading. Returns the created block; use move_block to position it.',
+        'Adds a DRAFT block at the end of its sibling group (top level, or under the heading given by parentId). Only experience, skills_group, education, custom, and executive_summary blocks can be nested; parentId must be a top-level heading. Returns the created block; use move_block to position it.',
       inputSchema: {
         type: BLOCK_TYPE_ENUM.describe('Block type.'),
         data: jsonObject().optional().describe('Block data; see get_block_schemas for the shape of this type.'),

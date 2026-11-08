@@ -68,6 +68,16 @@ test('letterResumeContext leaves out blocks and bullets hidden everywhere, and k
   assert.equal(letterResumeContext([block('heading', { text: 'Only a heading' })]), null);
 });
 
+test("an executive summary's headline and overview read as summary, its highlights as highlights", () => {
+  assert.deepEqual(
+    letterResumeContext([
+      block('executive_summary', { headline: ' Platform leader ', text: 'Builds teams.', highlights: ['Grew the team', '', ' ', 7] }),
+      block('executive_summary', { headline: 'Hidden', highlights: ['Secret'] }, { visibleWeb: false, visiblePrint: false }),
+    ]),
+    { summary: ['Platform leader', 'Builds teams.'], highlights: ['Grew the team'] }
+  );
+});
+
 test('a sub-bullet shows only where its parent does', () => {
   const context = letterResumeContext([
     block('experience', {

@@ -36,10 +36,11 @@ import { createCoverLetterStore, removeLetterPdf } from './coverLetterStore.js';
 // straight onto the response, and the MCP layer surfaces in the tool error.
 
 // Only these types can be nested under a heading; `heading` itself can't
-// (no multi-level nesting) and `summary` stays top-level only.
-export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'custom']);
+// (no multi-level nesting) and `summary` stays top-level only. An
+// executive summary can sit under its own "Executive Summary" heading.
+export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'custom', 'executive_summary']);
 
-export const BLOCK_TYPES = ['heading', 'summary', 'skills_group', 'experience', 'education', 'custom'];
+export const BLOCK_TYPES = ['heading', 'summary', 'executive_summary', 'skills_group', 'experience', 'education', 'custom'];
 
 export { httpError };
 

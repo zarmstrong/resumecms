@@ -105,6 +105,18 @@ test('landingProfile reads only the published, web-visible outline', () => {
   assert.equal(landingProfile({ header: {}, blocks: [] }), null);
 });
 
+test("landingProfile reads a web-visible executive summary's headline, overview and highlights", () => {
+  const profile = landingProfile({
+    header: {},
+    blocks: [
+      { type: 'summary', visibleWeb: true, data: { text: 'Plain summary.' } },
+      { type: 'executive_summary', visibleWeb: true, data: { headline: 'Platform leader', text: 'Builds teams.', highlights: ['Grew the team', ' ', null] } },
+      { type: 'executive_summary', visibleWeb: false, data: { headline: 'Print only', highlights: ['Secret'] } },
+    ],
+  });
+  assert.deepEqual(profile, { summary: 'Plain summary.\n\nPlatform leader\n\nBuilds teams.', highlights: ['Grew the team'] });
+});
+
 test('the prompt marks the target, and leaves out URLs, ids and the photo', () => {
   const { system, user } = buildLandingPrompt(landing, { kind: 'item', sectionId: 'proj', index: 0 }, 'Shorter', null);
   assert.match(user, /\[the part being rewritten\]/);

@@ -4,9 +4,9 @@ import { DEFAULT_TAILOR_TYPES, TAILOR_TYPES, createTailorRun, tailorItems } from
 
 const block = (id, type, data, { web = true, print = true } = {}) => ({ id, type, data, visibleWeb: web, visiblePrint: print });
 
-test('a run covers summary, experience and skills unless told otherwise', () => {
-  assert.deepEqual(DEFAULT_TAILOR_TYPES, ['summary', 'experience', 'skills_group']);
-  assert.deepEqual(TAILOR_TYPES.map((t) => t.type), ['summary', 'experience', 'skills_group', 'heading', 'custom']);
+test('a run covers summaries, experience and skills unless told otherwise', () => {
+  assert.deepEqual(DEFAULT_TAILOR_TYPES, ['summary', 'executive_summary', 'experience', 'skills_group']);
+  assert.deepEqual(TAILOR_TYPES.map((t) => t.type), ['summary', 'executive_summary', 'experience', 'skills_group', 'heading', 'custom']);
 });
 
 test('one request per section of the chosen types, plus an experience description, skipping hidden and empty ones', () => {
@@ -43,6 +43,20 @@ test('one request per section of the chosen types, plus an experience descriptio
   const legacy = block('old', 'custom', { title: 'Awards', items: [{ heading: '', body: 'Best paper' }] });
   assert.deepEqual(tailorItems([legacy, block('none', 'custom', { items: [{}] })], ['custom']).map((i) => i.key), ['old:block']);
   assert.deepEqual(tailorItems(blocks, []), []);
+});
+
+test('an executive summary is tailored when any of its three fields has text, and labeled by its headline', () => {
+  const items = tailorItems(
+    [
+      block('a', 'executive_summary', { headline: 'Platform leader', text: '', highlights: [] }),
+      block('b', 'executive_summary', { headline: '', text: '', highlights: ['', 'Grew the team'] }),
+      block('c', 'executive_summary', { headline: ' ', text: '', highlights: ['', ' '] }),
+    ],
+    ['executive_summary']
+  );
+  assert.deepEqual(items.map((i) => i.key), ['a:block', 'b:block']);
+  assert.equal(items[0].label, 'Executive Summary: Platform leader');
+  assert.equal(items[1].label, 'Executive Summary');
 });
 
 // A request the test settles by hand.

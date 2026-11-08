@@ -36,7 +36,7 @@ export const BLOCK_ALIGN_OPTIONS = [
   { value: 'right', label: 'Right' },
 ];
 
-export const ALIGNABLE_TYPES = ['heading', 'summary', 'skills_group', 'custom'];
+export const ALIGNABLE_TYPES = ['heading', 'summary', 'executive_summary', 'skills_group', 'custom'];
 
 export function normalizeBlockStyle(data) {
   return (data && data.style) || {};

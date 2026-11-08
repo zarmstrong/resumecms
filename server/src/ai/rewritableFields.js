@@ -5,7 +5,7 @@
 // routes/blocks.js this is an explicit allowlist: a block type added later
 // isn't rewritable until it's deliberately added here. (`education` is left
 // out on purpose: every field it has is a fact, not prose.)
-export const REWRITABLE_TYPES = new Set(['heading', 'summary', 'skills_group', 'experience', 'custom']);
+export const REWRITABLE_TYPES = new Set(['heading', 'summary', 'executive_summary', 'skills_group', 'experience', 'custom']);
 
 // Mirrors client/src/resume/bulletUtils.js — bullets nest one level deep,
 // and legacy data stored them as plain strings.
@@ -126,6 +126,9 @@ export function hasRewritableShape(type, data) {
   if (!isPlainObject(data)) return false;
   if (type === 'experience') return isBulletList(data.bullets);
   if (type === 'custom') return data.items === undefined || (Array.isArray(data.items) && data.items.every(isPlainObject));
+  if (type === 'executive_summary') {
+    return data.highlights == null || (Array.isArray(data.highlights) && data.highlights.every((h) => typeof h === 'string'));
+  }
   return true;
 }
 
@@ -194,6 +197,11 @@ const customItemInput = (item) => ({ heading: item.heading || '', body: item[bod
 // a cover letter's (letterWriting.js).
 export const customItemProse = (item) => customItemInput(normalizeCustomItem(item));
 
+// An executive summary's highlights as the model sees them: the editor's
+// one-per-line textarea can leave blank entries, which render as nothing.
+const highlightList = (highlights) =>
+  (Array.isArray(highlights) ? highlights : []).map((h) => String(h ?? '').trim()).filter(Boolean);
+
 // Splits a block's data into what the model may rewrite (`editable`) and
 // what it should only read for context (`context`). `target` must already
 // be normalized (normalizeTarget).
@@ -202,6 +210,11 @@ export function rewriteInput(type, data = {}, target = BLOCK_TARGET) {
     case 'heading':
     case 'summary':
       return { editable: { text: data.text || '' }, context: null };
+    case 'executive_summary':
+      return {
+        editable: { headline: data.headline || '', text: data.text || '', highlights: highlightList(data.highlights) },
+        context: null,
+      };
     case 'skills_group':
       return { editable: { category: data.category || '', items: data.items || '' }, context: null };
     case 'experience':
@@ -251,6 +264,8 @@ function editableSchema(type) {
     case 'heading':
     case 'summary':
       return obj({ text: str });
+    case 'executive_summary':
+      return obj({ headline: str, text: str, highlights: { type: 'array', items: str } });
     case 'skills_group':
       return obj({ category: str, items: str });
     case 'experience':
@@ -300,6 +315,15 @@ export function rewritten(original, value, field) {
 function requireArray(value, field) {
   if (!Array.isArray(value)) throw new RewriteShapeError(`AI response is missing "${field}"`);
   return value;
+}
+
+// Like `rewritten`, for a list of lines (an executive summary's
+// highlights). They carry no flags of their own, so the model may add,
+// drop, or reorder them; blank ones are dropped. Unchanged apart from
+// blanks and whitespace keeps the stored list exactly.
+function rewrittenList(original, value, field) {
+  const next = requireArray(value, field).map((line) => requireString(line, field)).filter(Boolean);
+  return JSON.stringify(next) === JSON.stringify(highlightList(original)) ? original : next;
 }
 
 // Words are runs of letters/digits in any script, with accents folded.
@@ -517,6 +541,15 @@ export function mergeRewrite(type, data = {}, rewrite, { allowBulletRestructure 
     case 'heading':
     case 'summary':
       return { data: { ...data, text: rewritten(data.text, rewrite.text, 'text') } };
+    case 'executive_summary':
+      return {
+        data: {
+          ...data,
+          headline: rewritten(data.headline, rewrite.headline, 'headline'),
+          text: rewritten(data.text, rewrite.text, 'text'),
+          highlights: rewrittenList(data.highlights, rewrite.highlights, 'highlights'),
+        },
+      };
     case 'skills_group':
       return {
         data: {

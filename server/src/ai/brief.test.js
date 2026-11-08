@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BRIEF_LIMITS, normalizeBrief, resumeOutline } from './brief.js';
+import { BRIEF_LIMITS, normalizeBrief, outlineScope, resumeOutline } from './brief.js';
 
 const statusOf = (fn) => {
   try {
@@ -77,4 +77,58 @@ test('the outline leaves out whatever is hidden anywhere the summary shows', () 
 test('an outline with nothing in it is null', () => {
   const summary = block('s', 'summary', {});
   assert.equal(resumeOutline([summary, block('h', 'heading', { text: 'x' }), block('e', 'experience', {})], summary), null);
+});
+
+test('outlineScope: a summary only when tailored, an executive summary always and with accomplishments', () => {
+  assert.equal(outlineScope('summary', false), null);
+  assert.deepEqual(outlineScope('summary', true), { accomplishments: false });
+  assert.deepEqual(outlineScope('executive_summary', false), { accomplishments: true });
+  assert.deepEqual(outlineScope('executive_summary', true), { accomplishments: true });
+  assert.equal(outlineScope('experience', true), null);
+});
+
+test("an executive summary's outline has each job's accomplishments, leaving out bullets hidden where it shows", () => {
+  const job = block('e', 'experience', {
+    jobTitle: 'SRE',
+    company: 'Acme',
+    tagline: ' Makes anvils. ',
+    description: 'Ran the platform.',
+    bullets: [
+      'Legacy string bullet',
+      { text: 'Shown', children: [{ text: 'Shown child' }, { text: 'Print-only child', visibleWeb: false }] },
+      { text: 'Web-only', visiblePrint: false, children: [{ text: 'Child of web-only' }] },
+      { text: 'Hidden', visibleWeb: false, visiblePrint: false },
+      null,
+      { text: '  ' },
+    ],
+  });
+  const bare = block('b', 'experience', { jobTitle: 'Intern', company: 'Globex' });
+  const bullets = (summary) => resumeOutline([job, bare], summary, { accomplishments: true }).experience[0].bullets;
+  const exec = block('x', 'executive_summary', {});
+  assert.deepEqual(resumeOutline([job, bare], exec, { accomplishments: true }).experience, [
+    {
+      jobTitle: 'SRE',
+      company: 'Acme',
+      dates: '',
+      tagline: 'Makes anvils.',
+      description: 'Ran the platform.',
+      bullets: ['Legacy string bullet', 'Shown', 'Shown child'],
+    },
+    { jobTitle: 'Intern', company: 'Globex', dates: '' },
+  ]);
+  assert.deepEqual(bullets(block('x', 'executive_summary', {}, { print: false })), [
+    'Legacy string bullet',
+    'Shown',
+    'Shown child',
+    'Web-only',
+    'Child of web-only',
+  ]);
+  assert.deepEqual(bullets(block('x', 'executive_summary', {}, { web: false })), [
+    'Legacy string bullet',
+    'Shown',
+    'Shown child',
+    'Print-only child',
+  ]);
+  // without accomplishments (a tailored summary), none of it is sent
+  assert.deepEqual(resumeOutline([job], exec).experience, [{ jobTitle: 'SRE', company: 'Acme', dates: '' }]);
 });

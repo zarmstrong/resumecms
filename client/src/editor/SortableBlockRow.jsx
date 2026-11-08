@@ -3,6 +3,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { BLOCK_TYPE_LABELS } from './blockDefaults.js';
 import { HeadingForm } from './blockForms/HeadingForm.jsx';
 import { SummaryForm } from './blockForms/SummaryForm.jsx';
+import { ExecutiveSummaryForm } from './blockForms/ExecutiveSummaryForm.jsx';
 import { SkillsGroupForm } from './blockForms/SkillsGroupForm.jsx';
 import { ExperienceForm } from './blockForms/ExperienceForm.jsx';
 import { EducationForm } from './blockForms/EducationForm.jsx';
@@ -21,6 +22,7 @@ function proposalsForBlock(proposals, blockId) {
 const FORM_COMPONENTS = {
   heading: HeadingForm,
   summary: SummaryForm,
+  executive_summary: ExecutiveSummaryForm,
   skills_group: SkillsGroupForm,
   experience: ExperienceForm,
   education: EducationForm,
@@ -32,8 +34,9 @@ function summarize(block) {
   switch (block.type) {
     case 'heading':
       return { title: d.text };
-    case 'summary': {
-      const text = d.text || '';
+    case 'summary':
+    case 'executive_summary': {
+      const text = d.headline || d.text || '';
       return { title: text.length > 60 ? `${text.slice(0, 60)}…` : text || 'Untitled' };
     }
     case 'skills_group':

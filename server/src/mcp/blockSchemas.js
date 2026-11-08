@@ -16,7 +16,7 @@ const COMMON = {
     visibleWeb: 'boolean — show on the public web page (default true)',
     visiblePrint: 'boolean — show in the print/PDF version (default true)',
     parentId:
-      'string | null — id of a top-level heading to nest under. Only experience, skills_group, education, and custom blocks can be nested, one level deep.',
+      'string | null — id of a top-level heading to nest under. Only experience, skills_group, education, custom, and executive_summary blocks can be nested, one level deep.',
   },
   dataStyle: {
     description: 'Optional `data.style` object on any block type for per-block spacing, alignment, and emphasis.',
@@ -26,7 +26,7 @@ const COMMON = {
       align: {
         enum: ['', 'left', 'center', 'right'],
         description:
-          "Text alignment for the block; '' or omitted = template default. Honored on heading, summary, skills_group, and custom blocks; ignored on experience and education. A custom block with no title and one centered text or link item makes a one-line footer such as 'More work history at example.com'.",
+          "Text alignment for the block; '' or omitted = template default. Honored on heading, summary, executive_summary, skills_group, and custom blocks; ignored on experience and education. A custom block with no title and one centered text or link item makes a one-line footer such as 'More work history at example.com'.",
       },
       highlight: { type: 'boolean', description: 'Draw the block with a highlight background' },
     },
@@ -75,6 +75,25 @@ export const BLOCK_DATA_SCHEMAS = {
       style: { $ref: 'dataStyle' },
     },
     example: { text: 'Infrastructure engineer with ten years of ...' },
+  },
+  executive_summary: {
+    description:
+      'An executive summary: a one-line headline, a short overview paragraph, and a list of key career highlights. Can be nested under a heading (e.g. "Executive Summary").',
+    properties: {
+      headline: { type: 'string', description: 'One line on who the person is and the value they bring; optional' },
+      text: { type: 'string', description: 'Overview paragraph, plain text; may contain multiple paragraphs separated by blank lines' },
+      highlights: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Key career highlights, one short line each, shown as a list; blank entries are skipped',
+      },
+      style: { $ref: 'dataStyle' },
+    },
+    example: {
+      headline: 'Engineering leader who scales platform teams and the systems they run',
+      text: 'Fifteen years building and leading infrastructure organizations ...',
+      highlights: ['Grew the platform group from 6 to 40 engineers across three regions', 'Cut cloud spend by 30% in one year'],
+    },
   },
   skills_group: {
     description: 'One row of skills under a category label.',

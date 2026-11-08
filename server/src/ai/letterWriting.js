@@ -75,13 +75,19 @@ function shownBullets(bullets) {
 // letter goes out with the resume in some form. Headings carry no content
 // of their own and are left out. Null when nothing is left.
 export function letterResumeContext(blocks) {
-  const out = { summary: [], experience: [], skills: [], education: [], otherSections: [] };
+  const out = { summary: [], highlights: [], experience: [], skills: [], education: [], otherSections: [] };
   for (const block of blocks || []) {
     if (!block.visibleWeb && !block.visiblePrint) continue;
     const data = isPlainObject(block.data) ? block.data : {};
     switch (block.type) {
       case 'summary':
         if (text(data.text)) out.summary.push(text(data.text));
+        break;
+      // Its headline and overview read as summary; its highlights are the
+      // career achievements a letter most wants to draw on.
+      case 'executive_summary':
+        for (const part of [data.headline, data.text]) if (text(part)) out.summary.push(text(part));
+        for (const h of Array.isArray(data.highlights) ? data.highlights : []) if (text(h)) out.highlights.push(text(h));
         break;
       case 'experience': {
         const entry = {

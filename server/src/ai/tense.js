@@ -14,8 +14,9 @@
 //   anything from awards to a current side project, so one setting can't
 //   fit them all. The editor gets this list from publicAiSettings()
 //   (`pickedTenseTypes`).
-// Summaries, headings, and skills rows get neither: a summary describes who
-// the person is now, and the others are labels and lists with no verbs.
+// Summaries (executive ones too), headings, and skills rows get neither: a
+// summary describes who the person is now, and the others are labels and
+// lists with no verbs.
 export const TENSE_TYPES = new Set(['experience']);
 export const PICKED_TENSE_TYPES = new Set(['custom']);
 
