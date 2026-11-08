@@ -676,6 +676,17 @@ shows it). The `pdf_meta` setting records which snapshot the file on disk
 was rendered from, and `getPublishStatus()` reports `pdfStale: true` until
 a later render catches up — the editor shows "PDF out of date" for it.
 
+Puppeteer is launched with its own SIGTERM/SIGINT/SIGHUP handlers off: they
+closed the browser but kept Node from exiting, so a server that had ever
+rendered survived `docker stop` (issue #68). `server/src/shutdown.js` owns
+both signals instead: it stops accepting connections, gives in-flight
+requests `DRAIN_MS` before cutting them, closes the shared browser
+(`closeBrowser()`) and the DB, and exits, with a `FORCE_EXIT_MS` backstop
+inside Docker's 10 s grace period; a second signal exits at once. Node is
+PID 1 in the container, which only gets signals it handles, so keep a
+handler there; compose's `init: true` adds a real init that also reaps
+Chromium's children.
+
 ### Cache headers
 
 Every public response carries an explicit `Cache-Control` from

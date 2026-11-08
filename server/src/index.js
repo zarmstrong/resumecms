@@ -2,11 +2,13 @@ import express from 'express';
 import cookieSession from 'cookie-session';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getSetting } from './db.js'; // also ensures schema + seed run on boot
+import { db, getSetting } from './db.js'; // also ensures schema + seed run on boot
 import { accessLogger } from './logger.js';
 import { store } from './store.js';
 import { applyTrustProxy } from './trustProxy.js';
 import { mountClient } from './clientStatic.js';
+import { closeBrowser } from './pdfRenderer.js';
+import { createShutdown } from './shutdown.js';
 
 import aiRoutes from './routes/ai.js';
 import authRoutes from './routes/auth.js';
@@ -79,7 +81,7 @@ app.use('/api', (req, res) => {
 // clientStatic.js for the SPA fallback and the cache policy.
 mountClient(app, path.join(__dirname, '..', '..', 'client', 'dist'));
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`resume server listening on port ${PORT}`);
   if (!getSetting('credentials')) {
     console.warn(
@@ -101,3 +103,7 @@ app.listen(PORT, () => {
     )
     .catch((err) => console.error('Initial PDF generation failed:', err));
 });
+
+const shutdown = createShutdown({ server, closeBrowser, closeDb: () => db.close() });
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

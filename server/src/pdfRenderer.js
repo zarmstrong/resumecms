@@ -17,6 +17,11 @@ function getBrowser() {
       .launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        // Puppeteer's handlers close the browser but stop Node exiting on
+        // the signal; shutdown.js handles them and calls closeBrowser().
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false,
       })
       .catch((err) => {
         // Don't cache a failed launch — let the next call try again
@@ -37,6 +42,14 @@ function getBrowser() {
 function resetBrowser(launch) {
   if (browserPromise === launch) browserPromise = null;
   launch.then((browser) => browser.close()).catch(() => {});
+}
+
+// Closes the shared browser, if one was launched, for shutdown.
+export async function closeBrowser() {
+  const launch = browserPromise;
+  browserPromise = null;
+  const browser = await launch?.catch(() => null);
+  await browser?.close();
 }
 
 // Rejects as soon as `signal` aborts, even if `promise` never settles —

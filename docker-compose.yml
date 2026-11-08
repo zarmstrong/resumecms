@@ -1,6 +1,9 @@
 services:
   resume:
     build: .
+    # A real PID 1 that forwards signals and reaps Chromium's exited
+    # children; the server's own handler (shutdown.js) still does the exit.
+    init: true
     ports:
       - '4000:4000'
     environment:
@@ -33,6 +36,7 @@ services:
   resume-preview:
     build: .
     profiles: ['tools']
+    init: true
     # The "resume" service above runs as non-root for defense-in-depth
     # around Chromium (see Dockerfile) — that doesn't matter for this
     # throwaway local tool, and running as root here avoids write-permission
