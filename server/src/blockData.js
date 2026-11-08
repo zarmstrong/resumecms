@@ -26,6 +26,7 @@ const bullet = z.union([
 export const BLOCK_DATA_VALIDATORS = {
   heading: z.looseObject({ text: str, fontSize: str, column: str, style }),
   summary: z.looseObject({ text: str, style }),
+  executive_summary: z.looseObject({ headline: str, text: str, highlights: z.array(z.string()).nullish(), style }),
   skills_group: z.looseObject({ category: str, items: str, style }),
   experience: z.looseObject({
     jobTitle: str,

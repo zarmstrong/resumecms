@@ -21,6 +21,26 @@ export function SummaryBlock({ data }) {
   return <p className="r-summary">{data.text}</p>;
 }
 
+// Blank highlights are what the editor's one-per-line textarea leaves
+// behind; they render as nothing.
+export function ExecutiveSummaryBlock({ data }) {
+  const highlights = (Array.isArray(data.highlights) ? data.highlights : []).map((h) => String(h ?? '').trim()).filter(Boolean);
+  if (!data.headline && !data.text && highlights.length === 0) return null;
+  return (
+    <div className="r-exec-summary">
+      {data.headline ? <p className="r-exec-summary-headline">{data.headline}</p> : null}
+      {data.text ? <p className="r-exec-summary-text">{data.text}</p> : null}
+      {highlights.length > 0 && (
+        <ul className="r-bullets r-exec-summary-highlights">
+          {highlights.map((h, i) => (
+            <li key={i}>{h}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function splitItems(items) {
   return (items || '')
     .split(',')
@@ -186,6 +206,7 @@ export function CustomBlock({ data }) {
 export const BLOCK_RENDERERS = {
   heading: HeadingBlock,
   summary: SummaryBlock,
+  executive_summary: ExecutiveSummaryBlock,
   skills_group: SkillsGroupBlock,
   experience: ExperienceBlock,
   education: EducationBlock,

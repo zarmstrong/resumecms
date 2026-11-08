@@ -8,8 +8,9 @@ A self-hosted, single-user resume site + CMS (see [README.md](README.md) for
 the full product description, environment variables, and API reference).
 Content is a reorderable list of **blocks** (`{ id, type, position, parentId,
 visibleWeb, visiblePrint, data }`); built-in types are `heading`, `summary`,
-`skills_group`, `experience`, `education`, plus a freeform `custom` type.
-`experience`, `skills_group`, `education`, and `custom` blocks may each nest
+`executive_summary` (headline, overview, `highlights` list), `skills_group`,
+`experience`, `education`, plus a freeform `custom` type. `experience`,
+`skills_group`, `education`, `custom`, and `executive_summary` blocks may each nest
 one level deep under a `heading` block via `parentId` — this is an explicit
 allowlist (`NESTABLE_TYPES` in `resumeStore.js`), not "everything but
 heading/summary", so a new block type added later is top-level-only until
@@ -335,7 +336,7 @@ through would reach the SPA catch-all.
 
 A block's `parentId` (nullable, on the `blocks` table and in the API) points
 at a `heading` block's `id`; only `experience`, `skills_group`, `education`,
-and `custom` blocks can be nested, and only one level deep — a `heading`
+`custom`, and `executive_summary` blocks can be nested, and only one level deep — a `heading`
 can't itself have a `parentId`, and `summary` can't have one at all. This is
 enforced server-side in `server/src/resumeStore.js`'s `assertValidParent`,
 called from every store method that can set `parentId` (`createBlock`,
@@ -524,7 +525,15 @@ same as without one, and with a brief the instruction may be empty
 the rest of its resume, built in the route from the stored draft; it
 leaves out every block hidden anywhere the summary shows (a summary hidden
 everywhere counts as shown everywhere, since unhiding it publishes its
-text), so keep that filter if you add fields to it. Requests with a brief count against their
+text), so keep that filter if you add fields to it. An `executive_summary`
+gets the outline on every rewrite, brief or not, and with each job's
+tagline, description and bullets (`accomplishments`; bullets hidden where
+it shows are left out, a sub-bullet with its parent): `outlineScope()` in
+`brief.js` is the one place that decides, read by both the route and
+`rewriteBlock`, and the editor's `contextNote()` (`aiReview.js`) says so in
+the panel. Its `highlights` are an array of plain strings with no flags, so
+`mergeRewrite` lets the model add, drop or reorder them (blanks dropped)
+without the bullet-restructure setting. Requests with a brief count against their
 own rate limiter (`tailorLimiter`) instead of `rewriteLimiter`. Each resume
 keeps the brief it was tailored for as its `tailoring` setting
 (`createResume`/`updateResume`, shown on every resume the API returns): a

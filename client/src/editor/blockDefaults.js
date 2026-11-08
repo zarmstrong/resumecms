@@ -1,6 +1,7 @@
 export const BLOCK_TYPE_LABELS = {
   heading: 'Section Heading',
   summary: 'Professional Summary',
+  executive_summary: 'Executive Summary',
   skills_group: 'Skills Row',
   experience: 'Experience Entry',
   education: 'Education Entry',
@@ -10,7 +11,7 @@ export const BLOCK_TYPE_LABELS = {
 // Mirrors NESTABLE_TYPES in server/src/resumeStore.js: these are the only
 // types that can live under a heading. `heading` can't nest (no multi-level
 // sections) and `summary` always stays top-level.
-export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'custom']);
+export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'custom', 'executive_summary']);
 
 export const CUSTOM_BODY_TYPES = [
   { value: 'text', label: 'Text' },
@@ -29,6 +30,12 @@ export function defaultDataForType(type) {
       return { text: 'New Section' };
     case 'summary':
       return { text: 'A brief summary of your professional background and goals.' };
+    case 'executive_summary':
+      return {
+        headline: 'Who you are and the value you bring, in one line',
+        text: 'A short overview of your career: the scale you work at, what you are known for, and where you are headed.',
+        highlights: [],
+      };
     case 'skills_group':
       return { category: 'Category', items: 'Item one, item two, item three' };
     case 'experience':

@@ -11,12 +11,14 @@ import {
 } from './rewritableFields.js';
 import { AiError, callProvider } from './providers.js';
 import { pickedTenseError, resolveTense } from './tense.js';
+import { outlineScope } from './brief.js';
 
 export const MAX_INSTRUCTION_LENGTH = 2000;
 
 const TYPE_LABELS = {
   heading: 'Section heading',
   summary: 'Professional summary',
+  executive_summary: 'Executive summary (a headline, a short overview, and a list of key career highlights)',
   skills_group: 'Skills row (a category label and a comma-separated list)',
   experience: 'Experience entry',
   custom: 'Custom section',
@@ -107,6 +109,17 @@ function customRules(target) {
   return [`Return exactly the same number of items in the same order. Each item's type is in itemBodyTypes. ${CUSTOM_BODY_RULE}`];
 }
 
+// An executive summary's three fields. An empty one stays empty unless
+// asked for, like an experience description, so "fix the grammar" on a
+// summary with no highlights doesn't invent some. Highlights carry no
+// visibility flags, so restructuring them needs no setting; the review
+// shows what was added or dropped.
+const EXECUTIVE_SUMMARY_RULES = [
+  '"headline" is one line saying who the person is and the value they bring, in at most about fifteen words. "text" is a short overview of the person, three to five sentences. "highlights" are their key career achievements, one short line each, leading with the result.',
+  'A field that is empty stays empty unless the instruction asks you to write it. When writing highlights, aim for three to five, each from a different accomplishment, and do not repeat what the overview already says.',
+  'Add, remove, or reorder highlights only when the instruction calls for it; otherwise return the same highlights in the same order.',
+];
+
 // What a rewrite with a brief but no instruction of its own is asked to do
 // (a tailoring run sends one request per block, all alike).
 export const TAILOR_INSTRUCTION = 'Tailor this section for the audience in the brief.';
@@ -126,6 +139,10 @@ const TAILORING_RULES = [
 // The summary's view of the rest of the resume (brief.js's resumeOutline).
 const OUTLINE_RULE =
   'The outline of the rest of the resume is context: you may draw on its job titles, companies, skills, and education to describe the person, but never on anything it does not say.';
+// An executive summary's outline also has each job's accomplishments
+// (outlineScope). Two bullets' numbers added up are a new claim.
+const ACCOMPLISHMENTS_RULE =
+  "The outline also lists each job's tagline, description, and bullets. Draw the overview and highlights from them, keeping their facts and numbers exactly as given; never combine numbers from different bullets into a new figure.";
 
 // The read-only brief section of the user message. The guidance is the
 // person's own, so it goes with the instruction instead (see buildPrompt).
@@ -139,8 +156,8 @@ function briefSection(brief) {
 }
 
 // `target` must already be normalized (normalizeTarget). `brief` is a
-// normalized brief or null; `outline` is a summary's resumeOutline (only
-// sent with a brief).
+// normalized brief or null; `outline` is a summary's resumeOutline (sent
+// only where brief.js's outlineScope says).
 export function buildPrompt(
   type,
   { editable, context },
@@ -156,9 +173,11 @@ export function buildPrompt(
   ];
   if (brief) rules.push(...TAILORING_RULES);
   if (outline) rules.push(OUTLINE_RULE);
+  if (outline && type === 'executive_summary') rules.push(ACCOMPLISHMENTS_RULE);
   if (Object.hasOwn(TENSE_RULES, tense ?? '')) rules.push(TENSE_RULES[tense]);
   if (type === 'experience') rules.push(...experienceRules(target, allowBulletRestructure));
   if (type === 'custom') rules.push(...customRules(target));
+  if (type === 'executive_summary') rules.push(...EXECUTIVE_SUMMARY_RULES);
 
   const system = [
     'You rewrite one section of a person\'s resume at their request, and return the rewritten section as JSON matching the provided schema.',
@@ -195,7 +214,8 @@ export function buildPrompt(
 // tense picked in the editor for a custom block (tense.js's PICKED_TENSES,
 // or undefined for the setting's default), checked here as the one place a
 // bad one becomes a 400; `brief` is a normalized brief (brief.js) or null,
-// and `outline` the summary's resumeOutline that goes with one; `callModel`
+// and `outline` the summary's resumeOutline, used only where outlineScope
+// gives one (a tailored summary, or any executive summary); `callModel`
 // is injectable so tests can stand in for the provider.
 export async function rewriteBlock({
   type,
@@ -233,7 +253,7 @@ export async function rewriteBlock({
     tense,
     target: scope,
     brief,
-    outline: brief ? outline : null,
+    outline: outlineScope(type, Boolean(brief)) ? outline : null,
   });
 
   const output = await callModel({

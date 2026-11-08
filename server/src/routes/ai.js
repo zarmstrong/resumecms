@@ -9,7 +9,7 @@ import { applyAiSettingsUpdate, normalizeAiSettings, publicAiSettings } from '..
 import { AiError } from '../ai/providers.js';
 import { MAX_INSTRUCTION_LENGTH, rewriteBlock } from '../ai/rewrite.js';
 import { hasRewritableShape } from '../ai/rewritableFields.js';
-import { normalizeBrief, resumeOutline } from '../ai/brief.js';
+import { normalizeBrief, outlineScope, resumeOutline } from '../ai/brief.js';
 import { hasLetterShape, rewriteLetter } from '../ai/letterWriting.js';
 import { landingProfile, rewriteLanding } from '../ai/landingRewrite.js';
 
@@ -91,7 +91,7 @@ router.put('/settings', settingsLimiter, (req, res) => {
 // `brief` (optional, brief.js) tailors the rewrite to an audience and job
 // posting. With one, the instruction may be empty (TAILOR_INSTRUCTION
 // stands in), and a summary also sees an outline of the rest of its
-// resume.
+// resume. An executive summary always sees one (brief.js's outlineScope).
 export function rewriteHandlers(storeFor) {
   return [rewriteLimiter, tailorLimiter, (req, res) => rewrite(req, res, storeFor)];
 }
@@ -117,7 +117,8 @@ async function rewrite(req, res, storeFor) {
   try {
     const resumeStore = storeFor(req);
     block = resumeStore.getBlock(blockId);
-    if (brief && block.type === 'summary') outline = resumeOutline(resumeStore.listBlocks(), block);
+    const scope = outlineScope(block.type, Boolean(brief));
+    if (scope) outline = resumeOutline(resumeStore.listBlocks(), block, scope);
   } catch (err) {
     return sendError(res, err);
   }

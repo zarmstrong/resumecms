@@ -10,6 +10,7 @@ import { BLOCK_TYPE_LABELS } from './blockDefaults.js';
 // headings or freeform sections.
 export const TAILOR_TYPES = [
   { type: 'summary', label: 'Summary', checked: true },
+  { type: 'executive_summary', label: 'Executive summary', checked: true },
   { type: 'experience', label: 'Experience', checked: true },
   { type: 'skills_group', label: 'Skills', checked: true },
   { type: 'heading', label: 'Headings', checked: false },
@@ -33,6 +34,8 @@ function hasText(type, data = {}) {
     case 'heading':
     case 'summary':
       return Boolean(text(data.text));
+    case 'executive_summary':
+      return Boolean(text(data.headline) || text(data.text) || (data.highlights || []).some((h) => text(h)));
     case 'skills_group':
       return Boolean(text(data.items));
     case 'experience':
@@ -82,7 +85,7 @@ function blockLabel(block) {
         ? text(data.category)
         : block.type === 'custom'
           ? text(data.title)
-          : text(data.text).slice(0, 40);
+          : (text(data.headline) || text(data.text)).slice(0, 40);
   const type = BLOCK_TYPE_LABELS[block.type] || 'Section';
   return detail ? `${type}: ${detail}` : type;
 }

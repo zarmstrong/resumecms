@@ -3,7 +3,7 @@ import { normalizeBullet } from '../resume/bulletUtils.js';
 import { bulletAt, updateAtPath } from './bulletDrag.js';
 
 // Mirrors REWRITABLE_TYPES in server/src/ai/rewritableFields.js.
-export const AI_REWRITABLE_TYPES = new Set(['heading', 'summary', 'skills_group', 'experience', 'custom']);
+export const AI_REWRITABLE_TYPES = new Set(['heading', 'summary', 'executive_summary', 'skills_group', 'experience', 'custom']);
 
 // What part of a block a rewrite is aimed at; see the server's
 // rewritableFields.js. `block` is the whole block (for an experience block,
@@ -313,11 +313,28 @@ export function tenseChangeNote(usedTense, currentTense, options) {
   return `This rewrite used “${label(usedTense)}”. Try again to use “${label(currentTense)}”.`;
 }
 
+// An executive summary is written from the rest of the resume (the server
+// sends it an outline; see brief.js's outlineScope), so its presets start
+// with drafting it from there.
+const EXECUTIVE_SUMMARY_PRESETS = [
+  {
+    label: 'Draft from my resume',
+    instruction:
+      'Write this executive summary from my resume: a one-line headline, an overview of three to five sentences, and three to five key highlights drawn from my experience. Replace what is here.',
+  },
+  {
+    label: 'Pick highlights',
+    instruction:
+      'Choose three to five key career highlights from my experience, each leading with the result. Leave the headline and overview as they are.',
+  },
+];
+
 // The presets for one rewrite. An experience description gets its own:
 // "Write description" when there isn't one yet (the general presets have
 // nothing to work on then), and "Rewrite description" after the general
 // ones otherwise.
 export function presetsFor(type, data = {}, target = BLOCK_TARGET) {
+  if (type === 'executive_summary') return [...EXECUTIVE_SUMMARY_PRESETS, ...AI_PRESETS];
   if (type !== 'experience' || target?.kind !== 'description') return AI_PRESETS;
   if (!data.description?.trim()) {
     return [
@@ -376,6 +393,14 @@ export function wordDiff(before, after) {
 
 const CUSTOM_BODY_FIELD = { text: 'text', list: 'items', tags: 'items', link: 'label' };
 
+// An executive summary's highlights as one line each, for the diff. Blank
+// ones render as nothing, so they don't count as a change either.
+const highlightLines = (highlights) =>
+  (Array.isArray(highlights) ? highlights : [])
+    .map((h) => String(h ?? '').trim())
+    .filter(Boolean)
+    .join('\n');
+
 function customBody(item) {
   if (!item.bodyType) return item.text ?? item.body ?? '';
   return item[CUSTOM_BODY_FIELD[item.bodyType] || 'text'] || '';
@@ -411,6 +436,11 @@ export function changedFields(type, before = {}, after = {}, target = BLOCK_TARG
       break;
     case 'summary':
       add('Summary', before.text, after.text);
+      break;
+    case 'executive_summary':
+      add('Headline', before.headline, after.headline);
+      add('Overview', before.text, after.text);
+      add('Key highlights', highlightLines(before.highlights), highlightLines(after.highlights));
       break;
     case 'skills_group':
       add('Category', before.category, after.category);
@@ -450,6 +480,13 @@ export function hiddenBulletCount(type, data = {}) {
       return n + (hidden ? 1 : 0) + count(b.children, hidden);
     }, 0);
   return count(data.bullets, false);
+}
+
+// What the panel says is sent along besides the block itself, or null.
+// Mirrors brief.js's outlineScope for rewrites without a brief.
+export function contextNote(type) {
+  if (type !== 'executive_summary') return null;
+  return 'An outline of the rest of this resume is sent to the AI too: job titles, companies, dates, taglines, descriptions, bullets, skills, and education, leaving out anything hidden where this block shows.';
 }
 
 // What happened to one bullet in the server's bulletReview, for its label.

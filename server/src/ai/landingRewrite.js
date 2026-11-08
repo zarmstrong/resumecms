@@ -117,7 +117,8 @@ function dates(start, end) {
 }
 
 // What the AI may know about a resume, from its published snapshot
-// (`{ header, blocks }`): its header's name and title, its summary, and an
+// (`{ header, blocks }`): its header's name and title, its summary (an
+// executive summary's headline and overview too, and its highlights), and an
 // outline of its jobs, skills and education, like brief.js's
 // resumeOutline(). Only blocks shown on the web are read, the landing page
 // being a web page; bullets are left out (they carry their own visibility,
@@ -126,12 +127,19 @@ function dates(start, end) {
 export function landingProfile(snapshot) {
   if (!isPlainObject(snapshot)) return null;
   const header = isPlainObject(snapshot.header) ? snapshot.header : {};
-  const profile = { name: text(header.name), title: text(header.title), summary: '', experience: [], skills: [], education: [] };
+  const profile = { name: text(header.name), title: text(header.title), summary: '', highlights: [], experience: [], skills: [], education: [] };
+  const addSummary = (value) => {
+    if (text(value)) profile.summary = [profile.summary, text(value)].filter(Boolean).join('\n\n');
+  };
   for (const block of Array.isArray(snapshot.blocks) ? snapshot.blocks : []) {
     if (!isPlainObject(block) || block.visibleWeb === false) continue;
     const data = isPlainObject(block.data) ? block.data : {};
     if (block.type === 'summary') {
-      if (text(data.text)) profile.summary = [profile.summary, text(data.text)].filter(Boolean).join('\n\n');
+      addSummary(data.text);
+    } else if (block.type === 'executive_summary') {
+      addSummary(data.headline);
+      addSummary(data.text);
+      for (const h of Array.isArray(data.highlights) ? data.highlights : []) if (text(h)) profile.highlights.push(text(h));
     } else if (block.type === 'experience') {
       const entry = { jobTitle: text(data.jobTitle), company: text(data.company), dates: dates(text(data.startDate), text(data.endDate)) };
       if (entry.jobTitle || entry.company) profile.experience.push(entry);

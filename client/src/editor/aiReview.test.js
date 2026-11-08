@@ -7,6 +7,7 @@ import {
   applyProposal,
   bulletChange,
   changedFields,
+  contextNote,
   describeTarget,
   hiddenBulletCount,
   isProposalStale,
@@ -96,6 +97,23 @@ test('presetsFor offers to write or rewrite an experience description, only on t
   assert.equal(presetsFor('experience', {}), AI_PRESETS);
   assert.equal(presetsFor('experience', {}, { kind: 'bullet', path: [0] }), AI_PRESETS);
   assert.equal(presetsFor('summary', { text: 'x' }), AI_PRESETS);
+});
+
+test('an executive summary diffs its headline, overview and highlights, ignoring blank highlights', () => {
+  const before = { headline: 'Leader', text: 'Builds teams.', highlights: ['Grew team', ''] };
+  assert.deepEqual(changedFields('executive_summary', before, { ...before, highlights: ['Grew team'] }), []);
+  assert.deepEqual(changedFields('executive_summary', before, { headline: 'Platform leader', text: 'Builds teams.', highlights: ['Grew team', 'Cut spend'] }), [
+    { label: 'Headline', before: 'Leader', after: 'Platform leader' },
+    { label: 'Key highlights', before: 'Grew team', after: 'Grew team\nCut spend' },
+  ]);
+});
+
+test('an executive summary leads with drafting from the resume, and says the outline is sent', () => {
+  const presets = presetsFor('executive_summary', {});
+  assert.deepEqual(presets.slice(0, 2).map((p) => p.label), ['Draft from my resume', 'Pick highlights']);
+  assert.deepEqual(presets.slice(2), AI_PRESETS);
+  assert.match(contextNote('executive_summary'), /outline of the rest of this resume/);
+  assert.equal(contextNote('summary'), null);
 });
 
 const exp = {

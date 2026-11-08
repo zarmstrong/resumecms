@@ -34,5 +34,7 @@ test('a key of the wrong kind is a 400 that names it', () => {
   fail('heading', { style: { highlight: 'yes' } }, /^data\.style\.highlight/);
   fail('custom', { style: { align: true } }, /^data\.style\.align/);
   fail('summary', { text: { rich: true } }, /^data\.text: /);
+  fail('executive_summary', { highlights: 'One per line' }, /^data\.highlights: /);
+  fail('executive_summary', { highlights: [{ text: 'x' }] }, /^data\.highlights\.0/);
   assert.throws(() => assertBlockData('poem', {}), (e) => e.status === 400 && /unknown block type/.test(e.message));
 });

@@ -622,6 +622,27 @@
   color: var(--r-text, var(--ink));
 }
 
+.r-exec-summary {
+  margin: var(--r-block-space-above, 0) 0 var(--r-block-space-below, 18px);
+  color: var(--r-text, var(--ink));
+}
+
+.r-exec-summary-headline {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: 1.0625em;
+  color: var(--r-heading, var(--ink));
+}
+
+.r-exec-summary-text {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.r-exec-summary-highlights {
+  margin-top: 8px;
+}
+
 .r-skills-row {
   display: grid;
   grid-template-columns: 130px 1fr;

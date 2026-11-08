@@ -514,3 +514,52 @@ test('hasRewritableShape rejects data the merge code would crash on', () => {
   assert.equal(hasRewritableShape('summary', null), false);
   assert.equal(hasRewritableShape('summary', []), false);
 });
+
+const executive = {
+  headline: 'Platform leader',
+  text: 'Builds teams.',
+  highlights: ['Grew the team to 40', '', '  Cut spend by 30%  '],
+  style: { highlight: true },
+};
+
+test('an executive summary rewrites its headline, overview and highlights, with blank highlights left out', () => {
+  assert.deepEqual(rewriteInput('executive_summary', executive), {
+    editable: { headline: 'Platform leader', text: 'Builds teams.', highlights: ['Grew the team to 40', 'Cut spend by 30%'] },
+    context: null,
+  });
+  assert.deepEqual(rewriteInput('executive_summary', {}).editable, { headline: '', text: '', highlights: [] });
+  const { data } = mergeRewrite('executive_summary', executive, {
+    headline: 'Platform engineering leader',
+    text: 'Builds and scales teams.',
+    highlights: ['Cut cloud spend by 30%', ' ', 'Grew the platform team from 6 to 40', 'Ran [N] migrations'],
+    style: { highlight: false },
+  });
+  assert.deepEqual(data, {
+    headline: 'Platform engineering leader',
+    text: 'Builds and scales teams.',
+    highlights: ['Cut cloud spend by 30%', 'Grew the platform team from 6 to 40', 'Ran [N] migrations'],
+    style: { highlight: true },
+  });
+});
+
+test('executive summary highlights the model left alone keep their stored form, blanks and all', () => {
+  const { data } = mergeRewrite('executive_summary', executive, {
+    headline: 'Platform leader',
+    text: 'Builds teams.',
+    highlights: ['Grew the team to 40', 'Cut spend by 30%'],
+  });
+  assert.equal(data.highlights, executive.highlights);
+  // a field the block never had isn't saved as empty
+  const { data: bare } = mergeRewrite('executive_summary', { text: 'Old.' }, { headline: '', text: 'New.', highlights: [] });
+  assert.deepEqual(JSON.parse(JSON.stringify(bare)), { text: 'New.' });
+});
+
+test('an executive summary rewrite without highlights is rejected, as are non-string ones', () => {
+  assert.throws(() => mergeRewrite('executive_summary', executive, { headline: 'h', text: 't' }), RewriteShapeError);
+  assert.throws(() => mergeRewrite('executive_summary', executive, { headline: 'h', text: 't', highlights: [1] }), RewriteShapeError);
+  assert.throws(() => normalizeTarget('executive_summary', executive, { kind: 'item', index: 0 }), InvalidTargetError);
+  assert.equal(hasRewritableShape('executive_summary', executive), true);
+  assert.equal(hasRewritableShape('executive_summary', { highlights: null }), true);
+  assert.equal(hasRewritableShape('executive_summary', { highlights: 'one' }), false);
+  assert.equal(hasRewritableShape('executive_summary', { highlights: [null] }), false);
+});

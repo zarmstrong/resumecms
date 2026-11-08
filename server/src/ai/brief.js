@@ -34,25 +34,41 @@ export function normalizeBrief(raw, label = 'brief') {
   return brief;
 }
 
-// What a summary rewrite with a brief gets to see of the rest of the
+// Which rewrites get an outline of the rest of their resume
+// (resumeOutline), and how much of it, or null for none. A summary gets
+// one only when it's tailored: rewording its own text needs nothing else.
+// An executive summary always does, since writing one means drawing on the
+// whole resume, and its outline also has each job's accomplishments
+// (tagline, description, bullets), which is what its highlights are made
+// of.
+export function outlineScope(type, hasBrief) {
+  if (type === 'executive_summary') return { accomplishments: true };
+  if (type === 'summary' && hasBrief) return { accomplishments: false };
+  return null;
+}
+
+// What a summary rewrite (outlineScope) gets to see of the rest of the
 // resume, so it can describe the person as a whole rather than only
-// reword its own text: job titles and companies, skills, and education.
-// `blocks` is the draft in display order. A block that's hidden anywhere
-// `summary` shows is left out, so nothing hidden reaches the summary's
-// public text. A summary hidden everywhere counts as shown everywhere:
-// it's most likely a draft about to be unhidden, text and all. Null when
-// there's nothing to show.
-export function resumeOutline(blocks, summary) {
+// reword its own text: job titles and companies, skills, and education,
+// plus with `accomplishments` each job's tagline, description and
+// bullets. `blocks` is the draft in display order; `summary` is the
+// summary or executive summary block being rewritten. A block or bullet
+// that's hidden anywhere `summary` shows is left out, so nothing hidden
+// reaches the summary's public text (a sub-bullet counts as hidden
+// wherever its parent is). A summary hidden everywhere counts as shown
+// everywhere: it's most likely a draft about to be unhidden, text and
+// all. Null when there's nothing to show.
+export function resumeOutline(blocks, summary, { accomplishments = false } = {}) {
   const hiddenEverywhere = !summary.visibleWeb && !summary.visiblePrint;
   const shows = { web: hiddenEverywhere || summary.visibleWeb, print: hiddenEverywhere || summary.visiblePrint };
   const shownWherever = (block) => (!shows.web || block.visibleWeb) && (!shows.print || block.visiblePrint);
-  const text = (value) => (typeof value === 'string' ? value.trim() : '');
   const outline = { experience: [], skills: [], education: [] };
   for (const block of blocks) {
     if (block.id === summary.id || !shownWherever(block)) continue;
     const data = block.data || {};
     if (block.type === 'experience') {
       const entry = { jobTitle: text(data.jobTitle), company: text(data.company), dates: dates(text(data.startDate), text(data.endDate)) };
+      if (accomplishments) Object.assign(entry, jobAccomplishments(data, shownWherever));
       if (entry.jobTitle || entry.company) outline.experience.push(entry);
     } else if (block.type === 'skills_group') {
       const entry = { category: text(data.category), items: text(data.items) };
@@ -64,6 +80,35 @@ export function resumeOutline(blocks, summary) {
   }
   const nonEmpty = Object.fromEntries(Object.entries(outline).filter(([, list]) => list.length > 0));
   return Object.keys(nonEmpty).length ? nonEmpty : null;
+}
+
+const text = (value) => (typeof value === 'string' ? value.trim() : '');
+
+// A job's tagline, description and shown bullets, each only when there is
+// one. Bullets are flattened, a sub-bullet right after its parent. Rows
+// saved before blockData.js's checks may hold anything, so a bullet that's
+// neither a string nor an object is skipped rather than trusted.
+function jobAccomplishments(data, shownWherever) {
+  const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const flags = (b) => ({ visibleWeb: b.visibleWeb !== false, visiblePrint: b.visiblePrint !== false });
+  const bullets = [];
+  // Sub-bullets are only reached through a shown parent, and nest one level.
+  const add = (list, depth) => {
+    for (const b of Array.isArray(list) ? list : []) {
+      if (typeof b === 'string') {
+        if (b.trim()) bullets.push(b.trim());
+      } else if (isObject(b) && shownWherever(flags(b))) {
+        if (text(b.text)) bullets.push(text(b.text));
+        if (depth === 0) add(b.children, 1);
+      }
+    }
+  };
+  add(data.bullets, 0);
+  const out = {};
+  if (text(data.tagline)) out.tagline = text(data.tagline);
+  if (text(data.description)) out.description = text(data.description);
+  if (bullets.length) out.bullets = bullets;
+  return out;
 }
 
 function dates(start, end) {

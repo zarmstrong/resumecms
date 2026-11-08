@@ -316,3 +316,26 @@ test('with a brief the instruction may be empty, the summary sees its outline, a
   await rewriteBlock({ type: 'summary', data, instruction: 'x', settings: settings(), outline, callModel });
   assert.doesNotMatch(requests[2].user, /Outline/);
 });
+
+test('an executive summary always sees its outline, with the accomplishments rule, and gets its own rules', async () => {
+  const requests = [];
+  const rewrite = { headline: 'SRE lead', text: 'Runs platforms.', highlights: ['Cut deploys to minutes'] };
+  const callModel = async (req) => (requests.push(req), { explanation: 'Drafted.', rewrite });
+  const outline = { experience: [{ jobTitle: 'SRE', company: 'Acme', dates: '2021', bullets: ['Cut deploys to minutes'] }] };
+  const data = { text: '' };
+  const result = await rewriteBlock({ type: 'executive_summary', data, instruction: 'Draft it', settings: settings(), outline, callModel });
+  assert.deepEqual(result.proposedData, rewrite);
+  const [{ system, user, schema }] = requests;
+  assert.match(user, /^Section type: Executive summary/);
+  assert.match(user, /Outline of the rest of the resume/);
+  assert.match(user, /"Cut deploys to minutes"/);
+  assert.match(system, /never on anything it does not say/);
+  assert.match(system, /never combine numbers from different bullets/);
+  assert.match(system, /A field that is empty stays empty unless the instruction asks you to write it/);
+  assert.deepEqual(Object.keys(schema.properties.rewrite.properties), ['headline', 'text', 'highlights']);
+  assert.equal(tenseLine(system), null);
+
+  // a plain summary's prompt has none of that
+  const summary = buildPrompt('summary', rewriteInput('summary', { text: 'x' }), 'x', { outline });
+  assert.doesNotMatch(summary.system, /never combine numbers|A field that is empty/);
+});

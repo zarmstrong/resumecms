@@ -39,7 +39,7 @@ block — built-in or custom — has the same shape:
   generated PDF (they share the same template, so one flag covers both).
 - `parentId` — nests this block one level deep under a `heading` block's
   `id`; `null` for a top-level block. Only `experience`, `skills_group`,
-  `education`, and `custom` blocks can be nested — a `heading` can't be
+  `education`, `custom`, and `executive_summary` blocks can be nested — a `heading` can't be
   nested under another heading, and `summary` always stays top-level. In
   the editor, drag a block to sit directly under a heading to nest it there.
 - `position` — only unique within a sibling group (blocks sharing the same
@@ -49,7 +49,14 @@ block — built-in or custom — has the same shape:
   the correct overall display order, with each heading's children spliced
   in right after it.
 
-Built-in block types: `heading`, `skills_group`, `experience`, `education`.
+Built-in block types: `heading`, `summary`, `executive_summary`,
+`skills_group`, `experience`, `education`.
+
+An **executive summary** (`type: "executive_summary"`) is a one-line
+headline, a short overview, and a list of key career highlights (one per
+line in the editor). Unlike a plain summary it can sit under its own
+heading, and its AI rewrite can draft the whole thing from the rest of
+your resume (see [AI rewrites](#ai-rewrites)).
 
 **Custom blocks** (`type: "custom"`) are a title plus a list of items, each
 with an optional heading and a body. Use these for anything the built-in
@@ -61,7 +68,7 @@ Every block also has a **Customize block** section in the editor, stored at
 `data.style`: extra space above/below (`spaceAbove`, `spaceBelow`), a
 highlight box (`highlight`), and text alignment (`align`: `left`, `center`,
 `right`, or unset for the template's default). Alignment applies to
-headings, summaries, skills rows, and custom blocks; experience and
+headings, summaries, executive summaries, skills rows, and custom blocks; experience and
 education blocks keep the template's layout. A centered custom block with no
 title and one text or link item makes a one-line footer such as "More work
 history available at example.com".
@@ -515,8 +522,9 @@ This immediately disables the code requirement on next login.
 
 Optional and off by default. In Account Settings → AI Rewrites, pick
 Claude (Anthropic) or ChatGPT (OpenAI), paste an API key, and enable it.
-Each rewritable block (headings, summary, skills rows, experience entries,
-custom blocks) then gets a "Rewrite with AI" button. You give it an
+Each rewritable block (headings, summaries, executive summaries, skills
+rows, experience entries, custom blocks) then gets a "Rewrite with AI"
+button. You give it an
 instruction, or pick a preset such as *Tighten* or *Quantify impact*, and
 review the result before anything is saved. The review shows a word-level
 diff in the block and the rewritten block, outlined, in the live preview.
@@ -535,6 +543,18 @@ Parts of a block can also be rewritten on their own:
   description, whatever the AI returns. Likewise, a bullet rewrite never
   changes the description.
 - Each item in a custom block has a ✨ button that rewrites just that item.
+
+An executive summary's rewrite always sees an outline of the rest of the
+resume: job titles, companies, dates, taglines, descriptions, bullets,
+skills, and education, leaving out any block or bullet hidden where the
+executive summary shows (anywhere at all while it's hidden itself). Its
+*Draft from my resume* preset writes the headline, overview, and three to
+five highlights from that outline, and *Pick highlights* chooses
+highlights only. The AI is told to keep the outline's facts and numbers
+as they are and not to add bullets' numbers up into new ones; an empty
+field stays empty unless you ask for it. Highlights have no visibility
+toggles, so the AI may add, remove, or reorder them without the bullet
+setting below; the review shows them as one diff.
 
 Several rewrites can be open at once, on different blocks or on different
 parts of one block. The preview shows all of them together, each one is
@@ -565,7 +585,7 @@ the resume switcher.
 To tailor in the editor, tick **Tailor the copy with AI** in **New
 resume** (when copying the open resume), or click **Tailor…** to tailor
 the open one again, starting from its saved brief. Pick which sections
-to tailor: summary, experience and skills to start with, headings and
+to tailor: summaries (executive ones too), experience and skills to start with, headings and
 custom sections if you like. Sections hidden on both web and print, and
 ones with no text, are skipped. Each section, and each experience entry's
 description, gets its own rewrite, three at a time, with progress and a
@@ -651,8 +671,8 @@ becomes optional.
   project, pick a tense for each rewrite in a menu next to their Rewrite
   button: *Any tense*, *Past tense*, or *Present tense*. It starts at the
   setting when that is *Past tense* or *Present tense*, and at *Any tense*
-  otherwise. Summaries, headings, and skills rows get no tense
-  instruction. A custom item's ✨ rewrite has the same menu.
+  otherwise. Summaries, executive summaries, headings, and skills rows
+  get no tense instruction. A custom item's ✨ rewrite has the same menu.
 - The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
   the same panel. Rewrites are rate-limited to 30 per 10 minutes, and
   tailoring rewrites (one per block) separately to 120 per 10 minutes.
@@ -683,7 +703,8 @@ the rest of the page's text (link labels but not
 the addresses, and never the photo), and an outline of a
 resume taken from its **published** version (never its draft), and only
 while it's public. That outline is the published header's name and title,
-the summary, job titles, companies and dates, skills, and education, from
+the summary (an executive summary's headline, overview and highlights
+too), job titles, companies and dates, skills, and education, from
 blocks shown on the web; no bullets, contact details or links, and never a
 resume's name in the editor or its tailoring brief. A card's blurb draws
 on the card's own resume (the ✨ button only shows once it's public and

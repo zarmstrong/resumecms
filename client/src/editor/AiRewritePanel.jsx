@@ -3,6 +3,7 @@ import {
   BLOCK_TARGET,
   bulletChange,
   changedFields,
+  contextNote,
   describeTarget,
   hiddenBulletCount,
   isProposalStale,
@@ -228,6 +229,7 @@ export function AiRewritePanel({ block, ai, target = BLOCK_TARGET, open: openPro
           Tailor for “{ai.tailoring.audience}”
         </label>
       )}
+      {contextNote(block.type) && <p className="ed-field-hint">{contextNote(block.type)}</p>}
       <div className="ed-ai-actions">
         {picksTense && (
           <select
