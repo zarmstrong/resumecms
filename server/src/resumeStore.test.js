@@ -16,7 +16,7 @@ import { pdfPathFor } from './pdfPaths.js';
 // `store`'s own methods act on the default resume (what most tests here
 // exercise); `addResume` makes another one for the isolation tests.
 
-function makeStore({ renderPdf, pdfTimeoutMs, publishWaitMs } = {}) {
+function makeStore({ renderPdf, pdfTimeoutMs, pdfWaitMs } = {}) {
   const db = new Database(':memory:');
   ensureSchema(db);
   const defaultId = migrateToResumes(db);
@@ -26,7 +26,7 @@ function makeStore({ renderPdf, pdfTimeoutMs, publishWaitMs } = {}) {
     db,
     pdfDir,
     pdfTimeoutMs,
-    publishWaitMs,
+    pdfWaitMs,
     renderPdf:
       renderPdf ||
       (async ({ resumeId }) => {
@@ -505,7 +505,7 @@ test('a publish stuck behind a slow render answers pdfPending, and the render st
   const gate = new Promise((r) => { release = r; });
   let body = '%PDF-old';
   const { store, pdfPath, setting } = makeStore({
-    publishWaitMs: 20,
+    pdfWaitMs: 20,
     renderPdf: async () => { await gate; return Buffer.from(body); },
   });
   // Something already on disk, so the pending answer carries its version.
@@ -544,7 +544,7 @@ test('a publish stuck behind a slow render answers pdfPending, and the render st
 test('a render that fails after publish answered pending leaves pdfStale, not pdfPending', async (t) => {
   let fail;
   const gate = new Promise((_, reject) => { fail = reject; });
-  const { store } = makeStore({ publishWaitMs: 10, renderPdf: () => gate });
+  const { store } = makeStore({ pdfWaitMs: 10, renderPdf: () => gate });
   const logged = [];
   t.mock.method(console, 'error', (...args) => logged.push(args));
   const answer = await store.publish();

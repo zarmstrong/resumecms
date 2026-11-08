@@ -74,12 +74,35 @@ export function mergeShallow(base, patch, label) {
 // every later publish (and the boot render) until a restart.
 export const DEFAULT_PDF_TIMEOUT_MS = 90_000;
 
-// How long publish() holds its caller for the PDF before answering with
-// pdfPending instead. A render normally takes a second or two; one stuck
-// behind a hung render could take two full timeouts, longer than a reverse
-// proxy waits, and a dropped connection reads as a failed publish that in
-// fact took effect.
-export const DEFAULT_PUBLISH_WAIT_MS = 20_000;
+// How long a request waits for its PDF on the queue before it's answered
+// without it (publish with pdfPending, a cover letter's download with a
+// 503 to retry). A render normally takes a second or two; one stuck behind
+// a hung render could take two full timeouts, longer than a reverse proxy
+// waits, and a dropped connection reads as a failure even when the work
+// went through.
+export const DEFAULT_PDF_WAIT_MS = 20_000;
+
+// Settles like `work` if it settles within `ms`; otherwise resolves with
+// `late()` (or rejects, if that throws) and leaves `work` to finish on the
+// queue. Nobody is waiting for it then, so its failure is only logged, as
+// `what` (a 404, something deleted meanwhile, is no failure).
+export function settleWithin(work, ms, late, what) {
+  const LATE = Symbol('late');
+  let timer;
+  const deadline = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(LATE), ms);
+    timer.unref?.();
+  });
+  return Promise.race([work, deadline])
+    .then((result) => {
+      if (result !== LATE) return result;
+      work.catch((err) => {
+        if (err?.status !== 404) console.error(`${what} failed after its request was answered:`, err?.cause ?? err);
+      });
+      return late();
+    })
+    .finally(() => clearTimeout(timer));
+}
 
 // Runs `fn({ signal })` and gives up after `ms`: the signal is aborted (so
 // the renderer can tear down whatever is wedged) and the returned promise
@@ -138,7 +161,7 @@ export function createResumeStore({
   renderLetterPdf,
   pdfDir,
   pdfTimeoutMs = DEFAULT_PDF_TIMEOUT_MS,
-  publishWaitMs = DEFAULT_PUBLISH_WAIT_MS,
+  pdfWaitMs = DEFAULT_PDF_WAIT_MS,
 }) {
   // ---- the PDF queue (shared by every resume) ------------------------------
 
@@ -541,6 +564,7 @@ export function createResumeStore({
       getSetting,
       withPdfLock,
       renderLetterPdf: renderLetterPdfBounded,
+      waitForPdf: (work, late, what) => settleWithin(work, pdfWaitMs, late, what),
       mergeShallow,
       pdfDir,
     });
@@ -927,7 +951,7 @@ export function createResumeStore({
     // already took effect — and getPublishStatus() reports pdfStale until a
     // later publish renders successfully.
     //
-    // The caller waits for the render for at most publishWaitMs. Past that
+    // The caller waits for the render for at most pdfWaitMs. Past that
     // (a render stuck behind a hung one), the answer is { pdfPending: true }
     // and the render finishes on the queue: getPublishStatus() reports
     // pdfPending until it does, then pdfStale says whether it worked.
@@ -966,22 +990,12 @@ export function createResumeStore({
         })
       );
 
-      let timer;
-      const stillRendering = new Promise((resolve) => {
-        timer = setTimeout(() => resolve(null), publishWaitMs);
-        timer.unref?.();
-      });
-      return Promise.race([render, stillRendering])
-        .then((result) => {
-          if (result) return result;
-          // Nobody is waiting for it any more, so its failure is only logged
-          // (a resume deleted meanwhile is no failure).
-          render.catch((err) => {
-            if (err.status !== 404) console.error(`PDF render for resume ${resumeId} failed after publish answered:`, err.cause ?? err);
-          });
-          return { publishedAt, pdfVersion: pdfVersion(), pdfPending: true };
-        })
-        .finally(() => clearTimeout(timer));
+      return settleWithin(
+        render,
+        pdfWaitMs,
+        () => ({ publishedAt, pdfVersion: pdfVersion(), pdfPending: true }),
+        `PDF render for resume ${resumeId}`
+      );
     }
 
     // Renders a PDF for the current published snapshot if none exists yet

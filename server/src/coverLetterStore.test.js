@@ -13,7 +13,7 @@ import { initialCoverLetterData } from './coverLetterFields.js';
 // Cover letters (issue #71) through the real store, over a ':memory:'
 // database like resumeStore.test.js. The letter renderer is a fake that
 // records which letter it was asked for and can be held open.
-function makeStore({ renderLetterPdf } = {}) {
+function makeStore({ renderLetterPdf, pdfWaitMs } = {}) {
   const db = new Database(':memory:');
   ensureSchema(db);
   const defaultId = migrateToResumes(db);
@@ -22,6 +22,7 @@ function makeStore({ renderLetterPdf } = {}) {
   const store = createResumeStore({
     db,
     pdfDir,
+    pdfWaitMs,
     renderPdf: async () => Buffer.from('%PDF-resume'),
     renderLetterPdf:
       renderLetterPdf ||
@@ -194,6 +195,75 @@ test('a failed render is a 500 and caches nothing', async () => {
   await assert.rejects(store.coverLetterPdf(letter.id), (e) => e.status === 500 && e.cause?.message === 'Chromium fell over');
   fail = false;
   assert.equal(fs.readFileSync((await store.coverLetterPdf(letter.id)).path, 'utf8'), '%PDF-ok');
+});
+
+test('a download stuck behind a slow render is a 503, and the retry gets the finished file', async (t) => {
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  const { store } = makeStore({
+    pdfWaitMs: 20,
+    renderLetterPdf: async () => {
+      await gate;
+      return Buffer.from('%PDF-slow');
+    },
+  });
+  const letter = store.createCoverLetter();
+  await assert.rejects(store.coverLetterPdf(letter.id), (e) => e.status === 503 && /still rendering/.test(e.message));
+  // The render carries on; once it lands, the next download is served from it.
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const logged = [];
+  t.mock.method(console, 'error', (...args) => logged.push(args));
+  const pdf = await store.coverLetterPdf(letter.id);
+  assert.equal(fs.readFileSync(pdf.path, 'utf8'), '%PDF-slow');
+  assert.equal(logged.length, 0);
+});
+
+test('retries while a render hangs join the queued render instead of stacking more', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const gates = [];
+  const { store } = makeStore({
+    pdfWaitMs: 10,
+    renderLetterPdf: () => new Promise((resolve, reject) => gates.push({ resolve, reject })),
+  });
+  const letter = store.createCoverLetter();
+  // The first render starts and hangs; each retry waits behind it.
+  for (let i = 0; i < 4; i += 1) await assert.rejects(store.coverLetterPdf(letter.id), (e) => e.status === 503);
+  assert.equal(gates.length, 1);
+  // The first fails; the one render queued behind it runs, and fails too.
+  // Nothing else was queued, so no third render follows on its own.
+  gates[0].reject(new Error('Chromium hung'));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(gates.length, 2);
+  gates[1].reject(new Error('Chromium hung again'));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(gates.length, 2);
+  // The next download renders afresh.
+  const next = store.coverLetterPdf(letter.id);
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(gates.length, 3);
+  gates[2].resolve(Buffer.from('%PDF-third'));
+  assert.equal(fs.readFileSync((await next).path, 'utf8'), '%PDF-third');
+});
+
+test('a render that fails after its download got a 503 is logged, and caches nothing', async (t) => {
+  let fail;
+  const gate = new Promise((_, reject) => (fail = reject));
+  let renders = 0;
+  const { store } = makeStore({
+    pdfWaitMs: 10,
+    renderLetterPdf: () => (renders++ === 0 ? gate : Promise.resolve(Buffer.from('%PDF-retry'))),
+  });
+  const logged = [];
+  t.mock.method(console, 'error', (...args) => logged.push(args));
+  const letter = store.createCoverLetter();
+  await assert.rejects(store.coverLetterPdf(letter.id), (e) => e.status === 503);
+  fail(new Error('Chromium fell over'));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(logged.length, 1);
+  assert.match(logged[0][0], /cover letter/);
+  assert.equal(logged[0][1].message, 'Chromium fell over');
+  assert.equal(fs.readFileSync((await store.coverLetterPdf(letter.id)).path, 'utf8'), '%PDF-retry');
 });
 
 test('a letter deleted while its render runs gets no file', async () => {
