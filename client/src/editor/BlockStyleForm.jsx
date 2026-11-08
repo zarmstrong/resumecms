@@ -1,9 +1,9 @@
-import { BLOCK_SPACING_OPTIONS } from '../resume/blockStyle.js';
+import { ALIGNABLE_TYPES, BLOCK_ALIGN_OPTIONS, BLOCK_SPACING_OPTIONS } from '../resume/blockStyle.js';
 
 // Shared "customize" section shown under every block type's own form —
-// spacing and other layout tweaks that apply the same way regardless of
+// spacing, alignment, and other layout tweaks that apply the same way regardless of
 // block type, stored at `data.style` alongside the block's own fields.
-export function BlockStyleForm({ data, onChange }) {
+export function BlockStyleForm({ type, data, onChange }) {
   const style = data.style || {};
 
   function patchStyle(patch) {
@@ -42,6 +42,22 @@ export function BlockStyleForm({ data, onChange }) {
             ))}
           </select>
         </label>
+        {ALIGNABLE_TYPES.includes(type) && (
+          <label className="ed-field ed-field-narrow">
+            <span>Text alignment</span>
+            <select
+              className="ed-input"
+              value={style.align || ''}
+              onChange={(e) => patchStyle({ align: e.target.value })}
+            >
+              {BLOCK_ALIGN_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       <label className="ed-field ed-checkbox-field">
         <input

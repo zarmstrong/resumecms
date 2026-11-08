@@ -21,6 +21,23 @@ export const BLOCK_SPACING_OPTIONS = [
   { value: 'xlarge', label: 'Extra large' },
 ];
 
+// Text alignment overrides the template's for the whole block (text,
+// headings, links, chip rows; a list keeps its bullets left-aligned and
+// moves as a box — see .r-align-* in resume.css). Experience and education
+// are left out: their title/date row is a space-between flex row that
+// centering would leave split while the bullets moved, so the option is
+// hidden for them and a stored value (e.g. from an MCP caller) is ignored.
+export const BLOCK_ALIGN_VALUES = ['left', 'center', 'right'];
+
+export const BLOCK_ALIGN_OPTIONS = [
+  { value: '', label: 'Default' },
+  { value: 'left', label: 'Left' },
+  { value: 'center', label: 'Center' },
+  { value: 'right', label: 'Right' },
+];
+
+export const ALIGNABLE_TYPES = ['heading', 'summary', 'skills_group', 'custom'];
+
 export function normalizeBlockStyle(data) {
   return (data && data.style) || {};
 }
@@ -55,9 +72,12 @@ export function blockWrapperStyle(data) {
   return wrapperStyle;
 }
 
-export function blockWrapperClassName(data) {
+export function blockWrapperClassName(data, type) {
   const style = normalizeBlockStyle(data);
   let className = '';
+  if (ALIGNABLE_TYPES.includes(type) && BLOCK_ALIGN_VALUES.includes(style.align)) {
+    className += ` r-align-${style.align}`;
+  }
   if (style.highlight) className += ' r-block-highlight';
   if (BLOCK_SPACING_CSS[style.spaceAbove]) className += ' r-block-space-above-set';
   if (BLOCK_SPACING_CSS[style.spaceBelow]) className += ' r-block-space-below-set';

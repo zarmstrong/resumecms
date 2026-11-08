@@ -14,7 +14,7 @@ import { httpError } from './httpError.js';
 
 const str = z.string().nullish();
 const bool = z.boolean().nullish();
-const style = z.looseObject({ spaceAbove: str, spaceBelow: str, highlight: bool }).nullish();
+const style = z.looseObject({ spaceAbove: str, spaceBelow: str, align: str, highlight: bool }).nullish();
 
 // Bullets are objects, but plain strings are accepted and treated as { text }.
 const subBullet = z.union([z.string(), z.looseObject({ text: str, visibleWeb: bool, visiblePrint: bool })]);
