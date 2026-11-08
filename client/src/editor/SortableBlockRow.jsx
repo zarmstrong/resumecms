@@ -124,7 +124,7 @@ export function SortableBlockRow({ block, nested, drop, nestTarget, moving, ai, 
               label={block.type === 'experience' ? '✨ Rewrite tagline and bullets with AI' : '✨ Rewrite with AI'}
             />
           )}
-          <BlockStyleForm data={block.data} onChange={(newData) => onChangeData(block.id, newData)} />
+          <BlockStyleForm type={block.type} data={block.data} onChange={(newData) => onChangeData(block.id, newData)} />
         </div>
       )}
     </div>

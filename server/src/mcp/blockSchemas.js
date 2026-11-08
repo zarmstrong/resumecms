@@ -19,10 +19,15 @@ const COMMON = {
       'string | null — id of a top-level heading to nest under. Only experience, skills_group, education, and custom blocks can be nested, one level deep.',
   },
   dataStyle: {
-    description: 'Optional `data.style` object on any block type for per-block spacing and emphasis.',
+    description: 'Optional `data.style` object on any block type for per-block spacing, alignment, and emphasis.',
     properties: {
       spaceAbove: { enum: SPACING, description: "Extra space above; '' or omitted = template default" },
       spaceBelow: { enum: SPACING, description: "Extra space below; '' or omitted = template default" },
+      align: {
+        enum: ['', 'left', 'center', 'right'],
+        description:
+          "Text alignment for the block; '' or omitted = template default. Honored on heading, summary, skills_group, and custom blocks; ignored on experience and education. A custom block with no title and one centered text or link item makes a one-line footer such as 'More work history at example.com'.",
+      },
       highlight: { type: 'boolean', description: 'Draw the block with a highlight background' },
     },
   },

@@ -54,7 +54,7 @@ export function ResumeView({
     return (
       <div
         key={block.id}
-        className={`r-block${dimmed ? ' r-block-dimmed' : ''}${highlighted ? ' r-block-ai-preview' : ''}${blockWrapperClassName(block.data)}`}
+        className={`r-block${dimmed ? ' r-block-dimmed' : ''}${highlighted ? ' r-block-ai-preview' : ''}${blockWrapperClassName(block.data, block.type)}`}
         data-block-type={block.type}
         style={style ? { ...blockWrapperStyle(block.data), ...style } : blockWrapperStyle(block.data)}
       >

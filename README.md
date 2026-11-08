@@ -57,6 +57,15 @@ types don't cover — certifications, publications, volunteer work, side
 projects — without touching any code. They drag, reorder, and toggle
 visibility exactly like built-in blocks.
 
+Every block also has a **Customize block** section in the editor, stored at
+`data.style`: extra space above/below (`spaceAbove`, `spaceBelow`), a
+highlight box (`highlight`), and text alignment (`align`: `left`, `center`,
+`right`, or unset for the template's default). Alignment applies to
+headings, summaries, skills rows, and custom blocks; experience and
+education blocks keep the template's layout. A centered custom block with no
+title and one text or link item makes a one-line footer such as "More work
+history available at example.com".
+
 The header (name, title, contact info, links) is edited separately from
 the block list, since a resume only has one. Its email and phone number
 are links (to the mail app and the dialer), and a link of its own can be

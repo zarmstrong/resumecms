@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { blockWrapperStyle, blockWrapperClassName, BLOCK_SPACING_OPTIONS } from './blockStyle.js';
+import {
+  blockWrapperStyle,
+  blockWrapperClassName,
+  BLOCK_SPACING_OPTIONS,
+  BLOCK_ALIGN_OPTIONS,
+  ALIGNABLE_TYPES,
+} from './blockStyle.js';
 
 test('unset spacing leaves the wrapper alone', () => {
   assert.deepEqual(blockWrapperStyle({}), {});
@@ -35,5 +41,41 @@ test('every non-default option resolves to a preset', () => {
   for (const { value } of BLOCK_SPACING_OPTIONS) {
     if (!value) continue;
     assert.ok(blockWrapperStyle({ style: { spaceAbove: value } }).paddingTop, value);
+  }
+});
+
+test('an alignment value maps to its class on the alignable block types', () => {
+  for (const type of ALIGNABLE_TYPES) {
+    assert.equal(blockWrapperClassName({ style: { align: 'center' } }, type), ' r-align-center', type);
+  }
+  assert.equal(blockWrapperClassName({ style: { align: 'left' } }, 'summary'), ' r-align-left');
+  assert.equal(blockWrapperClassName({ style: { align: 'right' } }, 'custom'), ' r-align-right');
+  assert.equal(
+    blockWrapperClassName({ style: { align: 'center', highlight: true } }, 'custom'),
+    ' r-align-center r-block-highlight',
+  );
+  // Alignment is a class, not an inline style: resume.css needs it to reach
+  // chip rows, lists, and template heading rules.
+  assert.deepEqual(blockWrapperStyle({ style: { align: 'center' } }), {});
+});
+
+// The store accepts any string here (and MCP callers can send anything),
+// so the renderer has to shrug off junk rather than emit a stray class.
+test('unknown or default alignment values add nothing', () => {
+  for (const align of ['', 'middle', 'justify', 'CENTER', 42, null, undefined, { x: 1 }]) {
+    assert.equal(blockWrapperClassName({ style: { align } }, 'custom'), '', String(align));
+  }
+});
+
+test('experience and education ignore a stored alignment', () => {
+  assert.equal(blockWrapperClassName({ style: { align: 'center' } }, 'experience'), '');
+  assert.equal(blockWrapperClassName({ style: { align: 'center' } }, 'education'), '');
+  assert.equal(blockWrapperClassName({ style: { align: 'center' } }), '');
+});
+
+test('every non-default alignment option resolves to a class', () => {
+  for (const { value } of BLOCK_ALIGN_OPTIONS) {
+    if (!value) continue;
+    assert.equal(blockWrapperClassName({ style: { align: value } }, 'summary'), ` r-align-${value}`);
   }
 });

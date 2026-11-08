@@ -17,7 +17,7 @@ test('every block type has a validator, and every documented key is known to it'
 test('well-formed data passes, including the documented examples, extras, and string bullets', () => {
   for (const type of BLOCK_TYPES) assertBlockData(type, BLOCK_DATA_SCHEMAS[type].example);
   assertBlockData('experience', { jobTitle: 'X', bullets: ['one', { text: 'two', children: ['a', { text: 'b' }] }], extra: 1 });
-  assertBlockData('heading', { text: 'H', style: { highlight: true, spaceAbove: 'large' } });
+  assertBlockData('heading', { text: 'H', style: { highlight: true, spaceAbove: 'large', align: 'center' } });
   assertBlockData('custom', { title: 'T', items: [{ heading: 'h', bodyType: 'tags', items: 'a, b' }] });
   assertBlockData('summary', {});
   assertBlockData('education', { degree: null });
@@ -32,6 +32,7 @@ test('a key of the wrong kind is a 400 that names it', () => {
   fail('custom', { items: [{ url: 5 }] }, /^data\.items\.0\.url/);
   fail('skills_group', { items: ['Go', 'Python'] }, /^data\.items: /);
   fail('heading', { style: { highlight: 'yes' } }, /^data\.style\.highlight/);
+  fail('custom', { style: { align: true } }, /^data\.style\.align/);
   fail('summary', { text: { rich: true } }, /^data\.text: /);
   assert.throws(() => assertBlockData('poem', {}), (e) => e.status === 400 && /unknown block type/.test(e.message));
 });

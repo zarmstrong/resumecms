@@ -790,6 +790,113 @@
   padding: 16px 18px;
 }
 
+/* Optional per-block text alignment (data.style.align, see blockStyle.js).
+   The wrapper's text-align covers plain text and links; the rest is for
+   descendants that set their own alignment or aren't text. The .r-page
+   prefix outranks layout rules like centered-headings' own centering, so
+   an explicit choice wins over the template's. */
+.r-block.r-align-left {
+  text-align: left;
+}
+
+.r-block.r-align-center {
+  text-align: center;
+}
+
+.r-block.r-align-right {
+  text-align: right;
+}
+
+/* justify-content is for layouts that make the heading a flex row (numbered,
+   for its counter), where text-align doesn't move anything. */
+.r-page .r-block.r-align-left .r-heading {
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.r-page .r-block.r-align-center .r-heading {
+  text-align: center;
+  justify-content: center;
+}
+
+.r-page .r-block.r-align-right .r-heading {
+  text-align: right;
+  justify-content: flex-end;
+}
+
+/* Layouts that draw a short accent rule under the heading (divider at the
+   left, centered-headings in the middle) keep it under the text when the
+   heading is moved. */
+.r-page .r-block.r-align-left .r-heading::after {
+  left: 0;
+  transform: none;
+}
+
+.r-page .r-block.r-align-center .r-heading::after {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
+.r-page .r-block.r-align-right .r-heading::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.r-block.r-align-center .r-skills-chip-list {
+  justify-content: center;
+}
+
+.r-block.r-align-right .r-skills-chip-list {
+  justify-content: flex-end;
+}
+
+/* In "rows" mode the label sits in a fixed 130px column, so centering the
+   text would center label and value in their own cells, far apart. Shrink
+   both columns to fit and move the pair as one. :where() keeps this at
+   .r-skills-row's own weight, so the rules that stack the row instead (the
+   sidebar rail, narrow screens) still win. */
+:where(.r-block.r-align-center, .r-block.r-align-right) .r-skills-row {
+  grid-template-columns: auto auto;
+}
+
+.r-block.r-align-center .r-skills-row {
+  justify-content: center;
+}
+
+.r-block.r-align-right .r-skills-row {
+  justify-content: end;
+}
+
+/* The skills label is a fit-content pill (a block in chips mode, a grid
+   cell in rows mode), so text-align alone doesn't move it. */
+.r-block.r-align-center .r-skills-label {
+  justify-self: center;
+  margin-inline: auto;
+}
+
+.r-block.r-align-right .r-skills-label {
+  justify-self: end;
+  margin-inline: auto 0;
+}
+
+/* A list moves as a box but keeps its bullets left-aligned; centered
+   bullet text under a centered marker reads as broken. */
+.r-block.r-align-center .r-bullets,
+.r-block.r-align-right .r-bullets {
+  display: table;
+  text-align: left;
+}
+
+.r-block.r-align-center .r-bullets {
+  margin-inline: auto;
+}
+
+.r-block.r-align-right .r-bullets {
+  margin-inline: auto 0;
+}
+
 /* Editor preview: dim individual bullets hidden from both web + print */
 .r-bullet-dimmed {
   opacity: 0.35;
