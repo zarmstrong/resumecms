@@ -185,8 +185,8 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`/`visiblePrint` (booleans), and/or `parentId` |
 | `DELETE /api/blocks/:id` | delete a block (nested children are promoted to top-level, not deleted); 404 for an unknown id |
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
-| `GET /api/publish/status` | `{ publishedAt, isDirty, pdfStale, pdfVersion }` |
-| `POST /api/publish` | snapshot the draft to the public site and re-render the PDF |
+| `GET /api/publish/status` | `{ publishedAt, isDirty, pdfStale, pdfVersion, pdfPending }` |
+| `POST /api/publish` | snapshot the draft to the public site and re-render the PDF: `{ publishedAt, pdfVersion, pdfPending }`. It waits up to 20 s for the PDF; a render still queued or running after that answers `pdfPending: true` and finishes in the background (poll the status until `pdfPending` is false) |
 | `POST /api/discard-draft` | restore the draft from the last published snapshot |
 | `GET /api/resumes` | every resume, default first: `{ id, slug, name, isDefault, isPublic, hostnames, tailoring, createdAt, updatedAt, publishedAt, isDirty, pdfStale }`. `tailoring` is the brief it was tailored for, `{ audience, posting, guidance }`, or null |
 | `POST /api/resumes` | `{ name, slug?, copyFrom?, tailoring? }` → a new private, unpublished resume. With `copyFrom` (a resume id) it starts as a copy of that resume's draft, and keeps its `tailoring` unless one (or null) is sent; without it, with the default resume's header and site settings and no blocks. `slug` (lowercase letters, digits and dashes) defaults to one made from the name; a taken one is a 409 |
@@ -265,7 +265,7 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 | `reorder_blocks` | `{ items: [{ id, parentId? }] }` — the complete order, every block once; an omitted `parentId` means top level |
 | `get_header`, `update_header` | read / merge keys into the header (`links` is replaced whole) |
 | `get_site_settings`, `update_site_settings` | read / merge keys into site settings (`colors` merges one level deep) |
-| `get_publish_status` | `{ publishedAt, isDirty, pdfStale, pdfVersion }` — `pdfVersion` identifies the PDF file on disk (null if none); `pdfStale` means the PDF on disk wasn't rendered from the current published snapshot (a publish whose PDF render failed); the next successful `publish` clears it |
+| `get_publish_status` | `{ publishedAt, isDirty, pdfStale, pdfVersion, pdfPending }` — `pdfVersion` identifies the PDF file on disk (null if none); `pdfStale` means the PDF on disk wasn't rendered from the current published snapshot (a publish whose PDF render failed, or is still running); the next successful `publish` clears it; `pdfPending` means a render for the resume is queued or running |
 | `publish` | snapshot the draft to the public site and re-render the PDF (takes a few seconds) |
 | `discard_draft` | restore the draft from the last published snapshot |
 | `get_published_resume` | the published snapshot as the site (`mode: "web"`) or PDF (`"print"`) sees it |

@@ -675,6 +675,15 @@ that says so (the REST route passes that message through, and the editor
 shows it). The `pdf_meta` setting records which snapshot the file on disk
 was rendered from, and `getPublishStatus()` reports `pdfStale: true` until
 a later render catches up — the editor shows "PDF out of date" for it.
+`publish()` waits for its render for at most `publishWaitMs` (default
+20 s, `DEFAULT_PUBLISH_WAIT_MS`; issue #58): one stuck behind a hung
+render could otherwise hold the caller for two full timeouts, past a
+reverse proxy's patience, and a dropped connection looks like a failed
+publish that in fact took effect. Past that it answers `pdfPending: true`
+and the render finishes on the queue (a failure then is only logged).
+`getPublishStatus().pdfPending` is true while any render of that resume
+(`trackRender()`, publish or `ensurePdf`) is queued or running; the
+editor shows "PDF rendering…" and polls until it clears.
 
 Puppeteer is launched with its own SIGTERM/SIGINT/SIGHUP handlers off: they
 closed the browser but kept Node from exiting, so a server that had ever

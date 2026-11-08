@@ -16,7 +16,7 @@ import { pdfPathFor } from './pdfPaths.js';
 // `store`'s own methods act on the default resume (what most tests here
 // exercise); `addResume` makes another one for the isolation tests.
 
-function makeStore({ renderPdf, pdfTimeoutMs } = {}) {
+function makeStore({ renderPdf, pdfTimeoutMs, publishWaitMs } = {}) {
   const db = new Database(':memory:');
   ensureSchema(db);
   const defaultId = migrateToResumes(db);
@@ -26,6 +26,7 @@ function makeStore({ renderPdf, pdfTimeoutMs } = {}) {
     db,
     pdfDir,
     pdfTimeoutMs,
+    publishWaitMs,
     renderPdf:
       renderPdf ||
       (async ({ resumeId }) => {
@@ -302,7 +303,7 @@ test('header and site can merge instead of replace (colors one level deep)', () 
 
 test('publish snapshots the draft, writes the PDF, and clears isDirty', async () => {
   const { store, pdfPath, calls, setting } = makeStore();
-  assert.deepEqual(store.getPublishStatus(), { publishedAt: null, isDirty: false, pdfStale: false, pdfVersion: null });
+  assert.deepEqual(store.getPublishStatus(), { publishedAt: null, isDirty: false, pdfStale: false, pdfVersion: null, pdfPending: false });
   store.setHeader({ name: 'Zed' });
   const h = store.createBlock({ type: 'heading', data: { text: 'H' } });
   const x = store.createBlock({ type: 'experience', data: { jobTitle: 'J' }, parentId: h.id });
@@ -314,7 +315,7 @@ test('publish snapshots the draft, writes the PDF, and clears isDirty', async ()
   assert.equal(calls.renderPdf, 1);
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), '%PDF-fake');
   assert.match(pdfVersion, /^\d+-9$/); // mtime-size of the 9-byte fake
-  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion });
+  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion, pdfPending: false });
   assert.equal(store.getPublishedResume('web').pdfVersion, pdfVersion);
   assert.equal(store.getPublishedResume('web').publishedAt, publishedAt);
   assert.deepEqual(setting('pdf_meta'), { renderedFor: publishedAt });
@@ -375,7 +376,7 @@ test('pdfStale tracks whether the PDF on disk matches the published snapshot', a
   // A later successful publish clears it; a missing file flags it again.
   ok = true;
   const { publishedAt, pdfVersion } = await store.publish();
-  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion });
+  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion, pdfPending: false });
   fs.unlinkSync(pdfPath);
   assert.equal(store.getPublishStatus().pdfStale, true);
   assert.equal(store.getPublishStatus().pdfVersion, null);
@@ -470,7 +471,7 @@ test('publish snapshots the draft at call time, before waiting for the PDF queue
   release();
   const [a, b] = await Promise.all([first, second]);
   assert.ok(a.publishedAt < b.publishedAt || a.publishedAt === b.publishedAt);
-  assert.deepEqual(store.getPublishStatus(), { publishedAt: b.publishedAt, isDirty: false, pdfStale: false, pdfVersion: b.pdfVersion });
+  assert.deepEqual(store.getPublishStatus(), { publishedAt: b.publishedAt, isDirty: false, pdfStale: false, pdfVersion: b.pdfVersion, pdfPending: false });
 });
 
 test('a hung render times out and releases the queue for later publishes', async () => {
@@ -496,7 +497,78 @@ test('a hung render times out and releases the queue for later publishes', async
   hang = false;
   const { publishedAt, pdfVersion } = await store.publish();
   assert.equal(fs.readFileSync(pdfPath, 'utf8'), 'ok');
-  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion });
+  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion, pdfPending: false });
+});
+
+test('a publish stuck behind a slow render answers pdfPending, and the render still lands', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let body = '%PDF-old';
+  const { store, pdfPath, setting } = makeStore({
+    publishWaitMs: 20,
+    renderPdf: async () => { await gate; return Buffer.from(body); },
+  });
+  // Something already on disk, so the pending answer carries its version.
+  fs.writeFileSync(pdfPath, '%PDF-old');
+  const oldVersion = store.getPublishStatus().pdfVersion;
+
+  store.setHeader({ name: 'A' });
+  const first = await store.publish();
+  assert.deepEqual(first, { publishedAt: first.publishedAt, pdfVersion: oldVersion, pdfPending: true });
+  // The site is live; the PDF is still the old one, and says it's coming.
+  assert.deepEqual(setting('published_resume').header, { name: 'A' });
+  assert.deepEqual(store.getPublishStatus(), {
+    publishedAt: first.publishedAt,
+    isDirty: false,
+    pdfStale: true,
+    pdfVersion: oldVersion,
+    pdfPending: true,
+  });
+
+  // A second publish queues behind the first and answers pending too.
+  store.setHeader({ name: 'B' });
+  body = '%PDF-new-render';
+  const second = await store.publish();
+  assert.equal(second.pdfPending, true);
+
+  release();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(fs.readFileSync(pdfPath, 'utf8'), '%PDF-new-render');
+  const status = store.getPublishStatus();
+  assert.equal(status.pdfPending, false);
+  assert.equal(status.pdfStale, false);
+  assert.equal(status.publishedAt, second.publishedAt);
+  assert.notEqual(status.pdfVersion, oldVersion);
+});
+
+test('a render that fails after publish answered pending leaves pdfStale, not pdfPending', async (t) => {
+  let fail;
+  const gate = new Promise((_, reject) => { fail = reject; });
+  const { store } = makeStore({ publishWaitMs: 10, renderPdf: () => gate });
+  const logged = [];
+  t.mock.method(console, 'error', (...args) => logged.push(args));
+  const answer = await store.publish();
+  assert.equal(answer.pdfPending, true);
+  fail(new Error('chromium exploded'));
+  await new Promise((r) => setTimeout(r, 10));
+  const status = store.getPublishStatus();
+  assert.equal(status.pdfPending, false);
+  assert.equal(status.pdfStale, true);
+  assert.equal(logged.length, 1);
+  assert.match(logged[0][1].message, /chromium exploded/);
+});
+
+test('a render that finishes in time answers as before, and pdfPending covers the wait', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { store } = makeStore({ renderPdf: async () => { await gate; return Buffer.from('x'); } });
+  const publishing = store.publish();
+  assert.equal(store.getPublishStatus().pdfPending, true);
+  release();
+  const { publishedAt, pdfVersion, pdfPending } = await publishing;
+  assert.equal(pdfPending, false);
+  assert.ok(pdfVersion);
+  assert.deepEqual(store.getPublishStatus(), { publishedAt, isDirty: false, pdfStale: false, pdfVersion, pdfPending: false });
 });
 
 test('the PDF is written atomically: the old file stays intact until the new one is complete', async () => {

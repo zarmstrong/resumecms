@@ -27,6 +27,8 @@ import {
 } from './aiReview.js';
 
 const SAVE_DEBOUNCE_MS = 500;
+// How often the publish status is asked for while a PDF render is pending.
+const PDF_PENDING_POLL_MS = 3000;
 
 const LEFT_PANE_WIDTH_KEY = 'resumecms-editor-left-pane-width';
 const LEFT_PANE_MIN = 340;
@@ -99,6 +101,9 @@ export function EditorPage({
   // snapshot (a publish whose PDF render failed) — see the server's
   // getPublishStatus().
   const [pdfStale, setPdfStale] = useState(false);
+  // True while a render for this resume is queued or running on the server
+  // (a publish that answered before its PDF was done); polled until it isn't.
+  const [pdfPending, setPdfPending] = useState(false);
   const [leftWidth, setLeftWidth] = useState(loadLeftPaneWidth);
   const [resizingPane, setResizingPane] = useState(false);
   const [aiSettings, setAiSettings] = useState(null);
@@ -204,6 +209,7 @@ export function EditorPage({
       setPdfVersion(status.pdfVersion ?? null);
       setIsDirty(status.isDirty);
       setPdfStale(!!status.pdfStale);
+      setPdfPending(!!status.pdfPending);
       setUsername(credentials.username);
       setLoading(false);
     }).catch((err) => {
@@ -219,6 +225,34 @@ export function EditorPage({
       .then(({ ai }) => setAiSettings(ai))
       .catch((err) => console.error('Failed to load AI settings', err));
   }, [rapi]);
+
+  // While a render is pending, ask the server every few seconds until it
+  // lands (or fails: pdfStale stays set). Only the PDF fields are taken, so
+  // an edit or publish meanwhile keeps its own idea of the draft.
+  useEffect(() => {
+    if (!pdfPending) return undefined;
+    let cancelled = false;
+    let timer;
+    function poll() {
+      timer = setTimeout(async () => {
+        try {
+          const status = await rapi.publishStatus();
+          if (cancelled) return;
+          setPdfVersion(status.pdfVersion ?? null);
+          setPdfStale(!!status.pdfStale);
+          if (status.pdfPending) poll();
+          else setPdfPending(false);
+        } catch {
+          if (!cancelled) poll();
+        }
+      }, PDF_PENDING_POLL_MS);
+    }
+    poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [pdfPending, rapi]);
 
   // Unmounting (another resume opened, or logging out) sends whatever is
   // still waiting on its debounce rather than dropping it. A switch started
@@ -348,10 +382,11 @@ export function EditorPage({
     setPublishError(null);
     const editsBefore = editSeq.current;
     try {
-      const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion } = await rapi.publish();
+      const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion, pdfPending: newPdfPending } = await rapi.publish();
       setPublishedAt(newPublishedAt);
       setPdfVersion(newPdfVersion ?? null);
-      setPdfStale(false);
+      setPdfStale(!!newPdfPending);
+      setPdfPending(!!newPdfPending);
       // The server snapshots the draft when the publish request arrives, so
       // an edit made while the PDF rendered is still unpublished: ask the
       // server rather than assuming, and count local edits too in case a
@@ -361,6 +396,7 @@ export function EditorPage({
         const status = await rapi.publishStatus();
         stillDirty = stillDirty || status.isDirty;
         setPdfStale(!!status.pdfStale);
+        setPdfPending(!!status.pdfPending);
         setPdfVersion(status.pdfVersion ?? null);
       } catch {
         // keep the local answer
@@ -382,6 +418,7 @@ export function EditorPage({
         setPdfVersion(status.pdfVersion ?? null);
         setIsDirty(status.isDirty);
         setPdfStale(!!status.pdfStale);
+        setPdfPending(!!status.pdfPending);
       } catch {
         // leave the indicator as it was
       }
@@ -756,7 +793,13 @@ export function EditorPage({
           {saveState === 'saved' && 'Saved'}
           {saveState === 'idle' && (isDirty ? 'Unpublished changes' : `Published ${timeAgo(publishedAt) || 'never'}`)}
           {publishError && <span className="ed-topbar-warning"> · {publishError}</span>}
-          {!publishError && pdfStale && (
+          {!publishError && pdfPending && (
+            <span title="The site is updated. Its PDF is waiting for an earlier render to finish, and the Download PDF link still gets the previous one.">
+              {' '}
+              · PDF rendering…
+            </span>
+          )}
+          {!publishError && !pdfPending && pdfStale && (
             <span className="ed-topbar-warning" title="The last publish updated the site but its PDF render failed. Publish again to re-render it.">
               {' '}
               · PDF out of date
