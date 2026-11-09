@@ -96,4 +96,21 @@ export function ensureSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS cover_letters_by_resume ON cover_letters (resume_id, created_at);
   `);
+
+  // The landing page's uploaded images (issue #92), referenced from its
+  // draft and snapshot by `id`, the sha256 of the stored bytes (always a
+  // server-side re-encode, see imageUpload.js). In the database rather than
+  // under the data dir because the backups copy only the SQLite file, and an
+  // upload, unlike a PDF, can't be made again. landingImageStore.js keeps
+  // the caps and deletes the ones nothing references any more.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS landing_images (
+      id TEXT PRIMARY KEY,
+      mime TEXT NOT NULL,
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      bytes BLOB NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
 }

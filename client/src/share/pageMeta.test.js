@@ -79,3 +79,23 @@ test('the same title, description and card as the server, for the same page', ()
   const args = { name: 'Jo', title: 'T', photoUrl: 'data:image/svg+xml;base64,AA', site: { colors: null, font: 3 } };
   assert.deepEqual(cardContent(args), serverCardContent(args));
 });
+
+test("the landing page's share image replaces its card, as on the server", () => {
+  const image = { src: `/api/public/landing/images/${'a'.repeat(64)}`, alt: 'Jo speaking', width: 1200, height: 630 };
+  const landing = { headline: 'Jo', subheadline: 'Engineer', photoUrl: PHOTO, sections: [], seo: { title: '', description: '', noindex: false, image }, site: null };
+  const mine = landingPageMeta(landing);
+  const theirs = server.landingPage(landing, null);
+  assert.deepEqual(mine.shareImage, image);
+  assert.deepEqual(theirs.shareImage, image);
+  assert.equal(mine.card, null);
+  assert.equal(theirs.card, null);
+  // An uploaded hero photo is on the card, by its public path on the server
+  // and its editor path in the preview.
+  for (const photoUrl of [`/api/public/landing/images/${'b'.repeat(64)}`, `/api/landing/images/${'b'.repeat(64)}`]) {
+    const meta = landingPageMeta({ ...landing, photoUrl, seo: { title: '', description: '', noindex: false } });
+    assert.equal(meta.card.photoUrl, photoUrl);
+  }
+  const uploaded = { name: 'Jo', title: '', photoUrl: `/api/public/landing/images/${'b'.repeat(64)}`, site: null };
+  assert.deepEqual(cardContent(uploaded), serverCardContent(uploaded));
+  assert.equal(serverCardContent({ ...uploaded, photoUrl: '/api/public/landing/images/../x' }).photoUrl, '');
+});

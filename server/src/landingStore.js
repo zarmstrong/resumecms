@@ -13,6 +13,8 @@ import {
 } from './landingFields.js';
 import { pdfPathFor, pdfVersionOf } from './pdfPaths.js';
 import { escapeLandingText } from './landingTextMigration.js';
+import { createLandingImageStore } from './landingImageStore.js';
+import { EDITOR_IMAGE_PATH, PUBLIC_IMAGE_PATH, assertImagesDescribed, isImageId, referencedImageIds, shownImageIds } from './landingImageFields.js';
 
 // The landing page's storage and publishing (issue #70), composed into the
 // resume store by createResumeStore() — the editor's routes and the MCP
@@ -27,12 +29,22 @@ import { escapeLandingText } from './landingTextMigration.js';
 //                       takes effect at once (and does nothing until a
 //                       snapshot exists)
 // Publishing it is separate from publishing a resume, so neither can push
-// out the other's half-finished edits.
+// out the other's half-finished edits. Its uploaded images (issue #92) are
+// in the `landing_images` table (landingImageStore.js), referenced by id.
 //
 // `defaultResumeId` is the resume store's own (a function: the default can
 // change between calls), `pdfDir` where its PDFs are (pdfPathFor()).
 export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   const { getSetting, setSetting } = createSettings(db);
+  // What the stored draft or the published snapshot names is never pruned.
+  const images = createLandingImageStore({
+    db,
+    referencedIds: () =>
+      new Set([
+        ...referencedImageIds(upgradeLanding(getSetting('landing_draft'))),
+        ...referencedImageIds(upgradeLanding(getSetting('landing_published'))),
+      ]),
+  });
 
   function touchLanding() {
     setSetting('landing_meta', { lastEditedAt: new Date().toISOString() });
@@ -70,7 +82,12 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   }
 
   function checkLanding(input, current) {
-    return validateLanding(input, { knownResumeIds: knownResumeIds(), previousResumeIds: referencedResumeIds(current) });
+    return validateLanding(input, {
+      knownResumeIds: knownResumeIds(),
+      previousResumeIds: referencedResumeIds(current),
+      knownImageIds: new Set(images.imageSizes().keys()),
+      previousImageIds: referencedImageIds(current),
+    });
   }
 
   // `input` checked as setLanding() would check it, without saving it: the
@@ -101,12 +118,53 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   }
 
   // A draft that was never saved (the one built from the default resume's
-  // header) can be published as it is.
+  // header) can be published as it is, but not with an image it shows
+  // still undescribed (a draft may leave alt blank while it's typed). The
+  // images neither it nor the draft uses any more go once their grace
+  // period is over.
   function publishLanding() {
+    const draft = getLanding();
+    assertImagesDescribed(draft, new Set(images.imageSizes().keys()));
     const publishedAt = new Date().toISOString();
-    setSetting('landing_published', { ...getLanding(), publishedAt });
+    setSetting('landing_published', { ...draft, publishedAt });
     setSetting('landing_meta', { lastEditedAt: null });
+    pruneLandingImages();
     return getLandingStatus();
+  }
+
+  // Never throws: a publish mustn't fail over its clean-up. Also on boot.
+  function pruneLandingImages() {
+    try {
+      return images.pruneImages();
+    } catch (err) {
+      console.error('Could not prune the landing page images:', err);
+      return 0;
+    }
+  }
+
+  // Stores an upload (re-encoded, see imageUpload.js); resolves with
+  // { id, mime, width, height, src }, `src` the editor's path to it. The
+  // draft then references it by id. Nothing is public until a published
+  // page shows it.
+  function uploadLandingImage(input, options) {
+    return images.uploadImage(input, options);
+  }
+
+  // Any stored image, for the editor's preview: { mime, bytes }, or null.
+  function landingImage(id) {
+    return images.imageFile(id);
+  }
+
+  // An image for a visitor, only while the landing page is shown and shows
+  // it (shownImageIds() of what resolveLanding() makes of the snapshot):
+  // { mime, bytes, noindex }, or null. A draft-only upload isn't public
+  // just because its id is known.
+  function publicLandingImage(id) {
+    if (!isImageId(id)) return null;
+    const shown = shownLanding();
+    if (!shown || !shownImageIds(shown).has(id)) return null;
+    const file = images.imageFile(id);
+    return file ? { ...file, noindex: shown.seo?.noindex === true } : null;
   }
 
   function discardLandingDraft() {
@@ -164,16 +222,32 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
         },
       ])
     );
-    return { photoUrl: defaultPublished?.header?.photoUrl || '', site: defaultPublished?.site ?? null, resumes };
+    return {
+      photoUrl: defaultPublished?.header?.photoUrl || '',
+      site: defaultPublished?.site ?? null,
+      resumes,
+      images: imagesAt(PUBLIC_IMAGE_PATH),
+    };
+  }
+
+  // Every stored image as resolveLanding() reads them, at `base` + id.
+  function imagesAt(base) {
+    return new Map([...images.imageSizes()].map(([id, size]) => [id, { src: base + id, ...size }]));
   }
 
   // The same, as JSON for the editor, whose preview resolves the draft
   // against it as someone types (client/src/landing/resolveLanding.js
   // mirrors resolveLanding()). Also what an AI rewrite of the page reads an
-  // experience section's roles from.
+  // experience section's roles from. Its images are at the editor's own path,
+  // since a draft's may not be public yet.
   function getLandingContext() {
     const { photoUrl, site, resumes } = landingContext();
-    return { photoUrl, site, resumes: [...resumes].map(([id, target]) => ({ id, ...target })) };
+    return {
+      photoUrl,
+      site,
+      resumes: [...resumes].map(([id, target]) => ({ id, ...target })),
+      images: [...imagesAt(EDITOR_IMAGE_PATH)].map(([id, image]) => ({ id, ...image })),
+    };
   }
 
   // A resume's published snapshot, but only while a visitor may see it
@@ -237,5 +311,9 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
     landingForHost,
     homeLinkForHost,
     shownLanding,
+    uploadLandingImage,
+    landingImage,
+    publicLandingImage,
+    pruneLandingImages,
   };
 }

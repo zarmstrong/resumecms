@@ -1,5 +1,6 @@
 import { headTags, landingPage, resumePage } from './pageMeta.js';
 import { photoKey } from './shareImages.js';
+import { imageIdOfPath } from './landingImageFields.js';
 
 // Which public page a request for the HTML shell is (issue #87), and the
 // head tags for it (pageMeta.js); clientStatic.js puts them into
@@ -18,11 +19,18 @@ import { photoKey } from './shareImages.js';
 // Returns { head, noindex }: the tags, and whether the page asks search
 // engines to leave it out (the landing page's seo.noindex).
 export function createShellHead(store) {
+  // The landing page's share image when it has one (issue #92), else the
+  // card, else the photo: a data: URL by its key, an uploaded one (the
+  // landing page's) at its own public path.
   function imageUrls(page, origin) {
-    const card = store.readyCardKey(page.card);
-    const photo = photoKey(page.photoUrl);
     const url = (key) => (key ? `${origin}/api/public/images/${key}` : null);
-    return { image: url(card ?? photo), largeImage: Boolean(card), photo: url(photo) };
+    const photo = url(photoKey(page.photoUrl)) ?? (imageIdOfPath(page.photoUrl) ? origin + page.photoUrl : null);
+    if (page.shareImage) {
+      const { src, width, height } = page.shareImage;
+      return { image: origin + src, largeImage: width > height, imageSize: { width, height }, photo };
+    }
+    const card = store.readyCardKey(page.card);
+    return { image: card ? url(card) : photo, largeImage: Boolean(card), photo };
   }
 
   function resumeHead(published, origin, canonicalPath, { withPerson }) {

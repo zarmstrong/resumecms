@@ -137,6 +137,49 @@
   overflow-wrap: anywhere;
 }
 
+/* An item with a thumbnail (issue #92): the picture beside its title and
+   text, which stack in the second column. */
+.l-item-with-image {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  column-gap: 14px;
+  align-content: start;
+}
+
+.l-item-with-image > :not(.l-item-image) {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.l-item-image {
+  grid-row: 1 / span 2;
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+/* An image section. */
+.l-figure {
+  margin: 0;
+}
+
+.l-figure-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.l-figure-caption {
+  margin-top: 8px;
+  font-size: 0.9em;
+  opacity: 0.75;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 a.l-item-title {
   text-decoration: none;
   border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);

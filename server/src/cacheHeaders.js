@@ -30,6 +30,14 @@ export const RENDER = 'private, no-store';
 // found by search engines.
 export const NOINDEX = 'noindex';
 
+// The landing page's uploaded images (issue #92) as the editor fetches
+// them, behind login: named by the hash of their bytes, so a URL never
+// changes content, and only the editor's own browser may keep them.
+// Visitors' copies (/api/public/landing/images/:id) are REVALIDATE
+// instead: one is served only while the published page shows it, and a
+// year-long cache would keep a removed photo up wherever it was cached.
+export const EDITOR_IMAGE = 'private, max-age=31536000, immutable';
+
 // Vite's content-hashed bundles under /assets/: the name changes whenever
 // the content does, so these can be cached indefinitely.
 export const IMMUTABLE = 'public, max-age=31536000, immutable';

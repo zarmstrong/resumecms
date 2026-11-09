@@ -1,8 +1,11 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { store } from '../store.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { handle } from './sendError.js';
+import { handle, sendError } from './sendError.js';
 import { LANDING_LIMITS } from '../landingFields.js';
+import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
+import { EDITOR_IMAGE } from '../cacheHeaders.js';
+import { httpError } from '../httpError.js';
 import { landingRewriteHandlers } from './ai.js';
 import { splitTextFormat } from '../landingTextMigration.js';
 
@@ -23,7 +26,7 @@ router.get('/', handle((req, res) => {
     landing: store.getLanding(),
     status: store.getLandingStatus(),
     context: store.getLandingContext(),
-    limits: LANDING_LIMITS,
+    limits: { ...LANDING_LIMITS, images: LANDING_IMAGE_LIMITS },
   });
 }));
 
@@ -52,6 +55,36 @@ router.post('/discard-draft', handle((req, res) => {
 // { landing?, target, instruction } → proposals for review; saves nothing.
 // See landingRewriteHandlers in routes/ai.js.
 router.post('/rewrite', ...landingRewriteHandlers());
+
+// An image upload (issue #92): the file itself as the body, parsed only here
+// and only after the login check above. Its type is told from its bytes, so
+// any Content-Type will do except application/json, which the app-wide
+// express.json() parses (and rejects) before this route sees it. Re-encoded and stored; responds with
+// { id, mime, width, height, src } for the draft to reference.
+const parseImage = express.raw({ type: () => true, limit: LANDING_IMAGE_LIMITS.uploadBytes });
+function imageBody(req, res, next) {
+  parseImage(req, res, (err) => {
+    if (!err) return next();
+    const mb = LANDING_IMAGE_LIMITS.uploadBytes / (1024 * 1024);
+    sendError(res, err.type === 'entity.too.large' ? httpError(413, `That image is too large (at most ${mb} MB)`) : httpError(400, 'Could not read the upload'));
+  });
+}
+
+router.post('/images', imageBody, handle(async (req, res) => {
+  if (!Buffer.isBuffer(req.body)) throw httpError(400, 'Send the image file itself as the request body');
+  res.status(201).json(await store.uploadLandingImage(req.body));
+}));
+
+// Any stored image, for the editor's preview (the public route serves only
+// what the published page shows).
+router.get('/images/:id', handle((req, res) => {
+  const image = store.landingImage(req.params.id);
+  if (!image) throw httpError(404, 'Not found');
+  res.set('Cache-Control', EDITOR_IMAGE);
+  res.set('ETag', `"${req.params.id}"`);
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.type(image.mime).send(image.bytes);
+}));
 
 // { enabled } — takes effect at once; see the store's setLandingEnabled.
 router.put('/enabled', handle((req, res) => {

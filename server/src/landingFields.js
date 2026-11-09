@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { httpError } from './httpError.js';
 import { blocksForMode } from './publicBlocks.js';
 import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inlineText.js';
+import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImageFields.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -16,12 +17,14 @@ import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inline
 //   { type: 'resume', label, resumeId, open: 'page' | 'pdf' }
 // A resume action follows a card's rules (see resolveLanding()).
 // `photo` says where the photo comes from: 'resume' (the default resume's
-// published header photo), 'custom' (photoUrl) or 'none'. `sections` is
+// published header photo), 'custom' (photoUrl), 'upload' (photoImage, an
+// uploaded image's reference, issue #92) or 'none'. `sections` is
 // shown in order under the headline, each `{ id, kind, title, ... }` with
 // the fields of its kind (SECTION_FIELDS):
 //   text       — body: text, a blank line between paragraphs
-//   items      — items: [{ title, text, url, meta? }], e.g. projects; meta
-//                is a short muted line under the title ("2024 · Rust")
+//   items      — items: [{ title, text, url, meta?, image? }], e.g.
+//                projects; meta is a short muted line under the title
+//                ("2024 · Rust"), image an optional thumbnail
 //   links      — links: [{ type, label, url }]
 //   resumes    — cards: [{ resumeId, label, blurb, showPdf }] linking to
 //                resumes, with the PDF next to the page when showPdf is on
@@ -29,6 +32,7 @@ import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inline
 //   experience — resumeId, count, showDates: the first `count` roles of
 //                that resume, read from its published snapshot when the
 //                page is requested (issue #90), never copied into the draft
+//   image      — image (a reference, or null until one is uploaded), caption
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown. `hidden` and an item's `meta` are only stored when set.
 // A text section's body and an item's text may hold links and emphasis
@@ -38,7 +42,11 @@ import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inline
 // publicly. `seo` is { title, description, noindex } (issue #87): what
 // the page's <title>, description and link previews say instead of the
 // headline and subheadline (see pageMeta.js), and whether search engines
-// are asked to leave it out. `homeLink` (issue #89) is whether a resume
+// are asked to leave it out, plus an optional `image`, the share image
+// link previews show instead of a drawn card. Image references
+// ({ imageId, alt }, landingImageFields.js) are stored only where one is
+// set: `photoImage`, an item's `image` and `seo.image` are optional keys,
+// not nulls. `homeLink` (issue #89) is whether a resume
 // page shows a "← Home" link back here while this page holds `/` (see
 // landingStore.js's homeLinkForHost()), and `homeLinkLabel` what it says
 // after the arrow ('' for "Home"). A draft stored before sections, `seo`
@@ -47,8 +55,8 @@ import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inline
 // Everything here ends up in front of every visitor, so it's checked more
 // strictly than the header: unknown keys, wrong types and oversized values
 // are a 400 on save, links can't use a script-running scheme, and the photo
-// can only be an inline image. resolveLanding() is the only shape that may
-// leave the server publicly.
+// can only be an inline image or a stored upload's reference.
+// resolveLanding() is the only shape that may leave the server publicly.
 
 export const LANDING_LIMITS = {
   headline: 120,
@@ -83,19 +91,19 @@ export const LANDING_LIMITS = {
   photoUrl: 700_000,
 };
 
-export const PHOTO_SOURCES = ['resume', 'custom', 'none'];
+export const PHOTO_SOURCES = ['resume', 'custom', 'upload', 'none'];
 
 // The header's link types (client/src/resume/linkTypes.js), which only pick
 // the badge a link is drawn with.
 export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image'];
 
 export const ACTION_TYPES = ['link', 'resume'];
 export const ACTION_OPENS = ['page', 'pdf'];
 
-const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'sections', 'seo', 'homeLink', 'homeLinkLabel'];
-const SEO_FIELDS = ['title', 'description', 'noindex'];
+const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'photoImage', 'sections', 'seo', 'homeLink', 'homeLinkLabel'];
+const SEO_FIELDS = ['title', 'description', 'noindex', 'image'];
 const SECTION_FIELDS = {
   text: ['id', 'kind', 'title', 'hidden', 'body'],
   items: ['id', 'kind', 'title', 'hidden', 'items'],
@@ -103,8 +111,9 @@ const SECTION_FIELDS = {
   resumes: ['id', 'kind', 'title', 'hidden', 'cards'],
   quotes: ['id', 'kind', 'title', 'hidden', 'quotes'],
   experience: ['id', 'kind', 'title', 'hidden', 'resumeId', 'count', 'showDates'],
+  image: ['id', 'kind', 'title', 'hidden', 'image', 'caption'],
 };
-const ITEM_FIELDS = ['title', 'text', 'url', 'meta'];
+const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
 // What an experience section shows when it's added without saying.
 export const EXPERIENCE_DEFAULTS = { count: 3, showDates: true };
@@ -311,7 +320,7 @@ function checkList(value, max, label) {
   return list;
 }
 
-function checkItem(item, label) {
+function checkItem(item, label, refs) {
   checkKeys(item, ITEM_FIELDS, label);
   const out = {
     title: checkString(item.title ?? '', LANDING_LIMITS.itemTitle, `${label}.title`),
@@ -321,6 +330,7 @@ function checkItem(item, label) {
   if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
   const meta = checkString(item.meta ?? '', LANDING_LIMITS.itemMeta, `${label}.meta`);
   if (meta !== '') out.meta = meta;
+  if (item.image != null) out.image = checkImageRef(item.image, `${label}.image`, refs);
   return out;
 }
 
@@ -354,7 +364,7 @@ function checkSection(section, i, refs, ids) {
       out.body = checkInlineText(section.body ?? '', LANDING_LIMITS.text, `${label}.body`, { paragraphs: true });
       break;
     case 'items':
-      out.items = checkList(section.items, LANDING_LIMITS.items, `${label}.items`).map((item, j) => checkItem(item, `${label}.items[${j}]`));
+      out.items = checkList(section.items, LANDING_LIMITS.items, `${label}.items`).map((item, j) => checkItem(item, `${label}.items[${j}]`, refs));
       break;
     case 'links':
       out.links = checkList(section.links, LANDING_LIMITS.links, `${label}.links`).map((link, j) => checkLink(link, `${label}.links[${j}]`));
@@ -378,11 +388,15 @@ function checkSection(section, i, refs, ids) {
       }
       out.showDates = checkBoolean(section.showDates ?? EXPERIENCE_DEFAULTS.showDates, `${label}.showDates`);
       break;
+    case 'image':
+      out.image = section.image == null ? null : checkImageRef(section.image, `${label}.image`, refs);
+      out.caption = checkString(section.caption ?? '', LANDING_IMAGE_LIMITS.caption, `${label}.caption`);
+      break;
   }
   return out;
 }
 
-function checkSeo(seo) {
+function checkSeo(seo, refs) {
   checkKeys(seo ?? {}, SEO_FIELDS, 'seo');
   const out = {
     title: checkString(seo?.title ?? '', LANDING_LIMITS.seoTitle, 'seo.title'),
@@ -390,13 +404,16 @@ function checkSeo(seo) {
     noindex: seo?.noindex ?? false,
   };
   if (typeof out.noindex !== 'boolean') throw httpError(400, 'seo.noindex must be a boolean');
+  if (seo?.image != null) out.image = checkImageRef(seo.image, 'seo.image', refs);
   return out;
 }
 
 // A complete, clean draft from `input`; missing fields take their empty
 // value, so a client can send only what it has. Strings aren't trimmed:
-// the editor saves while someone types.
-export function validateLanding(input, { knownResumeIds, previousResumeIds = new Set() }) {
+// the editor saves while someone types. The image ids work like the resume
+// ids: a new reference must name a stored image, one in the draft before
+// may outlive it (referencedImageIds()).
+export function validateLanding(input, { knownResumeIds, previousResumeIds = new Set(), knownImageIds = new Set(), previousImageIds = new Set() }) {
   checkKeys(input, FIELDS, 'landing page');
   const base = emptyLanding();
   const out = {
@@ -411,11 +428,12 @@ export function validateLanding(input, { knownResumeIds, previousResumeIds = new
     throw httpError(400, 'photoUrl must be a base64 data: URL of a JPEG, PNG or WebP image');
   }
 
-  const refs = { knownResumeIds, previousResumeIds };
+  const refs = { knownResumeIds, previousResumeIds, knownImageIds, previousImageIds };
+  if (input.photoImage != null) out.photoImage = checkImageRef(input.photoImage, 'photoImage', refs);
   out.actions = checkList(input.actions, LANDING_LIMITS.actions, 'actions').map((action, i) => checkAction(action, `actions[${i}]`, refs));
   const ids = new Set();
   out.sections = checkList(input.sections, LANDING_LIMITS.sections, 'sections').map((section, i) => checkSection(section, i, refs, ids));
-  out.seo = checkSeo(input.seo);
+  out.seo = checkSeo(input.seo, refs);
   out.homeLink = input.homeLink ?? base.homeLink;
   if (typeof out.homeLink !== 'boolean') throw httpError(400, 'homeLink must be a boolean');
   out.homeLinkLabel = checkString(input.homeLinkLabel ?? base.homeLinkLabel, LANDING_LIMITS.homeLinkLabel, 'homeLinkLabel');
@@ -500,6 +518,9 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 //                      published); pdfHref is '' while the resume has no
 //                      rendered PDF, experience is experienceRoles() of its
 //                      published blocks
+//   context.images   — Map of image id → { src, width, height } for the
+//                      stored images (issue #92), `src` where a visitor
+//                      fetches it
 // Cards and actions carry no resume ids and never a resume's internal name:
 // a card with no label of its own uses the resume's published header title.
 // A card's `pdfHref` is there only when it asks for one and the PDF exists;
@@ -511,10 +532,18 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // so is a hidden one; sections lose their ids. An experience section
 // resolves to { roles, href }: its resume's first `count` roles, and that
 // resume's link for "Full resume".
-// `seo` goes along whole: everything in it ends up in the page's head and
-// its X-Robots-Tag anyway.
+// `seo` goes along whole (everything in it ends up in the page's head and
+// its X-Robots-Tag anyway), its image resolved like the others. An image
+// reference resolves to { src, alt, width, height }, or is left out (a
+// photo, a thumbnail, the share image) when its image is gone; an image
+// section without one is left out. An uploaded hero photo is `photoUrl`
+// (its src), with its alt as `photoAlt`.
 export function resolveLanding(landing, context) {
-  const photoUrl = landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context.photoUrl || '' : '';
+  const upload = landing.photo === 'upload' ? resolveImage(landing.photoImage, context.images) : null;
+  const photoUrl =
+    landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context.photoUrl || '' : (upload?.src ?? '');
+  const { image: shareImage, ...seo } = landing.seo ?? {};
+  const seoImage = resolveImage(shareImage, context.images);
   return {
     headline: landing.headline,
     subheadline: landing.subheadline,
@@ -524,11 +553,12 @@ export function resolveLanding(landing, context) {
       return shown ? [shown] : [];
     }),
     photoUrl,
+    ...(upload ? { photoAlt: upload.alt } : {}),
     sections: landing.sections.flatMap((section) => {
       const shown = section.hidden ? null : resolveSection(section, context);
       return shown ? [{ kind: section.kind, title: section.title, ...shown }] : [];
     }),
-    seo: { ...emptySeo(), ...landing.seo },
+    seo: { ...emptySeo(), ...seo, ...(seoImage ? { image: seoImage } : {}) },
     site: context.site ?? null,
   };
 }
@@ -552,12 +582,16 @@ function resolveSection(section, context) {
     case 'items': {
       const items = section.items
         .filter((item) => item.title.trim() || item.text.trim())
-        .map((item) => ({
-          title: item.title,
-          text: item.text,
-          url: item.url !== '' && isSafeUrl(item.url) ? item.url : '',
-          ...(item.meta?.trim() ? { meta: item.meta } : {}),
-        }));
+        .map((item) => {
+          const image = resolveImage(item.image, context.images);
+          return {
+            title: item.title,
+            text: item.text,
+            url: item.url !== '' && isSafeUrl(item.url) ? item.url : '',
+            ...(item.meta?.trim() ? { meta: item.meta } : {}),
+            ...(image ? { image } : {}),
+          };
+        });
       return items.length ? { items } : null;
     }
     case 'links': {
@@ -591,6 +625,10 @@ function resolveSection(section, context) {
         dates: section.showDates ? roleDates(role) : '',
       }));
       return roles.length ? { roles, href: target.href } : null;
+    }
+    case 'image': {
+      const image = resolveImage(section.image, context.images);
+      return image ? { image, caption: section.caption } : null;
     }
     default:
       return null;

@@ -4,6 +4,7 @@ import * as z from 'zod';
 import { BLOCK_TYPES } from '../resumeStore.js';
 import { httpError } from '../httpError.js';
 import { ACTION_OPENS, LINK_TYPES, PHOTO_SOURCES } from '../landingFields.js';
+import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
 import { moveBlockOrder } from './moveBlock.js';
 
@@ -44,7 +45,7 @@ Draft vs published: every write tool changes the DRAFT only, of one resume. Noth
 
 Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
 
-Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, and cards linking to some of the resumes; any section can be hidden), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, and cards linking to some of the resumes; any section can be hidden), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, or seo.image for link previews.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -493,12 +494,18 @@ const landingAction = () =>
       open: z.enum(ACTION_OPENS).optional().describe("'page' (default) opens the resume, 'pdf' its PDF. Shown only while the resume is public and published, and for 'pdf' has a rendered PDF."),
     }),
   ]);
+const landingImage = () =>
+  z.object({
+    imageId: z.string().describe("An id from upload_landing_image (or get_landing_page's context.images)."),
+    alt: z.string().describe(`What the image shows, for screen readers and link previews (at most ${LANDING_IMAGE_LIMITS.alt} characters).`),
+  });
 const landingItem = () =>
   z.object({
     title: z.string().optional().describe('e.g. a project name.'),
     text: z.string().optional().describe('A line or two about it; may hold [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is.'),
     url: z.string().optional().describe('An optional http, https, mailto or tel link for its title.'),
     meta: z.string().optional().describe('An optional short line shown muted under the title, e.g. "2024 · Rust · Open source".'),
+    image: landingImage().nullable().optional().describe('An optional thumbnail; null removes it.'),
   });
 const landingQuote = () =>
   z.object({
@@ -526,7 +533,24 @@ const landingSection = () =>
       count: z.number().int().optional().describe('How many roles to show, 1 to 10 (default 3).'),
       showDates: z.boolean().optional().describe("Show each role's dates (default true)."),
     }),
+    z.object({
+      ...sectionBase,
+      kind: z.literal('image'),
+      image: landingImage().nullable().optional().describe('The image; a section without one is left off the public page.'),
+      caption: z.string().optional().describe('Plain text shown under it.'),
+    }),
   ]);
+
+// base64 as sent: optionally a data: URL, whitespace ignored.
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+function decodeImage(data) {
+  const body = data.replace(/^data:[^,]*;base64,/, '').replace(/\s+/g, '');
+  if (body.length > Math.ceil(LANDING_IMAGE_LIMITS.mcpUploadBytes / 3) * 4) {
+    throw httpError(413, `That image is too large to send here (at most ${LANDING_IMAGE_LIMITS.mcpUploadBytes} bytes before base64)`);
+  }
+  if (!body || !BASE64.test(body)) throw httpError(400, 'data must be the image file, base64-encoded');
+  return Buffer.from(body, 'base64');
+}
 
 const LANDING_TOOLS = [
   {
@@ -534,7 +558,7 @@ const LANDING_TOOLS = [
     config: {
       title: 'Get the landing page',
       description:
-        "Returns the landing page's DRAFT (`landing`), its status ({ enabled, publishedAt, isDirty }), and `context`: the resumes a card can currently link to (public and published; a card for any other resume is left out of the public page), and the default resume's published photo and site settings, which the page reuses. Before anything is saved, the draft is built from the default resume's published header.",
+        "Returns the landing page's DRAFT (`landing`), its status ({ enabled, publishedAt, isDirty }), and `context`: the resumes a card can currently link to (public and published; a card for any other resume is left out of the public page), the default resume's published photo and site settings, which the page reuses, and the uploaded images (images: id, width, height) a reference can name. Before anything is saved, the draft is built from the default resume's published header.",
       annotations: readOnly,
     },
     run: (store) => ({ landing: store.getLanding(), status: store.getLandingStatus(), context: store.getLandingContext() }),
@@ -564,8 +588,13 @@ const LANDING_TOOLS = [
           .nullable()
           .optional()
           .describe('At most 3 buttons under the subheadline, the first drawn as the primary one. Replaced as a whole list.'),
-        photo: z.enum(PHOTO_SOURCES).nullable().optional().describe("'resume' uses the default resume's published header photo, 'custom' uses photoUrl, 'none' shows none."),
+        photo: z
+          .enum(PHOTO_SOURCES)
+          .nullable()
+          .optional()
+          .describe("'resume' uses the default resume's published header photo, 'custom' uses photoUrl, 'upload' uses photoImage, 'none' shows none."),
         photoUrl: z.string().nullable().optional().describe("A base64 data: URL of a JPEG, PNG or WebP image, for photo: 'custom'."),
+        photoImage: landingImage().nullable().optional().describe("An uploaded image, for photo: 'upload'."),
         sections: z
           .array(landingSection())
           .nullable()
@@ -576,6 +605,10 @@ const LANDING_TOOLS = [
             title: z.string().nullable().optional().describe("The page's title in search results and link previews; '' uses the headline."),
             description: z.string().nullable().optional().describe("What search results and link previews say; '' uses the subheadline, else the first text section."),
             noindex: z.boolean().nullable().optional().describe('true asks search engines not to list the page.'),
+            image: landingImage()
+              .nullable()
+              .optional()
+              .describe('An uploaded image link previews show (ideally 1200×630) instead of the card drawn from the headline and photo; null removes it.'),
           })
           .nullable()
           .optional()
@@ -589,10 +622,21 @@ const LANDING_TOOLS = [
     },
   },
   {
+    name: 'upload_landing_image',
+    config: {
+      title: 'Upload a landing page image',
+      description: `Stores an image for the landing page and returns { id, mime, width, height } (src is the editor's own path to it). Send the JPEG, PNG or WebP file base64-encoded, at most ${LANDING_IMAGE_LIMITS.mcpUploadBytes} bytes before encoding. It's re-encoded on the server, which drops its metadata (EXIF, GPS position) and scales it down to ${LANDING_IMAGE_LIMITS.longSide} px on its long side. Nothing is shown until a reference to it ({ imageId: id, alt }) is saved with update_landing_page and published; an image nothing references is removed a week after it was uploaded.`,
+      inputSchema: { data: z.string().describe('The image file, base64-encoded (a data: URL works too).') },
+      annotations: { ...mutating, idempotentHint: true },
+    },
+    run: (store, { data }) => store.uploadLandingImage(decodeImage(data), { maxInputBytes: LANDING_IMAGE_LIMITS.mcpUploadBytes }),
+  },
+  {
     name: 'publish_landing_page',
     config: {
       title: 'Publish the landing page',
-      description: "Snapshots the landing page's DRAFT to the public site. It shows at / only while the landing page is enabled. Returns its status.",
+      description:
+        "Snapshots the landing page's DRAFT to the public site. It shows at / only while the landing page is enabled. Refused (400, naming the field) while an image the page would show has an empty alt. Returns its status.",
       annotations: mutating,
     },
     run: (store) => store.publishLanding(),

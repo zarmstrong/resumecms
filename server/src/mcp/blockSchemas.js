@@ -250,6 +250,16 @@ export const SITE_SCHEMA = {
 
 // The install's landing page (issue #70); landingFields.js checks it and
 // holds the caps.
+// An uploaded image (issue #92), by the id upload_landing_image returns.
+const LANDING_IMAGE_REF = {
+  type: 'object',
+  description: "An uploaded image: { imageId, alt }, both required. A new one must name a stored image; one whose image is gone shows nothing",
+  properties: {
+    imageId: { type: 'string', description: "From upload_landing_image or get_landing_page's context.images" },
+    alt: { type: 'string', description: 'What it shows, at most 200 characters' },
+  },
+};
+
 const LANDING_SECTION_BASE = {
   id: { type: 'string', description: 'Tells sections apart; omit for a new section, keep for an existing one' },
   title: { type: 'string', description: "Heading above the section; '' shows none" },
@@ -293,8 +303,9 @@ export const LANDING_SCHEMA = {
         ],
       },
     },
-    photo: { enum: ['resume', 'custom', 'none'], description: "'resume' = the default resume's published header photo" },
+    photo: { enum: ['resume', 'custom', 'upload', 'none'], description: "'resume' = the default resume's published header photo" },
     photoUrl: { type: 'string', description: "base64 data: URL (JPEG, PNG or WebP), used when photo is 'custom'" },
+    photoImage: { ...LANDING_IMAGE_REF, description: "Used when photo is 'upload'; optional (absent for none)" },
     sections: {
       type: 'array',
       description: 'Shown in order under the headline; one with nothing to show is left out. Each has the fields of its kind only',
@@ -319,6 +330,7 @@ export const LANDING_SCHEMA = {
                     text: { type: 'string', description: 'Text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is' },
                     url: { type: 'string', description: 'Optional http, https, mailto or tel link for the title' },
                     meta: { type: 'string', description: "Optional short line shown muted under the title, e.g. '2024 · Rust · Open source' (at most 80 characters)" },
+                    image: { ...LANDING_IMAGE_REF, description: 'Optional thumbnail (absent for none)' },
                   },
                 },
               },
@@ -384,6 +396,16 @@ export const LANDING_SCHEMA = {
               showDates: { type: 'boolean', description: 'Show dates (default true)' },
             },
           },
+          {
+            type: 'object',
+            description: 'One uploaded image with an optional caption; left out until it has an image',
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'image' },
+              image: { ...LANDING_IMAGE_REF, description: 'null until one is uploaded' },
+              caption: { type: 'string', description: 'Plain text under the image, at most 300 characters' },
+            },
+          },
         ],
       },
     },
@@ -394,6 +416,7 @@ export const LANDING_SCHEMA = {
         title: { type: 'string', description: "At most 70 characters; '' = the headline" },
         description: { type: 'string', description: "At most 200 characters; '' = the subheadline, else the first text section" },
         noindex: { type: 'boolean', description: 'Ask search engines not to list the page (X-Robots-Tag: noindex)' },
+        image: { ...LANDING_IMAGE_REF, description: 'Optional share image for link previews (ideally 1200×630), shown instead of the drawn card' },
       },
     },
   },

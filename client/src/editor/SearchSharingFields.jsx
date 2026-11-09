@@ -6,7 +6,8 @@ import { LinkPreview } from './LinkPreview.jsx';
 // meta with both left empty, shows as their placeholders), an optional
 // noindex switch, and a preview of the link as it will look once
 // published. `meta` is share/pageMeta.js's view of the draft as it is.
-export function SearchSharingFields({ title, description, noindex, onChange, meta, fallback, limits, hint }) {
+// `children` (the landing page's share image) go above the preview.
+export function SearchSharingFields({ title, description, noindex, onChange, meta, fallback, limits, hint, children }) {
   return (
     <details className="ed-collapsible">
       <summary>
@@ -42,6 +43,7 @@ export function SearchSharingFields({ title, description, noindex, onChange, met
             <span>Ask search engines not to list this page</span>
           </label>
         )}
+        {children}
         <div className="ed-field">
           <span>Link preview</span>
           <LinkPreview meta={meta} />

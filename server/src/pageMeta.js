@@ -97,7 +97,9 @@ export function resumePage(published) {
 // The landing page, as resolveLanding() shows it. Its Person is the
 // default resume's published header (`person`: the person the site is
 // about, whose resume is public), the headline standing in for the name
-// only when that has none.
+// only when that has none. Its `seo.image` (issue #92), when it has one,
+// is the share image (`shareImage`, { src, alt, width, height }) and no
+// card is drawn.
 export function landingPage(landing, defaultHeader) {
   const seo = isObject(landing?.seo) ? landing.seo : {};
   const sections = Array.isArray(landing?.sections) ? landing.sections : [];
@@ -106,13 +108,15 @@ export function landingPage(landing, defaultHeader) {
   const firstText = sections.map((section) => (section.kind === 'text' ? bodyPlainText(section.body) : '')).find(textOf);
   const header = isObject(defaultHeader) ? defaultHeader : {};
   const name = textOf(header.name) || headline;
+  const shareImage = isObject(seo.image) && typeof seo.image.src === 'string' ? seo.image : null;
   return {
     type: 'website',
     title: textOf(seo.title) || headline || 'Home',
     description: textOf(seo.description) || clip(subheadline || firstText, DESCRIPTION_LENGTH),
     photoUrl: landing?.photoUrl,
-    imageAlt: headline || name,
-    card: cardContent({ name: headline, title: subheadline, photoUrl: landing?.photoUrl, site: landing?.site }),
+    imageAlt: textOf(shareImage?.alt) || headline || name,
+    shareImage,
+    card: shareImage ? null : cardContent({ name: headline, title: subheadline, photoUrl: landing?.photoUrl, site: landing?.site }),
     person: name
       ? {
           name,
@@ -125,10 +129,12 @@ export function landingPage(landing, defaultHeader) {
 
 // The tags for `page` (resumePage() or landingPage()) at `url`, the page's
 // absolute canonical URL. `image` is the absolute URL of the image to show
-// (the share card when one is rendered, else the photo, else null), with
-// `largeImage` true for the card; `photo` the photo's, for the Person.
-// `withPerson` adds the JSON-LD (not on an unlisted /r/<slug> page).
-export function headTags(page, { url, image = null, largeImage = false, photo = null, withPerson = false }) {
+// (the landing page's share image, else the share card when one is
+// rendered, else the photo, else null), with `largeImage` true for the
+// card or a wide share image, and `imageSize` its { width, height } when
+// known; `photo` the photo's, for the Person. `withPerson` adds the
+// JSON-LD (not on an unlisted /r/<slug> page).
+export function headTags(page, { url, image = null, largeImage = false, imageSize = null, photo = null, withPerson = false }) {
   const tags = [`<title>${escapeHtml(page.title)}</title>`];
   const meta = (attr, key, value) => tags.push(`<meta ${attr}="${key}" content="${escapeHtml(value)}" />`);
   if (page.description) meta('name', 'description', page.description);
@@ -139,6 +145,10 @@ export function headTags(page, { url, image = null, largeImage = false, photo = 
   meta('property', 'og:url', url);
   if (image) {
     meta('property', 'og:image', image);
+    if (imageSize) {
+      meta('property', 'og:image:width', String(imageSize.width));
+      meta('property', 'og:image:height', String(imageSize.height));
+    }
     if (page.imageAlt) meta('property', 'og:image:alt', page.imageAlt);
   }
   meta('name', 'twitter:card', image && largeImage ? 'summary_large_image' : 'summary');
