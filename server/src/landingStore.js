@@ -1,7 +1,7 @@
 import { httpError } from './httpError.js';
 import { createSettings, createResumeSettings } from './settings.js';
 import { requestHostKey } from './hostnames.js';
-import { initialLanding, mergeLandingPatch, referencedResumeIds, resolveLanding, upgradeLanding, validateLanding } from './landingFields.js';
+import { HOME_LINK, initialLanding, mergeLandingPatch, referencedResumeIds, resolveLanding, upgradeLanding, validateLanding } from './landingFields.js';
 import { pdfPathFor, pdfVersionOf } from './pdfPaths.js';
 
 // The landing page's storage and publishing (issue #70), composed into the
@@ -172,9 +172,25 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   // not, so switching the landing page on never changes what a resume's
   // own domain shows.
   function landingForHost(hostname) {
-    const key = requestHostKey(hostname);
-    if (key && db.prepare('SELECT 1 FROM resume_hosts WHERE hostname = ?').get(key)) return null;
+    if (isResumeHost(hostname)) return null;
     return shownLanding();
+  }
+
+  function isResumeHost(hostname) {
+    const key = requestHostKey(hostname);
+    return Boolean(key && db.prepare('SELECT 1 FROM resume_hosts WHERE hostname = ?').get(key));
+  }
+
+  // The "← Home" link a resume page on `hostname` shows above itself
+  // (issue #89), or null: only where landingForHost() would show the
+  // landing page at `/`, and while its published snapshot keeps homeLink
+  // on (a draft's setting takes effect on publish, like the rest of it).
+  // So a resume's own domain never gets one. Cheaper than landingForHost(),
+  // since nothing has to be resolved.
+  function homeLinkForHost(hostname) {
+    if (isResumeHost(hostname) || getSetting('landing_enabled') !== true) return null;
+    const published = upgradeLanding(getSetting('landing_published'));
+    return published?.homeLink ? { ...HOME_LINK } : null;
   }
 
   // The same on whichever host shows it: the published page while it's
@@ -198,6 +214,7 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
     checkLandingDraft,
     visibleResumeSnapshot,
     landingForHost,
+    homeLinkForHost,
     shownLanding,
   };
 }

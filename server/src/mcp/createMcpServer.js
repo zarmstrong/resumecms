@@ -532,6 +532,11 @@ const LANDING_TOOLS = [
         headline: z.string().nullable().optional().describe('Big heading, usually your name.'),
         subheadline: z.string().nullable().optional().describe('One line under it, e.g. a title.'),
         availability: z.string().nullable().optional().describe('A short line above the headline, e.g. "Open to senior backend roles · Remote". Empty shows none.'),
+        homeLink: z
+          .boolean()
+          .nullable()
+          .optional()
+          .describe("Whether resume pages show a '← Home' link back to the landing page while it's shown at / (default true)."),
         actions: z
           .array(landingAction())
           .nullable()

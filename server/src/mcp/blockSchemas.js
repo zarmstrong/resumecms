@@ -262,6 +262,10 @@ export const LANDING_SCHEMA = {
     headline: { type: 'string', description: 'Usually your name' },
     subheadline: { type: 'string' },
     availability: { type: 'string', description: "A short line above the headline, e.g. 'Open to senior backend roles · Remote'; '' shows none" },
+    homeLink: {
+      type: 'boolean',
+      description: "Default true: while the landing page is shown at /, resume pages on that host (/resume, /r/<slug>, never a resume's own domain or its PDF) show a '← Home' link back to it. Takes effect on publish",
+    },
     actions: {
       type: 'array',
       description: "At most 3 buttons under the subheadline, the first drawn as the primary one; replaced whole by update_landing_page. One for a resume is shown only while it's public and published (for open: 'pdf', only while it has a PDF)",

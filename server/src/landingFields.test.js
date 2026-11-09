@@ -226,6 +226,7 @@ test('a draft stored before sections reads as the sections it showed, in order',
       { id: 'resumes', kind: 'resumes', title: '', cards: [{ ...old.resumes[0], showPdf: false }] },
     ],
     seo: { title: '', description: '', noindex: false },
+    homeLink: true,
   });
   // Stable, and the new shape (or nothing) passes through untouched.
   assert.deepEqual(upgradeLanding(old), upgraded);
@@ -443,4 +444,24 @@ test('actions and card PDFs resolve against what a visitor may open right now', 
   // A snapshot from before actions resolves with none.
   const { actions: _a, availability: _b, ...old } = landing;
   assert.deepEqual(resolveLanding(old, context).actions, []);
+});
+
+test('homeLink is a boolean, on unless switched off, and never part of what the page resolves to', () => {
+  assert.equal(emptyLanding().homeLink, true);
+  assert.equal(validateLanding({}, known()).homeLink, true);
+  assert.equal(validateLanding({ homeLink: false }, known()).homeLink, false);
+  for (const value of ['no', 0, 1, {}, []]) {
+    assert.equal(status(() => validateLanding({ homeLink: value }, known())), 400, JSON.stringify(value));
+  }
+  // The MCP merge: null resets it to on.
+  const off = validateLanding({ homeLink: false }, known());
+  assert.equal(validateLanding(mergeLandingPatch(off, { headline: 'Jo' }), known()).homeLink, false);
+  assert.equal(validateLanding(mergeLandingPatch(off, { homeLink: null }), known()).homeLink, true);
+  // A draft or snapshot stored before it existed has it on; one switched
+  // off stays off.
+  const { homeLink: _, ...old } = emptyLanding();
+  assert.equal(upgradeLanding(old).homeLink, true);
+  assert.equal(upgradeLanding(off).homeLink, false);
+  // It's read by the resume pages' link (landingStore.js), not shown here.
+  assert.equal('homeLink' in resolveLanding(emptyLanding(), { resumes: new Map() }), false);
 });

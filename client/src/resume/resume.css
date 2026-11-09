@@ -932,6 +932,51 @@
   }
 }
 
+/* The "← Home" link above a public resume while the landing page holds
+   `/` (issue #89, PublicResumePage.jsx). It sits outside the .r-page, on
+   the app's background, so it's a small chip in the resume's own
+   background and accent, like a link on the page. Never printed. */
+.r-home-nav {
+  max-width: 960px;
+  margin: 16px auto 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.r-home-link {
+  display: inline-block;
+  padding: 4px 10px;
+  color: var(--r-accent, var(--signal));
+  background: var(--r-bg, var(--panel));
+  box-shadow: 0 0 0 1px var(--line);
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+.r-home-link:hover {
+  text-decoration: underline;
+}
+
+@media screen {
+  .r-home-nav + .r-mode-web {
+    margin-top: 12px;
+  }
+}
+
+@media screen and (max-width: 640px) {
+  .r-home-nav {
+    margin-top: 12px;
+    padding: 0 16px;
+  }
+}
+
+@media print {
+  .r-home-nav {
+    display: none;
+  }
+}
+
 /* Narrow screens (phones): every header is a flex row of an identity block
    and a side block (actions, contact list) that refuses to shrink, so at
    phone widths the name/title get crushed to a few characters per line.
