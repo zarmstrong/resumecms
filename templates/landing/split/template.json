@@ -1,5 +1,6 @@
 {
   "label": "Split",
-  "description": "The photo and headline in a tinted left column that stays in view while the sections scroll by on the right; stacked on a phone.",
-  "author": "resumecms"
+  "description": "The photo and headline in a tinted left column that stays in view while the sections scroll by on the right. Any section can be moved into the left column under the photo, which then scrolls with the page. Stacked on a phone.",
+  "author": "resumecms",
+  "columns": true
 }

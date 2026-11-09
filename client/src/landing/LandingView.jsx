@@ -3,6 +3,7 @@ import { linkGlyph } from '../resume/linkTypes.js';
 import { getLandingTemplate } from '../resume/templateRegistry.js';
 import { darkClass, landingPageStyle } from './landingStyle.js';
 import { textParagraphs } from './resolveLanding.js';
+import { dropStrayDividers } from './dividers.js';
 import { renderInline } from './renderInline.js';
 import './landing.css';
 
@@ -16,7 +17,14 @@ import './landing.css';
 // parts: one with an index.jsx is handed the page, renderHero() and
 // renderSection(section, index) and lays them out, one without gets the
 // hero and then each section in an .l-main; either way its style.css,
-// scoped under .l-template-<id>, does the rest. Everything is rendered as text,
+// scoped under .l-template-<id>, does the rest. A template whose
+// template.json says `columns: true` puts a section with `column: 'side'`
+// in its side column; the others ignore `column`. A divider is a
+// separator rather than a <section>, its title a label on the rule, and
+// is only drawn between two things it divides (dividers.js): LandingView
+// sees to that for a template without columns, and hands one with columns
+// `dropStrayDividers(sections, { atStart })` to apply to each column.
+// Everything is rendered as text,
 // apart from the links and emphasis a text section or an item's text may
 // hold (issue #91, renderInline.js), which become elements, never HTML; every
 // href still goes through safeHref() (by way of linkProps()) although the
@@ -51,23 +59,37 @@ export function LandingView({ landing, preview = false, highlightIds = null, sch
     </header>
   );
 
-  const renderSection = (section, i) => (
-    <section
-      key={section.id ?? i}
-      className={`l-section l-section-${section.kind}${section.hidden ? ' l-section-hidden' : ''}${
-        highlightIds?.has(section.id) ? ' l-ai-preview' : ''
-      }`}
-    >
-      {section.hidden && <span className="l-hidden-label">Hidden</span>}
-      {section.title && <h2 className="l-section-title">{section.title}</h2>}
-      <SectionBody section={section} />
-    </section>
-  );
+  const renderSection = (section, i) => {
+    const hidden = section.hidden ? ' l-section-hidden' : '';
+    if (section.kind === 'divider') {
+      // A stray one (dividers.js) is only in the editor's preview.
+      return (
+        <div key={section.id ?? i} className={`l-section l-section-divider${section.stray ? ' l-section-hidden' : hidden}`}>
+          {section.hidden && <span className="l-hidden-label">Hidden</span>}
+          {section.stray && !section.hidden && <span className="l-hidden-label">Not shown: nothing to divide</span>}
+          <div className="l-divider" role="separator" aria-label={section.title || undefined}>
+            {section.title && <span className="l-divider-label">{section.title}</span>}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <section
+        key={section.id ?? i}
+        className={`l-section l-section-${section.kind}${hidden}${highlightIds?.has(section.id) ? ' l-ai-preview' : ''}`}
+      >
+        {section.hidden && <span className="l-hidden-label">Hidden</span>}
+        {section.title && <h2 className="l-section-title">{section.title}</h2>}
+        <SectionBody section={section} />
+      </section>
+    );
+  };
 
   return (
     <div className={`l-page l-template-${template.id}${preview ? ' l-preview' : ''}${dark ? ` ${dark}` : ''}`} style={style}>
       <Arrangement
-        landing={landing}
+        landing={template.columns ? landing : { ...landing, sections: dropStrayDividers(landing.sections, { preview }) }}
+        dropStrayDividers={(sections, { atStart = true } = {}) => dropStrayDividers(sections, { atStart, preview })}
         renderHero={renderHero}
         renderSection={renderSection}
         colors={colors}

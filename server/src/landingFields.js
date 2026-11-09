@@ -34,8 +34,13 @@ import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, empty
 //                that resume, read from its published snapshot when the
 //                page is requested (issue #90), never copied into the draft
 //   image      — image (a reference, or null until one is uploaded), caption
+//   divider    — nothing but its title: a rule across the page, the title
+//                (if any) a label on it
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
-// never shown. `hidden` and an item's `meta` are only stored when set.
+// never shown, and `column: 'side'`: drawn in the side column by a
+// template that has one (template.json's `columns`, e.g. split's column
+// under the hero) and in the main flow by every other. `hidden`, `column`
+// and an item's `meta` are only stored when set.
 // A text section's body and an item's text may hold links and emphasis
 // (issue #91, inlineText.js); every other string, a quote's text and an
 // item's meta included, is plain text.
@@ -101,7 +106,9 @@ export const PHOTO_SOURCES = ['resume', 'custom', 'upload', 'none'];
 // the badge a link is drawn with.
 export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider'];
+// Where a section goes in a template with two columns; 'main' isn't stored.
+export const SECTION_COLUMNS = ['main', 'side'];
 
 export const ACTION_TYPES = ['link', 'resume'];
 export const ACTION_OPENS = ['page', 'pdf'];
@@ -109,13 +116,14 @@ export const ACTION_OPENS = ['page', 'pdf'];
 const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'photoImage', 'sections', 'seo', 'homeLink', 'homeLinkLabel', 'template', 'style'];
 const SEO_FIELDS = ['title', 'description', 'noindex', 'image'];
 const SECTION_FIELDS = {
-  text: ['id', 'kind', 'title', 'hidden', 'body'],
-  items: ['id', 'kind', 'title', 'hidden', 'items'],
-  links: ['id', 'kind', 'title', 'hidden', 'links'],
-  resumes: ['id', 'kind', 'title', 'hidden', 'cards'],
-  quotes: ['id', 'kind', 'title', 'hidden', 'quotes'],
-  experience: ['id', 'kind', 'title', 'hidden', 'resumeId', 'count', 'showDates'],
-  image: ['id', 'kind', 'title', 'hidden', 'image', 'caption'],
+  text: ['id', 'kind', 'title', 'hidden', 'column', 'body'],
+  items: ['id', 'kind', 'title', 'hidden', 'column', 'items'],
+  links: ['id', 'kind', 'title', 'hidden', 'column', 'links'],
+  resumes: ['id', 'kind', 'title', 'hidden', 'column', 'cards'],
+  quotes: ['id', 'kind', 'title', 'hidden', 'column', 'quotes'],
+  experience: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId', 'count', 'showDates'],
+  image: ['id', 'kind', 'title', 'hidden', 'column', 'image', 'caption'],
+  divider: ['id', 'kind', 'title', 'hidden', 'column'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
@@ -380,6 +388,9 @@ function checkSection(section, i, refs, ids) {
   ids.add(id);
   const out = { id, kind: section.kind, title: checkString(section.title ?? '', LANDING_LIMITS.sectionTitle, `${label}.title`) };
   if (checkBoolean(section.hidden ?? false, `${label}.hidden`)) out.hidden = true;
+  const column = section.column ?? 'main';
+  if (!SECTION_COLUMNS.includes(column)) throw httpError(400, `${label}.column must be one of ${SECTION_COLUMNS.join(', ')}`);
+  if (column !== 'main') out.column = column;
   switch (section.kind) {
     case 'text':
       out.body = checkInlineText(section.body ?? '', LANDING_LIMITS.text, `${label}.body`, { paragraphs: true });
@@ -555,7 +566,10 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // is { label, href }. A section
 // left with nothing to show (no text, no item, every link half typed, every
 // card's resume hidden, every quote empty) is left out, title and all, and
-// so is a hidden one; sections lose their ids. An experience section
+// so is a hidden one; sections lose their ids, and keep `column` when set
+// (a divider always goes along: whether it has anything to divide depends
+// on how the template arranges the sections, so the client decides, in
+// client/src/landing/dividers.js). An experience section
 // resolves to { roles, href }: its resume's first `count` roles, and that
 // resume's link for "Full resume".
 // `seo` goes along whole (everything in it ends up in the page's head and
@@ -585,7 +599,7 @@ export function resolveLanding(landing, context) {
     ...(upload ? { photoAlt: upload.alt } : {}),
     sections: landing.sections.flatMap((section) => {
       const shown = section.hidden ? null : resolveSection(section, context);
-      return shown ? [{ kind: section.kind, title: section.title, ...shown }] : [];
+      return shown ? [{ kind: section.kind, title: section.title, ...(section.column ? { column: section.column } : {}), ...shown }] : [];
     }),
     seo: { ...emptySeo(), ...seo, ...(seoImage ? { image: seoImage } : {}) },
     template: landing.template || DEFAULT_LANDING_TEMPLATE,
@@ -661,6 +675,8 @@ function resolveSection(section, context) {
       const image = resolveImage(section.image, context.images);
       return image ? { image, caption: section.caption } : null;
     }
+    case 'divider':
+      return {};
     default:
       return null;
   }

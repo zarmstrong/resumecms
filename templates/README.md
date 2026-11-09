@@ -166,7 +166,11 @@ alias to `client/src/resume/` — no fragile relative paths.
 sections. The landing editor's **Look** group lists them; an unknown or
 missing id is drawn as `classic`, which must always exist.
 
-- `template.json` — `{ label, description, author }`, all required strings.
+- `template.json` — `{ label, description, author }`, all required strings,
+  plus an optional `columns: true` for a template whose `index.jsx` draws
+  a section with `column: 'side'` in a side column (like `split`, under
+  the hero); the editor offers each section a "Show in the side column"
+  box only then. Every other template ignores `column`.
 - `style.css` — **required**, every rule scoped under `.l-template-<id>`
   (the page root carries that class; the validator checks it's there).
   The look of each part (a card, a quote, the timeline, a button) is
@@ -182,12 +186,17 @@ missing id is drawn as `classic`, which must always exist.
   structure (like `split`, which puts the hero in a side column).
   Default-exports:
   ```jsx
-  export default function MyLanding({ landing, renderHero, renderSection, colors, darkColors, preview }) {
+  export default function MyLanding({ landing, renderHero, renderSection, dropStrayDividers, colors, darkColors, preview }) {
     // landing: the resolved page (headline, sections, …) — read it, but
     //   draw the parts with the two functions below, so every template
     //   shows every kind of section the same way
     // renderHero(): the hero, an <header class="l-hero">
     // renderSection(section, index): one section; landing.sections.map(renderSection)
+    //   (with `columns: true`, split them on section.column === 'side', and
+    //   pass each column through dropStrayDividers(sections, { atStart }),
+    //   atStart true when something sits above it, so it draws only the
+    //   dividers it has something to divide; without `columns`, the list
+    //   comes already tidied)
     // colors / darkColors: the normalized palettes (darkColors null if none)
     // preview: true in the editor
     return (

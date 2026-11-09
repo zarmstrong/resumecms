@@ -38,7 +38,10 @@ const css = (id) => `.l-template-${id} .l-main { max-width: 1px; }`;
 const classic = { 'template.json': META, 'style.css': css('classic') };
 
 test('landing templates need template.json and a scoped style.css; index.jsx is optional', () => {
-  const ok = validate({ classic, split: { 'template.json': META, 'style.css': css('split'), 'index.jsx': 'export default () => null;' } });
+  const ok = validate({
+    classic,
+    split: { 'template.json': { ...META, columns: true }, 'style.css': css('split'), 'index.jsx': 'export default () => null;' },
+  });
   assert.equal(ok.ok, true, ok.out);
   assert.match(ok.out, /2 landing template\(s\)/);
 
@@ -47,7 +50,9 @@ test('landing templates need template.json and a scoped style.css; index.jsx is 
     [{ classic, other: { 'template.json': META, 'style.css': '.l-main { color: red; }' } }, /other: style\.css must scope its rules under \.l-template-other/],
     [{ classic, other: { 'style.css': css('other') } }, /other: missing template\.json/],
     [{ classic, other: { 'template.json': { ...META, label: '' }, 'style.css': css('other') } }, /other: "label" must be a non-empty string/],
-    [{ classic, other: { 'template.json': { ...META, columns: true }, 'style.css': css('other') } }, /other: unrecognized field "columns"/],
+    [{ classic, other: { 'template.json': { ...META, skillsDisplay: 'pills' }, 'style.css': css('other') } }, /other: unrecognized field "skillsDisplay"/],
+    [{ classic, other: { 'template.json': { ...META, columns: 'yes' }, 'style.css': css('other'), 'index.jsx': '' } }, /other: "columns" must be a boolean/],
+    [{ classic, other: { 'template.json': { ...META, columns: true }, 'style.css': css('other') } }, /other: "columns" needs an index\.jsx/],
     [{ classic, Other_1: { 'template.json': META, 'style.css': css('Other_1') } }, /folder name "Other_1" must be lowercase kebab-case/],
     [{ split: { 'template.json': META, 'style.css': css('split') } }, /missing "classic"/],
   ];

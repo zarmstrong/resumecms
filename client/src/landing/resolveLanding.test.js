@@ -108,7 +108,7 @@ test('hero actions and card PDFs resolve like the server does', () => {
   assert.deepEqual(resolveLanding(landing, null).actions.map((a) => a.label), ['Email me', 'https://cal.example/jo']);
 });
 
-test('hidden sections, quotes, meta lines and experience resolve exactly like the server', () => {
+test('hidden sections, columns, quotes, meta lines, experience and dividers resolve exactly like the server', () => {
   const roles = [
     { jobTitle: 'SRE', company: 'Acme', companyUrl: 'https://acme.example', location: 'Remote', startDate: '2022', endDate: 'Present' },
     { jobTitle: 'Dev', company: 'Beta', companyUrl: 'java\tscript:alert(1)', location: '', startDate: '2019', endDate: '' },
@@ -139,18 +139,21 @@ test('hidden sections, quotes, meta lines and experience resolve exactly like th
       { id: 'z', kind: 'experience', title: 'Private', resumeId: 'private', count: 3, showDates: true },
       { id: 'e', kind: 'experience', title: 'None', resumeId: 'empty', count: 3, showDates: true },
       { id: 'h', kind: 'experience', title: 'Hidden', resumeId: 'main', count: 1, showDates: true, hidden: true },
+      { id: 'd', kind: 'divider', title: '', column: 'side' },
+      { id: 'd2', kind: 'divider', title: 'Or', hidden: true },
     ],
   };
   const out = resolveLanding(landing, { ...context, resumes });
   const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map(resumes.map((r) => [r.id, r])) });
   assert.deepEqual(out.sections, fromServer.sections);
-  assert.deepEqual(out.sections.map((s) => s.title), ['', 'Kind words', 'Recent', '']);
+  assert.deepEqual(out.sections.map((s) => s.title), ['', 'Kind words', 'Recent', '', '']);
+  assert.deepEqual(out.sections[4], { kind: 'divider', title: '', column: 'side' });
   assert.equal(out.sections[2].roles[0].dates, '2022 – Present');
   assert.equal(out.sections[2].roles[1].companyUrl, '');
 
   // The editor's preview keeps a hidden section, marked, for it to dim.
   const preview = resolveLanding(landing, { ...context, resumes }, { withIds: true, withHidden: true });
-  assert.deepEqual(preview.sections.filter((s) => s.hidden).map((s) => s.id), ['now', 'h']);
+  assert.deepEqual(preview.sections.filter((s) => s.hidden).map((s) => s.id), ['now', 'h', 'd2']);
   assert.equal(preview.sections.find((s) => s.id === 'now').body, 'Reading');
 });
 

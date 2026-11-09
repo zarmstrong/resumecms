@@ -72,7 +72,8 @@
 .l-template-centered .l-section-text,
 .l-template-centered .l-section-links,
 .l-template-centered .l-section-experience,
-.l-template-centered .l-section-image {
+.l-template-centered .l-section-image,
+.l-template-centered .l-section-divider {
   max-width: 680px;
   margin-left: auto;
   margin-right: auto;

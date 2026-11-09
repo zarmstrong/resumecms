@@ -275,6 +275,10 @@ const LANDING_SECTION_BASE = {
   id: { type: 'string', description: 'Tells sections apart; omit for a new section, keep for an existing one' },
   title: { type: 'string', description: "Heading above the section; '' shows none" },
   hidden: { type: 'boolean', description: 'true keeps it in the draft without showing it (default false)' },
+  column: {
+    enum: ['main', 'side'],
+    description: "'side' draws it in the side column of a template that has one (split: under the hero); the others draw it in order with the rest. Stored only when 'side'",
+  },
 };
 
 export const LANDING_SCHEMA = {
@@ -319,7 +323,7 @@ export const LANDING_SCHEMA = {
     photoImage: { ...LANDING_IMAGE_REF, description: "Used when photo is 'upload'; optional (absent for none)" },
     sections: {
       type: 'array',
-      description: 'Shown in order under the headline; one with nothing to show is left out. Each has the fields of its kind only',
+      description: 'Shown in order under the headline; one with nothing to show is left out, and a divider is only drawn between two shown sections (or the hero and a section) in the same column. Each has the fields of its kind only',
       items: {
         oneOf: [
           {
@@ -417,6 +421,11 @@ export const LANDING_SCHEMA = {
               caption: { type: 'string', description: 'Plain text under the image, at most 300 characters' },
             },
           },
+          {
+            type: 'object',
+            description: 'A rule across the page between two sections; its title, if any, is a label on the rule',
+            properties: { ...LANDING_SECTION_BASE, kind: { const: 'divider' } },
+          },
         ],
       },
     },
@@ -432,7 +441,7 @@ export const LANDING_SCHEMA = {
     },
     template: {
       type: 'string',
-      description: "Landing template id, a folder name under templates/landing/: 'classic' (default), 'centered' (hero centered, cards in a grid) or 'split' (photo and hero in a sticky left column). An unknown id is drawn as classic",
+      description: "Landing template id, a folder name under templates/landing/: 'classic' (default), 'centered' (hero centered, cards in a grid) or 'split' (photo and hero in a left column, sticky unless sections are placed there with column: 'side'). An unknown id is drawn as classic",
     },
     style: {
       type: 'object',

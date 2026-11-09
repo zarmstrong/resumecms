@@ -49,7 +49,8 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
       const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images);
       if (!shown) return [];
       const hidden = section.hidden ? { hidden: true } : {};
-      return [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...hidden, ...shown }];
+      const column = section.column ? { column: section.column } : {};
+      return [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...hidden, ...column, ...shown }];
     }),
     seo: { title: '', description: '', noindex: false, ...seo, ...(seoImage ? { image: seoImage } : {}) },
     template: landing.template || 'classic',
@@ -137,6 +138,8 @@ function resolveSection(section, targets, images) {
       const image = resolveImage(section.image, images);
       return image ? { image, caption: section.caption } : null;
     }
+    case 'divider':
+      return {};
     default:
       return null;
   }

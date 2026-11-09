@@ -314,11 +314,16 @@ opening its `page` or `pdf`), where `sections` is an ordered list of
 (`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url, meta, image? }]`),
 `links`, `resumes` (cards `{ resumeId, label, blurb }`), `quotes`
 (`[{ text, name, role, url }]`), `experience` (`resumeId`, `count`,
-`showDates`; issue #90) and `image` (`{ image, caption }`, `image` null
-until one is uploaded; issue #92). Any section may be `hidden: true`: kept in the
+`showDates`; issue #90), `image` (`{ image, caption }`, `image` null
+until one is uploaded; issue #92) and `divider` (only its `title`, a label
+on the rule; always resolved, but only drawn between two things it
+divides: `client/src/landing/dividers.js`, applied by `LandingView`, since
+which sections end up next to each other depends on the template). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
-(the client resolver's `withHidden`). `hidden` and an item's `meta` are
-only stored when set. The `id` is
+(the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
+which `resolveLanding()` passes on and only a landing template with
+`columns: true` reads (see "Pluggable header/layout templates"). `hidden`,
+`column` and an item's `meta` are only stored when set. The `id` is
 for the editor only and never leaves the server publicly. A draft or
 snapshot stored before sections (`intro`/`links`/`resumes` as fields) is
 read through `upgradeLanding()`, with fixed ids, until the next save or
@@ -476,7 +481,8 @@ site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
 kind needs `SECTION_FIELDS`, `checkSection()`, `resolveSection()` (both
 copies), the MCP `landingSection()` union, `LANDING_SCHEMA`, and a case in
-`LandingForm`'s `SectionFields` and `LandingView`'s `SectionBody`.
+`LandingForm`'s `SectionFields` and `LandingView`'s `SectionBody` (or, for
+one that isn't a titled `<section>` like the divider, its `renderSection`).
 
 `GET /api/public/home` is what `/` loads: `{ kind: 'landing' }` from
 `landingForHost()` when it's enabled, published and the host isn't in
@@ -717,20 +723,29 @@ default flat block list; see `templateRegistry.js`'s comment on
 
 A landing template needs a `style.css` with every rule scoped under
 `.l-template-<id>` (the validator checks the class appears; `classic`,
-the fallback, must exist), and its `index.jsx` is optional. `LandingView`
+the fallback, must exist), and its `index.jsx` is optional. Its
+`template.json` may say `columns: true` (only with an `index.jsx`) when
+the component draws a section with `column: 'side'` in a side column, as
+`split` does under the hero (and stops the column being sticky while it
+holds any). `LandingView` then leaves the stray-divider rule to it,
+handing it `dropStrayDividers(sections, { atStart })` to apply to each
+column (a template without columns gets its list already tidied); the editor shows each section's "side column" box only for
+such a template, and every other template ignores `column`. `LandingView`
 renders the page root (`.l-page .l-template-<id>`, the colors as `--l-*`
 and `--l-dark-*` custom properties that `landing.css` turns into the
 `--r-*` ones, switched to the dark ones by `.l-dark-auto` under
 `prefers-color-scheme: dark` or `.l-dark-on` in the editor's dark
 preview) and hands a component `{ landing, renderHero, renderSection,
-colors, darkColors, preview }`; without one the hero and the sections
+dropStrayDividers, colors, darkColors, preview }`; without one the hero and the sections
 go in turn into an `.l-main`. `landing.css` holds only what every
 template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
 pixel-identical to it. `centered` and `split` size themselves with
 container queries on the page root, so the editor's narrower preview
 matches a phone. A template must render every section kind
-(`LandingView`'s `SectionBody` draws them; the template only arranges).
+(`LandingView`'s `renderSection` and `SectionBody` draw them, a divider
+as a `role="separator"` rather than a `<section>`; the template only
+arranges).
 
 `client/src/resume/templateRegistry.js` builds the registry at **build
 time** via `import.meta.glob` (eager, one glob per kind — the glob path
