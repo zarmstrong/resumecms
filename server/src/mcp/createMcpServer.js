@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { BLOCK_TYPES } from '../resumeStore.js';
 import { httpError } from '../httpError.js';
-import { ACTION_OPENS, LINK_TYPES, PHOTO_SOURCES } from '../landingFields.js';
+import { ACTION_OPENS, LINK_TYPES, PHOTO_SOURCES, SECTION_COLUMNS } from '../landingFields.js';
 import { FONT_IDS, LANDING_STYLE_SOURCES } from '../landingStyle.js';
 import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
@@ -519,7 +519,7 @@ const sectionBase = {
   id: z.string().optional().describe("Keep an existing section's id from get_landing_page; omit it for a new section."),
   title: z.string().optional().describe('Heading shown above the section; empty shows none.'),
   hidden: z.boolean().optional().describe('true keeps the section in the draft without showing it.'),
-  column: z.enum(['main', 'side']).optional().describe("'side' draws it in the side column of a template that has one (split: under the hero); others draw it in order with the rest. Default 'main'."),
+  column: z.enum(SECTION_COLUMNS).optional().describe("'side' draws it in the side column of a template that has one (split: under the hero); others draw it in order with the rest. Default 'main'."),
 };
 const landingSection = () =>
   z.discriminatedUnion('kind', [

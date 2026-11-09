@@ -4,7 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from './createMcpServer.js';
 import { BLOCK_TYPES, mergeShallow } from '../resumeStore.js';
-import { SECTION_KINDS } from '../landingFields.js';
+import { SECTION_COLUMNS, SECTION_KINDS } from '../landingFields.js';
 
 // Drives the tools end to end through the SDK (client ↔ in-memory transport
 // ↔ McpServer) against a fake store, so what's tested is the tool surface —
@@ -527,6 +527,7 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
 
   const schemas = (await call('get_block_schemas')).json;
   assert.deepEqual(schemas.landing.properties.sections.items.oneOf.map((s) => s.properties.kind.const), SECTION_KINDS);
+  for (const section of schemas.landing.properties.sections.items.oneOf) assert.deepEqual(section.properties.column.enum, SECTION_COLUMNS);
   assert.deepEqual(Object.keys(schemas.landing.properties.style.properties), ['source', 'colors', 'font', 'nameFont', 'darkColors']);
 });
 

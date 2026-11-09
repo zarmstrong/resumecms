@@ -258,7 +258,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
                   checked={section.column === 'side'}
                   onChange={(e) => setSections(sections.map((s, idx) => (idx === i ? withColumn(s, e.target.checked ? 'side' : 'main') : s)))}
                 />
-                Show in the side column, under the photo
+                Show in the side column, under the headline
               </label>
             )}
             <SectionFields

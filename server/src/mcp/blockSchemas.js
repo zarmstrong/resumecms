@@ -323,7 +323,7 @@ export const LANDING_SCHEMA = {
     photoImage: { ...LANDING_IMAGE_REF, description: "Used when photo is 'upload'; optional (absent for none)" },
     sections: {
       type: 'array',
-      description: 'Shown in order under the headline; one with nothing to show is left out, and so is a divider after another or with no section after it. Each has the fields of its kind only',
+      description: 'Shown in order under the headline; one with nothing to show is left out, and a divider is only drawn between two shown sections (or the hero and a section) in the same column. Each has the fields of its kind only',
       items: {
         oneOf: [
           {
