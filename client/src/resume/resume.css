@@ -803,12 +803,57 @@
 }
 
 /* Optional per-block "highlight" customization — a tinted, rounded box
-   around the block, using the same color-mix technique as the sidebar. */
+   around the block, using the same color-mix technique as the sidebar.
+   The block's own spacing margin would land inside the box's padding and
+   leave it taller below than above, so the wrapper takes the margin
+   (read from the same vars) and the block inside gets none, as the boxed
+   and timeline layouts do. Its default below is 18px for every type but
+   a heading, so a box doesn't sit on what follows it, even where the type's
+   own (custom's 0, a skills row's 6px) would.
+   The box is drawn by ::after rather than the wrapper's background so a
+   spacing preset, which pads the wrapper (blockWrapperStyle), can stay
+   outside it: the preset is added to the inset, and --r-highlight-above/
+   -below pull the box in by as much.
+   A layout that draws the wrapper itself as a card with its own padding
+   (boxed, soft-cards, skills-panel) sets --r-highlight-pad-y and
+   --r-highlight-pull to 0 on it: the tint fills the card, and a preset
+   replaces the card's padding as it does on any other block. */
 .r-block-highlight {
+  --r-highlight-pad-y: 16px;
+  position: relative;
+  isolation: isolate;
+  padding: var(--r-highlight-pad-y) 18px;
+  margin: var(--r-block-space-above, 0) 0 var(--r-block-space-below, 18px);
+}
+
+.r-block-highlight::after {
+  content: '';
+  position: absolute;
+  inset: calc(var(--r-highlight-above, 0px) * var(--r-highlight-pull, 1)) 0
+    calc(var(--r-highlight-below, 0px) * var(--r-highlight-pull, 1));
+  z-index: -1;
   background: var(--panel-alt, #f4f1ea);
   background: color-mix(in srgb, var(--r-accent, #2f6f4e) 8%, var(--r-bg, #ffffff));
   border-radius: var(--radius);
-  padding: 16px 18px;
+}
+
+.r-block-highlight[data-block-type='heading'] {
+  margin: var(--r-block-space-above, 30px) 0 var(--r-block-space-below, 14px);
+}
+
+.r-block-highlight[data-block-type='heading']:first-child {
+  margin-top: var(--r-block-space-above, 0);
+}
+
+.r-block-highlight > * {
+  --r-block-space-above: 0px;
+  --r-block-space-below: 0px;
+}
+
+.r-block-highlight > * > :last-child,
+.r-block-highlight > * > .r-bullets:last-child li:last-child,
+.r-block-highlight > * > :last-child > .r-bullets:last-child li:last-child {
+  margin-bottom: 0;
 }
 
 /* Optional per-block text alignment (data.style.align, see blockStyle.js).

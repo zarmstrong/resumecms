@@ -6,6 +6,9 @@
   border-radius: var(--radius);
   padding: 16px 18px;
   margin-bottom: 16px;
+  /* A highlight tints the whole card (see .r-block-highlight). */
+  --r-highlight-pad-y: 0px;
+  --r-highlight-pull: 0;
   box-shadow:
     0 1px 2px rgba(20, 24, 28, 0.06),
     0 4px 10px rgba(20, 24, 28, 0.06);

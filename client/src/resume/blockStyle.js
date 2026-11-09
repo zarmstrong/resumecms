@@ -58,15 +58,24 @@ export function normalizeBlockStyle(data) {
 // previous block's 18px plus 12px, bigger than leaving it on Default. The
 // classes from blockWrapperClassName let resume.css zero that neighbor's
 // margin too, so the preset is the whole gap on that side.
+//
+// A highlighted wrapper also pads the tinted box's inset, so there the
+// preset is added to that inset, and the box (drawn by ::after in
+// resume.css) is pulled in by the preset so it stays outside it. Still
+// padding, so it can't collapse either.
 export function blockWrapperStyle(data) {
   const style = normalizeBlockStyle(data);
   const wrapperStyle = {};
-  if (BLOCK_SPACING_CSS[style.spaceAbove]) {
-    wrapperStyle.paddingTop = BLOCK_SPACING_CSS[style.spaceAbove];
+  const above = BLOCK_SPACING_CSS[style.spaceAbove];
+  const below = BLOCK_SPACING_CSS[style.spaceBelow];
+  if (above) {
+    wrapperStyle.paddingTop = style.highlight ? `calc(${above} + var(--r-highlight-pad-y))` : above;
+    if (style.highlight) wrapperStyle['--r-highlight-above'] = above;
     wrapperStyle['--r-block-space-above'] = '0px';
   }
-  if (BLOCK_SPACING_CSS[style.spaceBelow]) {
-    wrapperStyle.paddingBottom = BLOCK_SPACING_CSS[style.spaceBelow];
+  if (below) {
+    wrapperStyle.paddingBottom = style.highlight ? `calc(${below} + var(--r-highlight-pad-y))` : below;
+    if (style.highlight) wrapperStyle['--r-highlight-below'] = below;
     wrapperStyle['--r-block-space-below'] = '0px';
   }
   return wrapperStyle;

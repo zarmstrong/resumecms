@@ -25,6 +25,19 @@ test('a spacing preset pads its side and zeroes the block’s own margin there',
   });
 });
 
+// A highlighted wrapper's padding is also the box's inset, so the preset is
+// added to it rather than replacing it, and the box is pulled in by as much.
+test('a spacing preset on a highlighted block pads outside its box', () => {
+  assert.deepEqual(blockWrapperStyle({ style: { highlight: true, spaceAbove: 'small', spaceBelow: 'none' } }), {
+    paddingTop: 'calc(12px + var(--r-highlight-pad-y))',
+    '--r-highlight-above': '12px',
+    '--r-block-space-above': '0px',
+    paddingBottom: 'calc(0px + var(--r-highlight-pad-y))',
+    '--r-highlight-below': '0px',
+    '--r-block-space-below': '0px',
+  });
+});
+
 // resume.css keys off these classes to drop the neighbor's facing margin,
 // so the preset is the whole gap instead of stacking on top of it.
 test('a spacing preset marks the wrapper so the neighbor’s margin is dropped', () => {

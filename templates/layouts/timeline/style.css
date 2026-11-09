@@ -18,7 +18,11 @@
 .r-layout-timeline .r-body [data-block-type='experience']:has(+ [data-block-type='education']),
 .r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='experience']),
 .r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='education']) {
-  padding-bottom: 18px;
+  /* On a highlighted entry that gap goes below its box's inset, and the
+     box (see .r-block-highlight) stops short of it. A spaceBelow preset
+     sets both inline instead. */
+  padding-bottom: calc(18px + var(--r-highlight-pad-y, 0px));
+  --r-highlight-below: 18px;
   margin-bottom: 0;
 }
 
@@ -27,7 +31,10 @@
   content: '';
   position: absolute;
   left: -7px;
-  top: 3px;
+  /* A highlighted entry's title sits below its box's inset and any
+     spaceAbove preset (see .r-block-highlight); both vars are unset
+     otherwise. */
+  top: calc(3px + var(--r-highlight-above, 0px) + var(--r-highlight-pad-y, 0px));
   width: 12px;
   height: 12px;
   border-radius: 50%;
