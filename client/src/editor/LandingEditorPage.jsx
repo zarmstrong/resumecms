@@ -6,6 +6,7 @@ import { LandingForm } from './LandingForm.jsx';
 import { ResumeSelect } from './ResumeSelect.jsx';
 import { createSaveQueue } from './saveQueue.js';
 import { LANDING_PAGE, landingShown } from './resumeLinks.js';
+import { applyUploadedImage, uploadSpot } from './landingImages.js';
 import {
   anchorFor,
   highlightIds,
@@ -106,6 +107,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   }
 
   function handleChange(next) {
+    landingRef.current = next;
     setLanding(next);
     setStatus({ ...status, isDirty: true });
     setError(null);
@@ -113,11 +115,17 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
     saves.schedule('landing', () => saves.track(api.putLanding(next), 'landing').then(flashSaved, saveFailed));
   }
 
-  // An image upload (issue #92, LandingImageField): once it's stored, the
-  // preview's context learns of it and `apply` puts the reference into the
-  // draft, both before the tracked request settles, so a flush (a publish,
-  // a switch) waits for the upload and then for the draft save it led to.
-  function handleImageUpload(file, apply) {
+  // An image upload (issue #92, LandingImageField) for `target` (see
+  // landingImages.js). Once it's stored, the preview's context learns of it
+  // and the reference goes into the draft as it is by then (landingRef, the
+  // latest handleChange), at its target wherever that has moved, or nowhere
+  // if it's gone. Both happen before the tracked request settles, so a
+  // flush (a publish, a switch) waits for the upload and then for the draft
+  // save it led to.
+  const handleChangeRef = useRef(null);
+  handleChangeRef.current = handleChange;
+  function handleImageUpload(file, target) {
+    const spot = uploadSpot(landingRef.current, target);
     const request = api.uploadLandingImage(file).then((image) => {
       if (!mountedRef.current) return image;
       const stored = { id: image.id, src: image.src, width: image.width, height: image.height };
@@ -125,7 +133,8 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
         ...prev,
         context: { ...prev.context, images: [...(prev.context.images || []).filter((i) => i.id !== image.id), stored] },
       }));
-      apply(image);
+      const next = applyUploadedImage(landingRef.current, spot, image.id);
+      if (next) handleChangeRef.current(next);
       return image;
     });
     return saves.track(request);

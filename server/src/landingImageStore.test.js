@@ -96,7 +96,7 @@ test('clean-up keeps what the draft or the snapshot references, and anything rec
   const unused = await store.uploadLandingImage(await png('#333333'));
   const ids = () => db.prepare('SELECT id FROM landing_images').all().map((row) => row.id).sort();
 
-  store.setLanding({ sections: [{ id: 'pic', kind: 'image', image: { imageId: published.id, alt: '' } }] });
+  store.setLanding({ sections: [{ id: 'pic', kind: 'image', image: { imageId: published.id, alt: 'Pic' } }] });
   store.publishLanding();
   store.setLanding({ sections: [{ id: 'i', kind: 'items', items: [{ title: 'P', image: { imageId: inDraft.id, alt: '' } }] }] });
   // Nothing is old enough yet: an upload just before a discard survives it.
@@ -178,4 +178,24 @@ test("the shell names the landing page's share image, else its uploaded photo, a
   assert.equal(tag(html, 'property', 'og:image'), `https://jo.example/api/public/landing/images/${photo.id}`);
   assert.equal(tag(html, 'name', 'twitter:card'), 'summary');
   assert.equal(store.publicLandingImage(share.id), null);
+});
+
+test('publishing refuses an image it would show without a description; a draft may leave it blank', async () => {
+  const { store } = await makeStore();
+  const image = await store.uploadLandingImage(await png('#777777'));
+  const ref = (alt) => ({ imageId: image.id, alt });
+  store.setLanding({ headline: 'Jo', sections: [{ id: 'pic', kind: 'image', image: ref('  ') }] });
+  const before = store.getLandingStatus();
+  await assert.rejects(async () => store.publishLanding(), (err) => err.status === 400 && /sections\[0\]\.image\.alt/.test(err.message));
+  assert.deepEqual(store.getLandingStatus(), before); // nothing was published
+
+  store.setLanding({ headline: 'Jo', sections: [{ id: 'pic', kind: 'image', image: ref('Jo') }], seo: { image: ref('') } });
+  await assert.rejects(async () => store.publishLanding(), /seo\.image\.alt/);
+  // The hero's counts only while it's the photo shown.
+  store.setLanding({ headline: 'Jo', photo: 'none', photoImage: ref('') });
+  assert.ok(store.publishLanding().publishedAt);
+  store.setLanding({ headline: 'Jo', photo: 'upload', photoImage: ref('') });
+  await assert.rejects(async () => store.publishLanding(), /photoImage\.alt/);
+  store.setLanding({ headline: 'Jo', photo: 'upload', photoImage: ref('Jo by the sea') });
+  assert.ok(store.publishLanding().publishedAt);
 });

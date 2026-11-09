@@ -118,7 +118,8 @@ function AiField({ ai, ...props }) {
 // `onUploadImage` its image upload (issue #92, see LandingImageField).
 export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage }) {
   const set = (patch) => onChange({ ...landing, ...patch });
-  const imageProps = { images: context.images || [], limits: limits?.images, onUpload: onUploadImage };
+  // Each field passes its own target to the upload (landingImages.js).
+  const imageProps = (target) => ({ images: context.images || [], limits: limits?.images, onUpload: (file) => onUploadImage(file, target) });
   const sections = landing.sections;
   const introId = introSectionId(landing);
   const setSections = (next) => set({ sections: next });
@@ -192,7 +193,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
           hint="Shown round, like the default photo. Larger images are scaled down to 1600 px, and their location data is removed."
           value={landing.photoImage ?? null}
           onChange={(ref) => onChange(withImageRef(landing, 'photoImage', ref))}
-          {...imageProps}
+          {...imageProps({ kind: 'photo' })}
         />
       )}
 
@@ -303,7 +304,7 @@ function LandingSeoFields({ landing, context, limits, onChange, imageProps }) {
         value={seo.image ?? null}
         onChange={(ref) => onChange(withImageRef(seo, 'image', ref))}
         altHint="Say what it shows; link previews pass it on to screen readers."
-        {...imageProps}
+        {...imageProps({ kind: 'seo' })}
       />
     </SearchSharingFields>
   );
@@ -443,12 +444,12 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
     case 'image':
       return (
         <>
-          <LandingImageField value={section.image} onChange={(image) => onChange({ image })} {...imageProps} />
+          <LandingImageField value={section.image} onChange={(image) => onChange({ image })} {...imageProps({ kind: 'section', sectionId: section.id })} />
           <textarea
             className="ed-input"
             rows={2}
             value={section.caption}
-            maxLength={imageProps.limits?.caption}
+            maxLength={limits?.images?.caption}
             onChange={(e) => onChange({ caption: e.target.value })}
             placeholder="Caption (optional)"
             aria-label="Image caption"
@@ -619,7 +620,12 @@ function ItemsFields({ sectionId, items, onChange, limits, ai, imageProps }) {
             aria-label="Item text"
           />
           <span className="ed-field-hint">{INLINE_HINT}</span>
-          <LandingImageField hint="Thumbnail (optional)" value={item.image ?? null} onChange={(ref) => setThumbnail(i, ref)} {...imageProps} />
+          <LandingImageField
+            hint="Thumbnail (optional)"
+            value={item.image ?? null}
+            onChange={(ref) => setThumbnail(i, ref)}
+            {...imageProps({ kind: 'item', sectionId, index: i })}
+          />
           <AiField ai={ai} target={{ kind: 'item', sectionId, index: i }} current={item.text} />
         </div>
       ))}

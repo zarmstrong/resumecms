@@ -92,6 +92,36 @@ export function referencedImageIds(landing) {
   return new Set(refs.filter((ref) => isPlainObject(ref) && isImageId(ref.imageId)).map((ref) => ref.imageId));
 }
 
+// Throws a 400 unless every image reference the published page would show
+// has a description: `alt` is required, and only allowed to be blank in a
+// draft because the editor saves while it's typed. "Shown" as
+// resolveLanding() decides: the hero's only with photo: 'upload', an
+// item's only on an item with a title or text, and only a reference whose
+// image is among `storedIds` (one whose image is gone shows nothing).
+export function assertImagesDescribed(landing, storedIds) {
+  const missing = [];
+  const check = (ref, field, where) => {
+    if (isPlainObject(ref) && storedIds.has(ref.imageId) && !(typeof ref.alt === 'string' && ref.alt.trim())) missing.push({ field, where });
+  };
+  if (landing?.photo === 'upload') check(landing.photoImage, 'photoImage.alt', 'the photo');
+  (Array.isArray(landing?.sections) ? landing.sections : []).forEach((section, i) => {
+    if (section?.kind === 'image') check(section.image, `sections[${i}].image.alt`, `the image in section ${i + 1}`);
+    if (section?.kind === 'items' && Array.isArray(section.items)) {
+      section.items.forEach((item, j) => {
+        if (item?.title?.trim() || item?.text?.trim()) {
+          check(item.image, `sections[${i}].items[${j}].image.alt`, `the thumbnail of item ${j + 1} in section ${i + 1}`);
+        }
+      });
+    }
+  });
+  check(landing?.seo?.image, 'seo.image.alt', 'the share image');
+  if (missing.length) {
+    const [first] = missing;
+    const more = missing.length > 1 ? ` (and ${missing.length - 1} more)` : '';
+    throw httpError(400, `Describe every image before publishing: ${first.where} has no description (${first.field})${more}.`);
+  }
+}
+
 // A reference as a visitor sees it, { src, alt, width, height }, or null
 // when it names no stored image. `images` is a Map of id →
 // { src, width, height } (resolveLanding()'s context.images).

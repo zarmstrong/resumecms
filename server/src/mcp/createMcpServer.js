@@ -635,7 +635,8 @@ const LANDING_TOOLS = [
     name: 'publish_landing_page',
     config: {
       title: 'Publish the landing page',
-      description: "Snapshots the landing page's DRAFT to the public site. It shows at / only while the landing page is enabled. Returns its status.",
+      description:
+        "Snapshots the landing page's DRAFT to the public site. It shows at / only while the landing page is enabled. Refused (400, naming the field) while an image the page would show has an empty alt. Returns its status.",
       annotations: mutating,
     },
     run: (store) => store.publishLanding(),

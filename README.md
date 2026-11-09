@@ -212,7 +212,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/landing/images` | upload an image for the landing page: the JPEG, PNG or WebP file itself as the body (at most 15 MB; its type is told from its bytes, not `Content-Type`). It's re-encoded, which drops all metadata (EXIF and GPS position included), and scaled down to 1600 px on its long side; responds `201` with `{ id, mime, width, height, src }`. A 413 when it's too large, a 409 when the store is full (50 images or 30 MB; an image nothing uses is removed a week after its upload) |
 | `GET /api/landing/images/:id` | a stored image, for the editor's preview |
 | `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
-| `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it) |
+| `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it). A 400 naming the field (e.g. `sections[2].image.alt`) while an image the page would show has an empty description |
 | `POST /api/landing/discard-draft` | restore the landing page draft from its last published snapshot |
 | `PUT /api/landing/enabled` | `{ enabled }`: takes effect at once, and only shows the page once it's been published |
 | `POST /api/landing/rewrite` | `{ landing?, target, instruction }` → `{ target, proposals: [{ target, before, after }], explanation }`: an AI rewrite of one spot on the landing page, for review; saves nothing. `target` is `{ kind: 'headline' }`, `{ kind: 'subheadline' }`, `{ kind: 'text', sectionId }`, `{ kind: 'item', sectionId, index }` (the item's text), `{ kind: 'card', sectionId, resumeId }` (the card's blurb) or `{ kind: 'intro', sectionId }` (headline, subheadline and that text section at once; `instruction` may be empty). `landing` is the editor's copy of the draft, checked like a `PUT` (`textFormat` included); without it the stored draft is used. Counts against the same rate limit as `POST /api/ai/rewrite`. See [AI rewrites](#ai-rewrites) |
@@ -291,7 +291,7 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 | `delete_cover_letter` | `{ letterId }` — deletes the letter and its PDF |
 | `get_landing_page` | the landing page draft, its status and its context, as `GET /api/landing` returns them |
 | `update_landing_page` | merge fields into the landing page draft (`sections` is replaced whole; a section sent without an `id` is new; `seo` is merged one level deep; `null` resets a field), with the same checks as `PUT /api/landing` |
-| `publish_landing_page`, `discard_landing_draft` | publish the landing page draft / restore it from its last published snapshot |
+| `publish_landing_page`, `discard_landing_draft` | publish the landing page draft (refused, as `POST /api/landing/publish` is, while a shown image has no `alt`) / restore it from its last published snapshot |
 | `set_landing_page_enabled` | `{ enabled }` — switches the landing page at `/` on or off, at once |
 | `upload_landing_image` | `{ data }`, the image file base64-encoded (at most 1.4 MB before encoding) — stores it as `POST /api/landing/images` does and returns its `id`, for a `{ imageId, alt }` reference in `update_landing_page` |
 
@@ -455,7 +455,9 @@ uploaded image", and the share image) are uploaded to the server, which
 keeps them in its database, so its backups include them. Every upload is
 re-encoded: anything the camera wrote into the file, its GPS position
 included, is dropped, and a large image is scaled down to 1600 px on its
-long side. Each image needs a short description (its alt text). An
+long side. Each image needs a short description (its alt text): you can
+save without one while you type, but the page won't publish until every
+image it shows has one. An
 uploaded image is only public while the published landing page shows it,
 and one nothing uses any more is removed a week after it was uploaded.
 

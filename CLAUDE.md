@@ -372,7 +372,9 @@ no metadata at all (EXIF/GPS, XMP, PNG text), a PNG too big for the cap
 kept as WebP. The id is the sha256 of the stored bytes; caps and the
 grace period are `LANDING_IMAGE_LIMITS` and `IMAGE_GRACE_MS`. The draft
 refers to an image as `{ imageId, alt }` (`checkImageRef()`; `alt` a
-required string, '' allowed while typed) in `photoImage` (with
+required string, '' allowed in a draft while it's typed, but
+`publishLanding()` refuses with a 400 naming the field while a reference
+the page would show has a blank one: `assertImagesDescribed()`) in `photoImage` (with
 `photo: 'upload'`), an item's `image`, an `image` section and
 `seo.image`; the optional ones are stored only when set. Like a card, a
 new reference must name a stored image and one already in the draft may
@@ -460,7 +462,12 @@ logout. Its preview resolves the local draft with
 path. An upload goes through `LandingImageField.jsx` and
 `LandingEditorPage`'s `handleImageUpload()`, which tracks it on the save
 queue and applies the reference before it settles, so a flush waits for
-both. AI rewrites of its fields are described under "AI
+both. It applies it to the draft as it is when the upload resolves
+(`landingRef`), never through a field's render-time closure: the target is
+addressed like an AI request's spot (`landingImages.js`: the hero, the
+share image, a section by id, an item followed by `locateRequest()`), and
+one that's gone by then (the hero switched away from an upload, the
+section or item removed) drops the reference. AI rewrites of its fields are described under "AI
 rewrites" below. While the page is shown (`landingShown()` in
 `resumeLinks.js`), `publicUrl()` gives the default resume's link as
 `/resume`.

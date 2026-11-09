@@ -14,7 +14,7 @@ import {
 import { pdfPathFor, pdfVersionOf } from './pdfPaths.js';
 import { escapeLandingText } from './landingTextMigration.js';
 import { createLandingImageStore } from './landingImageStore.js';
-import { EDITOR_IMAGE_PATH, PUBLIC_IMAGE_PATH, isImageId, referencedImageIds, shownImageIds } from './landingImageFields.js';
+import { EDITOR_IMAGE_PATH, PUBLIC_IMAGE_PATH, assertImagesDescribed, isImageId, referencedImageIds, shownImageIds } from './landingImageFields.js';
 
 // The landing page's storage and publishing (issue #70), composed into the
 // resume store by createResumeStore() — the editor's routes and the MCP
@@ -118,11 +118,15 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   }
 
   // A draft that was never saved (the one built from the default resume's
-  // header) can be published as it is. The images neither it nor the draft
-  // uses any more go once their grace period is over.
+  // header) can be published as it is, but not with an image it shows
+  // still undescribed (a draft may leave alt blank while it's typed). The
+  // images neither it nor the draft uses any more go once their grace
+  // period is over.
   function publishLanding() {
+    const draft = getLanding();
+    assertImagesDescribed(draft, new Set(images.imageSizes().keys()));
     const publishedAt = new Date().toISOString();
-    setSetting('landing_published', { ...getLanding(), publishedAt });
+    setSetting('landing_published', { ...draft, publishedAt });
     setSetting('landing_meta', { lastEditedAt: null });
     pruneLandingImages();
     return getLandingStatus();

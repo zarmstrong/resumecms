@@ -13,7 +13,7 @@ import {
   upgradeLanding,
   validateLanding,
 } from './landingFields.js';
-import { LANDING_IMAGE_LIMITS, checkImageRef, imageIdOfPath, referencedImageIds, resolveImage, shownImageIds } from './landingImageFields.js';
+import { LANDING_IMAGE_LIMITS, assertImagesDescribed, checkImageRef, imageIdOfPath, referencedImageIds, resolveImage, shownImageIds } from './landingImageFields.js';
 
 const known = (...ids) => ({ knownResumeIds: new Set(ids) });
 const linksSection = (links) => ({ sections: [{ id: 'l', kind: 'links', links }] });
@@ -805,4 +805,35 @@ test('only an uploaded image path counts as one', () => {
   assert.deepEqual(resolveImage({ imageId: IMG, alt: 7 }, new Map([[IMG, { src: 's', width: 1, height: 2 }]])), { src: 's', alt: '', width: 1, height: 2 });
   assert.equal(resolveImage(null, new Map()), null);
   assert.equal(checkImageRef({ imageId: IMG, alt: 'a' }, 'x', withImages(IMG)).alt, 'a');
+});
+
+test('an image the page would show needs a description to publish', () => {
+  const stored = new Set([IMG]);
+  const ref = (alt, imageId = IMG) => ({ imageId, alt });
+  const fieldOf = (landing) => {
+    try {
+      assertImagesDescribed(landing, stored);
+    } catch (err) {
+      assert.equal(err.status, 400);
+      return err.message.match(/\(([^)]*\.alt)\)/)[1];
+    }
+    return null;
+  };
+  const items = (...list) => ({ id: 'i', kind: 'items', title: '', items: list });
+  assert.equal(fieldOf(emptyLanding()), null);
+  assert.equal(fieldOf({ ...emptyLanding(), photo: 'upload', photoImage: ref('') }), 'photoImage.alt');
+  assert.equal(fieldOf({ ...emptyLanding(), photo: 'resume', photoImage: ref('') }), null);
+  assert.equal(fieldOf({ ...emptyLanding(), sections: [items({ title: 'P', text: '', url: '', image: ref(' \n') })] }), 'sections[0].items[0].image.alt');
+  // An item with nothing to show isn't shown, thumbnail and all.
+  assert.equal(fieldOf({ ...emptyLanding(), sections: [items({ title: ' ', text: '', url: '', image: ref('') })] }), null);
+  assert.equal(fieldOf({ ...emptyLanding(), sections: [{ id: 't', kind: 'text', title: '', body: 'x' }, { id: 'p', kind: 'image', title: '', image: ref(''), caption: '' }] }), 'sections[1].image.alt');
+  assert.equal(fieldOf({ ...emptyLanding(), sections: [{ id: 'p', kind: 'image', title: '', image: null, caption: '' }] }), null);
+  assert.equal(fieldOf({ ...emptyLanding(), seo: { title: '', description: '', noindex: false, image: ref('') } }), 'seo.image.alt');
+  // One whose image is gone shows nothing, so it doesn't block a publish.
+  assert.equal(fieldOf({ ...emptyLanding(), seo: { title: '', description: '', noindex: false, image: ref('', IMG2) } }), null);
+  assert.equal(fieldOf({ ...emptyLanding(), photo: 'upload', photoImage: ref('Jo'), seo: { title: '', description: '', noindex: false, image: ref('Card') } }), null);
+  assert.throws(
+    () => assertImagesDescribed({ ...emptyLanding(), photo: 'upload', photoImage: ref(''), seo: { image: ref('') } }, stored),
+    /the photo has no description \(photoImage\.alt\) \(and 1 more\)/
+  );
 });

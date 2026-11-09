@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 const TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -6,17 +6,15 @@ const TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 // { imageId, alt } or null, `onChange` gets the new one (null to remove
 // it). `images` is the editor's context.images ({ id, src, width, height },
 // the stored ones), `limits` the server's LANDING_IMAGE_LIMITS, and
-// `onUpload(file, apply)` LandingEditorPage's upload, which calls `apply`
-// with the stored image once it's in. The server re-encodes the file (and
+// `onUpload(file)` LandingEditorPage's upload for this field's target,
+// which puts the reference into the draft itself once the image is stored
+// (into the draft as it is then: see landingImages.js), so nothing here
+// holds on to the draft across the wait. The server re-encodes the file (and
 // drops its metadata); here it's only checked enough to say what's wrong
 // before sending it.
 export function LandingImageField({ label, hint, value, images, limits, onUpload, onChange, altHint }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  // The upload finishes after other edits may have landed; it applies to
-  // the field as it is then, not as it was when it started.
-  const latest = useRef(null);
-  latest.current = { value, onChange };
   const stored = value ? images.find((image) => image.id === value.imageId) : null;
 
   async function handleFile(e) {
@@ -34,7 +32,7 @@ export function LandingImageField({ label, hint, value, images, limits, onUpload
     setError('');
     setBusy(true);
     try {
-      await onUpload(file, (image) => latest.current.onChange({ imageId: image.id, alt: latest.current.value?.alt ?? '' }));
+      await onUpload(file);
     } catch (err) {
       setError(err.message || 'Upload failed');
     } finally {
