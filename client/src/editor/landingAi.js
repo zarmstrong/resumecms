@@ -1,3 +1,5 @@
+import { carryItemKey } from './landingImages.js';
+
 // AI rewrites on the landing page (issue #73): the editor's side of
 // server/src/ai/landingRewrite.js. A request is for one spot (a target);
 // what comes back is a list of proposals, each `{ target, before, after }`
@@ -71,7 +73,7 @@ export function setLandingSlice(landing, target, value) {
       case 'text':
         return { ...section, body: value };
       case 'item':
-        return { ...section, items: section.items.map((item, i) => (i === target.index ? { ...item, text: value } : item)) };
+        return { ...section, items: section.items.map((item, i) => (i === target.index ? carryItemKey(item, { ...item, text: value }) : item)) };
       case 'card':
         return { ...section, cards: section.cards.map((card) => (card.resumeId === target.resumeId ? { ...card, blurb: value } : card)) };
       default:

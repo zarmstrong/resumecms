@@ -463,11 +463,14 @@ path. An upload goes through `LandingImageField.jsx` and
 `LandingEditorPage`'s `handleImageUpload()`, which tracks it on the save
 queue and applies the reference before it settles, so a flush waits for
 both. It applies it to the draft as it is when the upload resolves
-(`landingRef`), never through a field's render-time closure: the target is
-addressed like an AI request's spot (`landingImages.js`: the hero, the
-share image, a section by id, an item followed by `locateRequest()`), and
-one that's gone by then (the hero switched away from an upload, the
-section or item removed) drops the reference. AI rewrites of its fields are described under "AI
+(`landingRef`), never through a field's render-time closure, at the right
+target or not at all (`landingImages.js`: the hero, the share image, a
+section by id, and an item by a client-only key held in a `WeakMap` on
+the item object, never saved; anything that replaces an item with an
+edited copy passes it on with `carryItemKey()`, as `LandingForm` and
+`setLandingSlice()` do). A target that's gone by then (the hero switched
+away from an upload, the section or item removed, or an item whose key
+didn't follow it) drops the reference; content is never used to guess. AI rewrites of its fields are described under "AI
 rewrites" below. While the page is shown (`landingShown()` in
 `resumeLinks.js`), `publicUrl()` gives the default resume's link as
 `/resume`.

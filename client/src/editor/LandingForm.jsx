@@ -4,6 +4,7 @@ import { LandingAiPanel } from './LandingAiPanel.jsx';
 import { introSectionId } from './landingAi.js';
 import { SearchSharingFields } from './SearchSharingFields.jsx';
 import { LandingImageField, withImageRef } from './LandingImageField.jsx';
+import { carryItemKey } from './landingImages.js';
 import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
@@ -568,8 +569,9 @@ function ExperienceFields({ section, onChange, resumes, context, limits }) {
 }
 
 function ItemsFields({ sectionId, items, onChange, limits, ai, imageProps }) {
-  const setItem = (i, patch) => onChange(items.map((item, idx) => (idx === i ? { ...item, ...patch } : item)));
-  const setThumbnail = (i, ref) => onChange(items.map((item, idx) => (idx === i ? withImageRef(item, 'image', ref) : item)));
+  // An edited item stays the same item to an upload in flight (landingImages.js).
+  const setItem = (i, patch) => onChange(items.map((item, idx) => (idx === i ? carryItemKey(item, { ...item, ...patch }) : item)));
+  const setThumbnail = (i, ref) => onChange(items.map((item, idx) => (idx === i ? carryItemKey(item, withImageRef(item, 'image', ref)) : item)));
   return (
     <>
       {items.map((item, i) => (
