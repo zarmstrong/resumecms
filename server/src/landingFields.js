@@ -6,7 +6,7 @@ import { httpError } from './httpError.js';
 // here; landingStore.js stores it and decides which hosts get it.
 //
 // The draft is a fixed set of fields, all always present once stored:
-//   { headline, subheadline, availability, actions, photo, photoUrl, sections, seo }
+//   { headline, subheadline, availability, actions, photo, photoUrl, sections, seo, homeLink, homeLinkLabel }
 // `availability` is a short line shown above the headline ("Open to senior
 // backend roles · Remote"), '' for none. `actions` (issue #88) are the
 // hero's buttons, at most three, the first drawn as the primary one:
@@ -26,8 +26,11 @@ import { httpError } from './httpError.js';
 // publicly. `seo` is { title, description, noindex } (issue #87): what
 // the page's <title>, description and link previews say instead of the
 // headline and subheadline (see pageMeta.js), and whether search engines
-// are asked to leave it out. A draft stored before sections or `seo`
-// existed is read through upgradeLanding().
+// are asked to leave it out. `homeLink` (issue #89) is whether a resume
+// page shows a "← Home" link back here while this page holds `/` (see
+// landingStore.js's homeLinkForHost()), and `homeLinkLabel` what it says
+// after the arrow ('' for "Home"). A draft stored before sections, `seo`
+// or `homeLink` existed is read through upgradeLanding().
 //
 // Everything here ends up in front of every visitor, so it's checked more
 // strictly than the header: unknown keys, wrong types and oversized values
@@ -56,6 +59,7 @@ export const LANDING_LIMITS = {
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
+  homeLinkLabel: 40,
   // About 512 KB of image once base64-decoded; the editor's cropper makes
   // a 480 px JPEG of well under that.
   photoUrl: 700_000,
@@ -72,7 +76,7 @@ export const SECTION_KINDS = ['text', 'items', 'links', 'resumes'];
 export const ACTION_TYPES = ['link', 'resume'];
 export const ACTION_OPENS = ['page', 'pdf'];
 
-const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'sections', 'seo'];
+const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'sections', 'seo', 'homeLink', 'homeLinkLabel'];
 const SEO_FIELDS = ['title', 'description', 'noindex'];
 const SECTION_FIELDS = {
   text: ['id', 'kind', 'title', 'body'],
@@ -97,14 +101,20 @@ function emptySeo() {
 }
 
 export function emptyLanding() {
-  return { headline: '', subheadline: '', availability: '', actions: [], photo: 'resume', photoUrl: '', sections: [], seo: emptySeo() };
+  return { headline: '', subheadline: '', availability: '', actions: [], photo: 'resume', photoUrl: '', sections: [], seo: emptySeo(), homeLink: true, homeLinkLabel: '' };
 }
+
+// What a resume page's link back to the landing page points at, and says
+// while its `homeLinkLabel` is empty (issue #89); the client draws it as
+// "← Home".
+export const HOME_LINK = { href: '/', label: 'Home' };
 
 // A draft or snapshot as stored before sections (issue #70's first shape:
 // `intro`, `links` and `resumes` as fields of their own), turned into the
 // sections it showed, in the order it showed them, one stored before `seo`,
-// `availability` or `actions` given the empty ones, and a card stored
-// before `showPdf` given false. The ids are fixed, so reading the same
+// `availability`, `actions` or `homeLinkLabel` given the empty ones, one
+// stored before `homeLink` given it switched on, and a card stored before
+// `showPdf` given false. The ids are fixed, so reading the same
 // stored draft twice gives the same sections; one already in the current
 // shape comes back as it is.
 export function upgradeLanding(stored) {
@@ -121,6 +131,8 @@ export function upgradeLanding(stored) {
   if (!isPlainObject(upgraded.seo)) upgraded = { ...upgraded, seo: emptySeo() };
   if (typeof upgraded.availability !== 'string') upgraded = { ...upgraded, availability: '' };
   if (!Array.isArray(upgraded.actions)) upgraded = { ...upgraded, actions: [] };
+  if (typeof upgraded.homeLink !== 'boolean') upgraded = { ...upgraded, homeLink: true };
+  if (typeof upgraded.homeLinkLabel !== 'string') upgraded = { ...upgraded, homeLinkLabel: '' };
   const needsShowPdf = (section) => section?.kind === 'resumes' && Array.isArray(section.cards) && section.cards.some((card) => isPlainObject(card) && !('showPdf' in card));
   if (upgraded.sections.some(needsShowPdf)) {
     upgraded = {
@@ -331,6 +343,9 @@ export function validateLanding(input, { knownResumeIds, previousResumeIds = new
   const ids = new Set();
   out.sections = checkList(input.sections, LANDING_LIMITS.sections, 'sections').map((section, i) => checkSection(section, i, refs, ids));
   out.seo = checkSeo(input.seo);
+  out.homeLink = input.homeLink ?? base.homeLink;
+  if (typeof out.homeLink !== 'boolean') throw httpError(400, 'homeLink must be a boolean');
+  out.homeLinkLabel = checkString(input.homeLinkLabel ?? base.homeLinkLabel, LANDING_LIMITS.homeLinkLabel, 'homeLinkLabel');
   return out;
 }
 

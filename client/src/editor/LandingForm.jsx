@@ -215,6 +215,27 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
         )}
       </div>
 
+      <div className="ed-field">
+        <label className="ed-field ed-checkbox-field">
+          <input type="checkbox" checked={landing.homeLink !== false} onChange={(e) => set({ homeLink: e.target.checked })} />
+          <span>Show a "← Home" link on resume pages</span>
+        </label>
+        {landing.homeLink !== false && (
+          <input
+            className="ed-input"
+            value={landing.homeLinkLabel ?? ''}
+            maxLength={limits?.homeLinkLabel}
+            onChange={(e) => set({ homeLinkLabel: e.target.value })}
+            placeholder="Home"
+            aria-label="Home link text"
+          />
+        )}
+        <span className="ed-field-hint">
+          Above each resume at /resume and /r/&lt;link name&gt;, back to this page, while it's shown at /. Never on a resume's own
+          domain or in its PDF. Leave the text empty to say "Home".
+        </span>
+      </div>
+
       <LandingSeoFields landing={landing} context={context} limits={limits} onChange={(seo) => set({ seo })} />
     </div>
   );

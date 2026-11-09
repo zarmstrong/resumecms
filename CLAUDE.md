@@ -181,7 +181,8 @@ responses and the `/r/<slug>` HTML shell carry `X-Robots-Tag: noindex`
 (`NOINDEX` in `cacheHeaders.js`), and the two host-resolved routes send
 `Vary: Host, X-Forwarded-Host` (`HOST_HEADERS`; behind a trusted proxy
 the host comes from the latter) so no cache hands one domain's resume to
-another. A domain is never access control (anyone
+another; so does the slug's JSON, whose "← Home" link depends on the
+host (see "Landing page"). A domain is never access control (anyone
 can send any `Host`), so `updateResume` makes a resume public when it
 gets domains and removes them when it goes private; keep that pairing if
 you add another way to set either. The editor's routes never follow the
@@ -278,7 +279,7 @@ install, not to a resume, so it lives in the global `settings` table:
 `server/src/landingStore.js` holds the operations and is composed into the
 store by `createResumeStore()`; validation and the public shape are pure, in
 `landingFields.js`. It isn't blocks: `{ headline, subheadline, availability, actions,
-photo, photoUrl, sections, seo }` (`seo` is `{ title, description, noindex }`, see
+photo, photoUrl, sections, seo, homeLink, homeLinkLabel }` (`seo` is `{ title, description, noindex }`, see
 "Search and link previews"; `mergeLandingPatch()` merges it one level
 deep; `actions` are the hero's buttons, issue #88, a `link` or a `resume`
 opening its `page` or `pdf`), where `sections` is an ordered list of
@@ -338,6 +339,22 @@ load never shows the resume and then swaps. It sends `REVALIDATE` and
 are `LANDING_TOOLS` in `createMcpServer.js` (no `resumeId`;
 `update_landing_page` merges via `mergeLandingPatch()`, `sections` as a
 whole list).
+
+While the landing page holds `/`, resume pages link back to it (issue
+#89): `/api/public/resume` and `/api/public/resumes/:slug` (both in
+`routes/publicResume.js`, a factory over the store so its test runs on
+`:memory:`) add `home: { href: '/', label }` when `homeLinkForHost()`
+says so: the same conditions as `landingForHost()`, plus the published
+snapshot's `homeLink` (a drafted boolean, on by default and for a
+snapshot stored before it). `label` is that snapshot's `homeLinkLabel`
+(drafted too, capped by `LANDING_LIMITS`), trimmed, or `HOME_LINK`'s
+"Home" when empty; never the draft's. Never in
+print mode or to the render cookie, so no PDF shows it, and never on a
+resume's own domain. `home` isn't part of the snapshot, so both send
+`HOST_HEADERS`, and the client's `sameResume()` compares it on refetch.
+`PublishedResume` draws it as "← <label>" above `ResumeView`, not in it
+(`client/src/resume/homeLink.js` checks it's a same-site path, web
+only), so no template draws it and the editor preview never shows it.
 
 On the client, `/` is `HomePage` (`client/src/landing/HomePage.jsx`), which
 renders `LandingView` or the resume from that one response, and `/resume`
