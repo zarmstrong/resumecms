@@ -1,9 +1,11 @@
-/* Split (issue #93): a tinted left column holding the hero, sticky while
-   the sections on the right scroll; one column on a narrow page. Sized by
-   the page's own width (a container query), so the editor's narrower
-   preview shows what a phone would. index.jsx gives the structure:
-   .l-split > .l-split-side > .l-split-sticky > .l-hero, and
-   .l-split-content > .l-main > the sections. */
+/* Split (issue #93): a tinted left column holding the hero and any
+   sections placed there, sticky (when it holds none) while the sections on
+   the right scroll; one column on a narrow page. Sized by the page's own
+   width (a container query), so the editor's narrower preview shows what a
+   phone would. index.jsx gives the structure:
+   .l-split > .l-split-side > .l-split-panel(.l-split-sticky) > .l-hero and
+   .l-split-side-sections > the side sections, and
+   .l-split-content > .l-main > the others. */
 .l-template-split {
   container-type: inline-size;
 }
@@ -20,11 +22,23 @@
   border-right: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 18%, transparent);
 }
 
+.l-template-split .l-split-panel {
+  max-width: 360px;
+  margin-left: auto;
+}
+
 .l-template-split .l-split-sticky {
   position: sticky;
   top: 72px;
-  max-width: 360px;
-  margin-left: auto;
+}
+
+.l-template-split .l-split-side-sections {
+  margin-top: 44px;
+}
+
+/* The side column is narrow: one card per row. */
+.l-template-split .l-split-side .l-cards {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .l-template-split .l-hero {
@@ -95,10 +109,18 @@
     border-right: none;
     border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 18%, transparent);
   }
-  .l-template-split .l-split-sticky {
-    position: static;
+  .l-template-split .l-split-panel {
     max-width: 640px;
     margin: 0 auto;
+  }
+  .l-template-split .l-split-sticky {
+    position: static;
+  }
+  .l-template-split .l-split-side .l-cards {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  .l-template-split .l-split-side-sections {
+    margin-top: 36px;
   }
   .l-template-split .l-actions {
     flex-direction: row;

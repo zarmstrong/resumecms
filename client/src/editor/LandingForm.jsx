@@ -9,6 +9,7 @@ import { carryItemKey } from './landingImages.js';
 import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
+import { getLandingTemplate } from '../resume/templateRegistry.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
 // SECTION_KINDS), what each is called here, and what a new one starts with
@@ -26,6 +27,7 @@ const SECTION_KINDS = [
     empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id, count: 3, showDates: true }),
   },
   { kind: 'image', label: 'Image', addLabel: 'Image', empty: () => ({ image: null, caption: '' }) },
+  { kind: 'divider', label: 'Divider', addLabel: 'Divider (a line between sections)', empty: () => ({}) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -66,6 +68,12 @@ function hasContent(section) {
     default:
       return false;
   }
+}
+
+// A section in the given column; like the server, 'main' isn't stored.
+function withColumn(section, column) {
+  const { column: _old, ...rest } = section;
+  return column === 'main' ? rest : { ...rest, column };
 }
 
 function moved(list, i, delta) {
@@ -128,6 +136,8 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
   const imageProps = (target) => ({ images: context.images || [], limits: limits?.images, onUpload: (file) => onUploadImage(file, target) });
   const sections = landing.sections;
   const introId = introSectionId(landing);
+  // Whether the page's template has a side column to put a section in.
+  const hasColumns = Boolean(getLandingTemplate(landing.template)?.columns);
   const setSections = (next) => set({ sections: next });
   const setSection = (i, patch) => setSections(sections.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
   const removeSection = (i) => {
@@ -213,7 +223,9 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
 
       <div className="ed-field">
         <span>Sections</span>
-        <span className="ed-field-hint">Shown in this order under the headline. One with nothing to show is left off the page.</span>
+        <span className="ed-field-hint">
+          Shown in this order under the headline{hasColumns ? ' (or under the photo, in the side column)' : ''}. One with nothing to show is left off the page.
+        </span>
         {sections.map((section, i) => (
           <div className="ed-landing-section" key={section.id}>
             <div className="ed-landing-card-head">
@@ -231,14 +243,24 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
               value={section.title}
               maxLength={limits?.sectionTitle}
               onChange={(e) => setSection(i, { title: e.target.value })}
-              placeholder="Heading (optional)"
-              aria-label="Section heading"
+              placeholder={section.kind === 'divider' ? 'Label on the line (optional)' : 'Heading (optional)'}
+              aria-label={section.kind === 'divider' ? 'Divider label' : 'Section heading'}
             />
             <label className="ed-field ed-checkbox-field">
               <input type="checkbox" checked={Boolean(section.hidden)} onChange={(e) => setSection(i, { hidden: e.target.checked })} />
               Hide this section
             </label>
             {section.hidden && <span className="ed-field-hint">Kept here, but not shown on the page.</span>}
+            {hasColumns && (
+              <label className="ed-field ed-checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={section.column === 'side'}
+                  onChange={(e) => setSections(sections.map((s, idx) => (idx === i ? withColumn(s, e.target.checked ? 'side' : 'main') : s)))}
+                />
+                Show in the side column, under the photo
+              </label>
+            )}
             <SectionFields
               section={section}
               onChange={(patch) => setSection(i, patch)}
@@ -449,6 +471,8 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
       return <QuotesFields quotes={section.quotes} onChange={(quotes) => onChange({ quotes })} limits={limits} />;
     case 'experience':
       return <ExperienceFields section={section} onChange={onChange} resumes={resumes} context={context} limits={limits} />;
+    case 'divider':
+      return <span className="ed-field-hint">A line across the page between the sections around it, with its label (if any) on it.</span>;
     case 'image':
       return (
         <>

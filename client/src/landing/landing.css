@@ -404,6 +404,30 @@ a.l-role-company {
   font-size: 0.95em;
 }
 
+/* A divider section: a hairline across the column, its title (if any) a
+   small label in the middle of it. */
+.l-divider {
+  display: flex;
+  align-items: center;
+  color: color-mix(in srgb, var(--r-text, var(--ink)) 60%, transparent);
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.l-divider::before,
+.l-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 18%, transparent);
+}
+
+.l-divider-label {
+  padding: 0 14px;
+  overflow-wrap: anywhere;
+}
+
 /* The editor's preview: a section hidden from the page. */
 .l-section-hidden > :not(.l-hidden-label) {
   opacity: 0.35;

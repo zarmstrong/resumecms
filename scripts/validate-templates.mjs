@@ -75,14 +75,23 @@ for (const id of layoutIds) {
 
 // ---- landing: template.json + style.css required, index.jsx optional --
 // (issue #93). Every one ships a style.css scoped under .l-template-<id>;
-// one that changes the page's structure adds an index.jsx. `classic` is
-// what an unknown or missing template is drawn as, so it must exist.
+// one that changes the page's structure adds an index.jsx, and one whose
+// index.jsx draws a section with `column: 'side'` in a side column says
+// `columns: true`, so the editor offers the choice. `classic` is what an
+// unknown or missing template is drawn as, so it must exist.
 const landingIds = dirsIn(path.join(TEMPLATES_DIR, 'landing'));
 for (const id of landingIds) {
   const dir = path.join(TEMPLATES_DIR, 'landing', id);
   const label = `templates/landing/${id}`;
   checkId(id, label);
-  checkMeta(readJson(path.join(dir, 'template.json'), label), label);
+  const meta = readJson(path.join(dir, 'template.json'), label);
+  checkMeta(meta, label, ['columns']);
+  if (meta && 'columns' in meta && typeof meta.columns !== 'boolean') {
+    errors.push(`${label}: "columns" must be a boolean`);
+  }
+  if (meta?.columns === true && !existsSync(path.join(dir, 'index.jsx'))) {
+    errors.push(`${label}: "columns" needs an index.jsx that places the side column`);
+  }
   const css = path.join(dir, 'style.css');
   if (!existsSync(css)) errors.push(`${label}: missing style.css`);
   else if (!readFileSync(css, 'utf8').includes(`.l-template-${id}`)) {

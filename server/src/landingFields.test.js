@@ -554,6 +554,55 @@ test('any section can be hidden: kept in the draft, never shown', () => {
   assert.equal(status(() => validateLanding({ sections: [{ id: 's', kind: 'links', hidden: 'yes' }] }, known())), 400);
 });
 
+test("any section may go in a template's side column: stored only when 'side', and shown with it", () => {
+  const draft = validateLanding(
+    {
+      sections: [
+        { id: 'a', kind: 'text', body: 'Side', column: 'side' },
+        { id: 'b', kind: 'text', body: 'Main', column: 'main' },
+        { id: 'c', kind: 'text', body: 'Hidden', column: 'side', hidden: true },
+      ],
+    },
+    known()
+  );
+  assert.deepEqual(draft.sections, [
+    { id: 'a', kind: 'text', title: '', column: 'side', body: 'Side' },
+    { id: 'b', kind: 'text', title: '', body: 'Main' },
+    { id: 'c', kind: 'text', title: '', hidden: true, column: 'side', body: 'Hidden' },
+  ]);
+  assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections, [
+    { kind: 'text', title: '', column: 'side', body: 'Side' },
+    { kind: 'text', title: '', body: 'Main' },
+  ]);
+  for (const column of ['left', '', true, null]) {
+    assert.equal(status(() => validateLanding({ sections: [{ id: 's', kind: 'text', column }] }, known())), column === null ? null : 400);
+  }
+});
+
+test('a divider is only a title, and is always shown unless hidden', () => {
+  const draft = validateLanding(
+    {
+      sections: [
+        { id: 'a', kind: 'divider' },
+        { id: 'b', kind: 'divider', title: 'Or', column: 'side' },
+        { id: 'c', kind: 'divider', hidden: true },
+      ],
+    },
+    known()
+  );
+  assert.deepEqual(draft.sections, [
+    { id: 'a', kind: 'divider', title: '' },
+    { id: 'b', kind: 'divider', title: 'Or', column: 'side' },
+    { id: 'c', kind: 'divider', title: '', hidden: true },
+  ]);
+  assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections, [
+    { kind: 'divider', title: '' },
+    { kind: 'divider', title: 'Or', column: 'side' },
+  ]);
+  assert.equal(status(() => validateLanding({ sections: [{ id: 's', kind: 'divider', body: 'x' }] }, known())), 400);
+  assert.equal(status(() => validateLanding({ sections: [{ id: 's', kind: 'divider', title: 'x'.repeat(LANDING_LIMITS.sectionTitle + 1) }] }, known())), 400);
+});
+
 test('an item may carry a short meta line, stored and shown only when set', () => {
   const draft = validateLanding(
     { sections: [{ id: 'i', kind: 'items', items: [{ title: 'Tool', meta: '2024 · Rust' }, { title: 'Other', meta: '' }, { title: 'Third', meta: '  ' }] }] },

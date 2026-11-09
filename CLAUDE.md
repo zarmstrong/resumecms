@@ -287,11 +287,14 @@ opening its `page` or `pdf`), where `sections` is an ordered list of
 (`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url, meta, image? }]`),
 `links`, `resumes` (cards `{ resumeId, label, blurb }`), `quotes`
 (`[{ text, name, role, url }]`), `experience` (`resumeId`, `count`,
-`showDates`; issue #90) and `image` (`{ image, caption }`, `image` null
-until one is uploaded; issue #92). Any section may be `hidden: true`: kept in the
+`showDates`; issue #90), `image` (`{ image, caption }`, `image` null
+until one is uploaded; issue #92) and `divider` (only its `title`, a label
+on the rule; never dropped for being empty). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
-(the client resolver's `withHidden`). `hidden` and an item's `meta` are
-only stored when set. The `id` is
+(the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
+which `resolveLanding()` passes on and only a landing template with
+`columns: true` reads (see "Pluggable header/layout templates"). `hidden`,
+`column` and an item's `meta` are only stored when set. The `id` is
 for the editor only and never leaves the server publicly. A draft or
 snapshot stored before sections (`intro`/`links`/`resumes` as fields) is
 read through `upgradeLanding()`, with fixed ids, until the next save or
@@ -690,7 +693,12 @@ default flat block list; see `templateRegistry.js`'s comment on
 
 A landing template needs a `style.css` with every rule scoped under
 `.l-template-<id>` (the validator checks the class appears; `classic`,
-the fallback, must exist), and its `index.jsx` is optional. `LandingView`
+the fallback, must exist), and its `index.jsx` is optional. Its
+`template.json` may say `columns: true` (only with an `index.jsx`) when
+the component draws a section with `column: 'side'` in a side column, as
+`split` does under the hero (and stops the column being sticky while it
+holds any); the editor shows each section's "side column" box only for
+such a template, and every other template ignores `column`. `LandingView`
 renders the page root (`.l-page .l-template-<id>`, the colors as `--l-*`
 and `--l-dark-*` custom properties that `landing.css` turns into the
 `--r-*` ones, switched to the dark ones by `.l-dark-auto` under
@@ -703,7 +711,9 @@ is the pre-#93 layout moved out of it unchanged, and must stay
 pixel-identical to it. `centered` and `split` size themselves with
 container queries on the page root, so the editor's narrower preview
 matches a phone. A template must render every section kind
-(`LandingView`'s `SectionBody` draws them; the template only arranges).
+(`LandingView`'s `renderSection` and `SectionBody` draw them, a divider
+as a `role="separator"` rather than a `<section>`; the template only
+arranges).
 
 `client/src/resume/templateRegistry.js` builds the registry at **build
 time** via `import.meta.glob` (eager, one glob per kind — the glob path

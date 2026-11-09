@@ -519,6 +519,7 @@ const sectionBase = {
   id: z.string().optional().describe("Keep an existing section's id from get_landing_page; omit it for a new section."),
   title: z.string().optional().describe('Heading shown above the section; empty shows none.'),
   hidden: z.boolean().optional().describe('true keeps the section in the draft without showing it.'),
+  column: z.enum(['main', 'side']).optional().describe("'side' draws it in the side column of a template that has one (split: under the hero); others draw it in order with the rest. Default 'main'."),
 };
 const landingSection = () =>
   z.discriminatedUnion('kind', [
@@ -540,6 +541,7 @@ const landingSection = () =>
       image: landingImage().nullable().optional().describe('The image; a section without one is left off the public page.'),
       caption: z.string().optional().describe('Plain text shown under it.'),
     }),
+    z.object({ ...sectionBase, kind: z.literal('divider') }).describe('A rule across the page; its title, if any, is a label on the rule.'),
   ]);
 
 const landingColor = (what) => z.string().nullable().optional().describe(`${what}: #rrggbb, or '' (or null) for the default.`);
