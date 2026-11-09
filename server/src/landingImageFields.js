@@ -95,9 +95,10 @@ export function referencedImageIds(landing) {
 // Throws a 400 unless every image reference the published page would show
 // has a description: `alt` is required, and only allowed to be blank in a
 // draft because the editor saves while it's typed. "Shown" as
-// resolveLanding() decides: the hero's only with photo: 'upload', an
-// item's only on an item with a title or text, and only a reference whose
-// image is among `storedIds` (one whose image is gone shows nothing).
+// resolveLanding() decides: nothing in a hidden section, the hero's only
+// with photo: 'upload', an item's only on an item with a title or text,
+// and only a reference whose image is among `storedIds` (one whose image
+// is gone shows nothing).
 export function assertImagesDescribed(landing, storedIds) {
   const missing = [];
   const check = (ref, field, where) => {
@@ -105,6 +106,7 @@ export function assertImagesDescribed(landing, storedIds) {
   };
   if (landing?.photo === 'upload') check(landing.photoImage, 'photoImage.alt', 'the photo');
   (Array.isArray(landing?.sections) ? landing.sections : []).forEach((section, i) => {
+    if (section?.hidden) return;
     if (section?.kind === 'image') check(section.image, `sections[${i}].image.alt`, `the image in section ${i + 1}`);
     if (section?.kind === 'items' && Array.isArray(section.items)) {
       section.items.forEach((item, j) => {

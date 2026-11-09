@@ -828,6 +828,9 @@ test('an image the page would show needs a description to publish', () => {
   assert.equal(fieldOf({ ...emptyLanding(), sections: [items({ title: ' ', text: '', url: '', image: ref('') })] }), null);
   assert.equal(fieldOf({ ...emptyLanding(), sections: [{ id: 't', kind: 'text', title: '', body: 'x' }, { id: 'p', kind: 'image', title: '', image: ref(''), caption: '' }] }), 'sections[1].image.alt');
   assert.equal(fieldOf({ ...emptyLanding(), sections: [{ id: 'p', kind: 'image', title: '', image: null, caption: '' }] }), null);
+  // Nor anything in a hidden section.
+  assert.equal(fieldOf({ ...emptyLanding(), sections: [{ id: 'p', kind: 'image', title: '', hidden: true, image: ref(''), caption: '' }] }), null);
+  assert.equal(fieldOf({ ...emptyLanding(), sections: [{ ...items({ title: 'P', text: '', url: '', image: ref('') }), hidden: true }] }), null);
   assert.equal(fieldOf({ ...emptyLanding(), seo: { title: '', description: '', noindex: false, image: ref('') } }), 'seo.image.alt');
   // One whose image is gone shows nothing, so it doesn't block a publish.
   assert.equal(fieldOf({ ...emptyLanding(), seo: { title: '', description: '', noindex: false, image: ref('', IMG2) } }), null);
