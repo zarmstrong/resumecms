@@ -409,7 +409,7 @@ a.l-role-company {
 .l-divider {
   display: flex;
   align-items: center;
-  color: color-mix(in srgb, var(--r-text, var(--ink)) 60%, transparent);
+  color: color-mix(in srgb, var(--r-text, var(--ink)) 75%, transparent);
   font-size: 0.8em;
   font-weight: 600;
   letter-spacing: 0.08em;

@@ -566,8 +566,10 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // is { label, href }. A section
 // left with nothing to show (no text, no item, every link half typed, every
 // card's resume hidden, every quote empty) is left out, title and all, and
-// so is a hidden one; sections lose their ids, and keep `column` when set
-// (a divider always has something to show: its rule). An experience section
+// so is a hidden one; sections lose their ids, and keep `column` when set.
+// A divider has nothing to leave out, but goes when the sections around it
+// do: after another divider or with nothing after it (dropStrayDividers()).
+// A template with columns trims each column's ends again itself. An experience section
 // resolves to { roles, href }: its resume's first `count` roles, and that
 // resume's link for "Full resume".
 // `seo` goes along whole (everything in it ends up in the page's head and
@@ -595,15 +597,32 @@ export function resolveLanding(landing, context) {
     }),
     photoUrl,
     ...(upload ? { photoAlt: upload.alt } : {}),
-    sections: landing.sections.flatMap((section) => {
-      const shown = section.hidden ? null : resolveSection(section, context);
-      return shown ? [{ kind: section.kind, title: section.title, ...(section.column ? { column: section.column } : {}), ...shown }] : [];
-    }),
+    sections: dropStrayDividers(
+      landing.sections.flatMap((section) => {
+        const shown = section.hidden ? null : resolveSection(section, context);
+        return shown ? [{ kind: section.kind, title: section.title, ...(section.column ? { column: section.column } : {}), ...shown }] : [];
+      })
+    ),
     seo: { ...emptySeo(), ...seo, ...(seoImage ? { image: seoImage } : {}) },
     template: landing.template || DEFAULT_LANDING_TEMPLATE,
     site: landingSite(landing.style, context.site),
     darkColors: darkPalette(landing.style),
   };
+}
+
+// A divider is only kept between two things it divides: one right after
+// another divider, or with no other section after it, is dropped (a
+// hidden section, kept by the editor's preview, doesn't count either way).
+// One first in the list stays: it divides the hero from the sections.
+function dropStrayDividers(sections) {
+  const shown = sections.filter((section) => !section.hidden);
+  const stray = new Set(
+    shown.filter(
+      (section, i) =>
+        section.kind === 'divider' && (shown[i - 1]?.kind === 'divider' || !shown.slice(i + 1).some((next) => next.kind !== 'divider'))
+    )
+  );
+  return sections.filter((section) => !stray.has(section));
 }
 
 // What a button without a label of its own says.

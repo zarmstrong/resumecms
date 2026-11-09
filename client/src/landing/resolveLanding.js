@@ -45,18 +45,35 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
     }),
     photoUrl,
     ...(upload ? { photoAlt: upload.alt } : {}),
-    sections: landing.sections.flatMap((section) => {
-      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images);
-      if (!shown) return [];
-      const hidden = section.hidden ? { hidden: true } : {};
-      const column = section.column ? { column: section.column } : {};
-      return [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...hidden, ...column, ...shown }];
-    }),
+    sections: dropStrayDividers(
+      landing.sections.flatMap((section) => {
+        const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images);
+        if (!shown) return [];
+        const hidden = section.hidden ? { hidden: true } : {};
+        const column = section.column ? { column: section.column } : {};
+        return [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...hidden, ...column, ...shown }];
+      })
+    ),
     seo: { title: '', description: '', noindex: false, ...seo, ...(seoImage ? { image: seoImage } : {}) },
     template: landing.template || 'classic',
     site: landingSite(landing.style, context?.site),
     darkColors: darkPalette(landing.style),
   };
+}
+
+// Mirrors the server's. A divider is only kept between two things it divides: one right after
+// another divider, or with no other section after it, is dropped (a
+// hidden section, kept by the editor's preview, doesn't count either way).
+// One first in the list stays: it divides the hero from the sections.
+function dropStrayDividers(sections) {
+  const shown = sections.filter((section) => !section.hidden);
+  const stray = new Set(
+    shown.filter(
+      (section, i) =>
+        section.kind === 'divider' && (shown[i - 1]?.kind === 'divider' || !shown.slice(i + 1).some((next) => next.kind !== 'divider'))
+    )
+  );
+  return sections.filter((section) => !stray.has(section));
 }
 
 // What a button without a label of its own says.

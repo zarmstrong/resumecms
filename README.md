@@ -434,7 +434,8 @@ then a link to the full resume. It's read from the resume each time the
 page is shown, so it keeps up with every publish, and it's left off while
 that resume is private or unpublished. Each section can have a heading of
 its own, can be hidden (kept in the editor, dimmed in its preview, but
-not shown), and one with nothing to show is left off the page. With the
+not shown), and one with nothing to show is left off the page (a
+divider too, when nothing follows it or it comes right after another). With the
 *Split* template, any section can also be moved into the left column,
 under the photo. Open **Landing page** from
 the editor's resume switcher, fill it in, **Publish** it, and tick

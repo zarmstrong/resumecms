@@ -141,12 +141,17 @@ test('hidden sections, columns, quotes, meta lines, experience and dividers reso
       { id: 'h', kind: 'experience', title: 'Hidden', resumeId: 'main', count: 1, showDates: true, hidden: true },
       { id: 'd', kind: 'divider', title: '', column: 'side' },
       { id: 'd2', kind: 'divider', title: 'Or', hidden: true },
+      { id: 'd3', kind: 'divider', title: 'Twice' },
+      { id: 'last', kind: 'text', title: 'Last', body: 'Bye' },
+      { id: 'd4', kind: 'divider', title: 'Trailing' },
     ],
   };
   const out = resolveLanding(landing, { ...context, resumes });
   const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map(resumes.map((r) => [r.id, r])) });
   assert.deepEqual(out.sections, fromServer.sections);
-  assert.deepEqual(out.sections.map((s) => s.title), ['', 'Kind words', 'Recent', '', '']);
+  // 'd3' comes right after 'd' (the hidden one between doesn't count) and
+  // 'd4' has nothing after it, so both go.
+  assert.deepEqual(out.sections.map((s) => s.title), ['', 'Kind words', 'Recent', '', '', 'Last']);
   assert.deepEqual(out.sections[4], { kind: 'divider', title: '', column: 'side' });
   assert.equal(out.sections[2].roles[0].dates, '2022 – Present');
   assert.equal(out.sections[2].roles[1].companyUrl, '');

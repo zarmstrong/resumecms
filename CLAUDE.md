@@ -289,7 +289,8 @@ opening its `page` or `pdf`), where `sections` is an ordered list of
 (`[{ text, name, role, url }]`), `experience` (`resumeId`, `count`,
 `showDates`; issue #90), `image` (`{ image, caption }`, `image` null
 until one is uploaded; issue #92) and `divider` (only its `title`, a label
-on the rule; never dropped for being empty). Any section may be `hidden: true`: kept in the
+on the rule; never empty, but dropped by `dropStrayDividers()`, both
+copies, after another divider or with no section after it). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -452,7 +453,8 @@ site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
 kind needs `SECTION_FIELDS`, `checkSection()`, `resolveSection()` (both
 copies), the MCP `landingSection()` union, `LANDING_SCHEMA`, and a case in
-`LandingForm`'s `SectionFields` and `LandingView`'s `SectionBody`.
+`LandingForm`'s `SectionFields` and `LandingView`'s `SectionBody` (or, for
+one that isn't a titled `<section>` like the divider, its `renderSection`).
 
 `GET /api/public/home` is what `/` loads: `{ kind: 'landing' }` from
 `landingForHost()` when it's enabled, published and the host isn't in
