@@ -5,6 +5,8 @@ import { resolveLanding } from '../landing/resolveLanding.js';
 import { LandingForm } from './LandingForm.jsx';
 import { ResumeSelect } from './ResumeSelect.jsx';
 import { createSaveQueue } from './saveQueue.js';
+import { useLeaveGuard } from './useLeaveGuard.js';
+import { landingUnsavedWork } from './unsavedWork.js';
 import { LANDING_PAGE, landingShown } from './resumeLinks.js';
 import { applyUploadedImage, uploadSpot } from './landingImages.js';
 import {
@@ -25,7 +27,8 @@ const SAVE_DEBOUNCE_MS = 500;
 // The editor for the install's landing page (issue #70), opened from the
 // switcher as /editor?page=landing. Like EditorPage it's mounted fresh each
 // time and keeps its edits in its own save queue, flushed before a switch,
-// a publish, a discard and a logout, and sent on unmount. Its draft and
+// a publish, a discard and a logout, and sent on unmount. Leaving goes
+// through useLeaveGuard, which also asks before dropping AI suggestions. Its draft and
 // publish are separate from every resume's. `onStatus(status)` tells
 // ResumesEditor where it stands, so a resume's "View public site" knows
 // whether the default is at / or /resume.
@@ -59,6 +62,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   const landingRef = useRef(landing);
   landingRef.current = landing;
   const mountedRef = useRef(true);
+  const guard = useLeaveGuard({ saves, resumes, work: landingUnsavedWork({ landing, aiProposals }) });
 
   function setStatus(next) {
     setStatusState(next);
@@ -133,8 +137,10 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   function handleImageUpload(file, target) {
     const spot = uploadSpot(landingRef.current, target);
     const request = api.uploadLandingImage(file).then((image) => {
-      // The page went away mid-upload without a flush (the browser's Back
-      // button). Its draft may be stale, and writing the reference into the
+      // The page went away mid-upload without a flush. The leave guard
+      // waits for an upload (it's on the save queue) before every way out
+      // it sees, the browser's Back included, so this is one it didn't.
+      // Its draft may be stale, and writing the reference into the
       // server's could race a new editor page, so it's dropped, and the
       // image left for clean-up: never an edit lost, at worst an upload.
       if (!mountedRef.current) return image;
@@ -150,19 +156,17 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
     return saves.track(request);
   }
 
-  // Gets every edit to the server first; a save that failed stops here
-  // unless confirmed, so nothing goes on without an edit unnoticed.
-  async function afterSaving(next, { confirmFailed = true } = {}) {
+  // Gets every edit to the server first, for what reads the stored draft
+  // (a publish, an apply); a save that failed stops it outright, with its
+  // error shown, so nothing goes on without an edit unnoticed. Leaving asks
+  // instead (leaveFor).
+  async function afterSaving(next) {
     setBusy(true);
     try {
       const failed = await saves.flush();
       if (failed.length) {
-        const message = failed[0].message || 'unknown error';
-        if (!confirmFailed) {
-          setError(message);
-          return;
-        }
-        if (!window.confirm(`A change didn't save (${message}). Go on without it?`)) return;
+        setError(failed[0].message || 'unknown error');
+        return;
       }
       await next();
     } finally {
@@ -173,21 +177,18 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   function handlePublish() {
     // Publishing past a failed save would publish something other than
     // what's on screen, so a failure stops it outright.
-    return afterSaving(
-      async () => {
-        setPublishState('publishing');
-        setError(null);
-        try {
-          setStatus(await api.publishLanding());
-          setPublishState('published');
-          setTimeout(() => setPublishState((s) => (s === 'published' ? 'idle' : s)), 1500);
-        } catch (err) {
-          setPublishState('idle');
-          setError(err.message || 'Publish failed');
-        }
-      },
-      { confirmFailed: false }
-    );
+    return afterSaving(async () => {
+      setPublishState('publishing');
+      setError(null);
+      try {
+        setStatus(await api.publishLanding());
+        setPublishState('published');
+        setTimeout(() => setPublishState((s) => (s === 'published' ? 'idle' : s)), 1500);
+      } catch (err) {
+        setPublishState('idle');
+        setError(err.message || 'Publish failed');
+      }
+    });
   }
 
   // Copies the page's own colors and fonts into the default resume's site
@@ -201,20 +202,17 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       `Copy this page's colors and fonts into the site settings of ${name}?\n\n` +
       "Its other site settings stay as they are, and the dark palette isn't copied. Only that resume's draft changes: publish it to show them on the resume.";
     if (!window.confirm(question)) return;
-    afterSaving(
-      async () => {
-        setApplyState({ status: 'applying' });
-        try {
-          await api.applyLandingStyle();
-          if (mountedRef.current) {
-            setApplyState({ status: 'applied', message: `Copied into the draft of ${name}. Publish that resume to show them on it.` });
-          }
-        } catch (err) {
-          if (mountedRef.current) setApplyState({ status: 'error', message: err.message || "Couldn't apply them" });
+    afterSaving(async () => {
+      setApplyState({ status: 'applying' });
+      try {
+        await api.applyLandingStyle();
+        if (mountedRef.current) {
+          setApplyState({ status: 'applied', message: `Copied into the draft of ${name}. Publish that resume to show them on it.` });
         }
-      },
-      { confirmFailed: false }
-    );
+      } catch (err) {
+        if (mountedRef.current) setApplyState({ status: 'error', message: err.message || "Couldn't apply them" });
+      }
+    });
   }
 
   async function handleDiscard() {
@@ -337,13 +335,24 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
     dropProposals(new Set(shown.map((p) => p.proposal.id)));
   }
 
+  // Leaves through the guard: saves first (an upload too), then asks about
+  // a failed save and about suggestions not accepted yet.
+  async function leaveFor(next) {
+    setBusy(true);
+    try {
+      await guard.leave(next);
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
+  }
+
   function handleSwitch(id) {
     if (id === LANDING_PAGE) return;
-    afterSaving(() => onSwitch(id));
+    leaveFor(() => onSwitch(id));
   }
 
   function handleLogout() {
-    return afterSaving(async () => {
+    return leaveFor(async () => {
       await api.logout();
       onLogout();
     });

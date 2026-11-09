@@ -15,6 +15,8 @@ import {
 import { CoverLetterForm } from './CoverLetterForm.jsx';
 import { ResumeSelect } from './ResumeSelect.jsx';
 import { createSaveQueue } from './saveQueue.js';
+import { useLeaveGuard } from './useLeaveGuard.js';
+import { lettersUnsavedWork } from './unsavedWork.js';
 
 const SAVE_DEBOUNCE_MS = 500;
 // A download stuck behind another render is a 503 after the server's wait
@@ -30,9 +32,10 @@ const letterKey = (id) => `letter:${id}`;
 // EditorPage, and every edit goes through this page's save queue: a switch,
 // Back, a duplicate (the server copies the stored letter), a PDF download
 // and Log out all flush it first, and unmounting sends what's still
-// waiting. Letters aren't drafted or published, so there's no Publish: a
-// saved edit is the letter. The preview uses the resume's draft header and
-// look, as the PDF does.
+// waiting. Leaving goes through useLeaveGuard, which also asks before
+// dropping an AI proposal not accepted yet. Letters aren't drafted or
+// published, so there's no Publish: a saved edit is the letter. The
+// preview uses the resume's draft header and look, as the PDF does.
 //
 // With an AI provider set up, a letter can be drafted or rewritten whole,
 // or a paragraph at a time (letters/letterAi.js). Proposals are held here,
@@ -68,6 +71,7 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
   // The letters as last rendered, for a request reading the data to send.
   const lettersRef = useRef(letters);
   lettersRef.current = letters;
+  const guard = useLeaveGuard({ saves, resumes, work: lettersUnsavedWork({ letters, aiEntries }) });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -329,12 +333,23 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
     }
   }
 
+  // Leaves through the guard: saves first, then asks about a failed save
+  // and about proposals not accepted yet.
+  async function leaveFor(next) {
+    setBusy(true);
+    try {
+      await guard.leave(next);
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
+  }
+
   function handleSwitch(id) {
-    afterSaving(() => onSwitch(id));
+    leaveFor(() => onSwitch(id));
   }
 
   function handleLogout() {
-    return afterSaving(async () => {
+    return leaveFor(async () => {
       await api.logout();
       onLogout();
     });
@@ -376,7 +391,7 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
       <header className="ed-topbar">
         <div className="ed-resume-switcher">
           <ResumeSelect resumes={resumes} value={resume.id} onChange={handleSwitch} disabled={busy} />
-          <button className="ed-btn ed-btn-ghost" onClick={() => afterSaving(onBack)} disabled={busy}>
+          <button className="ed-btn ed-btn-ghost" onClick={() => leaveFor(onBack)} disabled={busy}>
             ← Back to resume
           </button>
         </div>

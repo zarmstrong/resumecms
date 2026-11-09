@@ -10,6 +10,8 @@ import { pdfUrl } from '../resume/pdfUrl.js';
 import { BLOCK_TYPE_LABELS, defaultDataForType } from './blockDefaults.js';
 import { createBlockReorderItems } from './blockDrag.js';
 import { createSaveQueue } from './saveQueue.js';
+import { useLeaveGuard } from './useLeaveGuard.js';
+import { editorUnsavedWork } from './unsavedWork.js';
 import { publicUrl } from './resumeLinks.js';
 import { ResumeSelect } from './ResumeSelect.jsx';
 import { NewResumeModal, ResumeSettingsModal } from './ResumeModals.jsx';
@@ -147,6 +149,26 @@ export function EditorPage({
   // The tailoring run on screen: createTailorRun's state plus its brief and
   // items (for Retry), or null.
   const [tailorRun, setTailorRun] = useState(null);
+  // Whether a dialog that asks before closing holds changes not saved yet,
+  // so leaving the page some other way asks too.
+  const [resumeSettingsDirty, setResumeSettingsDirty] = useState(false);
+  const [accountSettingsDirty, setAccountSettingsDirty] = useState(false);
+
+  // Every way out of this page goes through the guard (issue #105): what it
+  // would lose is the previewed proposals, the plan, a running tailoring
+  // run and those dialogs, on top of the save queue.
+  const guard = useLeaveGuard({
+    saves,
+    resumes,
+    work: editorUnsavedWork({
+      blocks,
+      aiProposals,
+      planHides,
+      planOrder,
+      tailorRun,
+      forms: [resumeSettingsDirty && 'Resume settings', accountSettingsDirty && 'Account Settings'].filter(Boolean),
+    }),
+  });
 
   const columnsRef = useRef(null);
   // The current blocks, for requests a tailoring run sends after the
@@ -289,9 +311,9 @@ export function EditorPage({
   }, [pdfPending, rapi]);
 
   // Unmounting (another resume opened, or logging out) sends whatever is
-  // still waiting on its debounce rather than dropping it. A switch started
-  // here has already waited for them (leaveFor), so this is for one that
-  // wasn't, like the browser's back button.
+  // still waiting on its debounce rather than dropping it. Every way out
+  // the guard sees has already waited for them (leaveFor, and the
+  // browser's Back once blocked), so this is for one it didn't.
   useEffect(() => () => saves.runWaiting(), [saves]);
 
   // A tailoring run sends nothing more once this resume is closed, and one
@@ -318,35 +340,34 @@ export function EditorPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when it has loaded
   }, [loading]);
 
-  // Gets every edit to the server, then does `next`: for whatever reads
-  // the server's copy (opening another resume, copying this one). A save
-  // that failed is reported, and only a confirm goes on without it.
-  async function afterSaving(next) {
+  // Leaves this page through the guard, then does `next`: gets every edit
+  // to the server first (opening another resume, or copying this one, reads
+  // the server's copy), reports a save that failed, and asks before
+  // dropping what can't be saved (open AI proposals, the plan, a tailoring
+  // run). Only a confirm goes on past either.
+  async function leaveFor(next) {
     setSwitching(true);
     try {
-      const failed = await saves.flush();
-      if (failed.length && !window.confirm(`A change didn't save (${failed[0].message || 'unknown error'}). Go on without it?`)) return;
-      await next();
+      await guard.leave(next);
     } finally {
       setSwitching(false);
     }
   }
 
   function handleSwitch(id) {
-    afterSaving(() => onSwitch(id));
+    leaveFor(() => onSwitch(id));
   }
 
   // `tailor` ({ brief, types, plan }) tailors the copy once it's open.
+  // Asked before it's made, so a Cancel leaves no copy behind.
   async function handleCreateResume(input, tailor = null) {
-    let created;
-    await afterSaving(async () => {
-      ({ resume: created } = await api.createResume(input));
+    await leaveFor(async () => {
+      const { resume: created } = await api.createResume(input);
+      // It exists now, so a failed reload mustn't read as a failed create (a
+      // retry would make a second one): open it from the list we have.
+      const list = await onResumesChanged().catch(() => [...resumes, created]);
+      onSwitch(created.id, list, tailor);
     });
-    if (!created) return;
-    // It exists now, so a failed reload mustn't read as a failed create (a
-    // retry would make a second one): open it from the list we have.
-    const list = await onResumesChanged().catch(() => [...resumes, created]);
-    onSwitch(created.id, list, tailor);
   }
 
   // AI tailoring (issue #53): one rewrite per item (tailorRun.js), each a
@@ -427,10 +448,14 @@ export function EditorPage({
     setPlanOrder(null);
   }
 
-  async function handleResumeDeleted() {
-    // It's gone either way, so a failed reload still opens the default.
-    const list = await onResumesChanged().catch(() => resumes.filter((r) => r.id !== resume.id));
-    onSwitch(list.find((r) => r.isDefault).id, list);
+  // Its deletion was confirmed, and nothing here outlives it, so the guard
+  // doesn't ask.
+  function handleResumeDeleted() {
+    return guard.leaveUnasked(async () => {
+      // It's gone either way, so a failed reload still opens the default.
+      const list = await onResumesChanged().catch(() => resumes.filter((r) => r.id !== resume.id));
+      onSwitch(list.find((r) => r.isDefault).id, list);
+    });
   }
   // Any edit or discard supersedes the message from the last publish; the
   // lasting state (an out-of-date PDF) is carried by pdfStale instead.
@@ -921,7 +946,7 @@ export function EditorPage({
 
   function handleLogout() {
     // Before the session ends, or the waiting saves would go out without it.
-    return afterSaving(async () => {
+    return leaveFor(async () => {
       await api.logout();
       onLogout();
     });
@@ -946,7 +971,7 @@ export function EditorPage({
           </button>
           <button
             className="ed-btn ed-btn-ghost"
-            onClick={() => afterSaving(onOpenLetters)}
+            onClick={() => leaveFor(onOpenLetters)}
             disabled={switching}
             title="Write cover letters that go with this resume"
           >
@@ -1024,7 +1049,10 @@ export function EditorPage({
           {/* No file yet (never published, or its only render failed): the
               link would leave the editor for a JSON 404. */}
           {pdfVersion ? (
-            <a className="ed-btn ed-btn-ghost" href={pdfUrl(pdfVersion, rapi.pdfPath)}>
+            // `download`: saved without leaving the page, so it never sets
+            // off the leave guard's beforeunload prompt (the server names
+            // the file).
+            <a className="ed-btn ed-btn-ghost" href={pdfUrl(pdfVersion, rapi.pdfPath)} download>
               Download PDF
             </a>
           ) : (
@@ -1266,6 +1294,7 @@ export function EditorPage({
           landingShown={landingShown}
           onChanged={onResumesChanged}
           onDeleted={handleResumeDeleted}
+          onDirtyChange={setResumeSettingsDirty}
           onClose={() => setResumeSettingsOpen(false)}
         />
       )}
@@ -1274,6 +1303,7 @@ export function EditorPage({
           username={username}
           onUsernameChange={setUsername}
           onAiSettingsChange={setAiSettings}
+          onDirtyChange={setAccountSettingsDirty}
           onClose={() => setSettingsOpen(false)}
         />
       )}

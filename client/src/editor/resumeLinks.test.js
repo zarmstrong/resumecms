@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LETTERS_PAGE, editorParams, parseHostnames, pickResume, publicUrl, resumeLabel, resumePatch } from './resumeLinks.js';
+import { LETTERS_PAGE, editorPageOf, editorParams, leavesEditorPage, parseHostnames, pickResume, publicUrl, resumeLabel, resumePatch } from './resumeLinks.js';
 
 const resume = (fields) => ({
   id: 'r',
@@ -88,4 +88,33 @@ test('editor params name the resume unless it is the default, and the page when 
   assert.deepEqual(editorParams(main, LETTERS_PAGE), { page: 'letters' });
   assert.deepEqual(editorParams({ id: 'r2', isDefault: false }), { resume: 'r2' });
   assert.deepEqual(editorParams({ id: 'r2', isDefault: false }, LETTERS_PAGE), { page: 'letters', resume: 'r2' });
+});
+
+test('an editor location names the page ResumesEditor shows for it', () => {
+  const sales = resume({ id: 'r2' });
+  const list = [main, sales];
+  const at = (search, pathname = '/editor') => editorPageOf(list, { pathname, search });
+  assert.equal(at(''), 'resume:main');
+  assert.equal(at('?resume=r2'), 'resume:r2');
+  assert.equal(at('?resume=gone'), 'resume:main', 'a resume that is gone opens the default');
+  assert.equal(at('?page=letters&resume=r2'), 'letters:r2');
+  assert.equal(at('?page=letters'), 'letters:main');
+  assert.equal(at('?page=landing&resume=r2'), 'landing');
+  assert.equal(at('?page=nonsense&resume=r2'), 'resume:r2', 'an unknown page is the resume editor');
+  assert.equal(at('', '/editor/'), 'resume:main');
+  assert.equal(at('', '/r/sales'), 'path:/r/sales');
+});
+
+test("rewriting the address to the same page isn't leaving it; any other page is", () => {
+  const sales = resume({ id: 'r2' });
+  const list = [main, sales];
+  const loc = (search, pathname = '/editor') => ({ pathname, search });
+  // ResumesEditor's canonical address: ?resume= naming the default or a deleted resume
+  assert.equal(leavesEditorPage(list, loc('?resume=main'), loc('')), false);
+  assert.equal(leavesEditorPage(list, loc('?resume=gone'), loc('')), false);
+  assert.equal(leavesEditorPage(list, loc('?page=letters&resume=main'), loc('?page=letters')), false);
+  assert.equal(leavesEditorPage(list, loc(''), loc('?resume=r2')), true);
+  assert.equal(leavesEditorPage(list, loc('?resume=r2'), loc('?page=letters&resume=r2')), true);
+  assert.equal(leavesEditorPage(list, loc('?resume=r2'), loc('?page=landing')), true);
+  assert.equal(leavesEditorPage(list, loc(''), loc('', '/')), true, 'out of the editor');
 });

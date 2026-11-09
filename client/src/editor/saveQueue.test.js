@@ -176,3 +176,58 @@ test('runWaiting sends what is waiting without waiting for it (unmount)', () => 
   q.runWaiting();
   assert.deepEqual(ran, ['block 1']);
 });
+
+test('pending counts what is waiting, in flight and failed, and isIdle is true only with none', async () => {
+  const timers = fakeTimers();
+  const q = createSaveQueue({ delayMs: 500, timers });
+  let notified = 0;
+  const unsubscribe = q.subscribe(() => {
+    notified += 1;
+  });
+  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 0, failed: 0 });
+  assert.equal(q.isIdle(), true);
+
+  const header = deferred();
+  const site = deferred();
+  q.schedule('header', () => q.track(header.promise, 'header'));
+  q.schedule('site', () => q.track(site.promise, 'site').catch(() => {}));
+  assert.deepEqual(q.pending(), { waiting: 2, inFlight: 0, failed: 0 }, 'on their debounce');
+  assert.equal(q.isIdle(), false);
+
+  timers.fireAll();
+  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 2, failed: 0 }, 'sent, not answered');
+
+  header.resolve({});
+  site.reject(new Error('400 bad site'));
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 0, failed: 1 }, 'the failure is kept');
+  assert.equal(q.isIdle(), false, 'a kept failure is still unsaved work');
+
+  await q.track(Promise.resolve({}), 'site');
+  await Promise.resolve();
+  assert.equal(q.isIdle(), true, 'until a newer write of its key succeeds');
+  assert.ok(notified >= 6, 'every change told the subscriber');
+
+  unsubscribe();
+  const before = notified;
+  q.schedule('header', () => {});
+  assert.equal(notified, before, 'not after unsubscribing');
+});
+
+test('an unkeyed write counts while in flight only, and forget clears what it drops', async () => {
+  const timers = fakeTimers();
+  const q = createSaveQueue({ delayMs: 500, timers });
+  const upload = deferred();
+  q.track(upload.promise).catch(() => {});
+  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 1, failed: 0 });
+  upload.reject(new Error('413'));
+  await new Promise((r) => setImmediate(r));
+  assert.equal(q.isIdle(), true, 'its failure is only reported by a flush that waited on it');
+
+  q.track(Promise.reject(new Error('500')), 'block:1').catch(() => {});
+  q.schedule('block:2', () => {});
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(q.pending(), { waiting: 1, inFlight: 0, failed: 1 });
+  q.forget(() => true);
+  assert.equal(q.isIdle(), true);
+});
