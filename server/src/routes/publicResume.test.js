@@ -111,7 +111,21 @@ test('the setting is drafted: switching it off takes effect on publish', async (
 test('a snapshot published before the setting existed has the link on', async () => {
   const stored = JSON.parse(db.prepare("SELECT value FROM settings WHERE key = 'landing_published'").get().value);
   delete stored.homeLink;
+  delete stored.homeLinkLabel;
   db.prepare("UPDATE settings SET value = ? WHERE key = 'landing_published'").run(JSON.stringify(stored));
+  assert.deepEqual((await get('/resume')).json.home, HOME);
+});
+
+test("the label is the published snapshot's, trimmed, not the draft's; a blank one says Home", async () => {
+  store.setLanding({ ...store.getLanding(), homeLink: true, homeLinkLabel: '  Jo Doe ' });
+  assert.deepEqual((await get('/resume')).json.home, HOME, 'drafted, not published');
+  store.publishLanding();
+  assert.deepEqual((await get('/resume')).json.home, { href: '/', label: 'Jo Doe' });
+  assert.deepEqual((await get('/resumes/sales')).json.home, { href: '/', label: 'Jo Doe' });
+  store.setLanding({ ...store.getLanding(), homeLinkLabel: 'Back' });
+  assert.equal((await get('/resume')).json.home.label, 'Jo Doe', 'a draft edit leaves the published label');
+  store.setLanding({ ...store.getLanding(), homeLinkLabel: '   ' });
+  store.publishLanding();
   assert.deepEqual((await get('/resume')).json.home, HOME);
 });
 

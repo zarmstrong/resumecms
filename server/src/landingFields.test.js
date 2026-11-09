@@ -227,6 +227,7 @@ test('a draft stored before sections reads as the sections it showed, in order',
     ],
     seo: { title: '', description: '', noindex: false },
     homeLink: true,
+    homeLinkLabel: '',
   });
   // Stable, and the new shape (or nothing) passes through untouched.
   assert.deepEqual(upgradeLanding(old), upgraded);
@@ -464,4 +465,26 @@ test('homeLink is a boolean, on unless switched off, and never part of what the 
   assert.equal(upgradeLanding(off).homeLink, false);
   // It's read by the resume pages' link (landingStore.js), not shown here.
   assert.equal('homeLink' in resolveLanding(emptyLanding(), { resumes: new Map() }), false);
+});
+
+test('homeLinkLabel is a short string, empty unless set, and never part of what the page resolves to', () => {
+  assert.equal(emptyLanding().homeLinkLabel, '');
+  assert.equal(validateLanding({}, known()).homeLinkLabel, '');
+  assert.equal(validateLanding({ homeLinkLabel: 'Jo Doe' }, known()).homeLinkLabel, 'Jo Doe');
+  // Not trimmed on save (the editor saves while someone types).
+  assert.equal(validateLanding({ homeLinkLabel: 'Jo ' }, known()).homeLinkLabel, 'Jo ');
+  const atCap = 'x'.repeat(LANDING_LIMITS.homeLinkLabel);
+  assert.equal(validateLanding({ homeLinkLabel: atCap }, known()).homeLinkLabel, atCap);
+  assert.equal(status(() => validateLanding({ homeLinkLabel: `${atCap}x` }, known())), 400);
+  for (const value of [5, true, {}, []]) {
+    assert.equal(status(() => validateLanding({ homeLinkLabel: value }, known())), 400, JSON.stringify(value));
+  }
+  // The MCP merge: null resets it to empty.
+  const named = validateLanding({ homeLinkLabel: 'Jo' }, known());
+  assert.equal(validateLanding(mergeLandingPatch(named, { homeLinkLabel: null }), known()).homeLinkLabel, '');
+  // A draft or snapshot stored before it existed has the empty one.
+  const { homeLinkLabel: _, ...old } = emptyLanding();
+  assert.equal(upgradeLanding(old).homeLinkLabel, '');
+  assert.equal(upgradeLanding(named).homeLinkLabel, 'Jo');
+  assert.equal('homeLinkLabel' in resolveLanding(named, { resumes: new Map() }), false);
 });

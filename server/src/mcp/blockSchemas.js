@@ -266,6 +266,7 @@ export const LANDING_SCHEMA = {
       type: 'boolean',
       description: "Default true: while the landing page is shown at /, resume pages on that host (/resume, /r/<slug>, never a resume's own domain or its PDF) show a '← Home' link back to it. Takes effect on publish",
     },
+    homeLinkLabel: { type: 'string', description: "At most 40 characters: what that link says after the arrow; '' says 'Home'. Takes effect on publish" },
     actions: {
       type: 'array',
       description: "At most 3 buttons under the subheadline, the first drawn as the primary one; replaced whole by update_landing_page. One for a resume is shown only while it's public and published (for open: 'pdf', only while it has a PDF)",

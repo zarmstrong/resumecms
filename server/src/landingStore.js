@@ -184,13 +184,15 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   // The "← Home" link a resume page on `hostname` shows above itself
   // (issue #89), or null: only where landingForHost() would show the
   // landing page at `/`, and while its published snapshot keeps homeLink
-  // on (a draft's setting takes effect on publish, like the rest of it).
-  // So a resume's own domain never gets one. Cheaper than landingForHost(),
+  // on, saying that snapshot's homeLinkLabel, trimmed, or "Home" (a
+  // draft's settings take effect on publish, like the rest of it). So a
+  // resume's own domain never gets one. Cheaper than landingForHost(),
   // since nothing has to be resolved.
   function homeLinkForHost(hostname) {
     if (isResumeHost(hostname) || getSetting('landing_enabled') !== true) return null;
     const published = upgradeLanding(getSetting('landing_published'));
-    return published?.homeLink ? { ...HOME_LINK } : null;
+    if (!published?.homeLink) return null;
+    return { href: HOME_LINK.href, label: published.homeLinkLabel.trim() || HOME_LINK.label };
   }
 
   // The same on whichever host shows it: the published page while it's

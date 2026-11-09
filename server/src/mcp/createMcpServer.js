@@ -537,6 +537,11 @@ const LANDING_TOOLS = [
           .nullable()
           .optional()
           .describe("Whether resume pages show a '← Home' link back to the landing page while it's shown at / (default true)."),
+        homeLinkLabel: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("What that link says after the arrow, at most 40 characters; empty says 'Home'."),
         actions: z
           .array(landingAction())
           .nullable()
