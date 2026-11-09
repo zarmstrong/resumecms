@@ -48,7 +48,9 @@ function hasContent(section) {
     case 'text':
       return Boolean(section.body.trim());
     case 'items':
-      return section.items.some((item) => item.title.trim() || item.text.trim() || item.url.trim() || item.meta?.trim());
+      return section.items.some(
+        (item) => item.title.trim() || item.text.trim() || item.url.trim() || item.meta?.trim() || Boolean(item.image)
+      );
     case 'links':
       return section.links.length > 0;
     case 'resumes':

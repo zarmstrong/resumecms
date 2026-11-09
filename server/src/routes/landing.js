@@ -56,9 +56,10 @@ router.post('/discard-draft', handle((req, res) => {
 // See landingRewriteHandlers in routes/ai.js.
 router.post('/rewrite', ...landingRewriteHandlers());
 
-// An image upload (issue #92): the file itself as the body, whatever its
-// Content-Type says (the type is told from its bytes), parsed only here and
-// only after the login check above. Re-encoded and stored; responds with
+// An image upload (issue #92): the file itself as the body, parsed only here
+// and only after the login check above. Its type is told from its bytes, so
+// any Content-Type will do except application/json, which the app-wide
+// express.json() parses (and rejects) before this route sees it. Re-encoded and stored; responds with
 // { id, mime, width, height, src } for the draft to reference.
 const parseImage = express.raw({ type: () => true, limit: LANDING_IMAGE_LIMITS.uploadBytes });
 function imageBody(req, res, next) {
