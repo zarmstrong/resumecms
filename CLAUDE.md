@@ -471,6 +471,9 @@ edited copy passes it on with `carryItemKey()`, as `LandingForm` and
 `setLandingSlice()` do). A target that's gone by then (the hero switched
 away from an upload, the section or item removed, or an item whose key
 didn't follow it) drops the reference; content is never used to guess.
+A new image there starts with an empty `alt` (only the same image
+uploaded again keeps it), so the publish check asks for a description of
+the image actually shown.
 If the page unmounted mid-upload without a flush (the browser's Back
 button), the reference is dropped too: writing it into the server's draft
 could race a new editor page and overwrite its edits, so the worst case

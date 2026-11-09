@@ -15,9 +15,10 @@ const draft = {
   seo: { title: '', description: '', noindex: false },
 };
 
-test('the hero takes the upload only while it still shows an uploaded photo, keeping its alt', () => {
+test('the hero takes the upload only while it still shows an uploaded photo', () => {
   const spot = uploadSpot(draft, { kind: 'photo' });
-  assert.deepEqual(applyUploadedImage(draft, spot, ID).photoImage, { imageId: ID, alt: 'Jo at work' });
+  // A different image: the old description doesn't describe it.
+  assert.deepEqual(applyUploadedImage(draft, spot, ID).photoImage, { imageId: ID, alt: '' });
   // Switched to "No photo" and the headline edited meanwhile: nothing is
   // applied, so neither edit is undone.
   const later = { ...draft, photo: 'none', headline: 'Jo Doe' };
@@ -98,4 +99,30 @@ test('an item no content tells apart is still only the item itself (review round
   // And with nothing removed, an empty item is found wherever it went.
   const out = applyUploadedImage(list([b, a]), spot, ID);
   assert.deepEqual(out.sections[0].items.map((i) => Boolean(i.image)), [true, false]);
+});
+
+test('a replaced image keeps its alt text only when it is the same image again', () => {
+  const OLD = 'b'.repeat(64);
+  const described = { imageId: OLD, alt: 'Jo at work' };
+  const landing = {
+    ...draft,
+    photoImage: described,
+    sections: [
+      { id: 'pic', kind: 'image', title: '', image: described, caption: '' },
+      { id: 'list', kind: 'items', title: '', items: [{ ...item('One'), image: described }] },
+    ],
+    seo: { ...draft.seo, image: described },
+  };
+  const spots = [
+    [uploadSpot(landing, { kind: 'photo' }), (l) => l.photoImage],
+    [uploadSpot(landing, { kind: 'seo' }), (l) => l.seo.image],
+    [uploadSpot(landing, { kind: 'section', sectionId: 'pic' }), (l) => l.sections[0].image],
+    [uploadSpot(landing, { kind: 'item', sectionId: 'list', index: 0 }), (l) => l.sections[1].items[0].image],
+  ];
+  for (const [spot, at] of spots) {
+    // A new image: its alt starts empty, so it has to be described again.
+    assert.deepEqual(at(applyUploadedImage(landing, spot, ID)), { imageId: ID, alt: '' }, spot.target.kind);
+    // The same bytes uploaded again (the same id): the description still fits.
+    assert.deepEqual(at(applyUploadedImage(landing, spot, OLD)), described, spot.target.kind);
+  }
 });

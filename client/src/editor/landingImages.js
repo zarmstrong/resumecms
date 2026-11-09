@@ -44,13 +44,16 @@ export function uploadSpot(landing, target) {
   return item ? { target, key: itemKey(item) } : null;
 }
 
-// `landing` with the stored image `imageId` at `spot`, keeping any alt text
-// already there, or null when the spot is gone: the hero no longer shows
-// an uploaded photo, the section or the item was removed.
+// `landing` with the stored image `imageId` at `spot`, or null when the
+// spot is gone: the hero no longer shows an uploaded photo, the section or
+// the item was removed. The alt text there is kept only when it's the same
+// image (the same bytes uploaded again); a different image starts with an
+// empty one, so the editor's hint and the publish check ask for a
+// description of *this* image instead of passing on the last one's.
 export function applyUploadedImage(landing, spot, imageId) {
   if (!spot) return null;
   const { target } = spot;
-  const ref = (current) => ({ imageId, alt: typeof current?.alt === 'string' ? current.alt : '' });
+  const ref = (current) => ({ imageId, alt: current?.imageId === imageId && typeof current.alt === 'string' ? current.alt : '' });
   switch (target.kind) {
     case 'photo':
       return landing.photo === 'upload' ? { ...landing, photoImage: ref(landing.photoImage) } : null;
