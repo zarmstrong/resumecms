@@ -44,8 +44,8 @@ jobs:
           # Editing CI runs all of CI.
           all=$(has '^\.github/workflows/')
           server=$(has '^"?server/')
-          # Client tests import server modules they mirror (pageMeta.js,
-          # tailorPlan.js, ...), so a server change runs them too.
+          # Client tests import server modules they mirror (pageMeta.js and
+          # shareImages.js today), so a server change runs them too.
           client=$(has '^"?(client|server)/')
           templates=$(has '^"?(templates/|client/src/resume/templateRegistry\.js"?$|scripts/validate-templates\.mjs"?$)')
           [ "$all" = true ] && server=true client=true templates=true
