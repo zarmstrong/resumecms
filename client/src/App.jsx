@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
+import { RouterProvider, createBrowserRouter, useParams } from 'react-router-dom';
 import { api } from './api.js';
 import { PublicResumePage } from './resume/PublicResumePage.jsx';
 import { TemplatePreviewPage } from './resume/TemplatePreviewPage.jsx';
@@ -32,21 +32,26 @@ function SlugResumePage() {
   return <PublicResumePage key={slug} mode="web" slug={slug} />;
 }
 
+// A data router, not <BrowserRouter>: the editor's leave guard
+// (editor/useLeaveGuard.js, issue #105) needs useBlocker, which only works
+// with one. Nothing here loads data through it; every page fetches its own.
+// The catch-all keeps an unknown path as blank as it was under <Routes>
+// (the server only sends the shell for paths without a file extension),
+// rather than the data router's built-in 404 screen.
+const router = createBrowserRouter([
+  // The landing page or the default resume, per host (issue #70).
+  { path: '/', element: <HomePage /> },
+  { path: '/resume', element: <ResumeRoute /> },
+  { path: '/print', element: <PublicResumePage mode="print" /> },
+  { path: '/print/letter', element: <LetterPrintPage /> },
+  { path: '/print/card', element: <ShareCardPrintPage /> },
+  { path: '/r/:slug', element: <SlugResumePage /> },
+  { path: '/template-preview', element: <TemplatePreviewPage /> },
+  { path: '/template-preview/preset/:id', element: <TemplatePreviewPage /> },
+  { path: '/editor', element: <EditorGate /> },
+  { path: '*', element: null },
+]);
+
 export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        {/* The landing page or the default resume, per host (issue #70). */}
-        <Route path="/" element={<HomePage />} />
-        <Route path="/resume" element={<ResumeRoute />} />
-        <Route path="/print" element={<PublicResumePage mode="print" />} />
-        <Route path="/print/letter" element={<LetterPrintPage />} />
-        <Route path="/print/card" element={<ShareCardPrintPage />} />
-        <Route path="/r/:slug" element={<SlugResumePage />} />
-        <Route path="/template-preview" element={<TemplatePreviewPage />} />
-        <Route path="/template-preview/preset/:id" element={<TemplatePreviewPage />} />
-        <Route path="/editor" element={<EditorGate />} />
-      </Routes>
-    </BrowserRouter>
-  );
+  return <RouterProvider router={router} />;
 }

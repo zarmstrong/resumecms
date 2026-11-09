@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { TotpSettings } from './TotpSettings.jsx';
 import { AiSettings } from './AiSettings.jsx';
 
 // No backdrop onClick and no Escape-key handler by design: the user must
-// explicitly hit Save or Close to dismiss this modal.
-export function SettingsModal({ username, onUsernameChange, onAiSettingsChange, onClose }) {
+// explicitly hit Save or Close to dismiss this modal. `onDirtyChange(dirty)`
+// says whether its AI section holds unsaved changes (what Close asks
+// about), so leaving the page another way asks too.
+export function SettingsModal({ username, onUsernameChange, onAiSettingsChange, onDirtyChange, onClose }) {
   const [newUsername, setNewUsername] = useState(username || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -13,6 +15,10 @@ export function SettingsModal({ username, onUsernameChange, onAiSettingsChange, 
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [aiDirty, setAiDirty] = useState(false);
+  useEffect(() => {
+    onDirtyChange?.(aiDirty);
+  }, [aiDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   // The AI section has its own Save button; the modal's Save only covers
   // username/password, so don't let it (or Close) silently drop AI edits.

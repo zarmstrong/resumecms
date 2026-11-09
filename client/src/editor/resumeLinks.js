@@ -81,6 +81,27 @@ export function editorParams(resume, page = null) {
   return params;
 }
 
+// Which editor page a location (`{ pathname, search }`) shows, as
+// ResumesEditor picks it: 'landing', 'letters:<id>' or 'resume:<id>', or
+// 'path:<pathname>' outside /editor. Two locations of one page differ only
+// in how they're written (?resume= naming the default, or a resume that's
+// gone), so ResumesEditor's own rewriting of the address isn't leaving.
+export function editorPageOf(resumes, { pathname, search }) {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  if (path !== '/editor') return `path:${path}`;
+  const params = new URLSearchParams(search);
+  const page = params.get('page');
+  if (page === LANDING_PAGE) return LANDING_PAGE;
+  const id = pickResume(resumes, params.get('resume'))?.id ?? null;
+  return page === LETTERS_PAGE ? `${LETTERS_PAGE}:${id}` : `resume:${id}`;
+}
+
+// Whether going from one location to the other unmounts the editor page
+// shown (issue #105), so a leave guard has to ask.
+export function leavesEditorPage(resumes, from, to) {
+  return editorPageOf(resumes, from) !== editorPageOf(resumes, to);
+}
+
 // What the landing page's status means for visitors: whether `/` shows it
 // (on this, the main domain). `status` is { enabled, publishedAt }.
 export function landingShown(status) {

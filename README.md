@@ -13,7 +13,14 @@ exact same components.
   reorder or nest; the bullet points inside an experience block drag too (a
   bullet moves among its siblings, carrying its sub-bullets — dragging can't
   turn a bullet into a sub-bullet or back), or move with the Up/Down arrow
-  keys on their drag handle.
+  keys on their drag handle. Edits save as you type. Leaving a page of the
+  editor (another resume, the landing page or cover letters, Back, Log out,
+  or the browser's Back and Forward) first saves what's still waiting, and
+  asks before dropping what can't be saved: AI suggestions you haven't
+  accepted, a tailoring run in progress, or unsaved changes in an open
+  dialog. Reloading or closing the tab while any of that, or a save, is
+  outstanding gets the browser's own "Leave site?" prompt; Download PDF
+  never does.
 - **`/r/<link name>`** — another resume's public page, once it's public
   and published (see "several resumes" below).
 - **`/print`** — the print-styled version of the resume (used internally by
