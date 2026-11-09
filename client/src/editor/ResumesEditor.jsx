@@ -10,10 +10,13 @@ import { LANDING_PAGE, LETTERS_PAGE, editorParams, landingShown, pickResume } fr
 // default when it names none or one that's gone. EditorPage is keyed by
 // the resume's id, so switching mounts a fresh one: nothing of the previous
 // resume (its AI proposals, a debounce timer, a response still in flight)
-// can land on the next. EditorPage flushes its waiting saves before it
-// asks to switch, and again on unmount for a switch it didn't start (the
-// browser's back button). A resume's cover letters (issue #71) are its
-// ?page=letters, mounted the same way.
+// can land on the next. Each page leaves through useLeaveGuard (issue
+// #105): it flushes its waiting saves and asks before dropping what it
+// can't save, both for its own switches and for the browser's Back and
+// Forward, which the guard blocks until then; this component's own
+// rewriting of the address below stays on the same page, so it never
+// is. A resume's cover letters (issue #71) are its ?page=letters, mounted
+// the same way.
 export function ResumesEditor({ onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [resumes, setResumes] = useState(null);

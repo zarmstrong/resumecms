@@ -206,6 +206,33 @@ be tracked there too or a switch can outrun it. The switcher's dialogs are
 in `ResumeModals.jsx`, and their pure parts (which resume to open, its
 public URL, the settings form's PATCH) in `resumeLinks.js`.
 
+Every way out of an editor page goes through `useLeaveGuard()`
+(`editor/useLeaveGuard.js`, issue #105), shared by `EditorPage`,
+`CoverLettersPage` and `LandingEditorPage`. Each page describes what it
+holds only on screen with one pure function in `editor/unsavedWork.js`
+(`editorUnsavedWork()`, `lettersUnsavedWork()`, `landingUnsavedWork()`:
+previewed AI proposals, counted through `previewedProposals()` and its
+letter and landing equivalents so stale ones don't count, the plan's
+hides and order, a running tailoring run, dialogs that report
+`onDirtyChange`), and the guard adds the save queue's `pending()`
+(waiting, in flight, failed; `isIdle()`/`subscribe()` for React). The
+page's own exits (switcher, Cover letters, Back, New resume, Log out) call
+`guard.leave(next)`: flush, the failed-save confirm, then
+`leaveQuestion()`'s confirm, and `next` only if both are accepted; New
+resume asks before it creates the copy, so the `pendingTailor` hand-off
+is untouched. `leaveUnasked()` is for an exit nothing survives (the
+resume just deleted). Everything else is caught by react-router's
+`useBlocker`, which is why `App.jsx` uses `createBrowserRouter` +
+`RouterProvider` rather than `<BrowserRouter>` (add routes to that list):
+a navigation is blocked, then asked about the same way, only while
+`mustGuard()` and only when `leavesEditorPage()` says it unmounts the page,
+so `ResumesEditor`'s own `replace` rewriting of `?resume=` passes. A
+`beforeunload` handler is registered only while there's something to
+lose, so an idle editor keeps the back/forward cache; the Download PDF
+link has `download` so it never fires it. `onLogout` itself never asks. A
+new page or a new kind of proposal belongs in that page's
+`unsavedWork.js` function, or leaving silently drops it.
+
 `migrateToResumes()` (`server/src/resumeMigration.js`) turns an install
 from before variants into its default resume (slug `main`) on first boot:
 it attaches the blocks, moves the settings rows, and moves

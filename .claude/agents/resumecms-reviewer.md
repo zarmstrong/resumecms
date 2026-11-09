@@ -46,6 +46,12 @@ in prose; check the diff against the ones that apply, especially:
   in `CONTENT_TOOLS`.
 - AI output schemas stay strict-mode valid (`additionalProperties: false`,
   every property required, no recursion).
+- Every way out of an editor page goes through `useLeaveGuard()`, and a
+  new kind of on-screen-only work (a proposal, a dirty dialog, a run) is
+  counted in that page's `unsavedWork.js` function; a new route goes in
+  `App.jsx`'s `createBrowserRouter` list. Anything that changes the save
+  queue's `pending()` notifies its subscribers, or `beforeunload` misses it
+  (issue #105).
 - SPA routes contain no dot; CI jobs stay behind `changes` and in
   `ci-passed`'s `needs`.
 - CLAUDE.md/README.md prose still matches the behavior.

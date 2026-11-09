@@ -16,21 +16,36 @@
 // kept, and every later flush() reports it, until a newer write under the
 // same key succeeds. An unkeyed write's failure is only reported by a flush
 // that waited on it; those writes resync, or never applied locally.
+//
+// pending() says what leaving now would put at risk (issue #105): saves
+// still waiting, writes in flight, and kept failures, as counts. isIdle()
+// is true when all three are none, and subscribe(listener) calls the
+// listener whenever that may have changed (React's useSyncExternalStore).
 export function createSaveQueue({ delayMs, timers = globalThis }) {
   const waiting = new Map(); // key -> { timer, run }
   const inFlight = new Map(); // promise -> key (undefined for an unkeyed write)
   const latest = new Map(); // key -> the newest promise tracked under it
   const failed = new Map(); // key -> error
+  const listeners = new Set();
+
+  function changed() {
+    for (const listener of [...listeners]) listener();
+  }
 
   function track(promise, key) {
     inFlight.set(promise, key);
     if (key !== undefined) latest.set(key, promise);
+    // An upload tracked on its own sets no page state, so the guard learns
+    // of it only from here.
+    changed();
     const settle = (err) => {
       inFlight.delete(promise);
       // An older write settling late says nothing about the newer one.
-      if (key === undefined || latest.get(key) !== promise) return;
-      if (err) failed.set(key, err);
-      else failed.delete(key);
+      if (key !== undefined && latest.get(key) === promise) {
+        if (err) failed.set(key, err);
+        else failed.delete(key);
+      }
+      changed();
     };
     promise.then(
       () => settle(null),
@@ -47,10 +62,12 @@ export function createSaveQueue({ delayMs, timers = globalThis }) {
         timers.clearTimeout(entry.timer);
         waiting.delete(key);
         save();
+        changed();
       },
     };
     entry.timer = timers.setTimeout(entry.run, delayMs);
     waiting.set(key, entry);
+    changed();
   }
 
   function runWaiting() {
@@ -72,6 +89,7 @@ export function createSaveQueue({ delayMs, timers = globalThis }) {
     }
     for (const key of [...latest.keys()]) if (match(key)) latest.delete(key);
     for (const key of [...failed.keys()]) if (match(key)) failed.delete(key);
+    changed();
     return cancelled;
   }
 
@@ -90,5 +108,18 @@ export function createSaveQueue({ delayMs, timers = globalThis }) {
     return [...failed.values(), ...unkeyed];
   }
 
-  return { schedule, track, flush, runWaiting, forget };
+  function pending() {
+    return { waiting: waiting.size, inFlight: inFlight.size, failed: failed.size };
+  }
+
+  function isIdle() {
+    return waiting.size === 0 && inFlight.size === 0 && failed.size === 0;
+  }
+
+  function subscribe(listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+
+  return { schedule, track, flush, runWaiting, forget, pending, isIdle, subscribe };
 }

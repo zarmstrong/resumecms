@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { parseHostnames, publicUrl, resumePatch } from './resumeLinks.js';
 import { TailorFields, emptyTailorForm, tailorBrief, tailorCount, tailorPlanOptions } from './TailorModal.jsx';
@@ -109,7 +109,9 @@ export function NewResumeModal({ resume, defaultResume, blocks, ai, onCreate, on
 // sends only what changed (resumePatch). `onChanged()` reloads the list
 // (this resume's new settings come back through the `resume` prop);
 // `onDeleted()` is EditorPage's, which reloads and opens the default.
-export function ResumeSettingsModal({ resume, defaultResume, landingShown = false, onChanged, onDeleted, onClose }) {
+// `onDirtyChange(dirty)` tells it whether the form holds unsaved changes,
+// so leaving the page another way (the browser's Back) asks too.
+export function ResumeSettingsModal({ resume, defaultResume, landingShown = false, onChanged, onDeleted, onDirtyChange, onClose }) {
   const [form, setForm] = useState(() => ({
     name: resume.name,
     slug: resume.slug,
@@ -122,6 +124,10 @@ export function ResumeSettingsModal({ resume, defaultResume, landingShown = fals
 
   const patch = resumePatch(resume, form);
   const dirty = Object.keys(patch).length > 0;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const hasDomains = parseHostnames(form.hostnames).length > 0;
   const url = publicUrl(resume, window.location, { landingShown });
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
