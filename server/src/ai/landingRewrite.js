@@ -167,6 +167,8 @@ function pageContext(landing, target) {
   return {
     headline: mark({ kind: 'headline' }, landing.headline),
     subheadline: mark({ kind: 'subheadline' }, landing.subheadline),
+    availability: landing.availability,
+    buttons: (landing.actions ?? []).map((action) => action.label).filter(Boolean),
     sections: landing.sections.map((section) => {
       const base = { kind: section.kind, title: section.title };
       switch (section.kind) {

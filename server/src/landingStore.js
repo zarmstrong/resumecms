@@ -1,7 +1,8 @@
 import { httpError } from './httpError.js';
 import { createSettings, createResumeSettings } from './settings.js';
 import { requestHostKey } from './hostnames.js';
-import { cardResumeIds, initialLanding, mergeLandingPatch, resolveLanding, upgradeLanding, validateLanding } from './landingFields.js';
+import { initialLanding, mergeLandingPatch, referencedResumeIds, resolveLanding, upgradeLanding, validateLanding } from './landingFields.js';
+import { pdfPathFor, pdfVersionOf } from './pdfPaths.js';
 
 // The landing page's storage and publishing (issue #70), composed into the
 // resume store by createResumeStore() — the editor's routes and the MCP
@@ -19,8 +20,8 @@ import { cardResumeIds, initialLanding, mergeLandingPatch, resolveLanding, upgra
 // out the other's half-finished edits.
 //
 // `defaultResumeId` is the resume store's own (a function: the default can
-// change between calls).
-export function createLandingStore({ db, defaultResumeId }) {
+// change between calls), `pdfDir` where its PDFs are (pdfPathFor()).
+export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   const { getSetting, setSetting } = createSettings(db);
 
   function touchLanding() {
@@ -44,8 +45,8 @@ export function createLandingStore({ db, defaultResumeId }) {
 
   // Replaces the draft, or with `merge: true` shallow-merges into it (as the
   // MCP tool does; a list is replaced whole). Either way the result is
-  // checked in full (landingFields.js): a card already in the draft may
-  // name a resume deleted since, a new one must name one that exists.
+  // checked in full (landingFields.js): a card or action already in the
+  // draft may name a resume deleted since, a new one must name one that exists.
   function setLanding(input, { merge = false } = {}) {
     const current = getLanding();
     const next = checkLanding(merge ? mergeLandingPatch(current, input) : input ?? {}, current);
@@ -55,7 +56,7 @@ export function createLandingStore({ db, defaultResumeId }) {
   }
 
   function checkLanding(input, current) {
-    return validateLanding(input, { knownResumeIds: knownResumeIds(), previousResumeIds: cardResumeIds(current) });
+    return validateLanding(input, { knownResumeIds: knownResumeIds(), previousResumeIds: referencedResumeIds(current) });
   }
 
   // `input` checked as setLanding() would check it, without saving it: the
@@ -109,10 +110,22 @@ export function createLandingStore({ db, defaultResumeId }) {
     return getLandingStatus();
   }
 
+  // A visitor's link to a resume's PDF, or '' while it has none. The
+  // default's is the host's own (the landing page is only shown on hosts
+  // whose resume is the default). It carries the file's version, as
+  // client/src/resume/pdfUrl.js's pdfUrl() adds it, so each render is a
+  // fresh URL.
+  function pdfHref(row, isDefault) {
+    const version = pdfVersionOf(pdfPathFor(pdfDir, row.id));
+    if (!version) return '';
+    const path = isDefault ? '/api/public/resume.pdf' : `/api/public/resumes/${encodeURIComponent(row.slug)}/resume.pdf`;
+    return `${path}?v=${encodeURIComponent(version)}`;
+  }
+
   // What the page's references point at right now, for resolveLanding():
   // the default resume's published photo and look, and every resume a
-  // visitor may open (public and published) with its link. The default
-  // lives at /resume while the landing page holds `/`.
+  // visitor may open (public and published) with its link and its PDF's.
+  // The default lives at /resume while the landing page holds `/`.
   function landingContext() {
     const defaultId = defaultResumeId();
     const defaultPublished = publishedResumeOf(defaultId);
@@ -129,6 +142,7 @@ export function createLandingStore({ db, defaultResumeId }) {
         {
           href: row.id === defaultId ? '/resume' : `/r/${row.slug}`,
           title: JSON.parse(row.value)?.header?.title || '',
+          pdfHref: pdfHref(row, row.id === defaultId),
         },
       ])
     );

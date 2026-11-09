@@ -18,6 +18,20 @@ export function pdfPathFor(pdfDir, resumeId) {
   return path.join(pdfDir, `${resumeId}.pdf`);
 }
 
+// Identifies the PDF at `filePath` (mtime plus size, so even a filesystem
+// with coarse timestamps tells two renders apart), or null if there is
+// none. The client appends it to the PDF URL as `?v=` so every render
+// yields a URL no cache has seen before (see routes/pdf.js and
+// client/src/resume/pdfUrl.js).
+export function pdfVersionOf(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    return `${Math.floor(stat.mtimeMs)}-${stat.size}`;
+  } catch {
+    return null;
+  }
+}
+
 // A cover letter's PDF (issue #71), rendered on demand and kept until its
 // content changes. A directory of its own, so a letter id can never be
 // mistaken for a resume id's file.

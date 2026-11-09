@@ -42,8 +42,18 @@ export function LandingView({ landing, preview = false, highlightIds = null }) {
         <header className={`l-hero${highlightIds?.has('hero') ? ' l-ai-preview' : ''}`}>
           {landing.photoUrl && <img className="l-photo" src={landing.photoUrl} alt="" />}
           <div>
+            {landing.availability && <p className="l-availability">{landing.availability}</p>}
             {landing.headline && <h1 className="l-headline">{landing.headline}</h1>}
             {landing.subheadline && <p className="l-subheadline">{landing.subheadline}</p>}
+            {landing.actions?.length > 0 && (
+              <div className="l-actions">
+                {landing.actions.map((action, i) => (
+                  <a key={i} className={`l-action${i === 0 ? ' l-action-primary' : ''}`} {...hrefProps(action.href)}>
+                    {action.label}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         </header>
 
@@ -59,6 +69,12 @@ export function LandingView({ landing, preview = false, highlightIds = null }) {
       </main>
     </div>
   );
+}
+
+// A link the server made (a resume's page or PDF, always a path on this
+// site) opens here; anything else is a link someone typed, so linkProps().
+function hrefProps(href) {
+  return /^\/(?!\/)/.test(href) ? { href } : linkProps(href);
 }
 
 function SectionBody({ section }) {
@@ -104,13 +120,25 @@ function SectionBody({ section }) {
       return (
         <nav className="l-cards" aria-label={section.title || 'Resumes'}>
           {section.cards.map((card, i) => (
-            <a key={i} className="l-card" href={card.href}>
-              <span className="l-card-label">{card.label}</span>
+            // The label's link covers the whole card (.l-card-link::after),
+            // so the PDF link can sit inside it without nesting anchors.
+            <div key={i} className="l-card">
+              <a className="l-card-label l-card-link" {...hrefProps(card.href)}>
+                {card.label}
+              </a>
               {card.blurb && <span className="l-card-blurb">{card.blurb}</span>}
-              <span className="l-card-cta" aria-hidden="true">
-                View resume →
+              <span className="l-card-cta">
+                <span aria-hidden="true">View resume →</span>
+                {card.pdfHref && (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    <a className="l-card-pdf" {...hrefProps(card.pdfHref)} aria-label={`${card.label} (PDF)`}>
+                      PDF
+                    </a>
+                  </>
+                )}
               </span>
-            </a>
+            </div>
           ))}
         </nav>
       );

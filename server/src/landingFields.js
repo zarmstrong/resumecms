@@ -6,7 +6,13 @@ import { httpError } from './httpError.js';
 // here; landingStore.js stores it and decides which hosts get it.
 //
 // The draft is a fixed set of fields, all always present once stored:
-//   { headline, subheadline, photo, photoUrl, sections, seo }
+//   { headline, subheadline, availability, actions, photo, photoUrl, sections, seo }
+// `availability` is a short line shown above the headline ("Open to senior
+// backend roles · Remote"), '' for none. `actions` (issue #88) are the
+// hero's buttons, at most three, the first drawn as the primary one:
+//   { type: 'link', label, url }
+//   { type: 'resume', label, resumeId, open: 'page' | 'pdf' }
+// A resume action follows a card's rules (see resolveLanding()).
 // `photo` says where the photo comes from: 'resume' (the default resume's
 // published header photo), 'custom' (photoUrl) or 'none'. `sections` is
 // shown in order under the headline, each `{ id, kind, title, ... }` with
@@ -14,7 +20,8 @@ import { httpError } from './httpError.js';
 //   text    — body: plain text, a blank line between paragraphs
 //   items   — items: [{ title, text, url }], e.g. projects
 //   links   — links: [{ type, label, url }]
-//   resumes — cards: [{ resumeId, label, blurb }] linking to resumes
+//   resumes — cards: [{ resumeId, label, blurb, showPdf }] linking to
+//             resumes, with the PDF next to the page when showPdf is on
 // `id` only tells sections apart in the editor; it never leaves the server
 // publicly. `seo` is { title, description, noindex } (issue #87): what
 // the page's <title>, description and link previews say instead of the
@@ -31,6 +38,9 @@ import { httpError } from './httpError.js';
 export const LANDING_LIMITS = {
   headline: 120,
   subheadline: 200,
+  availability: 80,
+  actions: 3,
+  actionLabel: 60,
   sections: 20,
   sectionTitle: 120,
   text: 4000,
@@ -59,7 +69,10 @@ export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter',
 
 export const SECTION_KINDS = ['text', 'items', 'links', 'resumes'];
 
-const FIELDS = ['headline', 'subheadline', 'photo', 'photoUrl', 'sections', 'seo'];
+export const ACTION_TYPES = ['link', 'resume'];
+export const ACTION_OPENS = ['page', 'pdf'];
+
+const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'sections', 'seo'];
 const SEO_FIELDS = ['title', 'description', 'noindex'];
 const SECTION_FIELDS = {
   text: ['id', 'kind', 'title', 'body'],
@@ -69,7 +82,11 @@ const SECTION_FIELDS = {
 };
 const ITEM_FIELDS = ['title', 'text', 'url'];
 const LINK_FIELDS = ['type', 'label', 'url'];
-const CARD_FIELDS = ['resumeId', 'label', 'blurb'];
+const CARD_FIELDS = ['resumeId', 'label', 'blurb', 'showPdf'];
+const ACTION_FIELDS = {
+  link: ['type', 'label', 'url'],
+  resume: ['type', 'label', 'resumeId', 'open'],
+};
 const SECTION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
@@ -80,14 +97,16 @@ function emptySeo() {
 }
 
 export function emptyLanding() {
-  return { headline: '', subheadline: '', photo: 'resume', photoUrl: '', sections: [], seo: emptySeo() };
+  return { headline: '', subheadline: '', availability: '', actions: [], photo: 'resume', photoUrl: '', sections: [], seo: emptySeo() };
 }
 
 // A draft or snapshot as stored before sections (issue #70's first shape:
 // `intro`, `links` and `resumes` as fields of their own), turned into the
-// sections it showed, in the order it showed them, and one stored before
-// `seo` given the empty one. The ids are fixed, so reading the same stored
-// draft twice gives the same sections.
+// sections it showed, in the order it showed them, one stored before `seo`,
+// `availability` or `actions` given the empty ones, and a card stored
+// before `showPdf` given false. The ids are fixed, so reading the same
+// stored draft twice gives the same sections; one already in the current
+// shape comes back as it is.
 export function upgradeLanding(stored) {
   if (!isPlainObject(stored)) return stored;
   let upgraded = stored;
@@ -99,14 +118,27 @@ export function upgradeLanding(stored) {
     if (Array.isArray(resumes) && resumes.length) sections.push({ id: 'resumes', kind: 'resumes', title: '', cards: resumes });
     upgraded = { ...rest, sections };
   }
-  return isPlainObject(upgraded.seo) ? upgraded : { ...upgraded, seo: emptySeo() };
+  if (!isPlainObject(upgraded.seo)) upgraded = { ...upgraded, seo: emptySeo() };
+  if (typeof upgraded.availability !== 'string') upgraded = { ...upgraded, availability: '' };
+  if (!Array.isArray(upgraded.actions)) upgraded = { ...upgraded, actions: [] };
+  const needsShowPdf = (section) => section?.kind === 'resumes' && Array.isArray(section.cards) && section.cards.some((card) => isPlainObject(card) && !('showPdf' in card));
+  if (upgraded.sections.some(needsShowPdf)) {
+    upgraded = {
+      ...upgraded,
+      sections: upgraded.sections.map((section) =>
+        needsShowPdf(section) ? { ...section, cards: section.cards.map((card) => (isPlainObject(card) && !('showPdf' in card) ? { ...card, showPdf: false } : card)) } : section
+      ),
+    };
+  }
+  return upgraded;
 }
 
-// Every resume a card in `landing` names, in any section.
-export function cardResumeIds(landing) {
-  return new Set(
-    (landing.sections || []).flatMap((section) => (section.kind === 'resumes' ? section.cards.map((card) => card.resumeId) : []))
-  );
+// Every resume `landing` names: a card's in any section, or a hero action's.
+export function referencedResumeIds(landing) {
+  return new Set([
+    ...(landing.sections || []).flatMap((section) => (section.kind === 'resumes' ? section.cards.map((card) => card.resumeId) : [])),
+    ...(landing.actions || []).flatMap((action) => (action.type === 'resume' ? [action.resumeId] : [])),
+  ]);
 }
 
 function isPlainObject(value) {
@@ -167,23 +199,51 @@ function checkLink(link, label) {
   return out;
 }
 
-function checkCard(card, label, { knownResumeIds, previousResumeIds }, seen) {
+// A card or resume action already in the draft keeps its place even if its
+// resume has since been deleted (the editor would otherwise be unable to
+// save anything until it's removed; nothing shows it publicly). A new one
+// has to name a resume that exists.
+function checkResumeRef(value, label, { knownResumeIds, previousResumeIds }) {
+  const resumeId = checkString(value, 200, label);
+  if (!knownResumeIds.has(resumeId) && !previousResumeIds.has(resumeId)) {
+    throw httpError(400, `${label} does not reference an existing resume`);
+  }
+  return resumeId;
+}
+
+function checkBoolean(value, label) {
+  if (typeof value !== 'boolean') throw httpError(400, `${label} must be a boolean`);
+  return value;
+}
+
+function checkCard(card, label, refs, seen) {
   checkKeys(card, CARD_FIELDS, label);
   const resumeId = checkString(card.resumeId, 200, `${label}.resumeId`);
   if (seen.has(resumeId)) throw httpError(400, `${label}: that resume already has a card in this section`);
   seen.add(resumeId);
-  // A card already in the draft keeps its place even if its resume has
-  // since been deleted (the editor would otherwise be unable to save
-  // anything until it's removed; nothing shows it publicly). A new one
-  // has to name a resume that exists.
-  if (!knownResumeIds.has(resumeId) && !previousResumeIds.has(resumeId)) {
-    throw httpError(400, `${label}.resumeId does not reference an existing resume`);
-  }
+  checkResumeRef(resumeId, `${label}.resumeId`, refs);
   return {
     resumeId,
     label: checkString(card.label ?? '', LANDING_LIMITS.cardLabel, `${label}.label`),
     blurb: checkString(card.blurb ?? '', LANDING_LIMITS.blurb, `${label}.blurb`),
+    showPdf: checkBoolean(card.showPdf ?? false, `${label}.showPdf`),
   };
+}
+
+function checkAction(action, label, refs) {
+  if (!isPlainObject(action)) throw httpError(400, `${label} must be an object`);
+  if (!ACTION_TYPES.includes(action.type)) throw httpError(400, `${label}.type must be one of ${ACTION_TYPES.join(', ')}`);
+  checkKeys(action, ACTION_FIELDS[action.type], label);
+  const out = { type: action.type, label: checkString(action.label ?? '', LANDING_LIMITS.actionLabel, `${label}.label`) };
+  if (action.type === 'link') {
+    out.url = checkString(action.url ?? '', LANDING_LIMITS.url, `${label}.url`);
+    if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
+  } else {
+    out.resumeId = checkResumeRef(action.resumeId, `${label}.resumeId`, refs);
+    out.open = action.open ?? 'page';
+    if (!ACTION_OPENS.includes(out.open)) throw httpError(400, `${label}.open must be one of ${ACTION_OPENS.join(', ')}`);
+  }
+  return out;
 }
 
 function checkList(value, max, label) {
@@ -257,6 +317,7 @@ export function validateLanding(input, { knownResumeIds, previousResumeIds = new
   const out = {
     headline: checkString(input.headline ?? base.headline, LANDING_LIMITS.headline, 'headline'),
     subheadline: checkString(input.subheadline ?? base.subheadline, LANDING_LIMITS.subheadline, 'subheadline'),
+    availability: checkString(input.availability ?? base.availability, LANDING_LIMITS.availability, 'availability'),
     photo: input.photo ?? base.photo,
     photoUrl: checkString(input.photoUrl ?? base.photoUrl, LANDING_LIMITS.photoUrl, 'photoUrl'),
   };
@@ -265,16 +326,16 @@ export function validateLanding(input, { knownResumeIds, previousResumeIds = new
     throw httpError(400, 'photoUrl must be a base64 data: URL of a JPEG, PNG or WebP image');
   }
 
+  const refs = { knownResumeIds, previousResumeIds };
+  out.actions = checkList(input.actions, LANDING_LIMITS.actions, 'actions').map((action, i) => checkAction(action, `actions[${i}]`, refs));
   const ids = new Set();
-  out.sections = checkList(input.sections, LANDING_LIMITS.sections, 'sections').map((section, i) =>
-    checkSection(section, i, { knownResumeIds, previousResumeIds }, ids)
-  );
+  out.sections = checkList(input.sections, LANDING_LIMITS.sections, 'sections').map((section, i) => checkSection(section, i, refs, ids));
   out.seo = checkSeo(input.seo);
   return out;
 }
 
 // The MCP tool's merge (like mergeShallow in resumeStore.js): the fields in
-// `patch` replace the draft's, `sections` as a whole, and a null resets one
+// `patch` replace the draft's, `sections` and `actions` as a whole, and a null resets one
 // to its empty value. `seo` is merged one level deeper, the way setSite()
 // merges `colors`, so a description can be set without restating the
 // title. The result still goes through validateLanding().
@@ -307,14 +368,16 @@ export function telUrl(phone) {
 // A first draft for an install that has never saved one, from the default
 // resume's *published* header (never its draft, so nothing unpublished is
 // carried over): its name and title, an empty text section to write an
-// intro in, its email, phone and links, and a card for it. The header
+// intro in, its email, phone and links, an "Email me" button when it has
+// an email, and a card for it. The header
 // isn't validated when it's saved, so only what passes the landing page's
 // own rules is taken.
 export function initialLanding(defaultResumeId, publishedHeader) {
   const header = isPlainObject(publishedHeader) ? publishedHeader : {};
   const text = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
+  const mailto = typeof header.email === 'string' && header.email.trim() ? `mailto:${header.email.trim()}` : '';
   const contact = [
-    { type: 'email', label: text(header.email, LANDING_LIMITS.linkLabel).trim(), url: typeof header.email === 'string' && header.email.trim() ? `mailto:${header.email.trim()}` : '' },
+    { type: 'email', label: text(header.email, LANDING_LIMITS.linkLabel).trim(), url: mailto },
     { type: 'phone', label: text(header.phone, LANDING_LIMITS.linkLabel).trim(), url: telUrl(header.phone) },
   ];
   const links = [...contact, ...(Array.isArray(header.links) ? header.links : [])]
@@ -329,10 +392,11 @@ export function initialLanding(defaultResumeId, publishedHeader) {
     ...emptyLanding(),
     headline: text(header.name, LANDING_LIMITS.headline),
     subheadline: text(header.title, LANDING_LIMITS.subheadline),
+    actions: mailto && mailto.length <= LANDING_LIMITS.url && isSafeUrl(mailto) ? [{ type: 'link', label: 'Email me', url: mailto }] : [],
     sections: [
       { id: 'intro', kind: 'text', title: '', body: '' },
       ...(links.length ? [{ id: 'links', kind: 'links', title: '', links }] : []),
-      { id: 'resumes', kind: 'resumes', title: '', cards: [{ resumeId: defaultResumeId, label: '', blurb: '' }] },
+      { id: 'resumes', kind: 'resumes', title: '', cards: [{ resumeId: defaultResumeId, label: '', blurb: '', showPdf: false }] },
     ],
   };
 }
@@ -343,10 +407,15 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // since drops off at once and a renamed one links to its new slug:
 //   context.photoUrl — the default resume's published header photo
 //   context.site     — the default resume's published site settings
-//   context.resumes  — Map of resume id → { href, title } for the resumes a
-//                      visitor may see (public and published)
-// Cards carry no resume ids and never a resume's internal name: a card with
-// no label of its own uses the resume's published header title. A section
+//   context.resumes  — Map of resume id → { href, title, pdfHref } for the
+//                      resumes a visitor may see (public and published);
+//                      pdfHref is '' while the resume has no rendered PDF
+// Cards and actions carry no resume ids and never a resume's internal name:
+// a card with no label of its own uses the resume's published header title.
+// A card's `pdfHref` is there only when it asks for one and the PDF exists;
+// a resume action is left out unless its resume (and for `open: 'pdf'`, its
+// PDF) is there, a link action unless its URL is safe. Each resolved action
+// is { label, href }. A section
 // left with nothing to show (no text, no item, every link half typed, every
 // card's resume hidden) is left out, title and all; sections lose their ids.
 // `seo` goes along whole: everything in it ends up in the page's head and
@@ -356,6 +425,11 @@ export function resolveLanding(landing, context) {
   return {
     headline: landing.headline,
     subheadline: landing.subheadline,
+    availability: landing.availability ?? '',
+    actions: (landing.actions ?? []).flatMap((action) => {
+      const shown = resolveAction(action, context);
+      return shown ? [shown] : [];
+    }),
     photoUrl,
     sections: landing.sections.flatMap((section) => {
       const shown = resolveSection(section, context);
@@ -364,6 +438,18 @@ export function resolveLanding(landing, context) {
     seo: { ...emptySeo(), ...landing.seo },
     site: context.site ?? null,
   };
+}
+
+// What a button without a label of its own says.
+const ACTION_LABELS = { page: 'View my resume', pdf: 'Download my resume (PDF)' };
+
+function resolveAction(action, context) {
+  if (action.type === 'link') {
+    return action.url !== '' && isSafeUrl(action.url) ? { label: action.label || action.url, href: action.url } : null;
+  }
+  const target = context.resumes.get(action.resumeId);
+  const href = action.open === 'pdf' ? target?.pdfHref : target?.href;
+  return href ? { label: action.label || ACTION_LABELS[action.open], href } : null;
 }
 
 function resolveSection(section, context) {
@@ -386,7 +472,8 @@ function resolveSection(section, context) {
       const cards = section.cards.flatMap((card) => {
         const target = context.resumes.get(card.resumeId);
         if (!target) return [];
-        return [{ label: card.label || target.title || 'Resume', blurb: card.blurb, href: target.href }];
+        const pdfHref = card.showPdf && target.pdfHref ? { pdfHref: target.pdfHref } : {};
+        return [{ label: card.label || target.title || 'Resume', blurb: card.blurb, href: target.href, ...pdfHref }];
       });
       return cards.length ? { cards } : null;
     }

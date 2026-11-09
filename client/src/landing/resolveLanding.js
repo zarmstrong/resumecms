@@ -2,8 +2,9 @@
 // the way a visitor will see it once published, as someone types. Mirrors
 // resolveLanding() in server/src/landingFields.js (which is what the public
 // site actually gets); `context` is the `context` GET /api/landing returns:
-// { photoUrl, site, resumes: [{ id, href, title }] }, the resumes a card can
-// link to right now. With `withIds`, each section keeps its id, which
+// { photoUrl, site, resumes: [{ id, href, title, pdfHref }] }, the resumes a
+// card or hero action can link to right now (pdfHref '' while one has no
+// PDF). With `withIds`, each section keeps its id, which
 // the server never sends: the editor's preview outlines a section by it.
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
@@ -22,6 +23,11 @@ export function resolveLanding(landing, context, { withIds = false } = {}) {
   return {
     headline: landing.headline,
     subheadline: landing.subheadline,
+    availability: landing.availability ?? '',
+    actions: (landing.actions ?? []).flatMap((action) => {
+      const shown = resolveAction(action, targets);
+      return shown ? [shown] : [];
+    }),
     photoUrl,
     sections: landing.sections.flatMap((section) => {
       const shown = resolveSection(section, targets);
@@ -30,6 +36,21 @@ export function resolveLanding(landing, context, { withIds = false } = {}) {
     seo: { title: '', description: '', noindex: false, ...landing.seo },
     site: context?.site ?? null,
   };
+}
+
+// What a button without a label of its own says.
+export const ACTION_LABELS = { page: 'View my resume', pdf: 'Download my resume (PDF)' };
+
+// A hero button as a visitor sees it, { label, href }, or null when it
+// isn't shown: a link that's half typed or unsafe, a resume a visitor
+// can't open, or a PDF it doesn't have.
+function resolveAction(action, targets) {
+  if (action.type === 'link') {
+    return action.url !== '' && isSafeUrl(action.url) ? { label: action.label || action.url, href: action.url } : null;
+  }
+  const target = targets.get(action.resumeId);
+  const href = action.open === 'pdf' ? target?.pdfHref : target?.href;
+  return href ? { label: action.label || ACTION_LABELS[action.open], href } : null;
 }
 
 // A section as a visitor sees it, or null when nothing of it is left to
@@ -54,7 +75,8 @@ function resolveSection(section, targets) {
       const cards = section.cards.flatMap((card) => {
         const target = targets.get(card.resumeId);
         if (!target) return [];
-        return [{ label: card.label || target.title || 'Resume', blurb: card.blurb, href: target.href }];
+        const pdfHref = card.showPdf && target.pdfHref ? { pdfHref: target.pdfHref } : {};
+        return [{ label: card.label || target.title || 'Resume', blurb: card.blurb, href: target.href, ...pdfHref }];
       });
       return cards.length ? { cards } : null;
     }

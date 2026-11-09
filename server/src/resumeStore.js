@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { httpError } from './httpError.js';
 import { assertBlockData, isValidBlockData } from './blockData.js';
 import { createResumeSettings } from './settings.js';
-import { pdfPathFor, writePdfAtomically } from './pdfPaths.js';
+import { pdfPathFor, pdfVersionOf, writePdfAtomically } from './pdfPaths.js';
 import { cloneBlockRows, slugify, uniqueSlug, validateName, validateSlug } from './resumeFields.js';
 import { normalizeHostnames, requestHostKey } from './hostnames.js';
 import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
@@ -540,7 +540,7 @@ export function createResumeStore({
   );
 
   // The install's landing page (issue #70), see landingStore.js.
-  const landing = createLandingStore({ db, defaultResumeId });
+  const landing = createLandingStore({ db, defaultResumeId, pdfDir });
 
   // Every page a visitor can open right now, as pageMeta.js describes it:
   // the landing page while it's shown, and every public, published resume.
@@ -956,20 +956,11 @@ export function createResumeStore({
       return meta.renderedFor !== published.publishedAt || !fs.existsSync(pdfPath);
     }
 
-    // Identifies the PDF currently on disk (mtime plus size, so even a
-    // filesystem with coarse timestamps tells two renders apart), or null if
-    // there is none. The client appends it to the PDF URL as `?v=` so every
-    // render yields a URL no cache has seen before (see routes/pdf.js and
-    // client/src/resume/pdfUrl.js). It deliberately tracks the file, not the
-    // snapshot's publishedAt: a publish whose render failed would otherwise
-    // advertise a new URL for the old file.
+    // The PDF currently on disk (pdfVersionOf()). It deliberately tracks the
+    // file, not the snapshot's publishedAt: a publish whose render failed
+    // would otherwise advertise a new URL for the old file.
     function pdfVersion() {
-      try {
-        const stat = fs.statSync(pdfPath);
-        return `${Math.floor(stat.mtimeMs)}-${stat.size}`;
-      } catch {
-        return null;
-      }
+      return pdfVersionOf(pdfPath);
     }
 
     function getPublishStatus() {

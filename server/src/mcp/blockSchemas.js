@@ -261,6 +261,32 @@ export const LANDING_SCHEMA = {
   properties: {
     headline: { type: 'string', description: 'Usually your name' },
     subheadline: { type: 'string' },
+    availability: { type: 'string', description: "A short line above the headline, e.g. 'Open to senior backend roles · Remote'; '' shows none" },
+    actions: {
+      type: 'array',
+      description: "At most 3 buttons under the subheadline, the first drawn as the primary one; replaced whole by update_landing_page. One for a resume is shown only while it's public and published (for open: 'pdf', only while it has a PDF)",
+      items: {
+        oneOf: [
+          {
+            type: 'object',
+            properties: {
+              type: { const: 'link' },
+              label: { type: 'string', description: "e.g. 'Email me'; '' shows the URL" },
+              url: { type: 'string', description: 'An http, https, mailto or tel link (mailto:you@example.com?subject=Hello prefills a subject)' },
+            },
+          },
+          {
+            type: 'object',
+            properties: {
+              type: { const: 'resume' },
+              label: { type: 'string', description: "'' says 'View my resume' or 'Download my resume (PDF)'" },
+              resumeId: { type: 'string' },
+              open: { enum: ['page', 'pdf'], description: "Its page (default) or its PDF" },
+            },
+          },
+        ],
+      },
+    },
     photo: { enum: ['resume', 'custom', 'none'], description: "'resume' = the default resume's published header photo" },
     photoUrl: { type: 'string', description: "base64 data: URL (JPEG, PNG or WebP), used when photo is 'custom'" },
     sections: {
@@ -313,6 +339,7 @@ export const LANDING_SCHEMA = {
                     resumeId: { type: 'string' },
                     label: { type: 'string', description: "Card title; '' uses the resume's published header title" },
                     blurb: { type: 'string' },
+                    showPdf: { type: 'boolean', description: 'Also link to its PDF, while it has one (default false)' },
                   },
                 },
               },

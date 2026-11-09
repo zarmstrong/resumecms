@@ -3,7 +3,7 @@ import { LinksEditor } from './LinksEditor.jsx';
 import { LandingAiPanel } from './LandingAiPanel.jsx';
 import { introSectionId } from './landingAi.js';
 import { SearchSharingFields } from './SearchSharingFields.jsx';
-import { resolveLanding } from '../landing/resolveLanding.js';
+import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
@@ -71,8 +71,9 @@ function RowActions({ index, count, onMove, onRemove, what }) {
   );
 }
 
-// Where a card's resume stands for visitors: shown, or why not. `context`
-// lists the resumes a card can link to now (public and published).
+// Where a card's (or a button's) resume stands for visitors: shown, or why
+// not. `context` lists the resumes a card can link to now (public and
+// published).
 function cardStatus(resumeId, resumes, context) {
   if (context.resumes.some((r) => r.id === resumeId)) return null;
   const resume = resumes.find((r) => r.id === resumeId);
@@ -80,6 +81,9 @@ function cardStatus(resumeId, resumes, context) {
   if (!resume.isPublic) return 'Private: not shown until it is made public';
   return 'Not shown until it is published';
 }
+
+// Whether a resume a visitor can open has a PDF to link to.
+const hasPdf = (resumeId, context) => Boolean(context.resumes.find((r) => r.id === resumeId)?.pdfHref);
 
 // A field's ✨ panel, or nothing while AI rewrites aren't set up.
 function AiField({ ai, ...props }) {
@@ -131,6 +135,17 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
         />
       </label>
       <AiField ai={ai} target={{ kind: 'subheadline' }} current={landing.subheadline} />
+      <label className="ed-field">
+        <span>Availability</span>
+        <input
+          className="ed-input"
+          value={landing.availability ?? ''}
+          maxLength={limits?.availability}
+          onChange={(e) => set({ availability: e.target.value })}
+          placeholder="e.g. Open to senior backend roles · Remote (optional)"
+        />
+        <span className="ed-field-hint">A short line shown above the headline. Leave it empty to show none.</span>
+      </label>
 
       <div className="ed-field">
         <span>Photo</span>
@@ -146,6 +161,14 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
       {landing.photo === 'custom' && (
         <PhotoUpload label="Landing page photo" value={landing.photoUrl} onChange={(photoUrl) => set({ photoUrl })} />
       )}
+
+      <ActionsFields
+        actions={landing.actions ?? []}
+        onChange={(actions) => set({ actions })}
+        resumes={resumes}
+        context={context}
+        limits={limits}
+      />
 
       <div className="ed-field">
         <span>Sections</span>
@@ -212,6 +235,90 @@ function LandingSeoFields({ landing, context, limits, onChange }) {
       limits={{ title: limits?.seoTitle, description: limits?.seoDescription }}
       hint="What search results and link previews say about this page. The preview card is drawn from the headline, subheadline and photo."
     />
+  );
+}
+
+// The hero's buttons (issue #88): a link, or a resume's page or PDF. The
+// one select picks both what kind and which resume ('link', 'page:<id>' or
+// 'pdf:<id>').
+function ActionsFields({ actions, onChange, resumes, context, limits }) {
+  const setAction = (i, next) => onChange(actions.map((a, idx) => (idx === i ? next : a)));
+  const choose = (action, value) => {
+    if (value === 'link') return { type: 'link', label: action.label, url: action.type === 'link' ? action.url : '' };
+    const [open, ...rest] = value.split(':');
+    return { type: 'resume', label: action.label, resumeId: rest.join(':'), open };
+  };
+  return (
+    <div className="ed-field">
+      <span>Buttons</span>
+      <span className="ed-field-hint">Up to {limits?.actions ?? 3} buttons under the subheadline. The first is drawn as the main one.</span>
+      {actions.map((action, i) => {
+        const value = action.type === 'link' ? 'link' : `${action.open}:${action.resumeId}`;
+        const known = action.type === 'link' || resumes.some((r) => r.id === action.resumeId);
+        let status = action.type === 'resume' ? cardStatus(action.resumeId, resumes, context) : null;
+        if (!status && action.type === 'resume' && action.open === 'pdf' && !hasPdf(action.resumeId, context)) {
+          status = 'No PDF yet: not shown until one is rendered';
+        }
+        return (
+          <div className="ed-landing-card" key={i}>
+            <div className="ed-landing-card-head">
+              <span>
+                Button {i + 1}
+                {i === 0 ? ' (main)' : ''}
+              </span>
+              <RowActions
+                index={i}
+                count={actions.length}
+                onMove={(delta) => onChange(moved(actions, i, delta))}
+                onRemove={() => onChange(actions.filter((_, idx) => idx !== i))}
+                what="button"
+              />
+            </div>
+            <select className="ed-input" value={value} onChange={(e) => setAction(i, choose(action, e.target.value))} aria-label="What the button opens">
+              <option value="link">A link (email, calendar, website…)</option>
+              {!known && <option value={value}>Deleted resume</option>}
+              {resumes.map((r) => (
+                <optgroup key={r.id} label={r.name}>
+                  <option value={`page:${r.id}`}>{r.name}: the resume</option>
+                  <option value={`pdf:${r.id}`}>{r.name}: its PDF</option>
+                </optgroup>
+              ))}
+            </select>
+            {status && <span className="ed-field-hint ed-landing-card-status">{status}</span>}
+            <input
+              className="ed-input"
+              value={action.label}
+              maxLength={limits?.actionLabel}
+              onChange={(e) => setAction(i, { ...action, label: e.target.value })}
+              placeholder={action.type === 'link' ? 'Button text, e.g. Email me' : ACTION_LABELS[action.open]}
+              aria-label="Button text"
+            />
+            {action.type === 'link' && (
+              <>
+                <input
+                  className="ed-input"
+                  value={action.url}
+                  maxLength={limits?.url}
+                  onChange={(e) => setAction(i, { ...action, url: e.target.value })}
+                  placeholder="mailto:you@example.com or https://…"
+                  aria-label="Button link"
+                />
+                {/^\s*mailto:/i.test(action.url) && !action.url.includes('?') && (
+                  <span className="ed-field-hint">
+                    To fill in the subject, add it to the link: mailto:you@example.com?subject=Hello
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
+      {(!limits || actions.length < limits.actions) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...actions, { type: 'link', label: '', url: '' }])}>
+          + Add button
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -349,6 +456,13 @@ function CardsFields({ sectionId, cards, onChange, resumes, context, limits, ai 
               placeholder="A line about this resume (optional)"
               aria-label="Card text"
             />
+            <label className="ed-field ed-checkbox-field">
+              <input type="checkbox" checked={Boolean(card.showPdf)} onChange={(e) => setCard(i, { showPdf: e.target.checked })} />
+              Also link to its PDF
+            </label>
+            {!status && card.showPdf && !hasPdf(card.resumeId, context) && (
+              <span className="ed-field-hint">It has no PDF yet, so no PDF link is shown.</span>
+            )}
             {!status && <AiField ai={ai} target={{ kind: 'card', sectionId, resumeId: card.resumeId }} current={card.blurb} />}
           </div>
         );
@@ -357,7 +471,7 @@ function CardsFields({ sectionId, cards, onChange, resumes, context, limits, ai 
         <select
           className="ed-input"
           value=""
-          onChange={(e) => e.target.value && onChange([...cards, { resumeId: e.target.value, label: '', blurb: '' }])}
+          onChange={(e) => e.target.value && onChange([...cards, { resumeId: e.target.value, label: '', blurb: '', showPdf: false }])}
           aria-label="Add a resume card"
         >
           <option value="">+ Add a resume…</option>
