@@ -218,10 +218,16 @@ test('an unkeyed write counts while in flight only, and forget clears what it dr
   const timers = fakeTimers();
   const q = createSaveQueue({ delayMs: 500, timers });
   const upload = deferred();
+  let notified = 0;
+  q.subscribe(() => {
+    notified += 1;
+  });
   q.track(upload.promise).catch(() => {});
+  assert.equal(notified, 1, 'tracking a write tells the subscriber at once');
   assert.deepEqual(q.pending(), { waiting: 0, inFlight: 1, failed: 0 });
   upload.reject(new Error('413'));
   await new Promise((r) => setImmediate(r));
+  assert.equal(notified, 2, 'and so does its settling');
   assert.equal(q.isIdle(), true, 'its failure is only reported by a flush that waited on it');
 
   q.track(Promise.reject(new Error('500')), 'block:1').catch(() => {});

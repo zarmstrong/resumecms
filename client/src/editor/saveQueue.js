@@ -35,6 +35,9 @@ export function createSaveQueue({ delayMs, timers = globalThis }) {
   function track(promise, key) {
     inFlight.set(promise, key);
     if (key !== undefined) latest.set(key, promise);
+    // An upload tracked on its own sets no page state, so the guard learns
+    // of it only from here.
+    changed();
     const settle = (err) => {
       inFlight.delete(promise);
       // An older write settling late says nothing about the newer one.
