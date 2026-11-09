@@ -11,7 +11,11 @@
 // each section keeps its id, which the server never sends: the editor's
 // preview outlines a section by it. With `withHidden`, a hidden section is
 // resolved too and kept as `hidden: true`, for the preview to dim; the
-// server always leaves it out.
+// server always leaves it out. Its look (issue #93) is `template`, `site`
+// (context.site, or its own colors and fonts) and `darkColors`, by
+// landingStyle.js's mirror of the server's.
+
+import { darkPalette, landingSite } from './landingStyle.js';
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 
@@ -48,7 +52,9 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
       return [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...hidden, ...shown }];
     }),
     seo: { title: '', description: '', noindex: false, ...seo, ...(seoImage ? { image: seoImage } : {}) },
-    site: context?.site ?? null,
+    template: landing.template || 'classic',
+    site: landingSite(landing.style, context?.site),
+    darkColors: darkPalette(landing.style),
   };
 }
 

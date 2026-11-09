@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DESCRIPTION_LENGTH, clip, escapeHtml, headTags, jsonForScript, landingPage, resumePage } from './pageMeta.js';
 import { cardContent, cardKey, isImageKey, parsePhoto, photoKey } from './shareImages.js';
+import { emptyLanding, resolveLanding } from './landingFields.js';
 
 const PHOTO = 'data:image/jpeg;base64,/9j/4AAQ';
 
@@ -106,6 +107,25 @@ test('the landing page: seo first, then headline, subheadline and the first text
   // The card shows what the page does: headline and subheadline.
   assert.equal(withSub.card.name, 'Hi, I am Jo');
   assert.equal(withSub.card.title, 'Engineer in Lisbon');
+});
+
+test("the landing page's card is drawn in the colors and fonts the page is, never its dark palette", () => {
+  const context = { photoUrl: '', site: { colors: { accent: '#123456' }, font: 'lora', layout: 'sidebar' }, resumes: new Map(), images: new Map() };
+  const draft = { ...emptyLanding(), headline: 'Jo' };
+  const resumeLook = landingPage(resolveLanding(draft, context), null).card;
+  assert.deepEqual(resumeLook.site, { colors: { accent: '#123456' }, accent: '', font: 'lora', nameFont: '' });
+  const style = { source: 'custom', colors: { accent: '#aa0000', heading: '', text: '', background: '#fafafa' }, font: 'inter', nameFont: '' };
+  const own = landingPage(resolveLanding({ ...draft, style }, context), null).card;
+  assert.deepEqual(own.site, {
+    colors: { accent: '#aa0000', heading: '#14181c', text: '#14181c', background: '#fafafa' },
+    accent: '',
+    font: 'inter',
+    nameFont: '',
+  });
+  assert.notEqual(cardKey(own), cardKey(resumeLook));
+  // A dark palette or another template is the same card.
+  const dark = landingPage(resolveLanding({ ...draft, style: { ...style, darkColors: { background: '#000000' } }, template: 'split' }, context), null).card;
+  assert.equal(cardKey(dark), cardKey(own));
 });
 
 test('every value is escaped, in text, attributes and the JSON-LD', () => {

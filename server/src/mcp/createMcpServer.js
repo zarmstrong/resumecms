@@ -4,6 +4,7 @@ import * as z from 'zod';
 import { BLOCK_TYPES } from '../resumeStore.js';
 import { httpError } from '../httpError.js';
 import { ACTION_OPENS, LINK_TYPES, PHOTO_SOURCES } from '../landingFields.js';
+import { FONT_IDS, LANDING_STYLE_SOURCES } from '../landingStyle.js';
 import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
 import { moveBlockOrder } from './moveBlock.js';
@@ -541,6 +542,30 @@ const landingSection = () =>
     }),
   ]);
 
+const landingColor = (what) => z.string().nullable().optional().describe(`${what}: #rrggbb, or '' (or null) for the default.`);
+const landingColors = () =>
+  z.object({
+    accent: landingColor('Buttons, links and the subheadline'),
+    heading: landingColor('The headline and headings'),
+    text: landingColor('Body text'),
+    background: landingColor('The page'),
+  });
+const landingStyle = () =>
+  z.object({
+    source: z
+      .enum(LANDING_STYLE_SOURCES)
+      .nullable()
+      .optional()
+      .describe("'resume' (default) draws the page in the default resume's published colors and fonts, 'custom' in colors, font and nameFont below."),
+    colors: landingColors().nullable().optional().describe("The page's own colors, used with source: 'custom'; merged key by key."),
+    font: z.string().nullable().optional().describe(`With source: 'custom', one of ${FONT_IDS.join(', ')}; '' for the default (source-serif).`),
+    nameFont: z.string().nullable().optional().describe("The same choices, for the headline and headings; '' matches font."),
+    darkColors: landingColors()
+      .nullable()
+      .optional()
+      .describe("An optional dark palette, used whatever the source for visitors whose device is set to dark; '' keys take the dark defaults, and null removes it."),
+  });
+
 // base64 as sent: optionally a data: URL, whitespace ignored.
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 function decodeImage(data) {
@@ -613,6 +638,15 @@ const LANDING_TOOLS = [
           .nullable()
           .optional()
           .describe('Search and link-preview settings, merged one level deep (send only what changes).'),
+        template: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("The landing template, a folder name under templates/landing/: 'classic' (default), 'centered' or 'split'. An unknown id is drawn as classic."),
+        style: landingStyle()
+          .nullable()
+          .optional()
+          .describe('Its colors and fonts, merged one level deep, colors and darkColors one more (send only what changes).'),
       },
       annotations: { ...mutating, idempotentHint: true },
     },
@@ -649,6 +683,16 @@ const LANDING_TOOLS = [
       annotations: destructive,
     },
     run: (store) => ({ landing: store.discardLandingDraft() }),
+  },
+  {
+    name: 'apply_landing_style_to_resume',
+    config: {
+      title: "Apply the landing page's colors and fonts to the default resume",
+      description:
+        "Copies the landing page DRAFT's own colors (accent, heading, text, background) and fonts (font, nameFont) into the default resume's site settings DRAFT, merged so its other site settings and colors stay; never the dark palette. A 400 unless the draft's style.source is 'custom'. Nothing is published: publish the default resume to show it. Returns { resumeId, site }, the resume's new site settings draft.",
+      annotations: { ...mutating, idempotentHint: true },
+    },
+    run: (store) => store.applyLandingStyleToResume(),
   },
   {
     name: 'set_landing_page_enabled',

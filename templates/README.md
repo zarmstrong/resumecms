@@ -1,6 +1,6 @@
 # Contributing resume templates
 
-This folder holds three kinds of contributable templates, from least to most
+This folder holds four kinds of contributable templates, from least to most
 involved:
 
 - **[Presets](#presets)** — no code. A JSON file bundling an existing header
@@ -11,6 +11,8 @@ involved:
   are pure CSS instead (no component needed).
 - **[Headers](#headers--layouts)** — code (a React component) that controls
   the name/title/photo/contact-info region at the top of the page.
+- **[Landing page templates](#landing-page-templates)** — CSS, plus an
+  optional React component, arranging the optional home page at `/`.
 
 Headers and layouts are two **independent** axes (see
 [`client/src/resume/templateRegistry.js`](../client/src/resume/templateRegistry.js)).
@@ -157,14 +159,56 @@ reimplementing them.
 Both `@resume/*` imports work from anywhere under `templates/` via a Vite
 alias to `client/src/resume/` — no fragile relative paths.
 
+## Landing page templates
+
+`templates/landing/<id>/` (issue #93) arranges the landing page: its hero
+(photo, availability line, headline, subheadline, buttons) and its
+sections. The landing editor's **Look** group lists them; an unknown or
+missing id is drawn as `classic`, which must always exist.
+
+- `template.json` — `{ label, description, author }`, all required strings.
+- `style.css` — **required**, every rule scoped under `.l-template-<id>`
+  (the page root carries that class; the validator checks it's there).
+  The look of each part (a card, a quote, the timeline, a button) is
+  shared in
+  [`client/src/landing/landing.css`](../client/src/landing/landing.css);
+  your CSS arranges them and may restyle them. Use the `--r-accent`,
+  `--r-heading`, `--r-text` and `--r-bg` custom properties for colors,
+  never fixed ones: they follow the page's palette, its dark one
+  included. Prefer `@container` queries to `@media` ones (set
+  `container-type: inline-size` on `.l-template-<id>`), so the editor's
+  narrower preview looks like a phone does.
+- `index.jsx` — **optional**, for a template that changes the page's
+  structure (like `split`, which puts the hero in a side column).
+  Default-exports:
+  ```jsx
+  export default function MyLanding({ landing, renderHero, renderSection, colors, darkColors, preview }) {
+    // landing: the resolved page (headline, sections, …) — read it, but
+    //   draw the parts with the two functions below, so every template
+    //   shows every kind of section the same way
+    // renderHero(): the hero, an <header class="l-hero">
+    // renderSection(section, index): one section; landing.sections.map(renderSection)
+    // colors / darkColors: the normalized palettes (darkColors null if none)
+    // preview: true in the editor
+    return (
+      <main className="l-main">
+        {renderHero()}
+        {landing.sections.map(renderSection)}
+      </main>
+    );
+  }
+  ```
+  Without one, that's exactly what's rendered.
+
 ## Validating
 
 ```bash
 node scripts/validate-templates.mjs
 ```
 
-Checks folder/id naming, required fields, and that every preset's
-`header`/`layout` reference something that actually exists. CI runs this
+Checks folder/id naming, required fields, that every preset's
+`header`/`layout` reference something that actually exists, and that every
+landing template has a `style.css` scoped under its own class. CI runs this
 plus a full `npm run build` on any PR touching `templates/**` — a broken
 component fails the build, not just the metadata check.
 

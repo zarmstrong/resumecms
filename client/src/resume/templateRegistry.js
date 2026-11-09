@@ -5,8 +5,9 @@
 // registration step. The server never renders resume markup (it only serves
 // the static client build + JSON APIs), so there's no matching runtime scan.
 //
-// import.meta.glob requires a static string literal per call, so headers and
-// layouts each need their own glob (can't parametrize the path).
+// import.meta.glob requires a static string literal per call, so headers,
+// layouts and landing page templates each need their own glob (can't
+// parametrize the path).
 const headerMeta = import.meta.glob('../../../templates/headers/*/template.json', {
   eager: true,
   import: 'default',
@@ -32,6 +33,18 @@ const presetMeta = import.meta.glob('../../../templates/presets/*/template.json'
   import: 'default',
 });
 
+// The landing page's templates (issue #93), templates/landing/<id>/: a
+// template.json, a style.css scoped under `.l-template-<id>` and an
+// optional index.jsx arranging the hero and sections (see LandingView.jsx).
+const landingMeta = import.meta.glob('../../../templates/landing/*/template.json', {
+  eager: true,
+  import: 'default',
+});
+const landingComponents = import.meta.glob('../../../templates/landing/*/index.jsx', {
+  eager: true,
+  import: 'default',
+});
+
 function idFromPath(path) {
   const match = path.match(/\/([^/]+)\/[^/]+$/);
   return match ? match[1] : null;
@@ -52,6 +65,7 @@ function buildRegistry(metaGlob, componentGlob) {
 
 export const HEADER_TEMPLATES = buildRegistry(headerMeta, headerComponents);
 export const LAYOUT_TEMPLATES = buildRegistry(layoutMeta, layoutComponents);
+export const LANDING_TEMPLATES = buildRegistry(landingMeta, landingComponents);
 export const PRESETS = Object.values(presetMeta).sort((a, b) => a.label.localeCompare(b.label));
 
 export function getPreset(id) {
@@ -60,6 +74,8 @@ export function getPreset(id) {
 
 export const DEFAULT_TEMPLATE = 'classic';
 export const DEFAULT_LAYOUT = 'classic';
+// server/src/landingStyle.js's DEFAULT_LANDING_TEMPLATE.
+export const DEFAULT_LANDING_TEMPLATE = 'classic';
 
 export function normalizeTemplate(site) {
   const value = site?.template;
@@ -69,6 +85,16 @@ export function normalizeTemplate(site) {
 export function normalizeLayout(site) {
   const value = site?.layout;
   return LAYOUT_TEMPLATES.some((l) => l.id === value) ? value : DEFAULT_LAYOUT;
+}
+
+// The landing page's `template` (the server keeps any well-formed id), or
+// classic for one this build doesn't have.
+export function normalizeLandingTemplate(value) {
+  return LANDING_TEMPLATES.some((t) => t.id === value) ? value : DEFAULT_LANDING_TEMPLATE;
+}
+
+export function getLandingTemplate(id) {
+  return LANDING_TEMPLATES.find((t) => t.id === normalizeLandingTemplate(id));
 }
 
 export function getHeaderTemplate(id) {
@@ -89,3 +115,7 @@ export function skillsDisplayFor(site) {
 // their style.css pulled into the build; layouts with a component import
 // their own CSS themselves (see templates/layouts/sidebar/index.jsx).
 import.meta.glob('../../../templates/layouts/*/style.css', { eager: true });
+
+// Every landing template ships a style.css (scoped under its
+// `.l-template-<id>` class), component or not.
+import.meta.glob('../../../templates/landing/*/style.css', { eager: true });

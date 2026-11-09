@@ -52,6 +52,13 @@ router.post('/discard-draft', handle((req, res) => {
   res.json({ landing, status: store.getLandingStatus() });
 }));
 
+// Copies the draft's own colors and fonts into the default resume's site
+// settings draft (issue #93; see the store's applyLandingStyleToResume):
+// { resumeId, site }. That resume still has to be published.
+router.post('/apply-style', handle((req, res) => {
+  res.json(store.applyLandingStyleToResume());
+}));
+
 // { landing?, target, instruction } → proposals for review; saves nothing.
 // See landingRewriteHandlers in routes/ai.js.
 router.post('/rewrite', ...landingRewriteHandlers());

@@ -1,6 +1,19 @@
-/* The landing page (issue #70). Takes its colors and fonts from the default
-   resume's site settings through the same --r-* properties resume.css uses. */
+/* The landing page (issue #70): what every template (templates/landing/,
+   issue #93) shares, the look of each part. A template's style.css
+   arranges them (the column, the hero, the cards' grid) under its own
+   .l-template-<id> class.
+
+   Its colors come in as --l-* (the default resume's site settings, or the
+   page's own) and --l-dark-* (its dark palette, when it has one), and reach
+   the parts as the same --r-* properties resume.css uses: the light ones,
+   or the dark ones under the visitor's dark setting (.l-dark-auto) or the
+   editor's dark preview (.l-dark-on). */
 .l-page {
+  --r-accent: var(--l-accent);
+  --r-heading: var(--l-heading);
+  --r-text: var(--l-text);
+  --r-bg: var(--l-bg);
+  --r-on-accent: var(--l-on-accent);
   min-height: 100vh;
   font-family: var(--font-resume);
   font-size: var(--r-font-size, 16px);
@@ -13,17 +26,24 @@
   min-height: 100%;
 }
 
-.l-main {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 72px 24px 96px;
+@media (prefers-color-scheme: dark) {
+  .l-page.l-dark-auto {
+    --r-accent: var(--l-dark-accent);
+    --r-heading: var(--l-dark-heading);
+    --r-text: var(--l-dark-text);
+    --r-bg: var(--l-dark-bg);
+    --r-on-accent: var(--l-dark-on-accent);
+    color-scheme: dark;
+  }
 }
 
-.l-hero {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  margin-bottom: 28px;
+.l-page.l-dark-on {
+  --r-accent: var(--l-dark-accent);
+  --r-heading: var(--l-dark-heading);
+  --r-text: var(--l-dark-text);
+  --r-bg: var(--l-dark-bg);
+  --r-on-accent: var(--l-dark-on-accent);
+  color-scheme: dark;
 }
 
 .l-photo {
@@ -93,14 +113,6 @@
 .l-action-primary:hover,
 .l-action-primary:focus-visible {
   background: color-mix(in srgb, var(--r-accent, var(--ink)) 85%, var(--r-text, #000));
-}
-
-.l-section {
-  margin: 0 0 36px;
-}
-
-.l-section:last-child {
-  margin-bottom: 0;
 }
 
 .l-section-title {
@@ -231,12 +243,6 @@ a.l-item-title:hover {
 
 .l-links a:hover {
   border-bottom-color: var(--r-accent, var(--ink));
-}
-
-.l-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
 }
 
 .l-card {
@@ -414,20 +420,6 @@ a.l-role-company {
   text-transform: uppercase;
   color: var(--r-text, var(--ink));
   background: color-mix(in srgb, var(--r-text, var(--ink)) 10%, transparent);
-}
-
-@media (max-width: 560px) {
-  .l-main {
-    padding: 40px 16px 64px;
-  }
-  .l-hero {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-  .l-headline {
-    font-size: 2em;
-  }
 }
 
 /* The editor's preview: a part showing an AI suggestion not saved yet (the

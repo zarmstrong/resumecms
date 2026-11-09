@@ -12,6 +12,7 @@ import { findSplitSectionId } from './blockReorder.js';
 import { blocksForMode } from './publicBlocks.js';
 import { normalizeBrief } from './ai/brief.js';
 import { createLandingStore } from './landingStore.js';
+import { resumeSitePatch } from './landingStyle.js';
 import { createCoverLetterStore, removeLetterPdf } from './coverLetterStore.js';
 import { createShareStore } from './shareStore.js';
 import { landingPage, resumePage } from './pageMeta.js';
@@ -574,6 +575,18 @@ export function createResumeStore({
       : null,
   });
 
+  // "Apply to the default resume" (issue #93): the landing page draft's own
+  // colors and fonts (resumeSitePatch(), never its dark palette) merged into
+  // the default resume's site settings *draft*, through setSite() like any
+  // edit of them, so its other settings stay and its touchDraft() runs.
+  // Nothing is published: the resume is published on its own, as ever. A
+  // 400 while the page uses the resume's colors and fonts.
+  function applyLandingStyleToResume() {
+    const patch = resumeSitePatch(landing.getLanding().style);
+    const resumeId = defaultResumeId();
+    return { resumeId, site: scopedStore(resumeId).setSite(patch, { merge: true }) };
+  }
+
   // What the landing page shows changed (or whether it's shown at all),
   // so its card may need drawing.
   function withCardRefresh(fn) {
@@ -589,6 +602,7 @@ export function createResumeStore({
     ...landing,
     publishLanding: withCardRefresh(landing.publishLanding),
     setLandingEnabled: withCardRefresh(landing.setLandingEnabled),
+    applyLandingStyleToResume,
     ...share,
     forResume,
     forHost,

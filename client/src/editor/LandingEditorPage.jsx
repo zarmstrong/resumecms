@@ -46,6 +46,10 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [aiSettings, setAiSettings] = useState(null);
+  // "Apply to the default resume" (issue #93): { status, message } or null.
+  const [applyState, setApplyState] = useState(null);
+  // Which palette the preview shows while the draft has a dark one.
+  const [previewScheme, setPreviewScheme] = useState('light');
   const [aiRequests, setAiRequests] = useState({});
   const [aiProposals, setAiProposals] = useState([]);
   // The latest request per spot: a response to an older one (or one
@@ -107,6 +111,8 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   }
 
   function handleChange(next) {
+    // What an apply said no longer describes colors changed since.
+    if (next.style !== landingRef.current?.style) setApplyState(null);
     landingRef.current = next;
     setLanding(next);
     setStatus({ ...status, isDirty: true });
@@ -178,6 +184,33 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
         } catch (err) {
           setPublishState('idle');
           setError(err.message || 'Publish failed');
+        }
+      },
+      { confirmFailed: false }
+    );
+  }
+
+  // Copies the page's own colors and fonts into the default resume's site
+  // settings draft (the store's applyLandingStyleToResume, issue #93). The
+  // server reads the stored draft, so every edit is saved first, and a
+  // failed save stops it rather than copying something else.
+  function handleApplyStyle() {
+    const target = resumes.find((r) => r.isDefault);
+    const name = target ? `"${target.name}"` : 'your default resume';
+    const question =
+      `Copy this page's colors and fonts into the site settings of ${name}?\n\n` +
+      "Its other site settings stay as they are, and the dark palette isn't copied. Only that resume's draft changes: publish it to show them on the resume.";
+    if (!window.confirm(question)) return;
+    afterSaving(
+      async () => {
+        setApplyState({ status: 'applying' });
+        try {
+          await api.applyLandingStyle();
+          if (mountedRef.current) {
+            setApplyState({ status: 'applied', message: `Copied into the draft of ${name}. Publish that resume to show them on it.` });
+          }
+        } catch (err) {
+          if (mountedRef.current) setApplyState({ status: 'error', message: err.message || "Couldn't apply them" });
         }
       },
       { confirmFailed: false }
@@ -406,6 +439,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
                 onChange={handleChange}
                 ai={ai}
                 onUploadImage={handleImageUpload}
+                look={{ onApply: handleApplyStyle, applyState }}
               />
             </div>
           </section>
@@ -430,15 +464,44 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
               </button>
             </div>
           ) : (
-            <div className="ed-preview-label">
-              Draft preview — colors and fonts come from your default resume's published site settings
+            <div className="ed-preview-label ed-landing-preview-label">
+              <span>
+                Draft preview —{' '}
+                {landing.style?.source === 'custom'
+                  ? "in this page's own colors and fonts"
+                  : "colors and fonts come from your default resume's published site settings"}
+              </span>
+              {preview.darkColors && <SchemeToggle value={previewScheme} onChange={setPreviewScheme} />}
             </div>
           )}
           <div className="ed-preview-frame">
-            <LandingView landing={preview} preview highlightIds={highlightIds(aiPlaced)} />
+            <LandingView landing={preview} preview highlightIds={highlightIds(aiPlaced)} scheme={previewScheme} />
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// Light or dark, for a draft with a dark palette: a visitor gets the one
+// their device asks for, the preview the one picked here.
+function SchemeToggle({ value, onChange }) {
+  return (
+    <span className="ed-landing-scheme" role="group" aria-label="Preview palette">
+      {[
+        ['light', 'Light'],
+        ['dark', 'Dark'],
+      ].map(([scheme, label]) => (
+        <button
+          key={scheme}
+          type="button"
+          className={`ed-btn ed-btn-ghost ed-btn-sub${value === scheme ? ' is-active' : ''}`}
+          aria-pressed={value === scheme}
+          onClick={() => onChange(scheme)}
+        >
+          {label}
+        </button>
+      ))}
+    </span>
   );
 }

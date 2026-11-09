@@ -12,6 +12,7 @@ import { SECTION_KINDS } from '../landingFields.js';
 // resumeStore.test.js covers.
 
 const EXPECTED_TOOLS = [
+  'apply_landing_style_to_resume',
   'create_block',
   'create_cover_letter',
   'create_resume',
@@ -49,6 +50,7 @@ const EXPECTED_TOOLS = [
 
 const RESUME_TOOLS = ['create_resume', 'delete_resume', 'get_resume', 'list_resumes', 'update_resume'];
 const LANDING_TOOLS = [
+  'apply_landing_style_to_resume',
   'discard_landing_draft',
   'get_landing_page',
   'publish_landing_page',
@@ -157,6 +159,7 @@ function fakeStore() {
     publishLanding: () => { calls.push(['publishLanding']); return { enabled: false, publishedAt: '2026-01-01T00:00:00.000Z', isDirty: false }; },
     discardLandingDraft: () => { calls.push(['discardLandingDraft']); return { headline: 'Zed' }; },
     setLandingEnabled: (enabled) => { calls.push(['setLandingEnabled', enabled]); return { enabled, publishedAt: null, isDirty: false }; },
+    applyLandingStyleToResume: () => { calls.push(['applyLandingStyleToResume']); return { resumeId: 'main', site: { font: 'inter' } }; },
     uploadLandingImage: async (bytes, opts) => {
       calls.push(['uploadLandingImage', bytes, opts]);
       return { id: 'a'.repeat(64), mime: 'image/png', width: 1, height: 1, src: `/api/landing/images/${'a'.repeat(64)}` };
@@ -514,8 +517,17 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   assert.deepEqual(store.calls.at(-1), ['setLandingEnabled', true]);
   assert.equal((await call('set_landing_page_enabled', {})).isError, true);
 
+  // the look (issue #93): template and style pass through to the merge
+  const style = { source: 'custom', colors: { accent: '#123456', text: null }, darkColors: null };
+  await call('update_landing_page', { template: 'split', style });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { template: 'split', style }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { style: { source: 'mine' } })).isError, true);
+  assert.deepEqual((await call('apply_landing_style_to_resume')).json, { resumeId: 'main', site: { font: 'inter' } });
+  assert.deepEqual(store.calls.at(-1), ['applyLandingStyleToResume']);
+
   const schemas = (await call('get_block_schemas')).json;
   assert.deepEqual(schemas.landing.properties.sections.items.oneOf.map((s) => s.properties.kind.const), SECTION_KINDS);
+  assert.deepEqual(Object.keys(schemas.landing.properties.style.properties), ['source', 'colors', 'font', 'nameFont', 'darkColors']);
 });
 
 test('upload_landing_image decodes base64 (or a data: URL) under its own cap, and image references pass through', async (t) => {

@@ -8,7 +8,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const TEMPLATES_DIR = path.join(ROOT, 'templates');
+// The repo's templates/, or the folder given (validateTemplates.test.js
+// runs it over fixtures).
+const TEMPLATES_DIR = process.argv[2] ? path.resolve(process.argv[2]) : path.join(ROOT, 'templates');
 const ID_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const errors = [];
@@ -71,6 +73,24 @@ for (const id of layoutIds) {
   }
 }
 
+// ---- landing: template.json + style.css required, index.jsx optional --
+// (issue #93). Every one ships a style.css scoped under .l-template-<id>;
+// one that changes the page's structure adds an index.jsx. `classic` is
+// what an unknown or missing template is drawn as, so it must exist.
+const landingIds = dirsIn(path.join(TEMPLATES_DIR, 'landing'));
+for (const id of landingIds) {
+  const dir = path.join(TEMPLATES_DIR, 'landing', id);
+  const label = `templates/landing/${id}`;
+  checkId(id, label);
+  checkMeta(readJson(path.join(dir, 'template.json'), label), label);
+  const css = path.join(dir, 'style.css');
+  if (!existsSync(css)) errors.push(`${label}: missing style.css`);
+  else if (!readFileSync(css, 'utf8').includes(`.l-template-${id}`)) {
+    errors.push(`${label}: style.css must scope its rules under .l-template-${id}`);
+  }
+}
+if (!landingIds.includes('classic')) errors.push('templates/landing: missing "classic", the fallback for an unknown template');
+
 // ---- presets: template.json referencing an existing header + layout ---
 const presetIds = dirsIn(path.join(TEMPLATES_DIR, 'presets'));
 const COLOR_KEYS = new Set([
@@ -108,4 +128,6 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`✓ templates/ OK — ${headerIds.length} header(s), ${layoutIds.length} layout(s), ${presetIds.length} preset(s)`);
+console.log(
+  `✓ templates/ OK — ${headerIds.length} header(s), ${layoutIds.length} layout(s), ${landingIds.length} landing template(s), ${presetIds.length} preset(s)`
+);

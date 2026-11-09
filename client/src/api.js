@@ -60,6 +60,9 @@ export const api = {
   publishLanding: () => request('/landing/publish', { method: 'POST' }),
   discardLandingDraft: () => request('/landing/discard-draft', { method: 'POST' }),
   setLandingEnabled: (enabled) => request('/landing/enabled', { method: 'PUT', body: JSON.stringify({ enabled }) }),
+  // The stored draft's own colors and fonts into the default resume's site
+  // settings draft (issue #93): { resumeId, site }.
+  applyLandingStyle: () => request('/landing/apply-style', { method: 'POST' }),
   // An image for the landing page (issue #92): the file itself as the body.
   // Resolves with { id, mime, width, height, src } once the server has
   // re-encoded and stored it.

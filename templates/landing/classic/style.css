@@ -1,0 +1,44 @@
+/* The landing page's first layout (issue #70), as it was before templates
+   (issue #93): one 720 px column, the photo beside the headline. No
+   index.jsx, so LandingView arranges it: the hero, then the sections, in
+   an .l-main. */
+.l-template-classic .l-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 72px 24px 96px;
+}
+
+.l-template-classic .l-hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.l-template-classic .l-section {
+  margin: 0 0 36px;
+}
+
+.l-template-classic .l-section:last-child {
+  margin-bottom: 0;
+}
+
+.l-template-classic .l-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 560px) {
+  .l-template-classic .l-main {
+    padding: 40px 16px 64px;
+  }
+  .l-template-classic .l-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .l-template-classic .l-headline {
+    font-size: 2em;
+  }
+}

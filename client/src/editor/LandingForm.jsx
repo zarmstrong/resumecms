@@ -3,6 +3,7 @@ import { LinksEditor } from './LinksEditor.jsx';
 import { LandingAiPanel } from './LandingAiPanel.jsx';
 import { introSectionId } from './landingAi.js';
 import { SearchSharingFields } from './SearchSharingFields.jsx';
+import { LandingLookFields } from './LandingLookFields.jsx';
 import { LandingImageField, withImageRef } from './LandingImageField.jsx';
 import { carryItemKey } from './landingImages.js';
 import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
@@ -118,8 +119,10 @@ function AiField({ ai, ...props }) {
 // The landing page's fields (issue #70). `landing` is the draft, `context`
 // and `limits` come from GET /api/landing, `resumes` is the editor's list,
 // `ai` is LandingEditorPage's AI rewrite state and handlers (issue #73),
-// `onUploadImage` its image upload (issue #92, see LandingImageField).
-export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage }) {
+// `onUploadImage` its image upload (issue #92, see LandingImageField),
+// `look` its "Apply to the default resume" ({ onApply, applyState }, issue
+// #93, see LandingLookFields).
+export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage, look }) {
   const set = (patch) => onChange({ ...landing, ...patch });
   // Each field passes its own target to the upload (landingImages.js).
   const imageProps = (target) => ({ images: context.images || [], limits: limits?.images, onUpload: (file) => onUploadImage(file, target) });
@@ -279,6 +282,8 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
           domain or in its PDF. Leave the text empty to say "Home".
         </span>
       </div>
+
+      <LandingLookFields landing={landing} site={context.site} onChange={set} onApply={look?.onApply} applyState={look?.applyState} />
 
       <LandingSeoFields landing={landing} context={context} limits={limits} onChange={(seo) => set({ seo })} imageProps={imageProps} />
     </div>

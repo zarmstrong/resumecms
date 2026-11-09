@@ -260,6 +260,17 @@ const LANDING_IMAGE_REF = {
   },
 };
 
+// The landing page's four colors (issue #93), as in the site settings.
+const LANDING_COLORS = {
+  type: 'object',
+  properties: {
+    accent: { type: 'string', description: '#rrggbb: buttons, links, the subheadline' },
+    heading: { type: 'string', description: '#rrggbb: the headline and headings' },
+    text: { type: 'string', description: '#rrggbb: body text' },
+    background: { type: 'string', description: '#rrggbb: the page' },
+  },
+};
+
 const LANDING_SECTION_BASE = {
   id: { type: 'string', description: 'Tells sections apart; omit for a new section, keep for an existing one' },
   title: { type: 'string', description: "Heading above the section; '' shows none" },
@@ -417,6 +428,25 @@ export const LANDING_SCHEMA = {
         description: { type: 'string', description: "At most 200 characters; '' = the subheadline, else the first text section" },
         noindex: { type: 'boolean', description: 'Ask search engines not to list the page (X-Robots-Tag: noindex)' },
         image: { ...LANDING_IMAGE_REF, description: 'Optional share image for link previews (ideally 1200×630), shown instead of the drawn card' },
+      },
+    },
+    template: {
+      type: 'string',
+      description: "Landing template id, a folder name under templates/landing/: 'classic' (default), 'centered' (hero centered, cards in a grid) or 'split' (photo and hero in a sticky left column). An unknown id is drawn as classic",
+    },
+    style: {
+      type: 'object',
+      description: "Its colors and fonts; merged one level deep by update_landing_page, colors and darkColors one more. Checked strictly: a color that isn't #rrggbb or '', or an unknown font, is a 400",
+      properties: {
+        source: { enum: ['resume', 'custom'], description: "'resume' (default) = the default resume's published site settings; 'custom' = colors, font and nameFont here" },
+        colors: { ...LANDING_COLORS, description: "Used with source 'custom'; '' = the site settings' default" },
+        font: { type: 'string', description: "Same options as the site settings' font; '' = source-serif" },
+        nameFont: { type: 'string', description: "Same options, for the headline and headings; '' = match font" },
+        darkColors: {
+          ...LANDING_COLORS,
+          optional: true,
+          description: "Optional dark palette for visitors whose device is set to dark, used with either source (a resume has none); '' = the dark default, absent = none",
+        },
       },
     },
   },
