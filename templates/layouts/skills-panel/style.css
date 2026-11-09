@@ -7,6 +7,9 @@
   border-radius: var(--radius);
   padding: 10px 14px;
   margin-bottom: 6px;
+  /* A highlight tints the whole panel (see .r-block-highlight). */
+  --r-highlight-pad-y: 0px;
+  --r-highlight-pull: 0;
 }
 
 .r-layout-skills-panel .r-body [data-block-type='skills_group'] .r-skills-row,

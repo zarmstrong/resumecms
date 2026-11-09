@@ -6,6 +6,9 @@
   border-radius: var(--radius);
   padding: 16px 18px;
   margin-bottom: 16px;
+  /* A highlight tints the whole card (see .r-block-highlight). */
+  --r-highlight-pad-y: 0px;
+  --r-highlight-pull: 0;
 }
 
 .r-layout-boxed .r-body [data-block-type='experience'] .r-experience,
