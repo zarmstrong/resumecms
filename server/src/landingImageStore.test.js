@@ -199,3 +199,23 @@ test('publishing refuses an image it would show without a description; a draft m
   store.setLanding({ headline: 'Jo', photo: 'upload', photoImage: ref('Jo by the sea') });
   assert.ok(store.publishLanding().publishedAt);
 });
+
+test("a plain write (an editor from before inline text) keeps the draft's images", async () => {
+  const { store } = await makeStore();
+  const image = await store.uploadLandingImage(await png('#888888'));
+  const ref = { imageId: image.id, alt: 'Grey' };
+  const draft = {
+    headline: 'Jo',
+    photo: 'upload',
+    photoImage: ref,
+    sections: [
+      { id: 'i', kind: 'items', items: [{ title: 'P', text: 'Uses *this* tool', image: ref }] },
+      { id: 'pic', kind: 'image', image: ref, caption: 'A *caption*' },
+    ],
+    seo: { image: ref },
+  };
+  const saved = store.setLanding(draft, { textFormat: 'plain' });
+  assert.deepEqual(saved.sections[0].items[0], { title: 'P', text: 'Uses \\*this\\* tool', url: '', image: ref });
+  assert.deepEqual(saved.sections[1], { id: 'pic', kind: 'image', title: '', image: ref, caption: 'A *caption*' });
+  assert.deepEqual([saved.photoImage, saved.seo.image], [ref, ref]);
+});

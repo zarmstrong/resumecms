@@ -266,3 +266,27 @@ function status(fn) {
   }
   return null;
 }
+
+test('escaping keeps every image reference: an item thumbnail, an image section and its caption', () => {
+  const image = { imageId: 'a'.repeat(64), alt: 'A *starred* alt' };
+  const landing = {
+    headline: 'Jo',
+    photo: 'upload',
+    photoImage: image,
+    sections: [
+      { id: 'i', kind: 'items', title: '', items: [{ title: 'P', text: 'Uses *this* tool', url: '', meta: '2024', image }] },
+      { id: 'pic', kind: 'image', title: '', image, caption: 'Plain *caption*' },
+    ],
+    seo: { title: '', description: '', noindex: false, image },
+  };
+  const { landing: out, changed } = escapeLandingText(landing);
+  assert.equal(changed, 1);
+  assert.deepEqual(out.sections[0].items[0], { title: 'P', text: 'Uses \\*this\\* tool', url: '', meta: '2024', image });
+  // Captions and alt text are plain text: never escaped.
+  assert.deepEqual(out.sections[1], landing.sections[1]);
+  assert.deepEqual([out.photoImage, out.seo.image], [image, image]);
+  // Against a stored draft (a plain write, keepItem()), moved or echoed.
+  const stored = { ...landing, sections: [{ ...landing.sections[0], items: [{ ...landing.sections[0].items[0], text: 'Uses \\*this\\* tool' }] }] };
+  const echoed = escapeLandingText({ ...landing, sections: [{ ...landing.sections[0], items: [{ ...stored.sections[0].items[0] }] }] }, stored).landing;
+  assert.deepEqual(echoed.sections[0].items[0].image, image);
+});
