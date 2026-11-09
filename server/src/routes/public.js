@@ -65,6 +65,21 @@ router.get('/images/:key', handle((req, res) => {
   });
 }));
 
+// An image the landing page shows (issue #92), by its id (the hash of its
+// bytes): only while the page is shown and its published snapshot shows
+// this one (the store's publicLandingImage), so a draft-only upload isn't
+// public and a removed one is gone at once. Hence revalidated, not
+// immutable; the strong ETag makes that a 304.
+router.get('/landing/images/:id', handle((req, res) => {
+  res.set('Cache-Control', REVALIDATE);
+  const image = store.publicLandingImage(req.params.id);
+  if (!image) throw httpError(404, 'Not found');
+  if (image.noindex) res.set('X-Robots-Tag', NOINDEX);
+  res.set('ETag', `"${req.params.id}"`);
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.type(image.mime).send(image.bytes);
+}));
+
 router.get('/resumes/:slug', slugResume);
 
 export default router;

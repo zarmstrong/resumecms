@@ -13,6 +13,7 @@ import {
   upgradeLanding,
   validateLanding,
 } from './landingFields.js';
+import { LANDING_IMAGE_LIMITS, checkImageRef, imageIdOfPath, referencedImageIds, resolveImage, shownImageIds } from './landingImageFields.js';
 
 const known = (...ids) => ({ knownResumeIds: new Set(ids) });
 const linksSection = (links) => ({ sections: [{ id: 'l', kind: 'links', links }] });
@@ -698,4 +699,110 @@ test("an experience section resolves its resume's first roles, without ids", () 
   // A resume with no roles to show takes the section off.
   const none = { resumes: new Map([['main', { href: '/resume', title: '', pdfHref: '', experience: [] }]]) };
   assert.deepEqual(resolveLanding(landing, none).sections, []);
+});
+
+const IMG = 'a'.repeat(64);
+const IMG2 = 'b'.repeat(64);
+const withImages = (...ids) => ({ knownResumeIds: new Set(), knownImageIds: new Set(ids) });
+
+test('image references are { imageId, alt }, checked strictly, and must name a stored image unless already in the draft', () => {
+  const ref = { imageId: IMG, alt: 'Jo at a talk' };
+  const out = validateLanding(
+    {
+      photo: 'upload',
+      photoImage: ref,
+      sections: [
+        { id: 'i', kind: 'items', items: [{ title: 'P', image: ref }, { title: 'Q', image: null }] },
+        { id: 'pic', kind: 'image', image: ref, caption: 'On stage' },
+        { id: 'empty', kind: 'image' },
+      ],
+      seo: { image: { imageId: IMG, alt: '' } },
+    },
+    withImages(IMG)
+  );
+  assert.deepEqual(out.photoImage, ref);
+  assert.deepEqual(out.sections[0].items, [{ title: 'P', text: '', url: '', image: ref }, { title: 'Q', text: '', url: '' }]);
+  assert.deepEqual(out.sections[1], { id: 'pic', kind: 'image', title: '', image: ref, caption: 'On stage' });
+  // A new image section starts empty; the editor uploads into it.
+  assert.deepEqual(out.sections[2], { id: 'empty', kind: 'image', title: '', image: null, caption: '' });
+  // alt may still be empty in a draft (the editor saves while it's typed).
+  assert.deepEqual(out.seo, { title: '', description: '', noindex: false, image: { imageId: IMG, alt: '' } });
+  // No image, no key: a draft without images keeps its old shape.
+  assert.deepEqual(validateLanding({}, withImages(IMG)), emptyLanding());
+
+  const bad = [
+    { photoImage: { imageId: IMG } }, // alt is required
+    { photoImage: { imageId: IMG, alt: 3 } },
+    { photoImage: { imageId: IMG, alt: 'x'.repeat(LANDING_IMAGE_LIMITS.alt + 1) } },
+    { photoImage: { imageId: IMG, alt: '', src: '/evil' } },
+    { photoImage: { imageId: 'not-a-hash', alt: '' } },
+    { photoImage: { imageId: IMG2, alt: '' } }, // not stored
+    { photoImage: 'data:image/png;base64,AAAA' },
+    { sections: [{ kind: 'image', image: { imageId: IMG2, alt: '' } }] },
+    { sections: [{ kind: 'image', caption: 'x'.repeat(LANDING_IMAGE_LIMITS.caption + 1) }] },
+    { sections: [{ kind: 'image', body: 'text' }] },
+    { sections: [{ kind: 'items', items: [{ title: 'P', image: { imageId: IMG2, alt: '' } }] }] },
+    { seo: { image: { imageId: IMG2, alt: '' } } },
+    { seo: { image: 'https://example.com/me.jpg' } },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, withImages(IMG))), 400, JSON.stringify(input));
+
+  // One already in the draft may outlive its image, as a card its resume.
+  const kept = validateLanding({ seo: { image: { imageId: IMG2, alt: '' } } }, { ...withImages(IMG), previousImageIds: new Set([IMG2]) });
+  assert.equal(kept.seo.image.imageId, IMG2);
+  assert.deepEqual([...referencedImageIds({ photoImage: ref, seo: kept.seo, sections: out.sections })].sort(), [IMG, IMG2]);
+  assert.deepEqual([...referencedImageIds(emptyLanding())], []);
+  // The MCP merge replaces seo.image and keeps the rest of seo.
+  const merged = mergeLandingPatch({ ...emptyLanding(), seo: { title: 'T', description: '', noindex: false } }, { seo: { image: ref } });
+  assert.deepEqual(merged.seo, { title: 'T', description: '', noindex: false, image: ref });
+  assert.equal('image' in mergeLandingPatch(merged, { seo: { image: null } }).seo, false);
+});
+
+test('images resolve to { src, alt, width, height } while stored, and drop out (or take their section) when not', () => {
+  const ref = (imageId, alt = 'Alt') => ({ imageId, alt });
+  const landing = {
+    ...emptyLanding(),
+    photo: 'upload',
+    photoImage: ref(IMG, 'Jo'),
+    sections: [
+      { id: 'i', kind: 'items', title: '', items: [{ title: 'P', text: '', url: '', image: ref(IMG) }, { title: 'Q', text: '', url: '', image: ref(IMG2) }] },
+      { id: 'pic', kind: 'image', title: 'Me', image: ref(IMG), caption: 'Hi' },
+      { id: 'gone', kind: 'image', title: 'Gone', image: ref(IMG2), caption: 'Bye' },
+      { id: 'none', kind: 'image', title: 'Not yet', image: null, caption: '' },
+    ],
+    seo: { title: '', description: '', noindex: false, image: ref(IMG, 'Card') },
+  };
+  const src = `/api/public/landing/images/${IMG}`;
+  const context = { photoUrl: 'data:image/jpeg;base64,AAAA', site: null, resumes: new Map(), images: new Map([[IMG, { src, width: 1200, height: 630 }]]) };
+  const out = resolveLanding(landing, context);
+  const shown = { src, alt: 'Alt', width: 1200, height: 630 };
+  assert.equal(out.photoUrl, src);
+  assert.equal(out.photoAlt, 'Jo');
+  assert.deepEqual(out.sections, [
+    { kind: 'items', title: '', items: [{ title: 'P', text: '', url: '', image: shown }, { title: 'Q', text: '', url: '' }] },
+    { kind: 'image', title: 'Me', image: shown, caption: 'Hi' },
+  ]);
+  assert.deepEqual(out.seo, { title: '', description: '', noindex: false, image: { ...shown, alt: 'Card' } });
+  assert.equal(JSON.stringify(out).includes('imageId'), false);
+  assert.deepEqual([...shownImageIds(out)], [IMG]);
+
+  // Its image gone: no photo, no share image.
+  const bare = resolveLanding(landing, { ...context, images: new Map() });
+  assert.equal(bare.photoUrl, '');
+  assert.equal('photoAlt' in bare, false);
+  assert.deepEqual(bare.seo, { title: '', description: '', noindex: false });
+  assert.deepEqual([...shownImageIds(bare)], []);
+  // photoImage only counts with photo: 'upload'; a context without images is fine.
+  assert.equal(resolveLanding({ ...landing, photo: 'resume' }, context).photoUrl, context.photoUrl);
+  assert.equal(resolveLanding({ ...landing, photo: 'none' }, { resumes: new Map() }).photoUrl, '');
+});
+
+test('only an uploaded image path counts as one', () => {
+  assert.equal(imageIdOfPath(`/api/public/landing/images/${IMG}`), IMG);
+  for (const other of [`/api/landing/images/${IMG}`, `/api/public/landing/images/${IMG}/x`, 'data:image/png;base64,AA', '', null]) {
+    assert.equal(imageIdOfPath(other), null);
+  }
+  assert.deepEqual(resolveImage({ imageId: IMG, alt: 7 }, new Map([[IMG, { src: 's', width: 1, height: 2 }]])), { src: 's', alt: '', width: 1, height: 2 });
+  assert.equal(resolveImage(null, new Map()), null);
+  assert.equal(checkImageRef({ imageId: IMG, alt: 'a' }, 'x', withImages(IMG)).alt, 'a');
 });

@@ -11,6 +11,10 @@ export const DESCRIPTION_LENGTH = 160;
 export const OVERRIDE_LIMITS = { title: 70, description: 200 };
 
 const PHOTO_DATA_URL = /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/;
+// The landing page's uploaded photo (issue #92): the server's cardContent()
+// takes it by its public path; the editor's preview has it at the
+// editor's own.
+const UPLOADED_PHOTO = /^\/api\/(?:public\/)?landing\/images\/[0-9a-f]{64}$/;
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const textOf = (value) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '');
 // A text section as a visitor reads it (issue #91), as the server's
@@ -35,7 +39,7 @@ export function cardContent({ name, title, photoUrl, site }) {
   return {
     name: shownName,
     title: typeof title === 'string' ? title.trim().slice(0, 200) : '',
-    photoUrl: typeof photoUrl === 'string' && PHOTO_DATA_URL.test(photoUrl) ? photoUrl : '',
+    photoUrl: typeof photoUrl === 'string' && (PHOTO_DATA_URL.test(photoUrl) || UPLOADED_PHOTO.test(photoUrl)) ? photoUrl : '',
     site: {
       colors: isObject(s.colors) ? s.colors : {},
       accent: typeof s.accent === 'string' ? s.accent : '',
@@ -76,17 +80,20 @@ export function resumePageMeta(header, site, blocks) {
 }
 
 // The landing page as resolveLanding() shows it: its seo, else the
-// headline, and the subheadline or first text section.
+// headline, and the subheadline or first text section. Its seo.image, when
+// it has one, is the share image (`shareImage`) and no card is drawn.
 export function landingPageMeta(landing) {
   const seo = isObject(landing?.seo) ? landing.seo : {};
   const sections = Array.isArray(landing?.sections) ? landing.sections : [];
   const headline = textOf(landing?.headline);
   const subheadline = textOf(landing?.subheadline);
   const firstText = sections.map((section) => (section.kind === 'text' ? bodyText(section.body) : '')).find(textOf);
+  const shareImage = isObject(seo.image) && typeof seo.image.src === 'string' ? seo.image : null;
   return {
     title: textOf(seo.title) || headline || 'Home',
     description: textOf(seo.description) || clip(subheadline || firstText, DESCRIPTION_LENGTH),
     photoUrl: landing?.photoUrl || '',
-    card: cardContent({ name: headline, title: subheadline, photoUrl: landing?.photoUrl, site: landing?.site }),
+    shareImage,
+    card: shareImage ? null : cardContent({ name: headline, title: subheadline, photoUrl: landing?.photoUrl, site: landing?.site }),
   };
 }

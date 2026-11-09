@@ -44,7 +44,7 @@ export function LandingView({ landing, preview = false, highlightIds = null }) {
     <div className={`l-page${preview ? ' l-preview' : ''}`} style={style}>
       <main className="l-main">
         <header className={`l-hero${highlightIds?.has('hero') ? ' l-ai-preview' : ''}`}>
-          {landing.photoUrl && <img className="l-photo" src={landing.photoUrl} alt="" />}
+          {landing.photoUrl && <img className="l-photo" src={landing.photoUrl} alt={landing.photoAlt || ''} />}
           <div>
             {landing.availability && <p className="l-availability">{landing.availability}</p>}
             {landing.headline && <h1 className="l-headline">{landing.headline}</h1>}
@@ -96,7 +96,8 @@ function SectionBody({ section }) {
       return (
         <ul className="l-items">
           {section.items.map((item, i) => (
-            <li key={i} className="l-item">
+            <li key={i} className={`l-item${item.image ? ' l-item-with-image' : ''}`}>
+              {item.image && <LandingImage className="l-item-image" image={item.image} />}
               {item.title &&
                 (item.url ? (
                   <a className="l-item-title" {...linkProps(item.url)}>
@@ -203,7 +204,20 @@ function SectionBody({ section }) {
           </a>
         </>
       );
+    case 'image':
+      return (
+        <figure className="l-figure">
+          <LandingImage className="l-figure-image" image={section.image} />
+          {section.caption && <figcaption className="l-figure-caption">{section.caption}</figcaption>}
+        </figure>
+      );
     default:
       return null;
   }
+}
+
+// An uploaded image (issue #92) as resolveLanding() gives it: its size is
+// known, so the page doesn't jump while it loads.
+function LandingImage({ className, image }) {
+  return <img className={className} src={image.src} alt={image.alt} width={image.width} height={image.height} loading="lazy" decoding="async" />;
 }

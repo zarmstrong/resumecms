@@ -5,7 +5,9 @@
 // { photoUrl, site, resumes: [{ id, href, title, pdfHref, experience }] },
 // the resumes a card or hero action can link to right now (pdfHref '' while
 // one has no PDF; experience the roles an experience section may show from
-// it, already filtered by the server's experienceRoles()). With `withIds`,
+// it, already filtered by the server's experienceRoles()), and images:
+// [{ id, src, width, height }], the uploaded images (issue #92) at the
+// editor's own path, since a draft's may not be public yet. With `withIds`,
 // each section keeps its id, which the server never sends: the editor's
 // preview outlines a section by it. With `withHidden`, a hidden section is
 // resolved too and kept as `hidden: true`, for the preview to dim; the
@@ -23,7 +25,12 @@ function isSafeUrl(url) {
 
 export function resolveLanding(landing, context, { withIds = false, withHidden = false } = {}) {
   const targets = new Map((context?.resumes || []).map((r) => [r.id, r]));
-  const photoUrl = landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context?.photoUrl || '' : '';
+  const images = new Map((context?.images || []).map((image) => [image.id, image]));
+  const upload = landing.photo === 'upload' ? resolveImage(landing.photoImage, images) : null;
+  const photoUrl =
+    landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context?.photoUrl || '' : (upload?.src ?? '');
+  const { image: shareImage, ...seo } = landing.seo ?? {};
+  const seoImage = resolveImage(shareImage, images);
   return {
     headline: landing.headline,
     subheadline: landing.subheadline,
@@ -33,13 +40,14 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
       return shown ? [shown] : [];
     }),
     photoUrl,
+    ...(upload ? { photoAlt: upload.alt } : {}),
     sections: landing.sections.flatMap((section) => {
-      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets);
+      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images);
       if (!shown) return [];
       const hidden = section.hidden ? { hidden: true } : {};
       return [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...hidden, ...shown }];
     }),
-    seo: { title: '', description: '', noindex: false, ...landing.seo },
+    seo: { title: '', description: '', noindex: false, ...seo, ...(seoImage ? { image: seoImage } : {}) },
     site: context?.site ?? null,
   };
 }
@@ -59,21 +67,32 @@ function resolveAction(action, targets) {
   return href ? { label: action.label || ACTION_LABELS[action.open], href } : null;
 }
 
+// An image reference ({ imageId, alt }) as a visitor sees it,
+// { src, alt, width, height }, or null while its image isn't stored.
+function resolveImage(ref, images) {
+  const image = ref && typeof ref === 'object' ? images.get(ref.imageId) : null;
+  return image ? { src: image.src, alt: typeof ref.alt === 'string' ? ref.alt : '', width: image.width, height: image.height } : null;
+}
+
 // A section as a visitor sees it, or null when nothing of it is left to
 // show (the server leaves those out, heading and all).
-function resolveSection(section, targets) {
+function resolveSection(section, targets, images) {
   switch (section.kind) {
     case 'text':
       return section.body.trim() ? { body: section.body } : null;
     case 'items': {
       const items = section.items
         .filter((item) => item.title.trim() || item.text.trim())
-        .map((item) => ({
-          title: item.title,
-          text: item.text,
-          url: item.url !== '' && isSafeUrl(item.url) ? item.url : '',
-          ...(item.meta?.trim() ? { meta: item.meta } : {}),
-        }));
+        .map((item) => {
+          const image = resolveImage(item.image, images);
+          return {
+            title: item.title,
+            text: item.text,
+            url: item.url !== '' && isSafeUrl(item.url) ? item.url : '',
+            ...(item.meta?.trim() ? { meta: item.meta } : {}),
+            ...(image ? { image } : {}),
+          };
+        });
       return items.length ? { items } : null;
     }
     case 'links': {
@@ -107,6 +126,10 @@ function resolveSection(section, targets) {
         dates: section.showDates ? roleDates(role) : '',
       }));
       return roles.length ? { roles, href: target.href } : null;
+    }
+    case 'image': {
+      const image = resolveImage(section.image, images);
+      return image ? { image, caption: section.caption } : null;
     }
     default:
       return null;

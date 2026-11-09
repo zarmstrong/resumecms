@@ -44,10 +44,18 @@ const EXPECTED_TOOLS = [
   'update_landing_page',
   'update_resume',
   'update_site_settings',
+  'upload_landing_image',
 ];
 
 const RESUME_TOOLS = ['create_resume', 'delete_resume', 'get_resume', 'list_resumes', 'update_resume'];
-const LANDING_TOOLS = ['discard_landing_draft', 'get_landing_page', 'publish_landing_page', 'set_landing_page_enabled', 'update_landing_page'];
+const LANDING_TOOLS = [
+  'discard_landing_draft',
+  'get_landing_page',
+  'publish_landing_page',
+  'set_landing_page_enabled',
+  'update_landing_page',
+  'upload_landing_image',
+];
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -149,6 +157,10 @@ function fakeStore() {
     publishLanding: () => { calls.push(['publishLanding']); return { enabled: false, publishedAt: '2026-01-01T00:00:00.000Z', isDirty: false }; },
     discardLandingDraft: () => { calls.push(['discardLandingDraft']); return { headline: 'Zed' }; },
     setLandingEnabled: (enabled) => { calls.push(['setLandingEnabled', enabled]); return { enabled, publishedAt: null, isDirty: false }; },
+    uploadLandingImage: async (bytes, opts) => {
+      calls.push(['uploadLandingImage', bytes, opts]);
+      return { id: 'a'.repeat(64), mime: 'image/png', width: 1, height: 1, src: `/api/landing/images/${'a'.repeat(64)}` };
+    },
     listCoverLetters: () => [{ id: 'l1', title: 'Acme', data: {} }],
     getCoverLetter: (id) => {
       if (id !== 'l1') throw httpError(404, 'Cover letter not found');
@@ -504,6 +516,35 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
 
   const schemas = (await call('get_block_schemas')).json;
   assert.deepEqual(schemas.landing.properties.sections.items.oneOf.map((s) => s.properties.kind.const), SECTION_KINDS);
+});
+
+test('upload_landing_image decodes base64 (or a data: URL) under its own cap, and image references pass through', async (t) => {
+  const store = fakeStore();
+  const { call, close } = await connect(store);
+  t.after(close);
+
+  const bytes = Buffer.from('not really a png, the store re-encodes');
+  const uploaded = await call('upload_landing_image', { data: bytes.toString('base64') });
+  assert.equal(uploaded.json.id, 'a'.repeat(64));
+  const [name, sent, opts] = store.calls.at(-1);
+  assert.equal(name, 'uploadLandingImage');
+  assert.ok(sent.equals(bytes));
+  assert.ok(opts.maxInputBytes < 2 * 1024 * 1024); // the JSON-RPC body's own cap
+  await call('upload_landing_image', { data: `data:image/png;base64,${bytes.toString('base64')}` });
+  assert.ok(store.calls.at(-1)[1].equals(bytes));
+
+  const callsBefore = store.calls.length;
+  assert.match((await call('upload_landing_image', { data: 'not base64!' })).text, /\[400\]/);
+  assert.match((await call('upload_landing_image', { data: '' })).text, /\[400\]/);
+  assert.match((await call('upload_landing_image', { data: 'A'.repeat(2_000_000) })).text, /\[413\]/);
+  assert.equal(store.calls.length, callsBefore);
+
+  const image = { imageId: 'a'.repeat(64), alt: 'Me' };
+  const sections = [{ kind: 'image', image, caption: 'Hi' }, { kind: 'items', items: [{ title: 'P', image }] }];
+  await call('update_landing_page', { photo: 'upload', photoImage: image, sections, seo: { image } });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { photo: 'upload', photoImage: image, sections, seo: { image } }, { merge: true }]);
+  // alt is required
+  assert.equal((await call('update_landing_page', { photoImage: { imageId: 'a'.repeat(64) } })).isError, true);
 });
 
 test('cover letter tools: create, merge or replace on update, delete, scoped by resumeId', async (t) => {

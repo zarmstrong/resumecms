@@ -158,3 +158,37 @@ test('a text section splits into paragraphs on blank lines', () => {
   assert.deepEqual(textParagraphs('One\nstill one\n\n  \nTwo\n'), ['One\nstill one', 'Two']);
   assert.deepEqual(textParagraphs(''), []);
 });
+
+test('uploaded images resolve like the server does, at the editor path the context gives', () => {
+  const id = 'a'.repeat(64);
+  const gone = 'b'.repeat(64);
+  const src = `/api/landing/images/${id}`;
+  const ctx = { ...context, images: [{ id, src, width: 800, height: 600 }] };
+  const ref = (imageId, alt = 'Alt') => ({ imageId, alt });
+  const landing = {
+    ...draft,
+    photo: 'upload',
+    photoImage: ref(id, 'Jo'),
+    sections: [
+      { id: 'i', kind: 'items', title: '', items: [{ title: 'P', text: '', url: '', image: ref(id) }, { title: 'Q', text: '', url: '', image: ref(gone) }] },
+      { id: 'pic', kind: 'image', title: 'Me', image: ref(id), caption: 'Hi' },
+      { id: 'gone', kind: 'image', title: 'Gone', image: ref(gone), caption: '' },
+      { id: 'none', kind: 'image', title: '', image: null, caption: '' },
+    ],
+    seo: { title: '', description: '', noindex: false, image: ref(id, 'Card') },
+  };
+  const shown = { src, alt: 'Alt', width: 800, height: 600 };
+  const out = resolveLanding(landing, ctx, { withIds: true });
+  assert.equal(out.photoUrl, src);
+  assert.equal(out.photoAlt, 'Jo');
+  assert.deepEqual(out.sections, [
+    { id: 'i', kind: 'items', title: '', items: [{ title: 'P', text: '', url: '', image: shown }, { title: 'Q', text: '', url: '' }] },
+    { id: 'pic', kind: 'image', title: 'Me', image: shown, caption: 'Hi' },
+  ]);
+  assert.deepEqual(out.seo.image, { ...shown, alt: 'Card' });
+  // Before the context lists it (or with none), nothing shows.
+  const bare = resolveLanding(landing, context);
+  assert.equal(bare.photoUrl, '');
+  assert.deepEqual(bare.sections.map((s) => s.kind), ['items']);
+  assert.equal('image' in bare.seo, false);
+});

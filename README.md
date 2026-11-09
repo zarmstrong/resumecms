@@ -207,8 +207,10 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/resumes/:id/cover-letters/:letterId/letter.pdf` | the letter as a PDF download, rendered on request and reused until the letter or its resume's header or site settings change. A render that waits more than 20 s behind another is a 503: it carries on, so asking again shortly gets the file |
 | `POST /api/resumes/:id/cover-letters/:letterId/rewrite` | `{ data?, target?, instruction?, brief? }` → `{ proposal }` for review; saves nothing. `target` is `{ kind: 'letter' }` (default: salutation, body and closing) or `{ kind: 'paragraph', index }`. A letter with an empty body is drafted without an instruction; otherwise an instruction or a `brief` is required. Shares `ai/rewrite`'s rate limits (a request with a `brief` counts as tailoring) |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`, `ai/tailor-plan`) for that resume. The unprefixed ones act on whichever resume is the default |
-| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, availability, actions, photo, photoUrl, sections, seo, homeLink, homeLinkLabel }`, `actions` being up to 3 buttons, each `{ type: 'link', label, url }` or `{ type: 'resume', label, resumeId, open: 'page' | 'pdf' }`, `seo` being `{ title, description, noindex }`, each section `{ id, kind, title, hidden?, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url, meta? }]`), `links` (`links`), `resumes` (`cards: [{ resumeId, label, blurb, showPdf }]`), `quotes` (`quotes: [{ text, name, role, url }]`) or `experience` (`resumeId`, `count` 1–10, `showDates`); `hidden` and `meta` are only there when set, `homeLink` (default `true`) whether resume pages show a "← Home" link back to it, and `homeLinkLabel` (up to 40 characters, `''` for "Home") what it says), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card, button or experience section can link to (public and published), each with its PDF's link (`pdfHref`, `''` while it has none) and the roles an experience section may show from it (`experience`). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links and its email an "Email me" button |
-| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL (or a `[label](url)` link inside a text section's `body` or an item's `text`) that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card, button or experience section for an unknown resume are all a 400. The editor sends `textFormat: 'inline'` with it (never stored); a body without it is taken as plain text, its text sections' and items' markers escaped first, so an editor loaded before that syntax existed saves what it showed |
+| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, availability, actions, photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel }`, `actions` being up to 3 buttons, each `{ type: 'link', label, url }` or `{ type: 'resume', label, resumeId, open: 'page' | 'pdf' }`, `photo` one of `resume`, `custom` (`photoUrl`), `upload` (`photoImage`) or `none`, `seo` being `{ title, description, noindex, image? }`, each section `{ id, kind, title, hidden?, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url, meta?, image? }]`), `links` (`links`), `resumes` (`cards: [{ resumeId, label, blurb, showPdf }]`), `quotes` (`quotes: [{ text, name, role, url }]`), `experience` (`resumeId`, `count` 1–10, `showDates`) or `image` (`image`, `caption`); `hidden`, `meta` and an item's `image` are only there when set, an image is referenced as `{ imageId, alt }`, `homeLink` (default `true`) whether resume pages show a "← Home" link back to it, and `homeLinkLabel` (up to 40 characters, `''` for "Home") what it says), its `status`, its fields' caps (`limits`, the images' under `limits.images`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card, button or experience section can link to (public and published), each with its PDF's link (`pdfHref`, `''` while it has none) and the roles an experience section may show from it (`experience`), and the uploaded images (`images: [{ id, src, width, height }]`). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links and its email an "Email me" button |
+| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL (or a `[label](url)` link inside a text section's `body` or an item's `text`) that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, an image reference without an `alt` string, and a new card, button, experience section or image reference for an unknown resume or image are all a 400. An image's `alt` may be empty in the draft. The editor sends `textFormat: 'inline'` with it (never stored); a body without it is taken as plain text, its text sections' and items' markers escaped first, so an editor loaded before that syntax existed saves what it showed |
+| `POST /api/landing/images` | upload an image for the landing page: the JPEG, PNG or WebP file itself as the body (at most 15 MB; its type is told from its bytes, not `Content-Type`). It's re-encoded, which drops all metadata (EXIF and GPS position included), and scaled down to 1600 px on its long side; responds `201` with `{ id, mime, width, height, src }`. A 413 when it's too large, a 409 when the store is full (50 images or 30 MB; an image nothing uses is removed a week after its upload) |
+| `GET /api/landing/images/:id` | a stored image, for the editor's preview |
 | `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
 | `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it) |
 | `POST /api/landing/discard-draft` | restore the landing page draft from its last published snapshot |
@@ -223,6 +225,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/public/home` | public, what `/` shows on this host: `{ kind: 'landing', landing }` when the landing page is enabled, published and the host isn't one of a resume's `hostnames`, otherwise `{ kind: 'resume', resume }` (the same as `/api/public/resume?mode=web`). Cards, buttons and experience sections only show public, published resumes, by link (`/resume` for the default, `/r/<slug>` otherwise, and the PDF's with its `?v=` version), never by id or internal name. Hidden sections are left out. Sent with `Vary: Host, X-Forwarded-Host` |
 | `GET /api/public/resumes/:slug?mode=web\|print` | public, the same for a resume by its link name; 404 unless that resume is public and published, with the same `home` link. Sent with `X-Robots-Tag: noindex` and, since `home` depends on the host, `Vary: Host, X-Forwarded-Host` |
 | `GET /api/public/resumes/:slug/resume.pdf` | public, its PDF, on the same terms |
+| `GET /api/public/landing/images/:id` | public, an uploaded image the landing page shows; a 404 unless the landing page is shown and its published version uses it |
 | `GET /api/public/images/:key` | public, a link preview's image (a page's photo, or its PNG share card) by the key in that page's `og:image`; a 404 once no public, published page shows it. Sent with `X-Robots-Tag: noindex`. See [Search results and link previews](#search-results-and-link-previews) |
 | `GET /api/public/letter` | the PDF renderer's own: the cover letter its signed render cookie names; a 404 to anyone else |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
@@ -290,6 +293,7 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 | `update_landing_page` | merge fields into the landing page draft (`sections` is replaced whole; a section sent without an `id` is new; `seo` is merged one level deep; `null` resets a field), with the same checks as `PUT /api/landing` |
 | `publish_landing_page`, `discard_landing_draft` | publish the landing page draft / restore it from its last published snapshot |
 | `set_landing_page_enabled` | `{ enabled }` — switches the landing page at `/` on or off, at once |
+| `upload_landing_image` | `{ data }`, the image file base64-encoded (at most 1.4 MB before encoding) — stores it as `POST /api/landing/images` does and returns its `id`, for a `{ imageId, alt }` reference in `update_landing_page` |
 
 Tool errors carry the same status the REST API would return, e.g.
 `[404] Block not found`.
@@ -415,8 +419,8 @@ buttons under it (a link such as "Email me" or "Book a call", or a
 resume's page or PDF; the first is drawn as the main one), then whatever sections you add, in
 the order you choose: text (a few lines about yourself, a "Now" note), a
 list such as projects (each with a title, a line of text, an optional
-link and an optional short line under the title such as "2024 · Rust ·
-Open source"), links, quotes (testimonials, each with who said it and
+link, an optional short line under the title such as "2024 · Rust ·
+Open source" and an optional thumbnail), an image with a caption, links, quotes (testimonials, each with who said it and
 their role), an experience timeline, and cards linking to whichever
 resumes you choose. The experience timeline shows the latest roles (one to
 ten) of a resume you pick, as it's published and shown on the web: title,
@@ -445,6 +449,15 @@ The landing page has its own draft and Publish, separate from every
 resume's. It takes its colors and fonts from the default resume's
 published site settings, and "The default resume's photo" means the photo
 in that resume's published header.
+
+Images (a thumbnail, an image section, the photo when you pick "An
+uploaded image", and the share image) are uploaded to the server, which
+keeps them in its database, so its backups include them. Every upload is
+re-encoded: anything the camera wrote into the file, its GPS position
+included, is dropped, and a large image is scaled down to 1600 px on its
+long side. Each image needs a short description (its alt text). An
+uploaded image is only public while the published landing page shows it,
+and one nothing uses any more is removed a week after it was uploaded.
 
 What visitors see:
 
@@ -502,7 +515,8 @@ All of it comes from what's **published** and what the page already shows:
 - The picture is a 1200×630 share card (name, title and photo in the
   page's colors and fonts), drawn by the same Chromium as the PDF after
   each publish. Until it's drawn, or if Chromium isn't available, the
-  photo is used instead. Each group shows a preview of the link.
+  photo is used instead. The landing page can have a share image of its
+  own instead of the card (uploaded under **Search & sharing**). Each group shows a preview of the link.
 - A private, unpublished or unknown `/r/<link name>` gets the generic
   tags, so a private resume's name never appears in its page. The editor
   and `/print` pages always do.
@@ -790,7 +804,8 @@ section in one go. Each suggestion opens under its own field with a diff,
 shows outlined in the preview, and is accepted or discarded on its own (or
 all at once from the banner over the preview). Accepting saves a draft
 edit; publish the landing page to make it live. Item titles and short
-lines, links, card titles, section headings and the photo are never
+lines, links, card titles, section headings, image captions and the
+images are never
 rewritten, and neither are quotes (someone else's words) or the
 experience timeline (it comes from the resume). Hidden sections aren't
 shown to the AI, apart from the one it's rewriting, and the intro draft
@@ -817,7 +832,7 @@ none yet.
 ## What's intentionally out of scope (v1)
 
 - Multi-user auth — this is single-account, single-tenant by design (one username/password pair, with optional TOTP 2FA).
-- Image/photo uploads — add them as a future block type if you need them.
+- Image uploads in resumes (the header photo is stored inline, and only the landing page has an image store) — add them as a future block type if you need them.
 - Rich text formatting inside bullets/body text (currently plain text).
 - Undo/version history.
 

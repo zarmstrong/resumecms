@@ -113,6 +113,24 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
     saves.schedule('landing', () => saves.track(api.putLanding(next), 'landing').then(flashSaved, saveFailed));
   }
 
+  // An image upload (issue #92, LandingImageField): once it's stored, the
+  // preview's context learns of it and `apply` puts the reference into the
+  // draft, both before the tracked request settles, so a flush (a publish,
+  // a switch) waits for the upload and then for the draft save it led to.
+  function handleImageUpload(file, apply) {
+    const request = api.uploadLandingImage(file).then((image) => {
+      if (!mountedRef.current) return image;
+      const stored = { id: image.id, src: image.src, width: image.width, height: image.height };
+      setLoaded((prev) => ({
+        ...prev,
+        context: { ...prev.context, images: [...(prev.context.images || []).filter((i) => i.id !== image.id), stored] },
+      }));
+      apply(image);
+      return image;
+    });
+    return saves.track(request);
+  }
+
   // Gets every edit to the server first; a save that failed stops here
   // unless confirmed, so nothing goes on without an edit unnoticed.
   async function afterSaving(next, { confirmFailed = true } = {}) {
@@ -374,6 +392,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
                 limits={loaded.limits}
                 onChange={handleChange}
                 ai={ai}
+                onUploadImage={handleImageUpload}
               />
             </div>
           </section>

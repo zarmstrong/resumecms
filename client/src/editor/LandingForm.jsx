@@ -3,6 +3,7 @@ import { LinksEditor } from './LinksEditor.jsx';
 import { LandingAiPanel } from './LandingAiPanel.jsx';
 import { introSectionId } from './landingAi.js';
 import { SearchSharingFields } from './SearchSharingFields.jsx';
+import { LandingImageField, withImageRef } from './LandingImageField.jsx';
 import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
@@ -22,6 +23,7 @@ const SECTION_KINDS = [
     addLabel: 'Experience (latest roles from a resume)',
     empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id, count: 3, showDates: true }),
   },
+  { kind: 'image', label: 'Image', addLabel: 'Image', empty: () => ({ image: null, caption: '' }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -55,6 +57,8 @@ function hasContent(section) {
     case 'experience':
       // Nothing typed but its heading: its roles come from the resume.
       return false;
+    case 'image':
+      return Boolean(section.image) || Boolean(section.caption.trim());
     default:
       return false;
   }
@@ -110,9 +114,11 @@ function AiField({ ai, ...props }) {
 
 // The landing page's fields (issue #70). `landing` is the draft, `context`
 // and `limits` come from GET /api/landing, `resumes` is the editor's list,
-// `ai` is LandingEditorPage's AI rewrite state and handlers (issue #73).
-export function LandingForm({ landing, resumes, context, limits, onChange, ai }) {
+// `ai` is LandingEditorPage's AI rewrite state and handlers (issue #73),
+// `onUploadImage` its image upload (issue #92, see LandingImageField).
+export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage }) {
   const set = (patch) => onChange({ ...landing, ...patch });
+  const imageProps = { images: context.images || [], limits: limits?.images, onUpload: onUploadImage };
   const sections = landing.sections;
   const introId = introSectionId(landing);
   const setSections = (next) => set({ sections: next });
@@ -170,6 +176,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
         <select className="ed-input" value={landing.photo} onChange={(e) => set({ photo: e.target.value })}>
           <option value="resume">The default resume's photo</option>
           <option value="custom">A different photo</option>
+          <option value="upload">An uploaded image, uncropped</option>
           <option value="none">No photo</option>
         </select>
         {landing.photo === 'resume' && !context.photoUrl && (
@@ -178,6 +185,15 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
       </div>
       {landing.photo === 'custom' && (
         <PhotoUpload label="Landing page photo" value={landing.photoUrl} onChange={(photoUrl) => set({ photoUrl })} />
+      )}
+      {landing.photo === 'upload' && (
+        <LandingImageField
+          label="Landing page photo"
+          hint="Shown round, like the default photo. Larger images are scaled down to 1600 px, and their location data is removed."
+          value={landing.photoImage ?? null}
+          onChange={(ref) => onChange(withImageRef(landing, 'photoImage', ref))}
+          {...imageProps}
+        />
       )}
 
       <ActionsFields
@@ -223,6 +239,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
               context={context}
               limits={limits}
               ai={ai}
+              imageProps={imageProps}
             />
           </div>
         ))}
@@ -259,13 +276,14 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
         </span>
       </div>
 
-      <LandingSeoFields landing={landing} context={context} limits={limits} onChange={(seo) => set({ seo })} />
+      <LandingSeoFields landing={landing} context={context} limits={limits} onChange={(seo) => set({ seo })} imageProps={imageProps} />
     </div>
   );
 }
 
-// The landing page's `seo` (issue #87), previewed as the page resolves.
-function LandingSeoFields({ landing, context, limits, onChange }) {
+// The landing page's `seo` (issue #87), previewed as the page resolves,
+// with its share image (issue #92).
+function LandingSeoFields({ landing, context, limits, onChange, imageProps }) {
   const seo = { title: '', description: '', noindex: false, ...landing.seo };
   const metaOf = (s) => landingPageMeta(resolveLanding({ ...landing, seo: s }, context));
   return (
@@ -277,8 +295,17 @@ function LandingSeoFields({ landing, context, limits, onChange }) {
       meta={metaOf(seo)}
       fallback={metaOf({ ...seo, title: '', description: '' })}
       limits={{ title: limits?.seoTitle, description: limits?.seoDescription }}
-      hint="What search results and link previews say about this page. The preview card is drawn from the headline, subheadline and photo."
-    />
+      hint="What search results and link previews say about this page. The preview card is drawn from the headline, subheadline and photo, unless you upload a share image."
+    >
+      <LandingImageField
+        label="Share image (optional)"
+        hint="Shown by link previews instead of the drawn card. 1200×630 suits most sites."
+        value={seo.image ?? null}
+        onChange={(ref) => onChange(withImageRef(seo, 'image', ref))}
+        altHint="Say what it shows; link previews pass it on to screen readers."
+        {...imageProps}
+      />
+    </SearchSharingFields>
   );
 }
 
@@ -369,7 +396,7 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
 // The syntax a text section and an item's text take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
 
-function SectionFields({ section, onChange, resumes, context, limits, ai }) {
+function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps }) {
   switch (section.kind) {
     case 'text':
       return (
@@ -392,7 +419,9 @@ function SectionFields({ section, onChange, resumes, context, limits, ai }) {
         </>
       );
     case 'items':
-      return <ItemsFields sectionId={section.id} items={section.items} onChange={(items) => onChange({ items })} limits={limits} ai={ai} />;
+      return (
+        <ItemsFields sectionId={section.id} items={section.items} onChange={(items) => onChange({ items })} limits={limits} ai={ai} imageProps={imageProps} />
+      );
     case 'links':
       return <LinksEditor label={null} links={section.links} onChange={(links) => onChange({ links })} />;
     case 'resumes':
@@ -411,6 +440,22 @@ function SectionFields({ section, onChange, resumes, context, limits, ai }) {
       return <QuotesFields quotes={section.quotes} onChange={(quotes) => onChange({ quotes })} limits={limits} />;
     case 'experience':
       return <ExperienceFields section={section} onChange={onChange} resumes={resumes} context={context} limits={limits} />;
+    case 'image':
+      return (
+        <>
+          <LandingImageField value={section.image} onChange={(image) => onChange({ image })} {...imageProps} />
+          <textarea
+            className="ed-input"
+            rows={2}
+            value={section.caption}
+            maxLength={imageProps.limits?.caption}
+            onChange={(e) => onChange({ caption: e.target.value })}
+            placeholder="Caption (optional)"
+            aria-label="Image caption"
+          />
+          <span className="ed-field-hint">A section with no image yet is left off the page.</span>
+        </>
+      );
     default:
       return null;
   }
@@ -521,8 +566,9 @@ function ExperienceFields({ section, onChange, resumes, context, limits }) {
   );
 }
 
-function ItemsFields({ sectionId, items, onChange, limits, ai }) {
+function ItemsFields({ sectionId, items, onChange, limits, ai, imageProps }) {
   const setItem = (i, patch) => onChange(items.map((item, idx) => (idx === i ? { ...item, ...patch } : item)));
+  const setThumbnail = (i, ref) => onChange(items.map((item, idx) => (idx === i ? withImageRef(item, 'image', ref) : item)));
   return (
     <>
       {items.map((item, i) => (
@@ -573,6 +619,7 @@ function ItemsFields({ sectionId, items, onChange, limits, ai }) {
             aria-label="Item text"
           />
           <span className="ed-field-hint">{INLINE_HINT}</span>
+          <LandingImageField hint="Thumbnail (optional)" value={item.image ?? null} onChange={(ref) => setThumbnail(i, ref)} {...imageProps} />
           <AiField ai={ai} target={{ kind: 'item', sectionId, index: i }} current={item.text} />
         </div>
       ))}

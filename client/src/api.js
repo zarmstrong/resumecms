@@ -60,6 +60,11 @@ export const api = {
   publishLanding: () => request('/landing/publish', { method: 'POST' }),
   discardLandingDraft: () => request('/landing/discard-draft', { method: 'POST' }),
   setLandingEnabled: (enabled) => request('/landing/enabled', { method: 'PUT', body: JSON.stringify({ enabled }) }),
+  // An image for the landing page (issue #92): the file itself as the body.
+  // Resolves with { id, mime, width, height, src } once the server has
+  // re-encoded and stored it.
+  uploadLandingImage: (file) =>
+    request('/landing/images', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file }),
   // An AI rewrite of one spot on the landing page (issue #73): the draft as
   // the editor has it, without its photo (landingAi.js's rewriteCopy). Saves
   // nothing; resolves with { target, proposals, explanation }.

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { imageIdOfPath } from './landingImageFields.js';
 
 // The images a link preview shows (issue #87): a page's photo, served from
 // the data: URL it's stored as, and its share card, a 1200×630 PNG of the
@@ -44,7 +45,8 @@ export function photoKey(photoUrl) {
 const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
 
 // What a card shows, and all it's drawn from: the name and title, the
-// photo, and the parts of the site settings the card uses (its colors and
+// photo (a data: URL, or the landing page's uploaded photo by its public
+// path, which the renderer fetches like a visitor would), and the parts of the site settings the card uses (its colors and
 // fonts), so a layout change doesn't draw it again. Null when there's no
 // name to show.
 export function cardContent({ name, title, photoUrl, site }) {
@@ -54,7 +56,7 @@ export function cardContent({ name, title, photoUrl, site }) {
   return {
     name: shownName,
     title: text(title, TITLE_MAX),
-    photoUrl: parsePhoto(photoUrl) ? photoUrl : '',
+    photoUrl: parsePhoto(photoUrl) || imageIdOfPath(photoUrl) ? photoUrl : '',
     site: {
       colors: s.colors && typeof s.colors === 'object' ? s.colors : {},
       accent: typeof s.accent === 'string' ? s.accent : '',

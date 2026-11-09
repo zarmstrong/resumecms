@@ -279,31 +279,31 @@ install, not to a resume, so it lives in the global `settings` table:
 `server/src/landingStore.js` holds the operations and is composed into the
 store by `createResumeStore()`; validation and the public shape are pure, in
 `landingFields.js`. It isn't blocks: `{ headline, subheadline, availability, actions,
-photo, photoUrl, sections, seo, homeLink, homeLinkLabel }` (`seo` is `{ title, description, noindex }`, see
+photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel }` (`seo` is `{ title, description, noindex, image? }`, see
 "Search and link previews"; `mergeLandingPatch()` merges it one level
 deep; `actions` are the hero's buttons, issue #88, a `link` or a `resume`
 opening its `page` or `pdf`), where `sections` is an ordered list of
 `{ id, kind, title, ... }` with only the fields of its kind
-(`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url, meta }]`),
+(`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url, meta, image? }]`),
 `links`, `resumes` (cards `{ resumeId, label, blurb }`), `quotes`
-(`[{ text, name, role, url }]`) and `experience` (`resumeId`, `count`,
-`showDates`; issue #90). Any section may be `hidden: true`: kept in the
+(`[{ text, name, role, url }]`), `experience` (`resumeId`, `count`,
+`showDates`; issue #90) and `image` (`{ image, caption }`, `image` null
+until one is uploaded; issue #92). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`). `hidden` and an item's `meta` are
 only stored when set. The `id` is
 for the editor only and never leaves the server publicly. A draft or
 snapshot stored before sections (`intro`/`links`/`resumes` as fields) is
 read through `upgradeLanding()`, with fixed ids, until the next save or
-publish. There's no image section: the editor PUTs the whole draft on
-every save, under `express.json()`'s 2 MB limit, so images would need
-storage of their own first. It's checked far more
+publish. It's checked far more
 strictly than the header, because all of it is shown to every visitor:
 unknown keys, wrong types and values over `LANDING_LIMITS` are a 400, a
 link (or item URL) with any scheme but http/https/mailto/tel is too (the client's
 `safeHref()` rule, run through the WHATWG parser so `java\tscript:` is
 caught; a URL the parser rejects outright, like a half-typed `https://`,
 saves but is never shown), and `photoUrl` has to be
-a base64 JPEG/PNG/WebP `data:` URL. A link's `type` only picks its badge;
+a base64 JPEG/PNG/WebP `data:` URL (still accepted; uploads go to the image
+store below). A link's `type` only picks its badge;
 its names are `LINK_TYPES`, kept in step with the catalog in
 `client/src/resume/linkTypes.js` and the header enum in
 `mcp/blockSchemas.js`, and `telUrl()` (a fresh draft's phone link) mirrors
@@ -314,7 +314,8 @@ publishing any resume, and `landing_enabled` isn't drafted: it takes
 effect at once, and does nothing until a snapshot exists.
 
 A text section's `body` and an item's `text` (issue #91, nothing else: a
-quote's `text`, an item's `meta` and every title or label stay plain text,
+quote's `text`, an item's `meta`, an image section's `caption`, an
+image's `alt` and every title or label stay plain text,
 never parsed, escaped or migrated) may
 hold `[label](url)`, `**bold**` and `*italic*`; a `\` before `\ * [ ]`
 escapes it, and an unmatched marker stays literal. The tokenizer,
@@ -354,6 +355,40 @@ echoed field is never escaped twice, and an edited one reads as that
 editor showed it, backslashes included. The marker is never stored. The store's default is `'inline'`, so MCP writes (whose
 tool descriptions document the syntax) and tests are taken as inline.
 
+Its images (issue #92) can't ride in the draft (the editor PUTs it whole
+under `express.json()`'s 2 MB limit), so they're a store of their own: the
+`landing_images` table (`schema.js`; in SQLite, not under the data dir,
+because the backups copy only the database and an upload can't be
+re-rendered like a PDF), `landingImageStore.js` composed into the landing
+store, pure parts in `landingImageFields.js`. `POST /api/landing/images`
+takes the raw file (`express.raw()` on that route only, after the login
+check) and `upload_landing_image` (MCP) base64 under a smaller cap, both
+into `uploadLandingImage()`. `imageUpload.js`, the only module that loads
+`sharp` (a pinned dependency; it ships prebuilt binaries for the Docker
+image's glibc), tells the type by its bytes (JPEG/PNG/WebP, never the
+`Content-Type`), refuses more than 50 MP before decoding, and *always*
+re-encodes: EXIF orientation applied, at most 1600 px on the long side,
+no metadata at all (EXIF/GPS, XMP, PNG text), a PNG too big for the cap
+kept as WebP. The id is the sha256 of the stored bytes; caps and the
+grace period are `LANDING_IMAGE_LIMITS` and `IMAGE_GRACE_MS`. The draft
+refers to an image as `{ imageId, alt }` (`checkImageRef()`; `alt` a
+required string, '' allowed while typed) in `photoImage` (with
+`photo: 'upload'`), an item's `image`, an `image` section and
+`seo.image`; the optional ones are stored only when set. Like a card, a
+new reference must name a stored image and one already in the draft may
+outlive it (`referencedImageIds()`). After a publish and on boot,
+`pruneLandingImages()` deletes images neither the stored draft nor the
+snapshot references once they're past the grace period (so an upload
+just before a discard survives), and a full store prunes before refusing
+(409). The editor fetches any stored image at `GET /api/landing/images/:id`
+(`EDITOR_IMAGE`, behind login); a visitor only through
+`GET /api/public/landing/images/:id`, which `publicLandingImage()` answers
+only while the landing page is shown and `shownImageIds()` of its
+resolved snapshot includes the id, so a draft-only upload isn't public
+just because its hash is known, and a removed one is gone at the next
+publish (hence `REVALIDATE` with the id as a strong ETag, not
+`immutable`).
+
 `resolveLanding()` is the only shape that leaves the server publicly, and
 it resolves references when the page is requested, not when it's
 published (`landingContext()`). That's what keeps a resume made private,
@@ -370,8 +405,11 @@ roles or block ids: the context carries each visible resume's
 `experience`, `experienceRoles()` of its published blocks (the experience
 entries `publicBlocks.js` shows on the web, in order, with only title,
 company, its URL, location and dates), and the section resolves to its
-first `count` of them plus the resume's `href`. A section left with nothing to show
-(no text, no item or quote, every card's resume hidden, no role) is dropped, heading and
+first `count` of them plus the resume's `href`. An image reference resolves
+against `context.images` to `{ src, alt, width, height }` (its public path)
+or drops out when its image is gone; an uploaded hero photo is `photoUrl`
+plus `photoAlt`. A section left with nothing to show
+(no text, no item or quote, every card's resume hidden, no role, no image) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -418,7 +456,11 @@ it has its own save queue, flushed before a switch, publish, discard and
 logout. Its preview resolves the local draft with
 `client/src/landing/resolveLanding.js`, a mirror of the server's
 `resolveLanding()` (keep the two in step), against the `context` from
-`GET /api/landing`. AI rewrites of its fields are described under "AI
+`GET /api/landing`, whose `images` list the stored ones at the editor's
+path. An upload goes through `LandingImageField.jsx` and
+`LandingEditorPage`'s `handleImageUpload()`, which tracks it on the save
+queue and applies the reference before it settles, so a flush waits for
+both. AI rewrites of its fields are described under "AI
 rewrites" below. While the page is shown (`landingShown()` in
 `resumeLinks.js`), `publicUrl()` gives the default resume's link as
 `/resume`.
@@ -447,7 +489,11 @@ page shows. A resume's overrides are `site.title` (also the tab title) and
 site settings; the landing page's are its `seo`. `seo.noindex` adds
 `X-Robots-Tag: noindex` to `/` while the landing page is what it shows.
 
-The image is a share card when one is drawn, else the photo.
+The image is the landing page's `seo.image` when it has one (issue #92:
+`landingPage()`'s `shareImage`, served by its public path with its size,
+and then no card is drawn), else a share card when one is drawn, else the
+photo (an uploaded hero photo by its public path, which `cardContent()`
+also accepts).
 `shareImages.js` (pure) keys both by a hash of what they show: a photo by
 its `data:` URL, a card by `cardContent()` (name, title, photo and only the
 colors and fonts it's drawn in) plus `CARD_DESIGN_VERSION`, which must be
@@ -465,7 +511,8 @@ serves card content, and screenshots 1200×630. `GET
 /api/public/images/:key` serves an image only while `publicPages()` (the
 shown landing page and every public, published resume) still shows it, so
 taking a resume private takes its photo and card down with it; keep that
-check if you add an image.
+check if you add an image (the landing page's uploads have the same rule,
+see "Landing page").
 
 ### Route mount order matters
 
@@ -927,7 +974,8 @@ Chromium's children.
 
 Every public response carries an explicit `Cache-Control` from
 `server/src/cacheHeaders.js`: `no-cache` for `/api/public/resume`,
-`/api/public/resumes/:slug`, `/api/public/images/:key` and the HTML shell
+`/api/public/resumes/:slug`, `/api/public/images/:key`,
+`/api/public/landing/images/:id` and the HTML shell
 (which also sends `HOST_HEADERS` as `Vary`, since its tags name the
 host's resume and origin; see "Search and link previews"), `private, no-cache` for
 every PDF route, `immutable` for the hashed

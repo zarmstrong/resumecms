@@ -1355,6 +1355,24 @@
   object-fit: cover;
 }
 
+/* The landing page's own share image (issue #92), as previews crop it. */
+.ed-link-preview-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.91;
+  object-fit: cover;
+}
+
+/* A landing page image field (LandingImageField.jsx). */
+.ed-landing-image-preview {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
 .ed-link-preview-text {
   display: flex;
   flex-direction: column;
