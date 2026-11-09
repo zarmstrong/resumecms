@@ -208,12 +208,12 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/resumes/:id/cover-letters/:letterId/rewrite` | `{ data?, target?, instruction?, brief? }` → `{ proposal }` for review; saves nothing. `target` is `{ kind: 'letter' }` (default: salutation, body and closing) or `{ kind: 'paragraph', index }`. A letter with an empty body is drafted without an instruction; otherwise an instruction or a `brief` is required. Shares `ai/rewrite`'s rate limits (a request with a `brief` counts as tailoring) |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`, `ai/tailor-plan`) for that resume. The unprefixed ones act on whichever resume is the default |
 | `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, availability, actions, photo, photoUrl, sections, seo, homeLink, homeLinkLabel }`, `actions` being up to 3 buttons, each `{ type: 'link', label, url }` or `{ type: 'resume', label, resumeId, open: 'page' | 'pdf' }`, `seo` being `{ title, description, noindex }`, each section `{ id, kind, title, hidden?, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url, meta? }]`), `links` (`links`), `resumes` (`cards: [{ resumeId, label, blurb, showPdf }]`), `quotes` (`quotes: [{ text, name, role, url }]`) or `experience` (`resumeId`, `count` 1–10, `showDates`); `hidden` and `meta` are only there when set, `homeLink` (default `true`) whether resume pages show a "← Home" link back to it, and `homeLinkLabel` (up to 40 characters, `''` for "Home") what it says), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card, button or experience section can link to (public and published), each with its PDF's link (`pdfHref`, `''` while it has none) and the roles an experience section may show from it (`experience`). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links and its email an "Email me" button |
-| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card, button or experience section for an unknown resume are all a 400 |
+| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL (or a `[label](url)` link inside a text section's `body` or an item's `text`) that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card, button or experience section for an unknown resume are all a 400. The editor sends `textFormat: 'inline'` with it (never stored); a body without it is taken as plain text, its text sections' and items' markers escaped first, so an editor loaded before that syntax existed saves what it showed |
 | `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
 | `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it) |
 | `POST /api/landing/discard-draft` | restore the landing page draft from its last published snapshot |
 | `PUT /api/landing/enabled` | `{ enabled }`: takes effect at once, and only shows the page once it's been published |
-| `POST /api/landing/rewrite` | `{ landing?, target, instruction }` → `{ target, proposals: [{ target, before, after }], explanation }`: an AI rewrite of one spot on the landing page, for review; saves nothing. `target` is `{ kind: 'headline' }`, `{ kind: 'subheadline' }`, `{ kind: 'text', sectionId }`, `{ kind: 'item', sectionId, index }` (the item's text), `{ kind: 'card', sectionId, resumeId }` (the card's blurb) or `{ kind: 'intro', sectionId }` (headline, subheadline and that text section at once; `instruction` may be empty). `landing` is the editor's copy of the draft, checked like a `PUT`; without it the stored draft is used. Counts against the same rate limit as `POST /api/ai/rewrite`. See [AI rewrites](#ai-rewrites) |
+| `POST /api/landing/rewrite` | `{ landing?, target, instruction }` → `{ target, proposals: [{ target, before, after }], explanation }`: an AI rewrite of one spot on the landing page, for review; saves nothing. `target` is `{ kind: 'headline' }`, `{ kind: 'subheadline' }`, `{ kind: 'text', sectionId }`, `{ kind: 'item', sectionId, index }` (the item's text), `{ kind: 'card', sectionId, resumeId }` (the card's blurb) or `{ kind: 'intro', sectionId }` (headline, subheadline and that text section at once; `instruction` may be empty). `landing` is the editor's copy of the draft, checked like a `PUT` (`textFormat` included); without it the stored draft is used. Counts against the same rate limit as `POST /api/ai/rewrite`. See [AI rewrites](#ai-rewrites) |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, a tailoring brief's caps (`briefLimits`), and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense?, brief? }` → `{ proposal }` for review; saves nothing. `brief` (`{ audience, posting?, guidance? }`, see [AI rewrites](#ai-rewrites)) tailors the rewrite; with one, `instruction` may be empty. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
@@ -457,9 +457,20 @@ What visitors see:
   that resume has a rendered PDF, and a button for a resume follows the
   same rules as a card.
 - Links (and a list item's or a button's link) must be `http`, `https`, `mailto` or
-  `tel` (Email and Phone links make the last two for you), and
-  text is plain text (a blank line starts a new paragraph), never HTML or
-  markdown.
+  `tel` (Email and Phone links make the last two for you).
+- A text section and a list item's text may hold `[a link](https://…)`,
+  `**bold**` and `*italic*`, and nothing more: no headings, lists, images
+  or HTML. A link inside them follows the same rule as any other, and a
+  `\` before `*`, `[`, `]` or `\` shows it as it is (that `\` doesn't
+  count toward the field's length limit). In a text section a
+  blank line starts a new paragraph, and a link or emphasis stays within
+  one. Everything else on the page is plain text. Text saved before this
+  syntax existed was escaped once, on the first start of the version that
+  has it, so it still reads exactly as it did. An editor tab opened before
+  then (still running the old editor) saves its text as plain text: what
+  it read before the upgrade still reads as it did, what it read after
+  is saved back unchanged, and text it edits after re-reading shows the
+  backslashes that tab showed. Reload such a tab to get the new editor.
 - A domain mapped to a resume keeps showing that resume, landing page or
   not. The landing page only replaces the default resume on hosts that
   aren't one of a resume's domains.
@@ -783,7 +794,11 @@ lines, links, card titles, section headings and the photo are never
 rewritten, and neither are quotes (someone else's words) or the
 experience timeline (it comes from the resume). Hidden sections aren't
 shown to the AI, apart from the one it's rewriting, and the intro draft
-writes into the first visible text section.
+writes into the first visible text section. A text section's or item's
+suggestion may reword, move or drop the links already in it, and bold or
+italicize a few words, but never adds a link: the AI only sees a
+placeholder for each address, and an answer linking anywhere else is
+refused.
 
 The landing page is public, so the AI only draws on what's already public:
 the rest of the page's text (link labels but not

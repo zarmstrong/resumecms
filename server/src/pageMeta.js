@@ -1,4 +1,5 @@
 import { cardContent } from './shareImages.js';
+import { bodyPlainText } from './inlineText.js';
 
 // The search and link-preview metadata the HTML shell carries for a public
 // page (issue #87): <title>, a description, Open Graph and Twitter card
@@ -102,7 +103,7 @@ export function landingPage(landing, defaultHeader) {
   const sections = Array.isArray(landing?.sections) ? landing.sections : [];
   const headline = textOf(landing?.headline);
   const subheadline = textOf(landing?.subheadline);
-  const firstText = sections.find((section) => section.kind === 'text' && textOf(section.body))?.body;
+  const firstText = sections.map((section) => (section.kind === 'text' ? bodyPlainText(section.body) : '')).find(textOf);
   const header = isObject(defaultHeader) ? defaultHeader : {};
   const name = textOf(header.name) || headline;
   return {

@@ -5,6 +5,7 @@ import { introSectionId } from './landingAi.js';
 import { SearchSharingFields } from './SearchSharingFields.jsx';
 import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
+import { inlineEdit } from '../landing/inlineText.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
 // SECTION_KINDS), what each is called here, and what a new one starts with
@@ -365,21 +366,28 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
   );
 }
 
+// The syntax a text section and an item's text take (issue #91).
+const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
+
 function SectionFields({ section, onChange, resumes, context, limits, ai }) {
   switch (section.kind) {
     case 'text':
       return (
         <>
+          {/* A refused edit leaves the state as it is, so React puts the
+              textarea back (inlineEdit(): exact where maxLength can't be). */}
           <textarea
             className="ed-input"
             rows={5}
             value={section.body}
-            maxLength={limits?.text}
-            onChange={(e) => onChange({ body: e.target.value })}
+            onChange={(e) => {
+              const body = inlineEdit(section.body, e.target.value, limits?.text);
+              if (body !== section.body) onChange({ body });
+            }}
             placeholder="A few lines about yourself."
             aria-label="Text"
           />
-          <span className="ed-field-hint">Plain text. Leave a blank line to start a new paragraph.</span>
+          <span className="ed-field-hint">{INLINE_HINT} Leave a blank line to start a new paragraph.</span>
           <AiField ai={ai} target={{ kind: 'text', sectionId: section.id }} current={section.body} />
         </>
       );
@@ -557,11 +565,14 @@ function ItemsFields({ sectionId, items, onChange, limits, ai }) {
             className="ed-input"
             rows={2}
             value={item.text}
-            maxLength={limits?.itemText}
-            onChange={(e) => setItem(i, { text: e.target.value })}
+            onChange={(e) => {
+              const text = inlineEdit(item.text, e.target.value, limits?.itemText);
+              if (text !== item.text) setItem(i, { text });
+            }}
             placeholder="A line or two about it (optional)"
             aria-label="Item text"
           />
+          <span className="ed-field-hint">{INLINE_HINT}</span>
           <AiField ai={ai} target={{ kind: 'item', sectionId, index: i }} current={item.text} />
         </div>
       ))}

@@ -53,7 +53,9 @@ export const api = {
   // The install's landing page (issue #70): its draft, status, and what its
   // preview resolves against. Not per resume.
   getLanding: () => request('/landing'),
-  putLanding: (landing) => request('/landing', { method: 'PUT', body: JSON.stringify(landing) }),
+  // Its text holds links and emphasis (issue #91): a write without
+  // `textFormat: 'inline'` is taken as plain text, and escaped.
+  putLanding: (landing) => request('/landing', { method: 'PUT', body: JSON.stringify({ ...landing, textFormat: 'inline' }) }),
   landingStatus: () => request('/landing/status'),
   publishLanding: () => request('/landing/publish', { method: 'POST' }),
   discardLandingDraft: () => request('/landing/discard-draft', { method: 'POST' }),
@@ -62,7 +64,10 @@ export const api = {
   // the editor has it, without its photo (landingAi.js's rewriteCopy). Saves
   // nothing; resolves with { target, proposals, explanation }.
   landingRewrite: (landing, target, instruction) =>
-    request('/landing/rewrite', { method: 'POST', body: JSON.stringify({ landing, target, instruction }) }),
+    request('/landing/rewrite', {
+      method: 'POST',
+      body: JSON.stringify({ landing: landing && { ...landing, textFormat: 'inline' }, target, instruction }),
+    }),
 
   // What `/` shows on this host: { kind: 'landing', landing } or
   // { kind: 'resume', resume }.

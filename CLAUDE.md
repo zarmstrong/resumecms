@@ -313,6 +313,44 @@ must name an existing resume, but one already in the draft may outlive its resum
 publishing any resume, and `landing_enabled` isn't drafted: it takes
 effect at once, and does nothing until a snapshot exists.
 
+A text section's `body` and an item's `text` (issue #91, nothing else: a
+quote's `text`, an item's `meta` and every title or label stay plain text,
+never parsed, escaped or migrated) may
+hold `[label](url)`, `**bold**` and `*italic*`; a `\` before `\ * [ ]`
+escapes it, and an unmatched marker stays literal. The tokenizer,
+`parseInline()`, is pure and exists twice, `server/src/inlineText.js` and
+`client/src/landing/inlineText.js` (the shared part identical), kept in
+step by the cases in `server/src/inlineText.cases.js`, which the client's
+`inlineText.test.js` runs through both. A body is parsed one paragraph at a
+time (`textParagraphs()`, also in both), an item's text whole, and every
+consumer has to read it the same way: `checkInlineText()` holds each
+link's URL to `isAllowedDraftUrl()` (a 400 naming the section and
+paragraph) and counts its cap with `inlineLength()`, every character as
+written except an escaping backslash (also in both copies; the landing
+rewrite's length check counts the same way, and the editor's two textareas
+refuse an edit past it with `inlineEdit()` instead of a `maxLength`, which
+can't be exact: typing inside an escape changes the count by two), so escaping never takes a field over its cap. `LandingView` renders the tokens as
+elements through `renderInline.js` (hrefs through `linkProps()`, never
+`dangerouslySetInnerHTML`), and both `pageMeta.js` copies read a body's
+description as its plain text. Text stored before the syntax was escaped
+once by `migrateLandingText()` (`landingTextMigration.js`, run from
+`db.js` on every boot): `escapeInline()` only touches text that would read
+differently, and the `landing_text_format` setting, written in the same
+transaction, keeps it from running twice (escaping isn't idempotent).
+An editor loaded before the upgrade would write its unescaped draft back,
+so the format is explicit on writes: the client sends `textFormat:
+'inline'` in `PUT /api/landing`'s body and the rewrite route's `landing`
+copy (`api.js`), the routes take it off with `splitTextFormat()`, and the
+store's `setLanding()`/`checkLandingDraft()` escape a write without it
+(`{ textFormat: 'plain' }`, `escapeLandingText()`) before checking it. Such
+an editor may also have re-read the escaped draft (a GET on mount, a
+Discard), so a field equal to the stored draft's at its place (a text
+section's body by section id, an item's text to any item's in that
+section) is kept as it is and only a field that differs is escaped: an
+echoed field is never escaped twice, and an edited one reads as that
+editor showed it, backslashes included. The marker is never stored. The store's default is `'inline'`, so MCP writes (whose
+tool descriptions document the syntax) and tests are taken as inline.
+
 `resolveLanding()` is the only shape that leaves the server publicly, and
 it resolves references when the page is requested, not when it's
 published (`landingContext()`). That's what keeps a resume made private,
@@ -737,6 +775,16 @@ the editor, `LandingEditorPage` holds the requests and proposals,
 `client/src/editor/landingAi.js` mirrors `landingSlice()` and follows an
 item's proposal when the item moves (`locateTarget()`), and each field's
 panel is `LandingAiPanel.jsx`.
+
+The model must never be able to put a URL on the landing page (issue #91).
+In the text it rewrites (a `text`, an `item`, or an `intro`'s section),
+each link's URL becomes a placeholder (`linkPlaceholders()`: `#L1`, `#L2`,
+…, one per URL, built from the draft alone so prompt and merge agree), and
+in the page context a link is just its label. `landingProposals()` maps
+the placeholders back (`unmaskLinks()`, through `mapLinks()`, which finds
+links exactly as the page does) and makes a link to anything else a 502
+for the whole answer. Labels may change and links may move or go. Keep
+that check in the merge if you add a target whose text holds links.
 
 Output schemas must stay valid for both providers' strict structured-output
 modes. That means `additionalProperties: false` and every property in

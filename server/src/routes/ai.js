@@ -12,6 +12,7 @@ import { hasRewritableShape } from '../ai/rewritableFields.js';
 import { normalizeBrief, outlineScope, resumeOutline } from '../ai/brief.js';
 import { hasLetterShape, rewriteLetter } from '../ai/letterWriting.js';
 import { landingProfile, rewriteLanding } from '../ai/landingRewrite.js';
+import { splitTextFormat } from '../landingTextMigration.js';
 import { normalizePlanRequest, suggestTailoring } from '../ai/tailorPlan.js';
 
 const router = Router();
@@ -276,7 +277,9 @@ async function landingRewrite(req, res) {
   let profile;
   let resumes;
   try {
-    landing = copy === undefined ? store.getLanding() : store.checkLandingDraft(copy);
+    // Marked like a PUT's body (routes/landing.js); unmarked text is plain.
+    const { landing: input, textFormat } = splitTextFormat(copy);
+    landing = copy === undefined ? store.getLanding() : store.checkLandingDraft(input, { textFormat });
     // What an experience section shows, which is public already.
     resumes = new Map(store.getLandingContext().resumes.map((target) => [target.id, target]));
     // A blurb is about its card's resume; everything else about the person,

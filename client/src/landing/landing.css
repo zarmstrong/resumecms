@@ -159,6 +159,17 @@ a.l-item-title:hover {
   overflow-wrap: anywhere;
 }
 
+/* A link inside a text section or an item's text (issue #91). */
+.l-inline-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);
+}
+
+.l-inline-link:hover {
+  border-bottom-color: var(--r-accent, var(--ink));
+}
+
 .l-links {
   list-style: none;
   display: flex;

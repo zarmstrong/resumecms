@@ -1,5 +1,6 @@
 import { LANDING_LIMITS } from '../landingFields.js';
 import { AiError, callProvider } from './providers.js';
+import { inlineLength, mapLinks } from '../inlineText.js';
 
 // AI rewrites on the landing page (issue #73). Like a block rewrite
 // (rewrite.js) it only proposes: the editor shows each proposal in its
@@ -27,6 +28,14 @@ import { AiError, callProvider } from './providers.js';
 // snapshot, never its draft, and the route only passes one for a resume
 // that's public and published. A resume's internal name and its tailoring
 // brief are never part of it.
+//
+// A text section's body and an item's text may hold links (issue #91), and
+// the model must never be able to put a URL on the page. It never sees one:
+// in the text it rewrites, each link's URL becomes a placeholder (`#L1`,
+// `#L2`, … linkPlaceholders()), and in the rest of the page a link is just
+// its label. Its answer gets the URLs back (unmaskLinks()), and a link to
+// anything but one of those placeholders makes the whole answer an error.
+// It may reword a label, move a link or drop it.
 
 export const LANDING_TARGET_KINDS = ['headline', 'subheadline', 'text', 'item', 'card', 'intro'];
 
@@ -45,6 +54,11 @@ const FIELD_LIMITS = {
 };
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// The single-field targets whose text may hold links and emphasis, and how
+// the page finds its links (a text section's one paragraph at a time).
+const INLINE_KINDS = ['text', 'item'];
+const linkScope = (kind) => ({ paragraphs: kind === 'text' });
 
 function findSection(landing, sectionId, kind) {
   if (typeof sectionId !== 'string') throw new InvalidLandingTargetError('target.sectionId is required');
@@ -110,6 +124,45 @@ export function landingSlice(landing, target) {
     default:
       return null;
   }
+}
+
+// The placeholder each URL in the target's own text stands behind: a Map
+// of URL → `#L<n>`, numbered by first appearance, one per URL. Built from
+// `landing` alone, so the prompt and the answer's merge agree on it.
+export function linkPlaceholders(landing, target) {
+  const placeholders = new Map();
+  for (const part of target.kind === 'intro' ? introParts(target.sectionId) : [target]) {
+    if (!INLINE_KINDS.includes(part.kind)) continue;
+    mapLinks(
+      landingSlice(landing, part) ?? '',
+      ({ href }) => {
+        if (!placeholders.has(href)) placeholders.set(href, `#L${placeholders.size + 1}`);
+        return '';
+      },
+      linkScope(part.kind)
+    );
+  }
+  return placeholders;
+}
+
+const maskLinks = (value, kind, placeholders) =>
+  mapLinks(value, ({ label, href }) => `[${label}](${placeholders.get(href)})`, linkScope(kind));
+
+// Text elsewhere on the page, its links as their labels.
+const linkLabels = (value, kind) => mapLinks(value, ({ label }) => label, linkScope(kind));
+
+// The model's `value` for a `kind` field with each placeholder turned back
+// into its URL. A link to anything else is one the model made up.
+function unmaskLinks(value, kind, placeholders) {
+  const urls = new Map([...placeholders].map(([href, placeholder]) => [placeholder, href]));
+  return mapLinks(
+    value,
+    ({ label, href }) => {
+      if (!urls.has(href)) throw new AiError(502, 'The AI added a link that was not in the text. Try again.');
+      return `[${label}](${urls.get(href)})`;
+    },
+    linkScope(kind)
+  );
 }
 
 const text = (value) => (typeof value === 'string' ? value.trim() : '');
@@ -178,13 +231,13 @@ function pageContext(landing, target, resumes) {
       const base = { kind: section.kind, title: section.title };
       switch (section.kind) {
         case 'text':
-          return { ...base, body: mark({ kind: 'text', sectionId: section.id }, section.body) };
+          return { ...base, body: mark({ kind: 'text', sectionId: section.id }, linkLabels(section.body, 'text')) };
         case 'items':
           return {
             ...base,
             items: section.items.map((item, index) => ({
               title: item.title,
-              text: mark({ kind: 'item', sectionId: section.id, index }, item.text),
+              text: mark({ kind: 'item', sectionId: section.id, index }, linkLabels(item.text, 'item')),
               ...(item.meta ? { meta: item.meta } : {}),
             })),
           };
@@ -221,16 +274,18 @@ function spotKey(target) {
   return [target.kind, target.sectionId ?? '', target.index ?? '', target.resumeId ?? ''].join('|');
 }
 
-// What the model may change, by the names the output schema uses.
-function editableFields(landing, target) {
+// What the model may change, by the names the output schema uses, its
+// links behind their placeholders.
+function editableFields(landing, target, placeholders) {
   if (target.kind === 'intro') {
     return {
       headline: landing.headline,
       subheadline: landing.subheadline,
-      intro: landingSlice(landing, { kind: 'text', sectionId: target.sectionId }),
+      intro: maskLinks(landingSlice(landing, { kind: 'text', sectionId: target.sectionId }), 'text', placeholders),
     };
   }
-  return { text: landingSlice(landing, target) };
+  const value = landingSlice(landing, target);
+  return { text: INLINE_KINDS.includes(target.kind) ? maskLinks(value, target.kind, placeholders) : value };
 }
 
 const str = { type: 'string' };
@@ -262,6 +317,15 @@ function fieldRule(target, limit, item) {
   }
 }
 
+const PLAIN_RULE = 'Plain text only — no Markdown, no emoji, no links.';
+const INLINE_SYNTAX =
+  'you may mark a few words **bold** or *italic*. A link is written [label](#L1): you may reword its label, move it or drop it, but keep its #L target exactly as it is, and never add a link or a URL of your own. No other Markdown, no emoji.';
+
+function formatRule(target) {
+  if (target.kind === 'intro') return `"headline" and "subheadline" are plain text, with no Markdown, emoji or links. In "intro", ${INLINE_SYNTAX}`;
+  return INLINE_KINDS.includes(target.kind) ? `Plain text, except that ${INLINE_SYNTAX}` : PLAIN_RULE;
+}
+
 const INTRO_RULE = `"headline" is the page's headline (usually the person's name, at most ${LANDING_LIMITS.headline} characters), "subheadline" the line under it (what they do, in a few words, at most ${LANDING_LIMITS.subheadline} characters), and "intro" a short introduction of two or three paragraphs separated by blank lines, at most ${LANDING_LIMITS.text} characters. Keep any of them that is already good as it is.`;
 
 // `profile` is landingProfile() of the resume the target is about (the
@@ -271,7 +335,7 @@ export function buildLandingPrompt(landing, target, instruction, profile, resume
   const rules = [
     "Only make the changes the instruction asks for, and keep the person's own voice. If the page has no text in their voice yet, write in the first person.",
     'Never invent facts: no employers, job titles, dates, technologies, credentials, projects, or numbers that are not in the input. If there is too little to go on, write less, and say so in "explanation".',
-    'Plain text only — no Markdown, no emoji, no links.',
+    formatRule(target),
     'In the context, "[the part being rewritten]" marks where the text you are writing sits. Use the rest of the page to stay consistent with it: match its tone, and do not repeat what it already says.',
     'In "explanation", say in one or two sentences what you changed.',
   ];
@@ -301,7 +365,7 @@ export function buildLandingPrompt(landing, target, instruction, profile, resume
     JSON.stringify(pageContext(landing, target, resumes), null, 2),
     '',
     'Section to rewrite:',
-    JSON.stringify(editableFields(landing, target), null, 2),
+    JSON.stringify(editableFields(landing, target, linkPlaceholders(landing, target)), null, 2),
     '',
     'Instruction:',
     instruction,
@@ -315,8 +379,10 @@ function requireString(value, field) {
   return value.trim();
 }
 
-function checkLength(value, limit, label) {
-  if (value.length > limit) {
+// `length` is how the field's cap counts (inlineLength() for one that holds
+// links and emphasis, as landingFields.js counts it).
+function checkLength(value, limit, label, length = value.length) {
+  if (length > limit) {
     throw new AiError(502, `The AI wrote more than the ${limit} characters the ${label} allows. Try again, or ask for something shorter.`);
   }
   return value;
@@ -325,9 +391,11 @@ function checkLength(value, limit, label) {
 const LABELS = { headline: 'headline', subheadline: 'subheadline', text: 'text section', item: 'item', card: 'card' };
 
 // The proposals the model's `rewrite` makes against `landing`, one per field
-// it changed. A field it left alone (give or take whitespace) isn't one.
+// it changed, with their links' URLs back. A field it left alone (give or
+// take whitespace) isn't one.
 export function landingProposals(landing, target, rewrite) {
   if (!isPlainObject(rewrite)) throw new AiError(502, 'AI response is missing "rewrite"');
+  const placeholders = linkPlaceholders(landing, target);
   const parts =
     target.kind === 'intro'
       ? [
@@ -338,7 +406,10 @@ export function landingProposals(landing, target, rewrite) {
       : [[target, rewrite.text, 'text']];
   return parts.flatMap(([part, value, field]) => {
     const before = landingSlice(landing, part);
-    const after = checkLength(requireString(value, field), FIELD_LIMITS[part.kind], LABELS[part.kind]);
+    const written = requireString(value, field);
+    const inline = INLINE_KINDS.includes(part.kind);
+    const unmasked = inline ? unmaskLinks(written, part.kind, placeholders) : written;
+    const after = checkLength(unmasked, FIELD_LIMITS[part.kind], LABELS[part.kind], inline ? inlineLength(unmasked) : unmasked.length);
     return after === before.trim() ? [] : [{ target: part, before, after }];
   });
 }

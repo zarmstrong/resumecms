@@ -60,7 +60,17 @@ test('the same title, description and card as the server, for the same page', ()
     seo: { title: '', description: '', noindex: false },
     site: { colors: { accent: '#654321' } },
   };
-  for (const variant of [landing, { ...landing, subheadline: '' }, { ...landing, seo: { title: 'T', description: 'D' } }]) {
+  const formatted = {
+    ...landing,
+    subheadline: '',
+    sections: [
+      { kind: 'text', title: '', body: '  ' },
+      { kind: 'text', title: '', body: 'At **Acme**, writing at [my blog](https://jo.example).\n\nAnd *more*.' },
+    ],
+  };
+  // A text section's links and emphasis (issue #91) read as plain text.
+  assert.equal(landingPageMeta(formatted).description, 'At Acme, writing at my blog. And more.');
+  for (const variant of [landing, { ...landing, subheadline: '' }, { ...landing, seo: { title: 'T', description: 'D' } }, formatted]) {
     const mine = landingPageMeta(variant);
     const theirs = server.landingPage(variant, null);
     assert.deepEqual([mine.title, mine.description, mine.card], [theirs.title, theirs.description, theirs.card]);
