@@ -12,6 +12,8 @@ import {
 } from '../resume/siteColors.js';
 import { normalizeTemplate, normalizeLayout, getHeaderTemplate, getLayoutTemplate } from '../resume/templateRegistry.js';
 import { TemplatePickerModal } from './TemplatePickerModal.jsx';
+import { SearchSharingFields } from './SearchSharingFields.jsx';
+import { OVERRIDE_LIMITS, resumePageMeta } from '../share/pageMeta.js';
 
 const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
@@ -168,14 +170,15 @@ export function SiteSettingsForm({ header, site, blocks, onChange }) {
 
   return (
     <div className="ed-form">
-      <label className="ed-field">
-        <span>Site title</span>
-        <input
-          className="ed-input"
-          value={site.title || ''}
-          onChange={(e) => onChange({ ...site, title: e.target.value })}
-        />
-      </label>
+      <SearchSharingFields
+        title={site.title || ''}
+        description={site.description || ''}
+        onChange={(patch) => onChange({ ...site, ...patch })}
+        meta={resumePageMeta(header, site, blocks)}
+        fallback={resumePageMeta(header, { ...site, title: '', description: '' }, blocks)}
+        limits={OVERRIDE_LIMITS}
+        hint="The browser tab's title, and what search results and link previews say about this resume. The preview card is drawn from the header's name, title and photo."
+      />
 
       <label className="ed-field">
         <span>Template</span>

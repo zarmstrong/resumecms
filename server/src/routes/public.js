@@ -63,6 +63,27 @@ router.get('/letter', handle((req, res) => {
   res.json(content);
 }));
 
+// A link preview's image (issue #87): a page's photo or share card, by the
+// key its page's head tags name (shareImages.js). Only while a public page
+// shows it, so one taken private or deleted is gone with it; the key
+// changes with the image, so revalidating costs a 304 at most. Meant for
+// previews, not image search.
+router.get('/images/:key', handle((req, res) => {
+  res.set('Cache-Control', REVALIDATE);
+  res.set('X-Robots-Tag', NOINDEX);
+  const image = store.shareImage(req.params.key);
+  if (!image) throw httpError(404, 'Not found');
+  res.type(image.contentType);
+  if (image.body) {
+    res.send(image.body);
+    return;
+  }
+  res.sendFile(image.path, { cacheControl: false, dotfiles: 'allow' }, (err) => {
+    // A newer card replaced this one between the lookup and the send.
+    if (err && !res.headersSent) res.status(404).json({ error: 'Not found' });
+  });
+}));
+
 // A public, published resume by its link name, for /r/<slug>. Unlisted: no
 // page links to it, and X-Robots-Tag keeps it out of search results.
 router.get('/resumes/:slug', handle((req, res) => {

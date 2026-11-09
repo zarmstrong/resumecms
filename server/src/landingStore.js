@@ -158,11 +158,18 @@ export function createLandingStore({ db, defaultResumeId }) {
   // not, so switching the landing page on never changes what a resume's
   // own domain shows.
   function landingForHost(hostname) {
+    const key = requestHostKey(hostname);
+    if (key && db.prepare('SELECT 1 FROM resume_hosts WHERE hostname = ?').get(key)) return null;
+    return shownLanding();
+  }
+
+  // The same on whichever host shows it: the published page while it's
+  // switched on, else null. For what the landing page's link preview
+  // shows (shareStore.js), which doesn't depend on the host.
+  function shownLanding() {
     if (getSetting('landing_enabled') !== true) return null;
     const published = upgradeLanding(getSetting('landing_published'));
     if (!published) return null;
-    const key = requestHostKey(hostname);
-    if (key && db.prepare('SELECT 1 FROM resume_hosts WHERE hostname = ?').get(key)) return null;
     return { ...resolveLanding(published, landingContext()), publishedAt: published.publishedAt };
   }
 
@@ -177,5 +184,6 @@ export function createLandingStore({ db, defaultResumeId }) {
     checkLandingDraft,
     visibleResumeSnapshot,
     landingForHost,
+    shownLanding,
   };
 }

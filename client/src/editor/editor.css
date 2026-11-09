@@ -1298,3 +1298,87 @@
   gap: 8px;
   margin: 10px 0 14px;
 }
+
+/* A collapsed group of fields (issue #87's "Search & sharing"). */
+.ed-collapsible {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.ed-collapsible > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.ed-collapsible-summary {
+  font-weight: 400;
+  color: var(--slate-light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.ed-collapsible-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+/* The link preview (LinkPreview.jsx): a card like a social feed's. */
+.ed-link-preview {
+  width: 360px;
+  max-width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.ed-link-preview .share-card-frame {
+  max-width: 100%;
+}
+
+.ed-link-preview-photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  max-height: 180px;
+  object-fit: cover;
+}
+
+.ed-link-preview-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.ed-link-preview-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ed-link-preview-description {
+  font-size: 12px;
+  color: var(--slate);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.ed-link-preview-host {
+  font-size: 11px;
+  color: var(--slate-light);
+}

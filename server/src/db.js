@@ -38,8 +38,9 @@ const defaultHeader = {
   links: [{ label: 'linkedin.com/in/you', url: 'https://linkedin.com/in/you' }],
 };
 
+// No title: an empty one is derived from the header ("Name – Title",
+// pageMeta.js), which a link preview shows (issue #87).
 const defaultSite = {
-  title: 'My Resume',
   colors: {
     accent: '#2f6f4e',
     heading: '#14181c',

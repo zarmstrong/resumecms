@@ -186,7 +186,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/auth/totp/confirm` | `{ token }` → verifies and enables 2FA (auth-gated) |
 | `POST /api/auth/totp/disable` | turns 2FA off (auth-gated) |
 | `GET/PUT /api/header` | header/contact fields |
-| `GET/PUT /api/site` | site settings (title, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
+| `GET/PUT /api/site` | site settings (title and description for search results and link previews, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
 | `POST /api/blocks` | create a block: `{ type, data, parentId? }` (`type` must be one of the built-in types; `data`'s documented keys are type-checked, e.g. `bullets` must be an array) |
 | `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`/`visiblePrint` (booleans), and/or `parentId` |
@@ -207,7 +207,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/resumes/:id/cover-letters/:letterId/letter.pdf` | the letter as a PDF download, rendered on request and reused until the letter or its resume's header or site settings change. A render that waits more than 20 s behind another is a 503: it carries on, so asking again shortly gets the file |
 | `POST /api/resumes/:id/cover-letters/:letterId/rewrite` | `{ data?, target?, instruction?, brief? }` → `{ proposal }` for review; saves nothing. `target` is `{ kind: 'letter' }` (default: salutation, body and closing) or `{ kind: 'paragraph', index }`. A letter with an empty body is drafted without an instruction; otherwise an instruction or a `brief` is required. Shares `ai/rewrite`'s rate limits (a request with a `brief` counts as tailoring) |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`, `ai/tailor-plan`) for that resume. The unprefixed ones act on whichever resume is the default |
-| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, photo, photoUrl, sections }`, each section `{ id, kind, title, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url }]`), `links` (`links`) or `resumes` (`cards: [{ resumeId, label, blurb }]`)), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card can link to (public and published). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links |
+| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, photo, photoUrl, sections, seo }`, `seo` being `{ title, description, noindex }`, each section `{ id, kind, title, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url }]`), `links` (`links`) or `resumes` (`cards: [{ resumeId, label, blurb }]`)), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card can link to (public and published). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links |
 | `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card for an unknown resume are all a 400 |
 | `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
 | `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it) |
@@ -223,6 +223,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/public/home` | public, what `/` shows on this host: `{ kind: 'landing', landing }` when the landing page is enabled, published and the host isn't one of a resume's `hostnames`, otherwise `{ kind: 'resume', resume }` (the same as `/api/public/resume?mode=web`). Cards only list public, published resumes, by link (`/resume` for the default, `/r/<slug>` otherwise), never by id or internal name. Sent with `Vary: Host, X-Forwarded-Host` |
 | `GET /api/public/resumes/:slug?mode=web\|print` | public, the same for a resume by its link name; 404 unless that resume is public and published. Sent with `X-Robots-Tag: noindex` |
 | `GET /api/public/resumes/:slug/resume.pdf` | public, its PDF, on the same terms |
+| `GET /api/public/images/:key` | public, a link preview's image (a page's photo, or its PNG share card) by the key in that page's `og:image`; a 404 once no public, published page shows it. Sent with `X-Robots-Tag: noindex`. See [Search results and link previews](#search-results-and-link-previews) |
 | `GET /api/public/letter` | the PDF renderer's own: the cover letter its signed render cookie names; a 404 to anyone else |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
 
@@ -286,7 +287,7 @@ publish it"). An unknown `resumeId` is a `[404] Resume not found`.
 | `update_cover_letter` | `{ letterId, title?, data?, replaceData? }` — `data` is **merged** like `update_block`'s (`paragraphs` is replaced whole); `replaceData: true` replaces it, matching the `PUT` route |
 | `delete_cover_letter` | `{ letterId }` — deletes the letter and its PDF |
 | `get_landing_page` | the landing page draft, its status and its context, as `GET /api/landing` returns them |
-| `update_landing_page` | merge fields into the landing page draft (`sections` is replaced whole; a section sent without an `id` is new; `null` resets a field), with the same checks as `PUT /api/landing` |
+| `update_landing_page` | merge fields into the landing page draft (`sections` is replaced whole; a section sent without an `id` is new; `seo` is merged one level deep; `null` resets a field), with the same checks as `PUT /api/landing` |
 | `publish_landing_page`, `discard_landing_draft` | publish the landing page draft / restore it from its last published snapshot |
 | `set_landing_page_enabled` | `{ enabled }` — switches the landing page at `/` on or off, at once |
 
@@ -440,6 +441,43 @@ What visitors see:
   not. The landing page only replaces the default resume on hosts that
   aren't one of a resume's domains.
 
+Its **Search & sharing** group sets the title and description search
+results and link previews use (otherwise the headline, and the
+subheadline or first text section), and can ask search engines not to
+list the page; see [Search results and link previews](#search-results-and-link-previews).
+
+### Search results and link previews
+
+A link to `/`, `/resume` or `/r/<link name>` pasted into LinkedIn, Slack,
+iMessage or an email shows the person's name, a line about them and a
+picture, and search engines index the page under its real title. The
+server writes these into the page's HTML itself (link-preview crawlers
+don't run JavaScript): a `<title>`, a description, Open Graph and Twitter
+card tags, a canonical link and, on the landing page and on a resume at
+`/` or `/resume`, a JSON-LD `Person` (name, title, photo, and the page's
+`http(s)` links as `sameAs`).
+
+All of it comes from what's **published** and what the page already shows:
+
+- A resume's title is its header's name and title, its description the
+  first summary or executive summary shown on the web. Set your own in
+  **Site Settings & Colors → Search & sharing** (the title is also the
+  browser tab's); publish to make them live.
+- The landing page's come from its own **Search & sharing** group, with
+  the headline and subheadline as fallbacks.
+- The picture is a 1200×630 share card (name, title and photo in the
+  page's colors and fonts), drawn by the same Chromium as the PDF after
+  each publish. Until it's drawn, or if Chromium isn't available, the
+  photo is used instead. Each group shows a preview of the link.
+- A private, unpublished or unknown `/r/<link name>` gets the generic
+  tags, so a private resume's name never appears in its page. The editor
+  and `/print` pages always do.
+
+LinkedIn keeps a link's preview for about a week. After changing a title,
+description or photo, paste the link into LinkedIn's
+[Post Inspector](https://www.linkedin.com/post-inspector/) to make it fetch
+the page again.
+
 ### Cover letters
 
 Each resume can keep cover letters: open **Cover letters** in the editor's
@@ -483,8 +521,9 @@ The server states a cache policy on everything the public can fetch, so a
 Publish shows up on the next page load instead of whenever a cache feels
 like it. `/api/public/resume` and the HTML shell are sent with
 `Cache-Control: no-cache` (always revalidate; unchanged content is a cheap
-`304`), the PDF with `private, no-cache` (never stored by a shared cache),
-and the hashed bundles under `/assets/` as `immutable` for a year. The
+`304`), and since the shell's title and link-preview tags depend on the
+domain, with `Vary: Host, X-Forwarded-Host` too. The PDF goes out with
+`private, no-cache` (never stored by a shared cache), and the hashed bundles under `/assets/` as `immutable` for a year. The
 public page also refetches when it comes back into view, and the PDF link
 carries a `pdfVersion` (the rendered file's timestamp) as a query string so
 each render is a URL no cache has seen before.

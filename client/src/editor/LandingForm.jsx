@@ -2,6 +2,9 @@ import { PhotoUpload } from './PhotoUpload.jsx';
 import { LinksEditor } from './LinksEditor.jsx';
 import { LandingAiPanel } from './LandingAiPanel.jsx';
 import { introSectionId } from './landingAi.js';
+import { SearchSharingFields } from './SearchSharingFields.jsx';
+import { resolveLanding } from '../landing/resolveLanding.js';
+import { landingPageMeta } from '../share/pageMeta.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
 // SECTION_KINDS), what each is called here, and what a new one starts with.
@@ -188,7 +191,27 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
           </select>
         )}
       </div>
+
+      <LandingSeoFields landing={landing} context={context} limits={limits} onChange={(seo) => set({ seo })} />
     </div>
+  );
+}
+
+// The landing page's `seo` (issue #87), previewed as the page resolves.
+function LandingSeoFields({ landing, context, limits, onChange }) {
+  const seo = { title: '', description: '', noindex: false, ...landing.seo };
+  const metaOf = (s) => landingPageMeta(resolveLanding({ ...landing, seo: s }, context));
+  return (
+    <SearchSharingFields
+      title={seo.title}
+      description={seo.description}
+      noindex={seo.noindex}
+      onChange={(patch) => onChange({ ...seo, ...patch })}
+      meta={metaOf(seo)}
+      fallback={metaOf({ ...seo, title: '', description: '' })}
+      limits={{ title: limits?.seoTitle, description: limits?.seoDescription }}
+      hint="What search results and link previews say about this page. The preview card is drawn from the headline, subheadline and photo."
+    />
   );
 }
 

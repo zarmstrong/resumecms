@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { usePublicFetch } from '../resume/usePublicFetch.js';
 import { LoadError, PublicResumePage, PublishedResume, sameResume } from '../resume/PublicResumePage.jsx';
 import { LandingView } from './LandingView.jsx';
+import { landingPageMeta } from '../share/pageMeta.js';
 
 // What `/` shows: the landing page or the resume, as the server decides
 // for this host (GET /api/public/home, issue #70). One request either way,
@@ -21,7 +22,8 @@ export function HomePage() {
   if (state.error) return <LoadError message={state.error} />;
   if (state.data.kind === 'landing') {
     const { landing } = state.data;
-    document.title = landing.headline || landing.site?.title || document.title;
+    // The same title the server put in the shell (share/pageMeta.js).
+    document.title = landingPageMeta(landing).title;
     return <LandingView landing={landing} />;
   }
   return <PublishedResume resume={state.data.resume} mode="web" />;

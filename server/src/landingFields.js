@@ -6,7 +6,7 @@ import { httpError } from './httpError.js';
 // here; landingStore.js stores it and decides which hosts get it.
 //
 // The draft is a fixed set of fields, all always present once stored:
-//   { headline, subheadline, photo, photoUrl, sections }
+//   { headline, subheadline, photo, photoUrl, sections, seo }
 // `photo` says where the photo comes from: 'resume' (the default resume's
 // published header photo), 'custom' (photoUrl) or 'none'. `sections` is
 // shown in order under the headline, each `{ id, kind, title, ... }` with
@@ -16,8 +16,11 @@ import { httpError } from './httpError.js';
 //   links   — links: [{ type, label, url }]
 //   resumes — cards: [{ resumeId, label, blurb }] linking to resumes
 // `id` only tells sections apart in the editor; it never leaves the server
-// publicly. A draft stored before sections existed is read through
-// upgradeLanding().
+// publicly. `seo` is { title, description, noindex } (issue #87): what
+// the page's <title>, description and link previews say instead of the
+// headline and subheadline (see pageMeta.js), and whether search engines
+// are asked to leave it out. A draft stored before sections or `seo`
+// existed is read through upgradeLanding().
 //
 // Everything here ends up in front of every visitor, so it's checked more
 // strictly than the header: unknown keys, wrong types and oversized values
@@ -40,6 +43,9 @@ export const LANDING_LIMITS = {
   cards: 12,
   cardLabel: 100,
   blurb: 400,
+  // About what a search result shows before cutting it off.
+  seoTitle: 70,
+  seoDescription: 200,
   // About 512 KB of image once base64-decoded; the editor's cropper makes
   // a 480 px JPEG of well under that.
   photoUrl: 700_000,
@@ -53,7 +59,8 @@ export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter',
 
 export const SECTION_KINDS = ['text', 'items', 'links', 'resumes'];
 
-const FIELDS = ['headline', 'subheadline', 'photo', 'photoUrl', 'sections'];
+const FIELDS = ['headline', 'subheadline', 'photo', 'photoUrl', 'sections', 'seo'];
+const SEO_FIELDS = ['title', 'description', 'noindex'];
 const SECTION_FIELDS = {
   text: ['id', 'kind', 'title', 'body'],
   items: ['id', 'kind', 'title', 'items'],
@@ -68,22 +75,31 @@ const SECTION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 const PHOTO_DATA_URL = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
+function emptySeo() {
+  return { title: '', description: '', noindex: false };
+}
+
 export function emptyLanding() {
-  return { headline: '', subheadline: '', photo: 'resume', photoUrl: '', sections: [] };
+  return { headline: '', subheadline: '', photo: 'resume', photoUrl: '', sections: [], seo: emptySeo() };
 }
 
 // A draft or snapshot as stored before sections (issue #70's first shape:
 // `intro`, `links` and `resumes` as fields of their own), turned into the
-// sections it showed, in the order it showed them. The ids are fixed, so
-// reading the same stored draft twice gives the same sections.
+// sections it showed, in the order it showed them, and one stored before
+// `seo` given the empty one. The ids are fixed, so reading the same stored
+// draft twice gives the same sections.
 export function upgradeLanding(stored) {
-  if (!isPlainObject(stored) || Array.isArray(stored.sections)) return stored;
-  const { intro, links, resumes, ...rest } = stored;
-  const sections = [];
-  if (typeof intro === 'string' && intro !== '') sections.push({ id: 'intro', kind: 'text', title: '', body: intro });
-  if (Array.isArray(links) && links.length) sections.push({ id: 'links', kind: 'links', title: '', links });
-  if (Array.isArray(resumes) && resumes.length) sections.push({ id: 'resumes', kind: 'resumes', title: '', cards: resumes });
-  return { ...rest, sections };
+  if (!isPlainObject(stored)) return stored;
+  let upgraded = stored;
+  if (!Array.isArray(stored.sections)) {
+    const { intro, links, resumes, ...rest } = stored;
+    const sections = [];
+    if (typeof intro === 'string' && intro !== '') sections.push({ id: 'intro', kind: 'text', title: '', body: intro });
+    if (Array.isArray(links) && links.length) sections.push({ id: 'links', kind: 'links', title: '', links });
+    if (Array.isArray(resumes) && resumes.length) sections.push({ id: 'resumes', kind: 'resumes', title: '', cards: resumes });
+    upgraded = { ...rest, sections };
+  }
+  return isPlainObject(upgraded.seo) ? upgraded : { ...upgraded, seo: emptySeo() };
 }
 
 // Every resume a card in `landing` names, in any section.
@@ -221,6 +237,17 @@ function checkSection(section, i, refs, ids) {
   return out;
 }
 
+function checkSeo(seo) {
+  checkKeys(seo ?? {}, SEO_FIELDS, 'seo');
+  const out = {
+    title: checkString(seo?.title ?? '', LANDING_LIMITS.seoTitle, 'seo.title'),
+    description: checkString(seo?.description ?? '', LANDING_LIMITS.seoDescription, 'seo.description'),
+    noindex: seo?.noindex ?? false,
+  };
+  if (typeof out.noindex !== 'boolean') throw httpError(400, 'seo.noindex must be a boolean');
+  return out;
+}
+
 // A complete, clean draft from `input`; missing fields take their empty
 // value, so a client can send only what it has. Strings aren't trimmed:
 // the editor saves while someone types.
@@ -242,18 +269,22 @@ export function validateLanding(input, { knownResumeIds, previousResumeIds = new
   out.sections = checkList(input.sections, LANDING_LIMITS.sections, 'sections').map((section, i) =>
     checkSection(section, i, { knownResumeIds, previousResumeIds }, ids)
   );
+  out.seo = checkSeo(input.seo);
   return out;
 }
 
 // The MCP tool's merge (like mergeShallow in resumeStore.js): the fields in
 // `patch` replace the draft's, `sections` as a whole, and a null resets one
-// to its empty value. The result still goes through validateLanding().
+// to its empty value. `seo` is merged one level deeper, the way setSite()
+// merges `colors`, so a description can be set without restating the
+// title. The result still goes through validateLanding().
 export function mergeLandingPatch(current, patch) {
   if (!isPlainObject(patch)) throw httpError(400, 'landing page must be an object');
   const out = { ...current };
   for (const [key, value] of Object.entries(patch)) {
     if (key === '__proto__') continue;
     if (value === null) delete out[key];
+    else if (key === 'seo' && isPlainObject(value)) out.seo = mergeLandingPatch(isPlainObject(current.seo) ? current.seo : {}, value);
     else out[key] = value;
   }
   return out;
@@ -318,6 +349,8 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // no label of its own uses the resume's published header title. A section
 // left with nothing to show (no text, no item, every link half typed, every
 // card's resume hidden) is left out, title and all; sections lose their ids.
+// `seo` goes along whole: everything in it ends up in the page's head and
+// its X-Robots-Tag anyway.
 export function resolveLanding(landing, context) {
   const photoUrl = landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context.photoUrl || '' : '';
   return {
@@ -328,6 +361,7 @@ export function resolveLanding(landing, context) {
       const shown = resolveSection(section, context);
       return shown ? [{ kind: section.kind, title: section.title, ...shown }] : [];
     }),
+    seo: { ...emptySeo(), ...landing.seo },
     site: context.site ?? null,
   };
 }

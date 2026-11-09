@@ -523,6 +523,15 @@ const LANDING_TOOLS = [
           .nullable()
           .optional()
           .describe('The complete list of sections, in the order they show under the headline. A section with nothing to show is left off the public page.'),
+        seo: z
+          .object({
+            title: z.string().nullable().optional().describe("The page's title in search results and link previews; '' uses the headline."),
+            description: z.string().nullable().optional().describe("What search results and link previews say; '' uses the subheadline, else the first text section."),
+            noindex: z.boolean().nullable().optional().describe('true asks search engines not to list the page.'),
+          })
+          .nullable()
+          .optional()
+          .describe('Search and link-preview settings, merged one level deep (send only what changes).'),
       },
       annotations: { ...mutating, idempotentHint: true },
     },

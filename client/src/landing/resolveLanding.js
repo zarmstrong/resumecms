@@ -27,6 +27,7 @@ export function resolveLanding(landing, context, { withIds = false } = {}) {
       const shown = resolveSection(section, targets);
       return shown ? [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...shown }] : [];
     }),
+    seo: { title: '', description: '', noindex: false, ...landing.seo },
     site: context?.site ?? null,
   };
 }
