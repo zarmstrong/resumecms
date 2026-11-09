@@ -472,9 +472,9 @@ edited copy passes it on with `carryItemKey()`, as `LandingForm` and
 away from an upload, the section or item removed, or an item whose key
 didn't follow it) drops the reference; content is never used to guess.
 If the page unmounted mid-upload without a flush (the browser's Back
-button), the reference goes into the server's current draft (a GET, then
-a PUT) rather than the page's possibly stale copy; an item's thumbnail
-can't be followed there and is dropped. AI rewrites of its fields are described under "AI
+button), the reference is dropped too: writing it into the server's draft
+could race a new editor page and overwrite its edits, so the worst case
+stays a lost upload, never a lost edit. AI rewrites of its fields are described under "AI
 rewrites" below. While the page is shown (`landingShown()` in
 `resumeLinks.js`), `publicUrl()` gives the default resume's link as
 `/resume`.

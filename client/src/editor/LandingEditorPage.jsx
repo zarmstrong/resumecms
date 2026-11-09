@@ -128,22 +128,10 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
     const spot = uploadSpot(landingRef.current, target);
     const request = api.uploadLandingImage(file).then((image) => {
       // The page went away mid-upload without a flush (the browser's Back
-      // button). This page's draft may be stale by now, so the reference
-      // goes into the server's current draft instead. An item can't be
-      // followed into a fresh copy, so its thumbnail is dropped, and the
-      // image left for clean-up.
-      if (!mountedRef.current) {
-        return api
-          .getLanding()
-          .then(({ landing }) => {
-            const next = applyUploadedImage(landing, spot, image.id);
-            return next && api.putLanding(next);
-          })
-          .then(
-            () => image,
-            () => image
-          );
-      }
+      // button). Its draft may be stale, and writing the reference into the
+      // server's could race a new editor page, so it's dropped, and the
+      // image left for clean-up: never an edit lost, at worst an upload.
+      if (!mountedRef.current) return image;
       const stored = { id: image.id, src: image.src, width: image.width, height: image.height };
       setLoaded((prev) => ({
         ...prev,
