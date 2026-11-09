@@ -539,8 +539,9 @@ didn't follow it) drops the reference; content is never used to guess.
 A new image there starts with an empty `alt` (only the same image
 uploaded again keeps it), so the publish check asks for a description of
 the image actually shown.
-If the page unmounted mid-upload without a flush (the browser's Back
-button), the reference is dropped too: writing it into the server's draft
+If the page unmounted mid-upload without a flush (an exit the leave
+guard doesn't see, since it waits for an upload before every one it
+does), the reference is dropped too: writing it into the server's draft
 could race a new editor page and overwrite its edits, so the worst case
 stays a lost upload, never a lost edit. AI rewrites of its fields are described under "AI
 rewrites" below. While the page is shown (`landingShown()` in
