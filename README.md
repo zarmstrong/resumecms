@@ -782,7 +782,8 @@ edit; publish the landing page to make it live. Item titles and short
 lines, links, card titles, section headings and the photo are never
 rewritten, and neither are quotes (someone else's words) or the
 experience timeline (it comes from the resume). Hidden sections aren't
-shown to the AI.
+shown to the AI, apart from the one it's rewriting, and the intro draft
+writes into the first visible text section.
 
 The landing page is public, so the AI only draws on what's already public:
 the rest of the page's text (link labels but not

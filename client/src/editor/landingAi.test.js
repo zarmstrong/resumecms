@@ -58,6 +58,12 @@ test('introSectionId is the first text section', () => {
   assert.equal(introSectionId({ ...landing, sections: [] }), null);
 });
 
+test('introSectionId skips a hidden text section', () => {
+  const now = { id: 'now', kind: 'text', title: 'Now', body: 'Later.', hidden: true };
+  assert.equal(introSectionId({ ...landing, sections: [now, ...landing.sections] }), 'intro');
+  assert.equal(introSectionId({ ...landing, sections: [now] }), null);
+});
+
 test('setLandingSlice writes one field and nothing else', () => {
   const next = setLandingSlice(landing, { kind: 'card', sectionId: 'cards', resumeId: 'r1' }, 'Engineering.');
   assert.equal(landingSlice(next, { kind: 'card', sectionId: 'cards', resumeId: 'r1' }), 'Engineering.');
