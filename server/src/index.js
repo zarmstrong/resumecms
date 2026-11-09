@@ -14,6 +14,7 @@ import { createShutdown } from './shutdown.js';
 import aiRoutes from './routes/ai.js';
 import authRoutes from './routes/auth.js';
 import blockRoutes from './routes/blocks.js';
+import { faviconRoutes } from './routes/favicon.js';
 import landingRoutes from './routes/landing.js';
 import mcpRoutes from './routes/mcp.js';
 import publicRoutes from './routes/public.js';
@@ -77,6 +78,10 @@ app.use('/api', publishRoutes); // /api/publish, /api/publish/status, /api/disca
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
+
+// The site's icon, /favicon.svg and /apple-touch-icon.png (routes/favicon.js).
+// Ahead of the client: its SPA fallback 404s any path with a file extension.
+app.use(faviconRoutes(store));
 
 // Serve the built client (Vite output) for everything else — see
 // clientStatic.js for the SPA fallback and the cache policy, and
