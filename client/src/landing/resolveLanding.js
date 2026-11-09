@@ -2,10 +2,14 @@
 // the way a visitor will see it once published, as someone types. Mirrors
 // resolveLanding() in server/src/landingFields.js (which is what the public
 // site actually gets); `context` is the `context` GET /api/landing returns:
-// { photoUrl, site, resumes: [{ id, href, title, pdfHref }] }, the resumes a
-// card or hero action can link to right now (pdfHref '' while one has no
-// PDF). With `withIds`, each section keeps its id, which
-// the server never sends: the editor's preview outlines a section by it.
+// { photoUrl, site, resumes: [{ id, href, title, pdfHref, experience }] },
+// the resumes a card or hero action can link to right now (pdfHref '' while
+// one has no PDF; experience the roles an experience section may show from
+// it, already filtered by the server's experienceRoles()). With `withIds`,
+// each section keeps its id, which the server never sends: the editor's
+// preview outlines a section by it. With `withHidden`, a hidden section is
+// resolved too and kept as `hidden: true`, for the preview to dim; the
+// server always leaves it out.
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 
@@ -17,7 +21,7 @@ function isSafeUrl(url) {
   }
 }
 
-export function resolveLanding(landing, context, { withIds = false } = {}) {
+export function resolveLanding(landing, context, { withIds = false, withHidden = false } = {}) {
   const targets = new Map((context?.resumes || []).map((r) => [r.id, r]));
   const photoUrl = landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context?.photoUrl || '' : '';
   return {
@@ -30,8 +34,10 @@ export function resolveLanding(landing, context, { withIds = false } = {}) {
     }),
     photoUrl,
     sections: landing.sections.flatMap((section) => {
-      const shown = resolveSection(section, targets);
-      return shown ? [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...shown }] : [];
+      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets);
+      if (!shown) return [];
+      const hidden = section.hidden ? { hidden: true } : {};
+      return [{ ...(withIds ? { id: section.id } : {}), kind: section.kind, title: section.title, ...hidden, ...shown }];
     }),
     seo: { title: '', description: '', noindex: false, ...landing.seo },
     site: context?.site ?? null,
@@ -62,7 +68,12 @@ function resolveSection(section, targets) {
     case 'items': {
       const items = section.items
         .filter((item) => item.title.trim() || item.text.trim())
-        .map((item) => ({ title: item.title, text: item.text, url: item.url !== '' && isSafeUrl(item.url) ? item.url : '' }));
+        .map((item) => ({
+          title: item.title,
+          text: item.text,
+          url: item.url !== '' && isSafeUrl(item.url) ? item.url : '',
+          ...(item.meta?.trim() ? { meta: item.meta } : {}),
+        }));
       return items.length ? { items } : null;
     }
     case 'links': {
@@ -80,9 +91,31 @@ function resolveSection(section, targets) {
       });
       return cards.length ? { cards } : null;
     }
+    case 'quotes': {
+      const quotes = section.quotes
+        .filter((quote) => quote.text.trim())
+        .map((quote) => ({ text: quote.text, name: quote.name, role: quote.role, url: quote.url !== '' && isSafeUrl(quote.url) ? quote.url : '' }));
+      return quotes.length ? { quotes } : null;
+    }
+    case 'experience': {
+      const target = targets.get(section.resumeId);
+      const roles = (target?.experience ?? []).slice(0, section.count).map((role) => ({
+        jobTitle: role.jobTitle,
+        company: role.company,
+        companyUrl: role.companyUrl !== '' && isSafeUrl(role.companyUrl) ? role.companyUrl : '',
+        location: role.location,
+        dates: section.showDates ? roleDates(role) : '',
+      }));
+      return roles.length ? { roles, href: target.href } : null;
+    }
     default:
       return null;
   }
+}
+
+function roleDates({ startDate, endDate }) {
+  if (startDate && endDate) return `${startDate} – ${endDate}`;
+  return startDate || endDate;
 }
 
 // A text section's paragraphs: plain text, a blank line between two. Rendered as

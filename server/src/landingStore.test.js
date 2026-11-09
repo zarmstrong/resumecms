@@ -248,6 +248,64 @@ test("hero actions and cards link a resume's PDF only while a visitor may open i
   assert.equal(status(() => store.setLanding({ ...draft, actions: [{ type: 'resume', resumeId: 'nope' }] })), 400);
 });
 
+test("an experience section shows a resume's latest published roles, only while a visitor may open it", async () => {
+  const { store, defaultId } = await makeStore();
+  const salesId = await publicResume(store, 'Sales', 'sales');
+  const sales = store.forResume(salesId);
+  const role = (jobTitle, extra = {}) => sales.createBlock({ type: 'experience', data: { jobTitle, company: 'Acme', startDate: '2020', endDate: '2022', description: 'Secret', ...extra } });
+  role('First');
+  const printOnly = role('Print only');
+  sales.updateBlock(printOnly.id, { visibleWeb: false });
+  role('Second', { companyUrl: 'javascript:alert(1)' });
+  role('Third');
+  await sales.publish();
+  // A draft edit after the publish isn't shown.
+  role('Unpublished');
+
+  store.setLanding({ sections: [{ id: 'x', kind: 'experience', title: 'Recent work', resumeId: salesId, count: 2 }] });
+  store.setLandingEnabled(true);
+  store.publishLanding();
+  let page = store.landingForHost('example.com');
+  assert.deepEqual(page.sections, [
+    {
+      kind: 'experience',
+      title: 'Recent work',
+      href: '/r/sales',
+      roles: [
+        { jobTitle: 'First', company: 'Acme', companyUrl: '', location: '', dates: '2020 – 2022' },
+        { jobTitle: 'Second', company: 'Acme', companyUrl: '', location: '', dates: '2020 – 2022' },
+      ],
+    },
+  ]);
+  const body = JSON.stringify(page);
+  for (const leak of [salesId, 'Secret', 'Print only', 'Unpublished', 'javascript']) assert.equal(body.includes(leak), false, leak);
+  // The editor's preview gets the same roles, already filtered.
+  const target = store.getLandingContext().resumes.find((r) => r.id === salesId);
+  assert.deepEqual(target.experience.map((r) => r.jobTitle), ['First', 'Second', 'Third']);
+  assert.equal(JSON.stringify(target).includes('Secret'), false);
+  // The default resume has no roles: a section for it shows nothing.
+  assert.deepEqual(store.getLandingContext().resumes.find((r) => r.id === defaultId).experience, []);
+
+  // Private, then unpublished, then deleted: the section goes at once.
+  store.updateResume(salesId, { isPublic: false });
+  assert.deepEqual(store.landingForHost('example.com').sections, []);
+  store.updateResume(salesId, { isPublic: true });
+  assert.equal(store.landingForHost('example.com').sections.length, 1);
+  const unpublishedId = store.createResume({ name: 'Draft only', slug: 'draft-only' }).id;
+  store.forResume(unpublishedId).createBlock({ type: 'experience', data: { jobTitle: 'Draft role' } });
+  store.updateResume(unpublishedId, { isPublic: true });
+  store.setLanding({ sections: [{ id: 'y', kind: 'experience', resumeId: unpublishedId }] });
+  store.publishLanding();
+  assert.deepEqual(store.landingForHost('example.com').sections, []);
+  store.setLanding({ sections: [{ id: 'x', kind: 'experience', resumeId: salesId }] });
+  store.publishLanding();
+  store.deleteResume(salesId);
+  assert.deepEqual(store.landingForHost('example.com').sections, []);
+  // The draft still saves with it, but a new one for an unknown id doesn't.
+  assert.equal(store.setLanding(store.getLanding()).sections[0].resumeId, salesId);
+  assert.equal(status(() => store.setLanding({ sections: [{ kind: 'experience', resumeId: 'nope' }] })), 400);
+});
+
 test('checkLandingDraft validates like a save but stores nothing', async () => {
   const { store } = await makeStore();
   const before = store.getLandingStatus();

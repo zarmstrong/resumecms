@@ -18,6 +18,9 @@ import { AiError, callProvider } from './providers.js';
 //                                           text section's body together
 // Sections and cards are addressed by id, so moving them doesn't move a
 // proposal onto something else; items have no ids, so theirs is a position.
+// Deliberately not targets (issue #90): a quote, which is someone else's
+// words; an experience section, which is read from a resume as published;
+// and an item's meta line.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*
@@ -160,8 +163,10 @@ export function landingProfile(snapshot) {
 const PLACEHOLDER = '[the part being rewritten]';
 
 // The rest of the page, as the model sees it: what a visitor reads, with
-// the target's spot marked. No URLs, ids or photo.
-function pageContext(landing, target) {
+// the target's spot marked. No URLs, ids or photo. A hidden section isn't
+// read, unless the target is in it. `resumes` is the landing context's
+// (landingStore.js), for what an experience section shows.
+function pageContext(landing, target, resumes) {
   const spots = new Set((target.kind === 'intro' ? introParts(target.sectionId) : [target]).map(spotKey));
   const mark = (spot, value) => (spots.has(spotKey(spot)) ? PLACEHOLDER : value);
   return {
@@ -169,7 +174,7 @@ function pageContext(landing, target) {
     subheadline: mark({ kind: 'subheadline' }, landing.subheadline),
     availability: landing.availability,
     buttons: (landing.actions ?? []).map((action) => action.label).filter(Boolean),
-    sections: landing.sections.map((section) => {
+    sections: landing.sections.filter((section) => !section.hidden || section.id === target.sectionId).map((section) => {
       const base = { kind: section.kind, title: section.title };
       switch (section.kind) {
         case 'text':
@@ -180,6 +185,7 @@ function pageContext(landing, target) {
             items: section.items.map((item, index) => ({
               title: item.title,
               text: mark({ kind: 'item', sectionId: section.id, index }, item.text),
+              ...(item.meta ? { meta: item.meta } : {}),
             })),
           };
         case 'links':
@@ -190,6 +196,18 @@ function pageContext(landing, target) {
             cards: section.cards.map((card) => ({
               label: card.label,
               blurb: mark({ kind: 'card', sectionId: section.id, resumeId: card.resumeId }, card.blurb),
+            })),
+          };
+        case 'quotes':
+          return { ...base, quotes: section.quotes.filter((q) => q.text.trim()).map((q) => ({ text: q.text, name: q.name, role: q.role })) };
+        case 'experience':
+          return {
+            ...base,
+            roles: (resumes.get(section.resumeId)?.experience ?? []).slice(0, section.count).map((role) => ({
+              jobTitle: role.jobTitle,
+              company: role.company,
+              location: role.location,
+              ...(section.showDates ? { dates: dates(role.startDate, role.endDate) } : {}),
             })),
           };
         default:
@@ -247,8 +265,9 @@ function fieldRule(target, limit, item) {
 const INTRO_RULE = `"headline" is the page's headline (usually the person's name, at most ${LANDING_LIMITS.headline} characters), "subheadline" the line under it (what they do, in a few words, at most ${LANDING_LIMITS.subheadline} characters), and "intro" a short introduction of two or three paragraphs separated by blank lines, at most ${LANDING_LIMITS.text} characters. Keep any of them that is already good as it is.`;
 
 // `profile` is landingProfile() of the resume the target is about (the
-// card's for a blurb, the default resume's otherwise), or null.
-export function buildLandingPrompt(landing, target, instruction, profile) {
+// card's for a blurb, the default resume's otherwise), or null. `resumes`
+// is the landing context's map of the resumes a visitor may open.
+export function buildLandingPrompt(landing, target, instruction, profile, resumes = new Map()) {
   const rules = [
     "Only make the changes the instruction asks for, and keep the person's own voice. If the page has no text in their voice yet, write in the first person.",
     'Never invent facts: no employers, job titles, dates, technologies, credentials, projects, or numbers that are not in the input. If there is too little to go on, write less, and say so in "explanation".',
@@ -279,7 +298,7 @@ export function buildLandingPrompt(landing, target, instruction, profile) {
   const user = [
     ...(profile ? ['Resume profile (read-only):', JSON.stringify(profile, null, 2), ''] : []),
     'The rest of the page (read-only — do not change or repeat it):',
-    JSON.stringify(pageContext(landing, target), null, 2),
+    JSON.stringify(pageContext(landing, target, resumes), null, 2),
     '',
     'Section to rewrite:',
     JSON.stringify(editableFields(landing, target), null, 2),
@@ -326,9 +345,10 @@ export function landingProposals(landing, target, rewrite) {
 
 // Produces the proposals for one landing page rewrite. `landing` is a
 // validated draft; `profile` is what the route may share of a resume (see
-// above), or null; `callModel` is injectable so tests stand in for the
-// provider. Saves nothing.
-export async function rewriteLanding({ landing, target, instruction, settings, profile = null, callModel = callProvider }) {
+// above), or null; `resumes` is the landing context's map of the resumes a
+// visitor may open (for an experience section's roles); `callModel` is
+// injectable so tests stand in for the provider. Saves nothing.
+export async function rewriteLanding({ landing, target, instruction, settings, profile = null, resumes = new Map(), callModel = callProvider }) {
   let scope;
   try {
     scope = normalizeLandingTarget(landing, target);
@@ -338,7 +358,7 @@ export async function rewriteLanding({ landing, target, instruction, settings, p
   }
   const said = instruction || (scope.kind === 'intro' ? INTRO_INSTRUCTION : '');
   if (!said) throw new AiError(400, 'Tell the AI what to change.');
-  const { system, user } = buildLandingPrompt(landing, scope, said, profile);
+  const { system, user } = buildLandingPrompt(landing, scope, said, profile, resumes);
   const output = await callModel({
     provider: settings.provider,
     apiKey: settings.apiKeys[settings.provider],

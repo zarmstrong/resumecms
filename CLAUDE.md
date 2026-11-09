@@ -284,8 +284,13 @@ photo, photoUrl, sections, seo, homeLink, homeLinkLabel }` (`seo` is `{ title, d
 deep; `actions` are the hero's buttons, issue #88, a `link` or a `resume`
 opening its `page` or `pdf`), where `sections` is an ordered list of
 `{ id, kind, title, ... }` with only the fields of its kind
-(`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url }]`),
-`links` and `resumes` (cards `{ resumeId, label, blurb }`). The `id` is
+(`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url, meta }]`),
+`links`, `resumes` (cards `{ resumeId, label, blurb }`), `quotes`
+(`[{ text, name, role, url }]`) and `experience` (`resumeId`, `count`,
+`showDates`; issue #90). Any section may be `hidden: true`: kept in the
+draft, dropped by `resolveLanding()`, dimmed in the editor's preview
+(the client resolver's `withHidden`). `hidden` and an item's `meta` are
+only stored when set. The `id` is
 for the editor only and never leaves the server publicly. A draft or
 snapshot stored before sections (`intro`/`links`/`resumes` as fields) is
 read through `upgradeLanding()`, with fixed ids, until the next save or
@@ -302,8 +307,8 @@ a base64 JPEG/PNG/WebP `data:` URL. A link's `type` only picks its badge;
 its names are `LINK_TYPES`, kept in step with the catalog in
 `client/src/resume/linkTypes.js` and the header enum in
 `mcp/blockSchemas.js`, and `telUrl()` (a fresh draft's phone link) mirrors
-the client's `telHref()`. A new card or resume action must name an existing
-resume, but one already in the draft may outlive its resume
+the client's `telHref()`. A new card, resume action or experience section
+must name an existing resume, but one already in the draft may outlive its resume
 (`referencedResumeIds()`), so a deletion doesn't make the draft unsavable. Publishing it is separate from
 publishing any resume, and `landing_enabled` isn't drafted: it takes
 effect at once, and does nothing until a snapshot exists.
@@ -319,9 +324,14 @@ resume's published header title. A card with `showPdf`, and a resume
 action with `open: 'pdf'`, link the PDF (`pdfHref` in the context: the
 host's own `/api/public/resume.pdf` for the default, the slug's
 otherwise, with `pdfVersionOf()`'s `?v=`) only while the file exists; a
-resolved action is `{ label, href }`. A section left with nothing to show
-(no text, no item, every card's resume hidden) is dropped, heading and
-all. The photo (`photo: 'resume'`) and the
+resolved action is `{ label, href }`. An experience section never stores
+roles or block ids: the context carries each visible resume's
+`experience`, `experienceRoles()` of its published blocks (the experience
+entries `publicBlocks.js` shows on the web, in order, with only title,
+company, its URL, location and dates), and the section resolves to its
+first `count` of them plus the resume's `href`. A section left with nothing to show
+(no text, no item or quote, every card's resume hidden, no role) is dropped, heading and
+all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
 kind needs `SECTION_FIELDS`, `checkSection()`, `resolveSection()` (both
@@ -713,11 +723,15 @@ is one string, so a proposal is `{ target, before, after }`, and one
 request returns a list (an `intro` target writes headline, subheadline and
 a text section, three proposals). Targets are an allowlist
 (`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items by
-index. The page is public, so what the model sees is too: the route builds
+index. Quotes (someone else's words), experience sections (read from a
+resume) and an item's `meta` are deliberately never targets. The page is
+public, so what the model sees is too: the route builds
 `landingProfile()` from `store.visibleResumeSnapshot()` (a resume's
 *published* snapshot, only while it's public; the card's resume for a
-blurb, the default otherwise), and the page context leaves out URLs, ids
-and the photo. Keep both if you add a target or a field to the profile.
+blurb, the default otherwise), and the page context leaves out URLs, ids,
+the photo and hidden sections (but the one the target is in), and shows an
+experience section's roles from `getLandingContext()`. Keep both if you
+add a target or a field to the profile.
 The editor copy it works on is checked by `store.checkLandingDraft()`. In
 the editor, `LandingEditorPage` holds the requests and proposals,
 `client/src/editor/landingAi.js` mirrors `landingSlice()` and follows an

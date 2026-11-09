@@ -20,7 +20,8 @@ import './landing.css';
 // safeHref() (by way of linkProps()) although the server only stores safe ones. `highlightIds`
 // (editor preview only) outlines the parts an AI suggestion is shown in:
 // 'hero' for the headline and subheadline, otherwise a section's id (the
-// preview resolves its draft `withIds`).
+// preview resolves its draft `withIds`). A section marked `hidden` (only
+// the preview resolves those, `withHidden`) is dimmed and labelled.
 export function LandingView({ landing, preview = false, highlightIds = null }) {
   const { site } = landing;
   const colors = normalizeSiteColors(site);
@@ -60,8 +61,11 @@ export function LandingView({ landing, preview = false, highlightIds = null }) {
         {landing.sections.map((section, i) => (
           <section
             key={section.id ?? i}
-            className={`l-section l-section-${section.kind}${highlightIds?.has(section.id) ? ' l-ai-preview' : ''}`}
+            className={`l-section l-section-${section.kind}${section.hidden ? ' l-section-hidden' : ''}${
+              highlightIds?.has(section.id) ? ' l-ai-preview' : ''
+            }`}
           >
+            {section.hidden && <span className="l-hidden-label">Hidden</span>}
             {section.title && <h2 className="l-section-title">{section.title}</h2>}
             <SectionBody section={section} />
           </section>
@@ -98,6 +102,7 @@ function SectionBody({ section }) {
                 ) : (
                   <span className="l-item-title">{item.title}</span>
                 ))}
+              {item.meta && <p className="l-item-meta">{item.meta}</p>}
               {item.text && <p className="l-item-text">{item.text}</p>}
             </li>
           ))}
@@ -141,6 +146,59 @@ function SectionBody({ section }) {
             </div>
           ))}
         </nav>
+      );
+    case 'quotes':
+      return (
+        <div className="l-quotes">
+          {section.quotes.map((quote, i) => (
+            <figure key={i} className="l-quote">
+              <blockquote className="l-quote-text">{quote.text}</blockquote>
+              {(quote.name || quote.role) && (
+                <figcaption className="l-quote-by">
+                  {quote.name &&
+                    (quote.url ? (
+                      <a className="l-quote-name" {...linkProps(quote.url)}>
+                        {quote.name}
+                      </a>
+                    ) : (
+                      <span className="l-quote-name">{quote.name}</span>
+                    ))}
+                  {quote.name && quote.role && ', '}
+                  {quote.role && <span className="l-quote-role">{quote.role}</span>}
+                </figcaption>
+              )}
+            </figure>
+          ))}
+        </div>
+      );
+    case 'experience':
+      return (
+        <>
+          <ol className="l-roles">
+            {section.roles.map((role, i) => (
+              <li key={i} className="l-role">
+                <span className="l-role-title">
+                  {role.jobTitle}
+                  {role.jobTitle && role.company && ' · '}
+                  {role.company &&
+                    (role.companyUrl ? (
+                      <a className="l-role-company" {...linkProps(role.companyUrl)}>
+                        {role.company}
+                      </a>
+                    ) : (
+                      <span className="l-role-company">{role.company}</span>
+                    ))}
+                </span>
+                {(role.location || role.dates) && (
+                  <span className="l-role-meta">{[role.dates, role.location].filter(Boolean).join(' · ')}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+          <a className="l-roles-more" {...hrefProps(section.href)}>
+            Full resume →
+          </a>
+        </>
       );
     default:
       return null;

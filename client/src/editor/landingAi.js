@@ -33,9 +33,10 @@ export function introParts(sectionId) {
   return [{ kind: 'headline' }, { kind: 'subheadline' }, { kind: 'text', sectionId }];
 }
 
-// The text section an intro request writes: the first one on the page.
+// The text section an intro request writes: the first one visitors see, so
+// a hidden one above it (a "Now" note kept for later) doesn't take the intro.
 export function introSectionId(landing) {
-  return landing.sections.find((s) => s.kind === 'text')?.id ?? null;
+  return landing.sections.find((s) => s.kind === 'text' && !s.hidden)?.id ?? null;
 }
 
 function sectionOf(landing, target, kind) {
