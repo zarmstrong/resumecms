@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LANDING_LIMITS,
-  cardResumeIds,
+  referencedResumeIds,
   emptyLanding,
   initialLanding,
   isSafeUrl,
@@ -154,7 +154,7 @@ test('photoUrl must be an inline JPEG, PNG or WebP image', () => {
 
 test('a new card must name an existing resume; one already in the draft may outlive it', () => {
   const cards = (list) => ({ sections: [cardsSection(list)] });
-  assert.deepEqual(validateLanding(cards([{ resumeId: 'a' }]), known('a')).sections[0].cards, [{ resumeId: 'a', label: '', blurb: '' }]);
+  assert.deepEqual(validateLanding(cards([{ resumeId: 'a' }]), known('a')).sections[0].cards, [{ resumeId: 'a', label: '', blurb: '', showPdf: false }]);
   assert.equal(status(() => validateLanding(cards([{ resumeId: 'gone' }]), known('a'))), 400);
   const kept = validateLanding(cards([{ resumeId: 'gone' }]), { knownResumeIds: new Set(['a']), previousResumeIds: new Set(['gone']) });
   assert.equal(kept.sections[0].cards[0].resumeId, 'gone');
@@ -162,7 +162,7 @@ test('a new card must name an existing resume; one already in the draft may outl
   assert.equal(status(() => validateLanding(cards([{ label: 'x' }]), known('a'))), 400);
   // Two sections may each have a card for the same resume.
   const both = validateLanding({ sections: [cardsSection([{ resumeId: 'a' }], 'c1'), cardsSection([{ resumeId: 'a' }], 'c2')] }, known('a'));
-  assert.deepEqual([...cardResumeIds(both)], ['a']);
+  assert.deepEqual([...referencedResumeIds(both)], ['a']);
 });
 
 test('mergeLandingPatch replaces fields, resets null ones, and ignores __proto__', () => {
@@ -215,13 +215,15 @@ test('a draft stored before sections reads as the sections it showed, in order',
   assert.deepEqual(upgraded, {
     headline: 'Jo',
     subheadline: 'Engineer',
+    availability: '',
+    actions: [],
     photo: 'resume',
     photoUrl: '',
     publishedAt: '2026-11-06T00:00:00.000Z',
     sections: [
       { id: 'intro', kind: 'text', title: '', body: 'Hi' },
       { id: 'links', kind: 'links', title: '', links: old.links },
-      { id: 'resumes', kind: 'resumes', title: '', cards: old.resumes },
+      { id: 'resumes', kind: 'resumes', title: '', cards: [{ ...old.resumes[0], showPdf: false }] },
     ],
     seo: { title: '', description: '', noindex: false },
   });
@@ -252,7 +254,7 @@ test('initialLanding takes only what the landing page allows from the published 
   assert.deepEqual(draft.sections, [
     { id: 'intro', kind: 'text', title: '', body: '' },
     { id: 'links', kind: 'links', title: '', links: [{ type: 'github', label: 'gh', url: 'https://github.com/jo' }] },
-    { id: 'resumes', kind: 'resumes', title: '', cards: [{ resumeId: 'main', label: '', blurb: '' }] },
+    { id: 'resumes', kind: 'resumes', title: '', cards: [{ resumeId: 'main', label: '', blurb: '', showPdf: false }] },
   ]);
   // It's a valid draft as it stands.
   assert.deepEqual(validateLanding(draft, known('main')), draft);
@@ -275,6 +277,9 @@ test("initialLanding starts the links with the header's email and phone", () => 
   const capped = initialLanding('main', { email: 'jo@example.com', links: many }).sections[1].links;
   assert.equal(capped.length, LANDING_LIMITS.links);
   assert.equal(capped[0].type, 'email');
+  // An email also makes the first button; no email, no button.
+  assert.deepEqual(draft.actions, [{ type: 'link', label: 'Email me', url: 'mailto:jo@example.com' }]);
+  assert.deepEqual(initialLanding('main', { email: ' ' }).actions, []);
 });
 
 test('resolveLanding shows only available resumes, without ids or internal names', () => {
@@ -344,4 +349,98 @@ test('resolveLanding shows only available resumes, without ids or internal names
   assert.equal(out.photoUrl, context.photoUrl);
   assert.equal(resolveLanding({ ...landing, photo: 'none' }, context).photoUrl, '');
   assert.equal(resolveLanding({ ...landing, photo: 'custom', photoUrl: 'data:image/png;base64,BB' }, context).photoUrl, 'data:image/png;base64,BB');
+});
+
+test('actions and availability are checked strictly; a new resume action must name an existing resume', () => {
+  const actions = (list, refs = known('a')) => validateLanding({ actions: list }, refs).actions;
+  assert.deepEqual(actions([{ type: 'link', url: 'mailto:jo@example.com?subject=Hello' }, { type: 'resume', resumeId: 'a' }]), [
+    { type: 'link', label: '', url: 'mailto:jo@example.com?subject=Hello' },
+    { type: 'resume', label: '', resumeId: 'a', open: 'page' },
+  ]);
+  assert.equal(validateLanding({ availability: 'Open to work · Remote' }, known()).availability, 'Open to work · Remote');
+  const bad = [
+    { availability: 'x'.repeat(LANDING_LIMITS.availability + 1) },
+    { availability: 7 },
+    { actions: 'Email me' },
+    { actions: Array.from({ length: LANDING_LIMITS.actions + 1 }, () => ({ type: 'link', url: 'https://x.example' })) },
+    { actions: [{ url: 'https://x.example' }] },
+    { actions: [{ type: 'button', url: 'https://x.example' }] },
+    { actions: [{ type: 'link', url: 'java\tscript:alert(1)' }] },
+    { actions: [{ type: 'link', url: 'https://x.example', resumeId: 'a' }] },
+    { actions: [{ type: 'link', label: 'x'.repeat(LANDING_LIMITS.actionLabel + 1), url: 'https://x.example' }] },
+    { actions: [{ type: 'resume', resumeId: 'a', open: 'print' }] },
+    { actions: [{ type: 'resume', resumeId: 'a', url: 'https://x.example' }] },
+    { actions: [{ type: 'resume' }] },
+    { actions: [{ type: 'resume', resumeId: 'gone' }] },
+    { sections: [cardsSection([{ resumeId: 'a', showPdf: 'yes' }])] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known('a'))), 400, JSON.stringify(input));
+
+  // One already in the draft may outlive its resume, as a card may, and
+  // counts as a reference for the next save.
+  const kept = actions([{ type: 'resume', resumeId: 'gone', open: 'pdf' }], { knownResumeIds: new Set(['a']), previousResumeIds: new Set(['gone']) });
+  assert.equal(kept[0].resumeId, 'gone');
+  assert.deepEqual([...referencedResumeIds({ actions: kept, sections: [cardsSection([{ resumeId: 'a' }])] })].sort(), ['a', 'gone']);
+  // Replaced whole by the MCP merge.
+  const merged = mergeLandingPatch({ ...emptyLanding(), actions: kept }, { actions: [{ type: 'link', url: 'https://x.example' }] });
+  assert.deepEqual(merged.actions, [{ type: 'link', url: 'https://x.example' }]);
+  // A draft stored before them reads with none.
+  const { availability: _a, actions: _b, ...old } = emptyLanding();
+  assert.deepEqual(upgradeLanding(old), emptyLanding());
+});
+
+test('actions and card PDFs resolve against what a visitor may open right now', () => {
+  const landing = {
+    ...emptyLanding(),
+    availability: 'Open to work',
+    actions: [
+      { type: 'link', label: 'Email me', url: 'mailto:jo@example.com' },
+      { type: 'link', label: '', url: 'https://cal.example/jo' },
+      { type: 'link', label: 'Half typed', url: '' },
+      { type: 'link', label: 'Bad', url: 'java\tscript:alert(1)' },
+      { type: 'resume', label: '', resumeId: 'main', open: 'pdf' },
+      { type: 'resume', label: 'Sales', resumeId: 'sales', open: 'page' },
+      { type: 'resume', label: 'Sales PDF', resumeId: 'sales', open: 'pdf' },
+      { type: 'resume', label: 'Secret', resumeId: 'private', open: 'page' },
+    ],
+    sections: [
+      {
+        id: 'cards',
+        kind: 'resumes',
+        title: '',
+        cards: [
+          { resumeId: 'main', label: '', blurb: '', showPdf: true },
+          { resumeId: 'sales', label: '', blurb: '', showPdf: true },
+          { resumeId: 'other', label: '', blurb: '', showPdf: false },
+        ],
+      },
+    ],
+  };
+  const context = {
+    photoUrl: '',
+    site: null,
+    resumes: new Map([
+      ['main', { href: '/resume', title: 'Engineer', pdfHref: '/api/public/resume.pdf?v=1-2' }],
+      ['sales', { href: '/r/sales', title: 'Sales', pdfHref: '' }],
+      ['other', { href: '/r/other', title: 'Other', pdfHref: '/api/public/resumes/other/resume.pdf?v=3-4' }],
+    ]),
+  };
+  const out = resolveLanding(landing, context);
+  assert.equal(out.availability, 'Open to work');
+  assert.deepEqual(out.actions, [
+    { label: 'Email me', href: 'mailto:jo@example.com' },
+    { label: 'https://cal.example/jo', href: 'https://cal.example/jo' },
+    { label: 'Download my resume (PDF)', href: '/api/public/resume.pdf?v=1-2' },
+    { label: 'Sales', href: '/r/sales' },
+  ]);
+  assert.deepEqual(out.sections[0].cards, [
+    { label: 'Engineer', blurb: '', href: '/resume', pdfHref: '/api/public/resume.pdf?v=1-2' },
+    { label: 'Sales', blurb: '', href: '/r/sales' },
+    { label: 'Other', blurb: '', href: '/r/other' },
+  ]);
+  const body = JSON.stringify(out);
+  for (const leak of ['private', 'Secret', 'resumeId', '"main"']) assert.equal(body.includes(leak), false, leak);
+  // A snapshot from before actions resolves with none.
+  const { actions: _a, availability: _b, ...old } = landing;
+  assert.deepEqual(resolveLanding(old, context).actions, []);
 });

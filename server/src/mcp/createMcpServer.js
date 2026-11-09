@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { BLOCK_TYPES } from '../resumeStore.js';
 import { httpError } from '../httpError.js';
-import { LINK_TYPES, PHOTO_SOURCES } from '../landingFields.js';
+import { ACTION_OPENS, LINK_TYPES, PHOTO_SOURCES } from '../landingFields.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
 import { moveBlockOrder } from './moveBlock.js';
 
@@ -477,7 +477,22 @@ const landingCard = () =>
     resumeId: z.string().describe('A resume id from list_resumes.'),
     label: z.string().optional().describe("Card title, e.g. \"Engineering\". Empty uses the resume's published header title (never its internal name)."),
     blurb: z.string().optional().describe('A line or two about this resume.'),
+    showPdf: z.boolean().optional().describe('Also link to its PDF, while it has one.'),
   });
+const landingAction = () =>
+  z.discriminatedUnion('type', [
+    z.object({
+      type: z.literal('link'),
+      label: z.string().optional().describe('Button text, e.g. "Email me". Empty shows the URL.'),
+      url: z.string().describe('An http, https, mailto or tel URL; mailto:you@example.com?subject=Hello prefills a subject.'),
+    }),
+    z.object({
+      type: z.literal('resume'),
+      label: z.string().optional().describe('Button text. Empty says "View my resume" or "Download my resume (PDF)".'),
+      resumeId: z.string().describe('A resume id from list_resumes.'),
+      open: z.enum(ACTION_OPENS).optional().describe("'page' (default) opens the resume, 'pdf' its PDF. Shown only while the resume is public and published, and for 'pdf' has a rendered PDF."),
+    }),
+  ]);
 const landingItem = () =>
   z.object({
     title: z.string().optional().describe('e.g. a project name.'),
@@ -512,10 +527,16 @@ const LANDING_TOOLS = [
     config: {
       title: 'Update the landing page',
       description:
-        "Merges fields into the landing page's DRAFT: send only what changes (sections is replaced as a whole list, so send every section to keep, in order; null resets a field). Nothing is public until publish_landing_page. Returns the draft.",
+        "Merges fields into the landing page's DRAFT: send only what changes (sections and actions are each replaced as a whole list, so send every entry to keep, in order; null resets a field). Nothing is public until publish_landing_page. Returns the draft.",
       inputSchema: {
         headline: z.string().nullable().optional().describe('Big heading, usually your name.'),
         subheadline: z.string().nullable().optional().describe('One line under it, e.g. a title.'),
+        availability: z.string().nullable().optional().describe('A short line above the headline, e.g. "Open to senior backend roles · Remote". Empty shows none.'),
+        actions: z
+          .array(landingAction())
+          .nullable()
+          .optional()
+          .describe('At most 3 buttons under the subheadline, the first drawn as the primary one. Replaced as a whole list.'),
         photo: z.enum(PHOTO_SOURCES).nullable().optional().describe("'resume' uses the default resume's published header photo, 'custom' uses photoUrl, 'none' shows none."),
         photoUrl: z.string().nullable().optional().describe("A base64 data: URL of a JPEG, PNG or WebP image, for photo: 'custom'."),
         sections: z

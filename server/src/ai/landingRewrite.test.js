@@ -17,6 +17,11 @@ const landing = {
   subheadline: 'Engineer',
   photo: 'custom',
   photoUrl: 'data:image/jpeg;base64,AAAA',
+  availability: 'Open to SRE roles',
+  actions: [
+    { type: 'link', label: 'Email me', url: 'mailto:jo@example.com' },
+    { type: 'resume', label: 'Get the PDF', resumeId: 'r1', open: 'pdf' },
+  ],
   sections: [
     { id: 'intro', kind: 'text', title: '', body: 'I build things.' },
     { id: 'proj', kind: 'items', title: 'Projects', items: [{ title: 'Widget', text: 'A widget.', url: 'https://w.example' }, { title: 'Gadget', text: '', url: '' }] },
@@ -123,7 +128,9 @@ test('the prompt marks the target, and leaves out URLs, ids and the photo', () =
   assert.match(user, /"text": "A widget\."/);
   assert.match(system, /its title, which you don't change, is "Widget"/);
   assert.match(system, new RegExp(`At most ${LANDING_LIMITS.itemText} characters`));
-  for (const hidden of ['https://', 'data:image', 'r1', '"proj"', '"intro"']) assert.ok(!user.includes(hidden), hidden);
+  for (const hidden of ['https://', 'mailto:', 'data:image', 'r1', '"proj"', '"intro"']) assert.ok(!user.includes(hidden), hidden);
+  // The buttons and availability line are part of what a visitor reads.
+  for (const shown of ['Open to SRE roles', 'Email me', 'Get the PDF']) assert.ok(user.includes(shown), shown);
   assert.ok(!/resume profile/i.test(user));
 });
 

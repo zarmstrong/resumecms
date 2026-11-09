@@ -50,7 +50,7 @@ test('before anything is saved, the draft comes from the published header', asyn
   const draft = store.getLanding();
   assert.equal(draft.headline, 'Jo');
   assert.equal(draft.subheadline, 'Engineer');
-  assert.deepEqual(cardsOf(draft), [{ resumeId: defaultId, label: '', blurb: '' }]);
+  assert.deepEqual(cardsOf(draft), [{ resumeId: defaultId, label: '', blurb: '', showPdf: false }]);
   assert.deepEqual(store.getLandingStatus(), { enabled: false, publishedAt: null, isDirty: false });
 });
 
@@ -200,6 +200,52 @@ test('a draft and snapshot stored before sections still read, publish and discar
   assert.deepEqual(store.discardLandingDraft(), draft);
   store.publishLanding();
   assert.equal(store.landingForHost('example.com').sections[0].body, 'Hello');
+});
+
+test("hero actions and cards link a resume's PDF only while a visitor may open it", async () => {
+  const { store, defaultId } = await makeStore();
+  const salesId = await publicResume(store, 'Sales', 'sales');
+  store.setLanding({
+    actions: [
+      { type: 'resume', label: 'PDF', resumeId: defaultId, open: 'pdf' },
+      { type: 'resume', label: 'Sales PDF', resumeId: salesId, open: 'pdf' },
+      { type: 'resume', label: 'Sales', resumeId: salesId },
+    ],
+    sections: [{ id: 'cards', kind: 'resumes', cards: [{ resumeId: defaultId, showPdf: true }, { resumeId: salesId, showPdf: true }] }],
+  });
+  store.setLandingEnabled(true);
+  store.publishLanding();
+
+  // Both have a rendered PDF; the default's is the host's own, the other's
+  // goes by its slug, and each carries the file's version.
+  let page = store.landingForHost('example.com');
+  const defaultPdf = `/api/public/resume.pdf?v=${encodeURIComponent(store.getPublishStatus().pdfVersion)}`;
+  const salesPdf = `/api/public/resumes/sales/resume.pdf?v=${encodeURIComponent(store.forResume(salesId).getPublishStatus().pdfVersion)}`;
+  assert.deepEqual(page.actions, [
+    { label: 'PDF', href: defaultPdf },
+    { label: 'Sales PDF', href: salesPdf },
+    { label: 'Sales', href: '/r/sales' },
+  ]);
+  assert.deepEqual(cardsOf(page).map((c) => c.pdfHref), [defaultPdf, salesPdf]);
+  assert.equal(JSON.stringify(page).includes(salesId), false);
+  // The editor's preview gets the same links.
+  assert.deepEqual(store.getLandingContext().resumes.map((r) => r.pdfHref).sort(), [defaultPdf, salesPdf].sort());
+
+  // No PDF on disk: the PDF button and link go, the page link stays.
+  fs.rmSync(store.forResume(salesId).getPdfFile().path);
+  page = store.landingForHost('example.com');
+  assert.deepEqual(page.actions.map((a) => a.label), ['PDF', 'Sales']);
+  assert.equal('pdfHref' in cardsOf(page)[1], false);
+
+  // Private, then deleted: every action for it goes, and the draft still saves.
+  store.updateResume(salesId, { isPublic: false });
+  assert.deepEqual(store.landingForHost('example.com').actions.map((a) => a.label), ['PDF']);
+  store.updateResume(salesId, { isPublic: true });
+  store.deleteResume(salesId);
+  assert.deepEqual(store.landingForHost('example.com').actions.map((a) => a.label), ['PDF']);
+  const draft = store.getLanding();
+  assert.deepEqual(store.setLanding({ ...draft, sections: [] }).actions.length, 3);
+  assert.equal(status(() => store.setLanding({ ...draft, actions: [{ type: 'resume', resumeId: 'nope' }] })), 400);
 });
 
 test('checkLandingDraft validates like a save but stores nothing', async () => {

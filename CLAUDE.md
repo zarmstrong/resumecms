@@ -247,10 +247,11 @@ install, not to a resume, so it lives in the global `settings` table:
 `lastEditedAt`, bumped by `touchLanding()`) and `landing_enabled`.
 `server/src/landingStore.js` holds the operations and is composed into the
 store by `createResumeStore()`; validation and the public shape are pure, in
-`landingFields.js`. It isn't blocks: `{ headline, subheadline, photo,
-photoUrl, sections, seo }` (`seo` is `{ title, description, noindex }`, see
+`landingFields.js`. It isn't blocks: `{ headline, subheadline, availability, actions,
+photo, photoUrl, sections, seo }` (`seo` is `{ title, description, noindex }`, see
 "Search and link previews"; `mergeLandingPatch()` merges it one level
-deep), where `sections` is an ordered list of
+deep; `actions` are the hero's buttons, issue #88, a `link` or a `resume`
+opening its `page` or `pdf`), where `sections` is an ordered list of
 `{ id, kind, title, ... }` with only the fields of its kind
 (`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url }]`),
 `links` and `resumes` (cards `{ resumeId, label, blurb }`). The `id` is
@@ -270,9 +271,9 @@ a base64 JPEG/PNG/WebP `data:` URL. A link's `type` only picks its badge;
 its names are `LINK_TYPES`, kept in step with the catalog in
 `client/src/resume/linkTypes.js` and the header enum in
 `mcp/blockSchemas.js`, and `telUrl()` (a fresh draft's phone link) mirrors
-the client's `telHref()`. A new card must name an existing
-resume, but a card already in the draft may outlive its resume, so a
-deletion doesn't make the draft unsavable. Publishing it is separate from
+the client's `telHref()`. A new card or resume action must name an existing
+resume, but one already in the draft may outlive its resume
+(`referencedResumeIds()`), so a deletion doesn't make the draft unsavable. Publishing it is separate from
 publishing any resume, and `landing_enabled` isn't drafted: it takes
 effect at once, and does nothing until a snapshot exists.
 
@@ -283,7 +284,11 @@ unpublished or deleted after the publish off the page, and keeps a renamed
 one's link working. Cards carry an `href` (`/resume` for the default,
 `/r/<slug>` otherwise) and a label, never a resume id or its internal
 `name` (which can say who it was tailored for); an empty label uses the
-resume's published header title. A section left with nothing to show
+resume's published header title. A card with `showPdf`, and a resume
+action with `open: 'pdf'`, link the PDF (`pdfHref` in the context: the
+host's own `/api/public/resume.pdf` for the default, the slug's
+otherwise, with `pdfVersionOf()`'s `?v=`) only while the file exists; a
+resolved action is `{ label, href }`. A section left with nothing to show
 (no text, no item, every card's resume hidden) is dropped, heading and
 all. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never

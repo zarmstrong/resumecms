@@ -207,8 +207,8 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/resumes/:id/cover-letters/:letterId/letter.pdf` | the letter as a PDF download, rendered on request and reused until the letter or its resume's header or site settings change. A render that waits more than 20 s behind another is a 503: it carries on, so asking again shortly gets the file |
 | `POST /api/resumes/:id/cover-letters/:letterId/rewrite` | `{ data?, target?, instruction?, brief? }` → `{ proposal }` for review; saves nothing. `target` is `{ kind: 'letter' }` (default: salutation, body and closing) or `{ kind: 'paragraph', index }`. A letter with an empty body is drafted without an instruction; otherwise an instruction or a `brief` is required. Shares `ai/rewrite`'s rate limits (a request with a `brief` counts as tailoring) |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`, `ai/tailor-plan`) for that resume. The unprefixed ones act on whichever resume is the default |
-| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, photo, photoUrl, sections, seo }`, `seo` being `{ title, description, noindex }`, each section `{ id, kind, title, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url }]`), `links` (`links`) or `resumes` (`cards: [{ resumeId, label, blurb }]`)), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card can link to (public and published). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links |
-| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card for an unknown resume are all a 400 |
+| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, availability, actions, photo, photoUrl, sections, seo }`, `actions` being up to 3 buttons, each `{ type: 'link', label, url }` or `{ type: 'resume', label, resumeId, open: 'page' | 'pdf' }`, `seo` being `{ title, description, noindex }`, each section `{ id, kind, title, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url }]`), `links` (`links`) or `resumes` (`cards: [{ resumeId, label, blurb, showPdf }]`)), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card or button can link to (public and published), each with its PDF's link (`pdfHref`, `''` while it has none). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links and its email an "Email me" button |
+| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card or button for an unknown resume are all a 400 |
 | `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
 | `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it) |
 | `POST /api/landing/discard-draft` | restore the landing page draft from its last published snapshot |
@@ -220,7 +220,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/ai/tailor-plan` | `{ brief, hide?, order?, hideFrom? }` → `{ plan: { explanation, hides, order } }`: the AI's suggestions of what to hide for a brief and what order to put the sections in, for review; saves nothing. `brief` is required, and so is at least one of `hide` and `order` (`true`). `hideFrom` is `'both'` (default: the web page and the PDF) or `'print'`. Each hide is `{ key, blockId, path, section, blockIds, reason, before }`: a block (`path` null), a whole section (`section: true`, the heading and every block under it in `blockIds`), or an experience bullet (`path: [i]` or `[i, j]`); apply one by turning `visibleWeb`/`visiblePrint` off (on the hideFrom surfaces) on each of `blockIds`, or on that bullet. `order` is null or `{ blockIds, basis, reason }`: every block id in the suggested display order, nesting unchanged, ready for `POST /api/blocks/reorder`, and the order it was made against. Never suggested: hiding a summary or executive summary, a resume's last shown experience entry, or every bullet of an entry; nothing hidden on both web and print is sent to the AI. Counts against the tailoring rate limit |
 | `GET /api/public/resume?mode=web\|print` | public, the published version of the resume this domain shows (the default, unless the request's host is one of another resume's `hostnames`), filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
 | `GET /api/public/resume.pdf` | public, streams that same resume's last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
-| `GET /api/public/home` | public, what `/` shows on this host: `{ kind: 'landing', landing }` when the landing page is enabled, published and the host isn't one of a resume's `hostnames`, otherwise `{ kind: 'resume', resume }` (the same as `/api/public/resume?mode=web`). Cards only list public, published resumes, by link (`/resume` for the default, `/r/<slug>` otherwise), never by id or internal name. Sent with `Vary: Host, X-Forwarded-Host` |
+| `GET /api/public/home` | public, what `/` shows on this host: `{ kind: 'landing', landing }` when the landing page is enabled, published and the host isn't one of a resume's `hostnames`, otherwise `{ kind: 'resume', resume }` (the same as `/api/public/resume?mode=web`). Cards and buttons only list public, published resumes, by link (`/resume` for the default, `/r/<slug>` otherwise, and the PDF's with its `?v=` version), never by id or internal name. Sent with `Vary: Host, X-Forwarded-Host` |
 | `GET /api/public/resumes/:slug?mode=web\|print` | public, the same for a resume by its link name; 404 unless that resume is public and published. Sent with `X-Robots-Tag: noindex` |
 | `GET /api/public/resumes/:slug/resume.pdf` | public, its PDF, on the same terms |
 | `GET /api/public/images/:key` | public, a link preview's image (a page's photo, or its PNG share card) by the key in that page's `og:image`; a 404 once no public, published page shows it. Sent with `X-Robots-Tag: noindex`. See [Search results and link previews](#search-results-and-link-previews) |
@@ -409,7 +409,10 @@ resumes with a domain of their own are meant to show up in search.
 ### A landing page at `/`
 
 By default `/` is your default resume. You can put a short home page
-there instead: a headline and a photo, then whatever sections you add, in
+there instead: a headline and a photo, an optional availability line
+above the headline ("Open to senior backend roles · Remote"), up to three
+buttons under it (a link such as "Email me" or "Book a call", or a
+resume's page or PDF; the first is drawn as the main one), then whatever sections you add, in
 the order you choose: text (a few lines about yourself, a "Now" note), a
 list such as projects (each with a title, a line of text and an optional
 link), links, and cards linking to whichever resumes you choose. Each
@@ -432,8 +435,11 @@ What visitors see:
   on every request: making one private or deleting it takes its card off at
   once, without republishing. A card's title is the one you give it, or
   else that resume's published header title, never its name in the editor
-  (which may say who it was tailored for).
-- Links (and a list item's link) must be `http`, `https`, `mailto` or
+  (which may say who it was tailored for). A card can also link to the
+  resume's PDF, and a button can open either; a PDF link only shows while
+  that resume has a rendered PDF, and a button for a resume follows the
+  same rules as a card.
+- Links (and a list item's or a button's link) must be `http`, `https`, `mailto` or
   `tel` (Email and Phone links make the last two for you), and
   text is plain text (a blank line starts a new paragraph), never HTML or
   markdown.
