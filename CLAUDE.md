@@ -74,6 +74,30 @@ PDF export needs a real Chromium; the Docker image installs the system
 package and points Puppeteer at it. In local (non-Docker) dev, PDF export
 fails unless you install Chromium yourself and set `PUPPETEER_EXECUTABLE_PATH`.
 
+## Working in this repo
+
+Always work in a git worktree under `.claude/worktrees/<name>`, branched
+from an up-to-date `origin/main`, and never edit, switch branches or
+`git stash` in the main `/opt/resumecms` checkout. The production sites are
+built from that checkout, so whatever is in it ships on the next rebuild.
+Keep it on a clean `main`. A fresh worktree has no `node_modules`: run
+`npm ci` in `server/` and `client/` before their tests.
+
+Subagents follow the same rule. Agents that write code run with
+`isolation: worktree`, and the project's own agents are in
+`.claude/agents/`:
+
+- `resumecms-implementer`: makes one scoped change in its own worktree and
+  runs the checks for every package it touched.
+- `resumecms-reviewer`: read-only review of a branch's diff against the
+  invariants in this file.
+- `resumecms-app-verifier`: runs a worktree's server on a scratch port and
+  data dir and drives the real app. Production shares this host's PID
+  namespace, so it never kills processes by name.
+
+When an invariant below changes, update the reviewer's checklist along with
+this file.
+
 ## Architecture
 
 ### Draft vs. published content
