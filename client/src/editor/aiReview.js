@@ -21,6 +21,10 @@ export function targetKey(target) {
       return `bullet:${target.path.join('.')}`;
     case 'item':
       return `item:${target.index}`;
+    // A tailoring plan's hide (editor/tailorPlan.js), not a rewrite: a
+    // block or section, or one bullet. Mirrors the server's hideKey.
+    case 'hide':
+      return target.path ? `hide:${target.path.join('.')}` : 'hide';
     default:
       return 'block';
   }

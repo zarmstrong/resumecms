@@ -206,7 +206,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET/PUT/DELETE /api/resumes/:id/cover-letters/:letterId` | one letter. `PUT` takes `{ title?, data? }`, `data` replaced whole. A letter of another resume is a 404 |
 | `GET /api/resumes/:id/cover-letters/:letterId/letter.pdf` | the letter as a PDF download, rendered on request and reused until the letter or its resume's header or site settings change. A render that waits more than 20 s behind another is a 503: it carries on, so asking again shortly gets the file |
 | `POST /api/resumes/:id/cover-letters/:letterId/rewrite` | `{ data?, target?, instruction?, brief? }` → `{ proposal }` for review; saves nothing. `target` is `{ kind: 'letter' }` (default: salutation, body and closing) or `{ kind: 'paragraph', index }`. A letter with an empty body is drafted without an instruction; otherwise an instruction or a `brief` is required. Shares `ai/rewrite`'s rate limits (a request with a `brief` counts as tailoring) |
-| `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`) for that resume. The unprefixed ones act on whichever resume is the default |
+| `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`, `ai/tailor-plan`) for that resume. The unprefixed ones act on whichever resume is the default |
 | `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, photo, photoUrl, sections }`, each section `{ id, kind, title, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url }]`), `links` (`links`) or `resumes` (`cards: [{ resumeId, label, blurb }]`)), its `status`, its fields' caps (`limits`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card can link to (public and published). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links |
 | `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, and a new card for an unknown resume are all a 400 |
 | `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
@@ -217,6 +217,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, a tailoring brief's caps (`briefLimits`), and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense?, brief? }` → `{ proposal }` for review; saves nothing. `brief` (`{ audience, posting?, guidance? }`, see [AI rewrites](#ai-rewrites)) tailors the rewrite; with one, `instruction` may be empty. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
+| `POST /api/ai/tailor-plan` | `{ brief, hide?, order?, hideFrom? }` → `{ plan: { explanation, hides, order } }`: the AI's suggestions of what to hide for a brief and what order to put the sections in, for review; saves nothing. `brief` is required, and so is at least one of `hide` and `order` (`true`). `hideFrom` is `'both'` (default: the web page and the PDF) or `'print'`. Each hide is `{ key, blockId, path, section, blockIds, reason, before }`: a block (`path` null), a whole section (`section: true`, the heading and every block under it in `blockIds`), or an experience bullet (`path: [i]` or `[i, j]`); apply one by turning `visibleWeb`/`visiblePrint` off (on the hideFrom surfaces) on each of `blockIds`, or on that bullet. `order` is null or `{ blockIds, basis, reason }`: every block id in the suggested display order, nesting unchanged, ready for `POST /api/blocks/reorder`, and the order it was made against. Never suggested: hiding a summary or executive summary, a resume's last shown experience entry, or every bullet of an entry; nothing hidden on both web and print is sent to the AI. Counts against the tailoring rate limit |
 | `GET /api/public/resume?mode=web\|print` | public, the published version of the resume this domain shows (the default, unless the request's host is one of another resume's `hostnames`), filtered by the matching visibility flag, plus the snapshot's `publishedAt` and the current `pdfVersion` |
 | `GET /api/public/resume.pdf` | public, streams that same resume's last rendered PDF (any query string, e.g. the client's `?v=<pdfVersion>`, is ignored) |
 | `GET /api/public/home` | public, what `/` shows on this host: `{ kind: 'landing', landing }` when the landing page is enabled, published and the host isn't one of a resume's `hostnames`, otherwise `{ kind: 'resume', resume }` (the same as `/api/public/resume?mode=web`). Cards only list public, published resumes, by link (`/resume` for the default, `/r/<slug>` otherwise), never by id or internal name. Sent with `Vary: Host, X-Forwarded-Host` |
@@ -599,6 +600,25 @@ On a tailored resume, a single rewrite's panel has a **Tailor for …**
 checkbox, on by default, that sends the brief too, so the instruction
 becomes optional.
 
+Tailoring can also leave things out and put the relevant part first.
+Tick **Suggest what to hide** (choosing whether to hide from the web page
+and the PDF, or from the PDF only) and **Suggest a section order** in
+**Tailor…** or **New resume**. The AI then reads what the resume shows
+(nothing hidden on both web and print, and never your header) and
+suggests entries, bullets and whole sections to hide, each with a
+one-line reason, and an order for the sections. That one request goes
+first, and sections it suggests hiding aren't rewritten. Each suggested
+hide shows under its section in the list, with **Hide** and **Discard**,
+and dimmed in the preview; the order shows in the preview, with its own
+banner. **Accept all** takes them with the rewrites. Hiding never deletes
+anything: unhide it with its Web or Print/PDF toggle. The AI never
+suggests hiding a summary, your last experience entry, or every bullet
+of an entry, and a heading takes its whole section with it, which in a
+resume without nesting means everything after it up to the next heading.
+A suggestion for something you've changed since is kept out of the
+preview and Accept all. **Suggest what to hide…** asks for these
+suggestions on their own, for a resume that's already tailored.
+
 - Only the block's prose is sent and can change. Dates, URLs,
   company/institution names, visibility flags, and block styling are
   always kept from the original. Education blocks aren't rewritable.
@@ -675,7 +695,7 @@ becomes optional.
   get no tense instruction. A custom item's ✨ rewrite has the same menu.
 - The default models are `claude-opus-5-5` and `gpt-5.6`. Change them in
   the same panel. Rewrites are rate-limited to 30 per 10 minutes, and
-  tailoring rewrites (one per block) separately to 120 per 10 minutes.
+  tailoring rewrites (one per block) and tailoring plans separately to 120 per 10 minutes.
 - **Timeout** (default 60 seconds, 20–120) is how long a rewrite may take,
   including one automatic retry, before the server gives up on the
   provider. If you run behind a reverse proxy, keep it below the proxy's

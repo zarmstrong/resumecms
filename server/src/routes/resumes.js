@@ -5,7 +5,7 @@ import { handle } from './sendError.js';
 import { createBlockRoutes } from './blocks.js';
 import { createPublishRoutes } from './publish.js';
 import { createCoverLetterRoutes } from './coverLetters.js';
-import { letterRewriteHandlers, rewriteHandlers } from './ai.js';
+import { letterRewriteHandlers, rewriteHandlers, tailorPlanHandlers } from './ai.js';
 import { sendResumePdf } from './sendPdf.js';
 
 // Managing the install's resumes (issue #53), plus every editor route for
@@ -51,6 +51,7 @@ router.get('/:resumeId/resume.pdf', (req, res) => {
 });
 
 router.post('/:resumeId/ai/rewrite', ...rewriteHandlers(forResume));
+router.post('/:resumeId/ai/tailor-plan', ...tailorPlanHandlers(forResume));
 router.post('/:resumeId/cover-letters/:letterId/rewrite', ...letterRewriteHandlers(forResume));
 router.use('/:resumeId', createCoverLetterRoutes(forResume));
 router.use('/:resumeId', createBlockRoutes(forResume));

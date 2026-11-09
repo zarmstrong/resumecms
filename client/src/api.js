@@ -112,6 +112,10 @@ export function resumeApi(resumeId) {
         method: 'POST',
         body: JSON.stringify({ blockId, data, instruction, target, tense, brief: brief || undefined }),
       }),
+    // A tailoring plan (issue #84, editor/tailorPlan.js): what to hide and a
+    // section order for `brief`, from the stored draft. Saves nothing.
+    tailorPlan: ({ brief, hide, order, hideFrom }) =>
+      request(`${prefix}/ai/tailor-plan`, { method: 'POST', body: JSON.stringify({ brief, hide, order, hideFrom }) }),
 
     publish: () => request(`${prefix}/publish`, { method: 'POST' }),
     publishStatus: () => request(`${prefix}/publish/status`),

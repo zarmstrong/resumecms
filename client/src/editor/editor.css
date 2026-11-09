@@ -1156,6 +1156,55 @@
   margin: 4px 0;
 }
 
+/* ---- Tailoring plan: what to hide, a section order (issue #84) ---------- */
+.ed-tailor-hide-from {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  width: 100%;
+  padding-left: 22px;
+  font-size: 13px;
+}
+
+.ed-plan-hides {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.ed-plan-hide {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--signal-dim);
+  font-size: 13px;
+}
+
+.ed-plan-hide-text {
+  flex: 1;
+  min-width: 12em;
+}
+
+.ed-plan-hide-text strong {
+  font-weight: 600;
+  color: var(--signal);
+}
+
+.ed-plan-hide-note {
+  opacity: 0.75;
+}
+
+.ed-plan-hide-actions {
+  display: flex;
+  gap: 6px;
+}
+
 /* ---- Landing page editor (issue #70) ------------------------------------- */
 .ed-landing-section {
   display: flex;

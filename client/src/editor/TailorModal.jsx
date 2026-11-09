@@ -1,18 +1,38 @@
 import { useState } from 'react';
 import { DEFAULT_TAILOR_TYPES, TAILOR_TYPES, tailorItems } from './tailorRun.js';
+import { DEFAULT_HIDE_FROM, HIDE_FROM_LABELS } from './tailorPlan.js';
 
 // The brief behind AI tailoring (issue #53; the server checks it in
 // ai/brief.js) plus which block types to tailor. The fields are shared by
 // "Tailor…" (TailorModal, below) and the New resume dialog's "Tailor the
-// copy" section. `limits` is the AI settings' briefLimits.
+// copy" section. `limits` is the AI settings' briefLimits. The form also
+// holds the tailoring plan's options (issue #84, editor/tailorPlan.js):
+// whether to ask what to hide (`hide`, from `hideFrom`) and for a section
+// order (`order`).
 
-export function emptyTailorForm(tailoring) {
+export function emptyTailorForm(tailoring, { hide = false } = {}) {
   return {
     audience: tailoring?.audience || '',
     posting: tailoring?.posting || '',
     guidance: tailoring?.guidance || '',
     types: DEFAULT_TAILOR_TYPES,
+    hide,
+    order: false,
+    hideFrom: DEFAULT_HIDE_FROM,
   };
+}
+
+// The plan the form asks for ({ hide, order, hideFrom }), or null for none.
+export function tailorPlanOptions(form) {
+  return form.hide || form.order ? { hide: form.hide, order: form.order, hideFrom: form.hideFrom } : null;
+}
+
+// The submit button's count: "3 rewrites", "3 rewrites and suggestions",
+// "suggestions"; null when the form asks for nothing.
+export function tailorRequestsLabel(count, plan) {
+  const rewrites = count ? `${count} rewrite${count === 1 ? '' : 's'}` : '';
+  if (!plan) return rewrites || null;
+  return rewrites ? `${rewrites} and suggestions` : 'suggestions';
 }
 
 export function tailorBrief(form) {
@@ -78,6 +98,41 @@ export function BriefFields({ form, onChange, limits, idPrefix, disabled = false
   );
 }
 
+// The plan's options: suggest what to hide (and where from), suggest a
+// section order.
+export function PlanFields({ form, onChange, idPrefix, disabled = false }) {
+  const check = (key) => (e) => onChange({ ...form, [key]: e.target.checked });
+  return (
+    <fieldset className="ed-field ed-tailor-types" disabled={disabled}>
+      <legend>Leave out and reorder</legend>
+      <label className="ed-checkbox-field">
+        <input type="checkbox" checked={form.hide} onChange={check('hide')} />
+        Suggest what to hide
+      </label>
+      {form.hide && (
+        <div className="ed-tailor-hide-from" role="radiogroup" aria-label="Hide from">
+          <span>Hide from:</span>
+          {Object.entries(HIDE_FROM_LABELS).map(([value, label]) => (
+            <label key={value} className="ed-checkbox-field">
+              <input
+                type="radio"
+                name={`${idPrefix}-hide-from`}
+                checked={form.hideFrom === value}
+                onChange={() => onChange({ ...form, hideFrom: value })}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      )}
+      <label className="ed-checkbox-field">
+        <input type="checkbox" checked={form.order} onChange={check('order')} />
+        Suggest a section order
+      </label>
+    </fieldset>
+  );
+}
+
 export function TailorFields({ form, onChange, limits, idPrefix, disabled = false }) {
   const toggle = (type) => (e) =>
     onChange({ ...form, types: e.target.checked ? [...form.types, type] : form.types.filter((t) => t !== type) });
@@ -93,29 +148,35 @@ export function TailorFields({ form, onChange, limits, idPrefix, disabled = fals
           </label>
         ))}
       </fieldset>
+      <PlanFields form={form} onChange={onChange} idPrefix={idPrefix} disabled={disabled} />
       <span className="ed-field-hint">
         Each section gets its own AI rewrite to review; nothing is saved until you accept it. Tailoring changes what's stressed
         and how it's worded, never the facts.
+        {form.hide && ' Suggestions of what to hide come first, and sections they suggest hiding aren’t rewritten. Hiding never deletes anything.'}
       </span>
     </>
   );
 }
 
 // "Tailor…" for the open resume, pre-filled with the brief it was last
-// tailored for. `onTailor(brief, types)` saves the brief and starts the
-// run (EditorPage's); this closes once it has.
-export function TailorModal({ resume, blocks, limits, onTailor, onClose }) {
-  const [form, setForm] = useState(() => emptyTailorForm(resume.tailoring));
+// tailored for. `onTailor(brief, types, plan)` saves the brief and starts
+// the run (EditorPage's); this closes once it has. With `planOnly` it's
+// "Suggest what to hide…": the plan alone, no rewrites, for a resume
+// that's already tailored.
+export function TailorModal({ resume, blocks, limits, planOnly = false, onTailor, onClose }) {
+  const [form, setForm] = useState(() => emptyTailorForm(resume.tailoring, { hide: planOnly }));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const count = tailorCount(form, blocks);
+  const plan = tailorPlanOptions(form);
+  const count = planOnly ? 0 : tailorCount(form, blocks);
+  const requests = tailorRequestsLabel(count, plan);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      await onTailor(tailorBrief(form), form.types);
+      await onTailor(tailorBrief(form), planOnly ? [] : form.types, plan);
       onClose();
     } catch (err) {
       setError(err.message);
@@ -128,19 +189,30 @@ export function TailorModal({ resume, blocks, limits, onTailor, onClose }) {
     <div className="ed-modal-backdrop">
       <form className="ed-modal" role="dialog" aria-modal="true" aria-labelledby="ed-tailor-title" onSubmit={handleSubmit}>
         <div className="ed-modal-header">
-          <h2 id="ed-tailor-title">Tailor “{resume.name}” with AI</h2>
+          <h2 id="ed-tailor-title">{planOnly ? `Suggest what to hide in “${resume.name}”` : `Tailor “${resume.name}” with AI`}</h2>
         </div>
         <div className="ed-modal-body">
           <div className="ed-form ed-modal-section">
-            <TailorFields form={form} onChange={setForm} limits={limits} idPrefix="ed-tailor" disabled={busy} />
+            {planOnly ? (
+              <>
+                <BriefFields form={form} onChange={setForm} limits={limits} idPrefix="ed-tailor" disabled={busy} />
+                <PlanFields form={form} onChange={setForm} idPrefix="ed-tailor" disabled={busy} />
+                <span className="ed-field-hint">
+                  The AI reads what this resume shows now and suggests what to hide for this audience, each with a reason, for you to
+                  review. Nothing is saved until you accept, and hiding never deletes anything.
+                </span>
+              </>
+            ) : (
+              <TailorFields form={form} onChange={setForm} limits={limits} idPrefix="ed-tailor" disabled={busy} />
+            )}
             {error && <div className="ed-login-error">{error}</div>}
           </div>
           <div className="ed-modal-actions">
             <button type="button" className="ed-btn ed-btn-ghost" onClick={onClose} disabled={busy}>
               Cancel
             </button>
-            <button type="submit" className="ed-btn ed-btn-primary" disabled={busy || !form.audience.trim() || count === 0}>
-              {count === 0 ? 'Nothing to tailor' : `Tailor (${count} rewrite${count === 1 ? '' : 's'})`}
+            <button type="submit" className="ed-btn ed-btn-primary" disabled={busy || !form.audience.trim() || !requests}>
+              {!requests ? (planOnly ? 'Pick a suggestion' : 'Nothing to tailor') : planOnly ? 'Suggest' : `Tailor (${requests})`}
             </button>
           </div>
         </div>
