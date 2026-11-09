@@ -6,6 +6,7 @@ import {
   landingProfile,
   landingProposals,
   landingSlice,
+  linkPlaceholders,
   normalizeLandingTarget,
   rewriteLanding,
   InvalidLandingTargetError,
@@ -158,6 +159,10 @@ test('landingProposals refuses a malformed or oversized answer', () => {
     status: 502,
     message: /more than the 120 characters the headline allows/,
   });
+  // Text that holds the syntax counts as its cap does, without escaping backslashes.
+  const escaped = `${'x'.repeat(LANDING_LIMITS.itemText - 4)} \\*a\\*`;
+  assert.equal(landingProposals(landing, { kind: 'item', sectionId: 'proj', index: 0 }, { text: escaped })[0].after, escaped);
+  assert.throws(() => landingProposals(landing, { kind: 'item', sectionId: 'proj', index: 0 }, { text: `${escaped}x` }), { status: 502 });
 });
 
 test('rewriteLanding calls the model with the schema and returns proposals', async () => {
@@ -250,4 +255,65 @@ test('the page context leaves hidden sections out, and shows quotes, meta lines 
   const context = inHidden.slice(inHidden.indexOf('The rest of the page'), inHidden.indexOf('Section to rewrite'));
   assert.match(context, /"title": "Now"/);
   assert.match(context, /\[the part being rewritten\]/);
+});
+
+test('links reach the model as placeholders, the rest of the page as labels, and come back as they were', () => {
+  const linked = {
+    ...landing,
+    sections: [
+      { id: 'intro', kind: 'text', title: '', body: 'I write at [my blog](https://jo.example/blog).\n\nAlso [here](https://jo.example/blog) and [mail me](mailto:jo@example.com).' },
+      { id: 'proj', kind: 'items', title: 'Projects', items: [{ title: 'Widget', text: 'Built for [Acme](https://acme.example/(x)).', url: '' }] },
+    ],
+  };
+  const text = { kind: 'text', sectionId: 'intro' };
+  assert.deepEqual([...linkPlaceholders(linked, text)], [
+    ['https://jo.example/blog', '#L1'],
+    ['mailto:jo@example.com', '#L2'],
+  ]);
+  const { system, user } = buildLandingPrompt(linked, text, 'Shorter', null);
+  assert.match(system, /keep its #L target exactly as it is/);
+  assert.ok(user.includes('I write at [my blog](#L1).\\n\\nAlso [here](#L1) and [mail me](#L2).'));
+  // The item, outside the target, shows its link's label only.
+  assert.ok(user.includes('"text": "Built for Acme."'));
+  for (const hidden of ['jo.example', 'mailto:', 'acme.example']) assert.ok(!user.includes(hidden), hidden);
+
+  // Labels reworded, links moved, one dropped: the URLs come back.
+  assert.deepEqual(landingProposals(linked, text, { text: 'Read [the blog](#L1), or **[write](#L2)**.' }), [
+    { target: text, before: linked.sections[0].body, after: 'Read [the blog](https://jo.example/blog), or **[write](mailto:jo@example.com)**.' },
+  ]);
+  const item = { kind: 'item', sectionId: 'proj', index: 0 };
+  assert.ok(buildLandingPrompt(linked, item, 'x', null).user.includes('"text": "Built for [Acme](#L1)."'));
+  assert.equal(landingProposals(linked, item, { text: 'Made for [Acme](#L1).' })[0].after, 'Made for [Acme](https://acme.example/(x)).');
+  // An intro masks only its text section; the headline is plain text.
+  const intro = { kind: 'intro', sectionId: 'intro' };
+  assert.ok(buildLandingPrompt(linked, intro, 'x', null).user.includes('"intro": "I write at [my blog](#L1).'));
+  assert.equal(
+    landingProposals(linked, intro, { headline: 'Jo', subheadline: 'Engineer', intro: 'At [my blog](#L1).' }).at(-1).after,
+    'At [my blog](https://jo.example/blog).'
+  );
+});
+
+test('an answer that links anywhere but its placeholders is refused', () => {
+  const linked = { ...landing, sections: [{ id: 'intro', kind: 'text', title: '', body: 'See [my blog](https://jo.example).' }, landing.sections[1]] };
+  const text = { kind: 'text', sectionId: 'intro' };
+  for (const answer of [
+    'See [my blog](https://evil.example).',
+    'See [my blog](#L1) and [this](#L2).',
+    'See [x](javascript:alert(1)).',
+    'Fine.\n\nThen [a page](/r/secret).',
+  ]) {
+    assert.throws(() => landingProposals(linked, text, { text: answer }), { status: 502, message: /added a link/ }, answer);
+  }
+  // With no links in the field, any link is made up, in an item too.
+  assert.throws(() => landingProposals(landing, { kind: 'item', sectionId: 'proj', index: 0 }, { text: '[Widget](#L1)' }), { status: 502 });
+  assert.throws(
+    () => landingProposals(landing, { kind: 'intro', sectionId: 'intro' }, { headline: 'Jo', subheadline: 'SRE', intro: 'Hi at [blog](https://jo.example).' }),
+    { status: 502 }
+  );
+  // Text that only looks like a link, and emphasis, are fine; a headline is plain text, never a link.
+  assert.equal(
+    landingProposals(linked, text, { text: '**See** \\[x](https://evil.example) [my blog](#L1).' })[0].after,
+    '**See** \\[x](https://evil.example) [my blog](https://jo.example).'
+  );
+  assert.equal(landingProposals(landing, { kind: 'headline' }, { text: '[Jo](https://evil.example)' })[0].after, '[Jo](https://evil.example)');
 });

@@ -10,14 +10,17 @@ import {
   fontCssFor,
 } from '../resume/siteColors.js';
 import { textParagraphs } from './resolveLanding.js';
+import { renderInline } from './renderInline.js';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
 // API sends (server/src/landingFields.js's resolveLanding(); the editor's
 // preview builds the same from its draft). It takes the default resume's
-// colors and fonts, so the two pages match. Everything is rendered as text:
-// a text section isn't markdown or HTML, and every href still goes through
-// safeHref() (by way of linkProps()) although the server only stores safe ones. `highlightIds`
+// colors and fonts, so the two pages match. Everything is rendered as text,
+// apart from the links and emphasis a text section or an item's text may
+// hold (issue #91, renderInline.js), which become elements, never HTML; every
+// href still goes through safeHref() (by way of linkProps()) although the
+// server only stores safe ones. `highlightIds`
 // (editor preview only) outlines the parts an AI suggestion is shown in:
 // 'hero' for the headline and subheadline, otherwise a section's id (the
 // preview resolves its draft `withIds`). A section marked `hidden` (only
@@ -86,7 +89,7 @@ function SectionBody({ section }) {
     case 'text':
       return textParagraphs(section.body).map((paragraph, i) => (
         <p key={i} className="l-text">
-          {paragraph}
+          {renderInline(paragraph)}
         </p>
       ));
     case 'items':
@@ -103,7 +106,7 @@ function SectionBody({ section }) {
                   <span className="l-item-title">{item.title}</span>
                 ))}
               {item.meta && <p className="l-item-meta">{item.meta}</p>}
-              {item.text && <p className="l-item-text">{item.text}</p>}
+              {item.text && <p className="l-item-text">{renderInline(item.text)}</p>}
             </li>
           ))}
         </ul>

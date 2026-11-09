@@ -12,6 +12,7 @@ import {
   validateLanding,
 } from './landingFields.js';
 import { pdfPathFor, pdfVersionOf } from './pdfPaths.js';
+import { escapeLandingText } from './landingTextMigration.js';
 
 // The landing page's storage and publishing (issue #70), composed into the
 // resume store by createResumeStore() — the editor's routes and the MCP
@@ -56,9 +57,13 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   // MCP tool does; a list is replaced whole). Either way the result is
   // checked in full (landingFields.js): a card or action already in the
   // draft may name a resume deleted since, a new one must name one that exists.
-  function setLanding(input, { merge = false } = {}) {
+  // With `textFormat: 'plain'` (a write from an editor older than issue
+  // #91's syntax, see landingTextMigration.js), its text is escaped first,
+  // except where it equals the stored draft's.
+  function setLanding(input, { merge = false, textFormat = 'inline' } = {}) {
     const current = getLanding();
-    const next = checkLanding(merge ? mergeLandingPatch(current, input) : input ?? {}, current);
+    const text = textFormat === 'plain' ? escapeLandingText(input, current).landing : input;
+    const next = checkLanding(merge ? mergeLandingPatch(current, text) : text ?? {}, current);
     setSetting('landing_draft', next);
     touchLanding();
     return next;
@@ -71,8 +76,10 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   // `input` checked as setLanding() would check it, without saving it: the
   // editor's copy of the draft, which an AI rewrite (routes/ai.js) works on
   // since it can be a debounce ahead of the stored one.
-  function checkLandingDraft(input) {
-    return checkLanding(input ?? {}, getLanding());
+  function checkLandingDraft(input, { textFormat = 'inline' } = {}) {
+    const current = getLanding();
+    const text = textFormat === 'plain' ? escapeLandingText(input, current).landing : input;
+    return checkLanding(text ?? {}, current);
   }
 
   // Same rule as a resume's (see resumeStore.js's isDirty): publish clears

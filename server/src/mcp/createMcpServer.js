@@ -496,7 +496,7 @@ const landingAction = () =>
 const landingItem = () =>
   z.object({
     title: z.string().optional().describe('e.g. a project name.'),
-    text: z.string().optional().describe('A line or two about it, plain text.'),
+    text: z.string().optional().describe('A line or two about it; may hold [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is.'),
     url: z.string().optional().describe('An optional http, https, mailto or tel link for its title.'),
     meta: z.string().optional().describe('An optional short line shown muted under the title, e.g. "2024 · Rust · Open source".'),
   });
@@ -514,7 +514,7 @@ const sectionBase = {
 };
 const landingSection = () =>
   z.discriminatedUnion('kind', [
-    z.object({ ...sectionBase, kind: z.literal('text'), body: z.string().optional().describe('Plain text; a blank line starts a new paragraph.') }),
+    z.object({ ...sectionBase, kind: z.literal('text'), body: z.string().optional().describe('Text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is; a blank line starts a new paragraph.') }),
     z.object({ ...sectionBase, kind: z.literal('items'), items: z.array(landingItem()).optional() }),
     z.object({ ...sectionBase, kind: z.literal('links'), links: z.array(landingLink()).optional() }),
     z.object({ ...sectionBase, kind: z.literal('resumes'), cards: z.array(landingCard()).optional() }),

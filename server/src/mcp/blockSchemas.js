@@ -302,7 +302,7 @@ export const LANDING_SCHEMA = {
         oneOf: [
           {
             type: 'object',
-            properties: { ...LANDING_SECTION_BASE, kind: { const: 'text' }, body: { type: 'string', description: 'Plain text; a blank line starts a new paragraph' } },
+            properties: { ...LANDING_SECTION_BASE, kind: { const: 'text' }, body: { type: 'string', description: 'Text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is; a blank line starts a new paragraph' } },
           },
           {
             type: 'object',
@@ -316,7 +316,7 @@ export const LANDING_SCHEMA = {
                   type: 'object',
                   properties: {
                     title: { type: 'string' },
-                    text: { type: 'string', description: 'Plain text' },
+                    text: { type: 'string', description: 'Text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is' },
                     url: { type: 'string', description: 'Optional http, https, mailto or tel link for the title' },
                     meta: { type: 'string', description: "Optional short line shown muted under the title, e.g. '2024 · Rust · Open source' (at most 80 characters)" },
                   },

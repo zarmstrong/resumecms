@@ -4,12 +4,21 @@
 // server/src/shareImages.js (cardContent()), which are what the HTML shell
 // actually carries; keep the two in step.
 
+import { inlinePlainText, parseInline } from '../landing/inlineText.js';
+import { textParagraphs } from '../landing/resolveLanding.js';
+
 export const DESCRIPTION_LENGTH = 160;
 export const OVERRIDE_LIMITS = { title: 70, description: 200 };
 
 const PHOTO_DATA_URL = /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/;
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const textOf = (value) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '');
+// A text section as a visitor reads it (issue #91), as the server's
+// bodyPlainText() reads it: links as their labels, no markers.
+const bodyText = (body) =>
+  textParagraphs(typeof body === 'string' ? body : '')
+    .map((paragraph) => inlinePlainText(parseInline(paragraph)))
+    .join('\n\n');
 
 export function clip(value, max) {
   const text = textOf(value);
@@ -73,7 +82,7 @@ export function landingPageMeta(landing) {
   const sections = Array.isArray(landing?.sections) ? landing.sections : [];
   const headline = textOf(landing?.headline);
   const subheadline = textOf(landing?.subheadline);
-  const firstText = sections.find((section) => section.kind === 'text' && textOf(section.body))?.body;
+  const firstText = sections.map((section) => (section.kind === 'text' ? bodyText(section.body) : '')).find(textOf);
   return {
     title: textOf(seo.title) || headline || 'Home',
     description: textOf(seo.description) || clip(subheadline || firstText, DESCRIPTION_LENGTH),

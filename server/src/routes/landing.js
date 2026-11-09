@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { handle } from './sendError.js';
 import { LANDING_LIMITS } from '../landingFields.js';
 import { landingRewriteHandlers } from './ai.js';
+import { splitTextFormat } from '../landingTextMigration.js';
 
 // The editor's routes for the landing page (issue #70), thin wrappers over
 // the store (landingStore.js) like the rest. Mounted at /api/landing before
@@ -26,9 +27,12 @@ router.get('/', handle((req, res) => {
   });
 }));
 
-// Replaces the draft; see landingFields.js for the shape.
+// Replaces the draft; see landingFields.js for the shape. The editor marks
+// it `textFormat: 'inline'`; without that its text is plain and escaped
+// (an editor loaded before issue #91, see landingTextMigration.js).
 router.put('/', handle((req, res) => {
-  const landing = store.setLanding(req.body);
+  const { landing: input, textFormat } = splitTextFormat(req.body);
+  const landing = store.setLanding(input, { textFormat });
   res.json({ landing, status: store.getLandingStatus() });
 }));
 

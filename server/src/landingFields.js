@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { httpError } from './httpError.js';
 import { blocksForMode } from './publicBlocks.js';
+import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inlineText.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -18,7 +19,7 @@ import { blocksForMode } from './publicBlocks.js';
 // published header photo), 'custom' (photoUrl) or 'none'. `sections` is
 // shown in order under the headline, each `{ id, kind, title, ... }` with
 // the fields of its kind (SECTION_FIELDS):
-//   text       — body: plain text, a blank line between paragraphs
+//   text       — body: text, a blank line between paragraphs
 //   items      — items: [{ title, text, url, meta? }], e.g. projects; meta
 //                is a short muted line under the title ("2024 · Rust")
 //   links      — links: [{ type, label, url }]
@@ -30,6 +31,9 @@ import { blocksForMode } from './publicBlocks.js';
 //                page is requested (issue #90), never copied into the draft
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown. `hidden` and an item's `meta` are only stored when set.
+// A text section's body and an item's text may hold links and emphasis
+// (issue #91, inlineText.js); every other string, a quote's text and an
+// item's meta included, is plain text.
 // `id` only tells sections apart in the editor; it never leaves the server
 // publicly. `seo` is { title, description, noindex } (issue #87): what
 // the page's <title>, description and link previews say instead of the
@@ -220,6 +224,25 @@ function isAllowedDraftUrl(url) {
   return isSafeUrl(url);
 }
 
+// A text section's body (`paragraphs`, read one paragraph at a time as the
+// page shows it) or an item's text. Its cap counts the text as written,
+// markup and all, but not an escaping backslash (inlineLength()), so the
+// one-off escape of older text (landingTextMigration.js) never takes a
+// field over it. Its links follow the rule every other link on the page
+// does.
+function checkInlineText(value, max, label, { paragraphs = false } = {}) {
+  if (typeof value !== 'string') throw httpError(400, `${label} must be a string`);
+  if (inlineLength(value) > max) throw httpError(400, `${label} is too long (at most ${max} characters)`);
+  (paragraphs ? textParagraphs(value) : [value]).forEach((part, p) => {
+    const bad = inlineLinks(parseInline(part)).find((link) => !isAllowedDraftUrl(link.href));
+    if (bad) {
+      const where = paragraphs ? `${label}, paragraph ${p + 1}` : label;
+      throw httpError(400, `${where}: the link "${bad.label.slice(0, 40)}" must be an http, https, mailto or tel link`);
+    }
+  });
+  return value;
+}
+
 function checkLink(link, label) {
   checkKeys(link, LINK_FIELDS, label);
   const out = {
@@ -292,7 +315,7 @@ function checkItem(item, label) {
   checkKeys(item, ITEM_FIELDS, label);
   const out = {
     title: checkString(item.title ?? '', LANDING_LIMITS.itemTitle, `${label}.title`),
-    text: checkString(item.text ?? '', LANDING_LIMITS.itemText, `${label}.text`),
+    text: checkInlineText(item.text ?? '', LANDING_LIMITS.itemText, `${label}.text`),
     url: checkString(item.url ?? '', LANDING_LIMITS.url, `${label}.url`),
   };
   if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
@@ -328,7 +351,7 @@ function checkSection(section, i, refs, ids) {
   if (checkBoolean(section.hidden ?? false, `${label}.hidden`)) out.hidden = true;
   switch (section.kind) {
     case 'text':
-      out.body = checkString(section.body ?? '', LANDING_LIMITS.text, `${label}.body`);
+      out.body = checkInlineText(section.body ?? '', LANDING_LIMITS.text, `${label}.body`, { paragraphs: true });
       break;
     case 'items':
       out.items = checkList(section.items, LANDING_LIMITS.items, `${label}.items`).map((item, j) => checkItem(item, `${label}.items[${j}]`));

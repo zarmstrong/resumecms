@@ -118,8 +118,9 @@ function roleDates({ startDate, endDate }) {
   return startDate || endDate;
 }
 
-// A text section's paragraphs: plain text, a blank line between two. Rendered as
-// text, never as HTML or markdown.
+// A text section's paragraphs, a blank line between two. Each is rendered
+// with its links and emphasis (renderInline.js), never as HTML. Mirrored by
+// textParagraphs() in server/src/inlineText.js.
 export function textParagraphs(text) {
   return String(text || '')
     .split(/\n\s*\n/)

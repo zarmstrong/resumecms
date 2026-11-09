@@ -109,6 +109,46 @@ test('link URLs may not use a script-running scheme, however it is spelled', () 
   }
 });
 
+test('links inside a text section or an item follow the same rules, named by section and paragraph', () => {
+  const text = (body) => ({ sections: [{ id: 't', kind: 'text', body }] });
+  const item = (itemText) => ({ sections: [{ id: 't', kind: 'text', body: '' }, { id: 'i', kind: 'items', items: [{ title: 'a', text: itemText }] }] });
+  const message = (fn) => {
+    try {
+      fn();
+    } catch (err) {
+      return `${err.status} ${err.message}`;
+    }
+    return null;
+  };
+  for (const url of ['javascript:alert(1)', 'JavaScript:alert(1)', '\u0001javascript:alert(1)', 'data:text/html,<script>x</script>', 'vbscript:x']) {
+    assert.equal(
+      message(() => validateLanding(text(`Fine.\n\nSee [**my** blog](${url}).`), known())),
+      '400 sections[0].body, paragraph 2: the link "my blog" must be an http, https, mailto or tel link',
+      url
+    );
+    assert.equal(message(() => validateLanding(item(`[x](${url})`), known())), '400 sections[1].items[0].text: the link "x" must be an http, https, mailto or tel link', url);
+  }
+  // A URL can't hold a space, so one hidden by a tab or newline isn't a link at all: it shows as text.
+  for (const body of ['[a](java\tscript:alert(1))', '[a](java\nscript:x)']) {
+    assert.equal(validateLanding(text(body), known()).sections[0].body, body);
+  }
+  // Safe, relative, half typed or escaped: saved as written.
+  for (const body of [
+    'At [my blog](https://jo.example), **Acme** and *more*.',
+    '[mail](mailto:jo@example.com) [call](tel:+15555550100) [home](/resume)',
+    '[half typed](https://)',
+    '\\[not a link](javascript:alert(1))',
+  ]) {
+    assert.equal(validateLanding(text(body), known()).sections[0].body, body);
+    assert.equal(validateLanding(item(body), known()).sections[1].items[0].text, body);
+  }
+  // The cap counts the text as written, markup included.
+  const long = `[${'a'.repeat(LANDING_LIMITS.text - 20)}](https://x.example)`;
+  assert.equal(status(() => validateLanding(text(long), known())), 400);
+  // Other fields are plain text, so a URL there is never a link.
+  assert.equal(validateLanding({ headline: '[x](javascript:alert(1))' }, known()).headline, '[x](javascript:alert(1))');
+});
+
 test('email and phone links save, show and keep their type', () => {
   const links = [
     { type: 'email', label: 'jo@example.com', url: 'mailto:jo@example.com' },

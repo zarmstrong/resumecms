@@ -9,6 +9,7 @@ import { rowToBlock, orderBlocksHierarchically } from './blockRows.js';
 import { DATA_DIR } from './dataDir.js';
 import { migrateToResumes, adoptLegacyRows } from './resumeMigration.js';
 import { LEGACY_PDF_PATH, PDF_DIR } from './pdfPaths.js';
+import { migrateLandingText } from './landingTextMigration.js';
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -148,6 +149,11 @@ if (!db.prepare('SELECT 1 FROM resumes LIMIT 1').get()) {
         'older version. They are ignored; the default resume reads its own rows in resume_settings.'
     );
   }
+}
+
+{
+  const escaped = migrateLandingText(db);
+  if (escaped) console.warn(`Escaped ${escaped} landing page text field(s) that would otherwise read as links or emphasis.`);
 }
 
 // RESUMECMS_ADMIN_USERNAME/RESUMECMS_APP_PASSWORD are only read here, once,
