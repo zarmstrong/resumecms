@@ -253,6 +253,7 @@ export const SITE_SCHEMA = {
 const LANDING_SECTION_BASE = {
   id: { type: 'string', description: 'Tells sections apart; omit for a new section, keep for an existing one' },
   title: { type: 'string', description: "Heading above the section; '' shows none" },
+  hidden: { type: 'boolean', description: 'true keeps it in the draft without showing it (default false)' },
 };
 
 export const LANDING_SCHEMA = {
@@ -317,6 +318,7 @@ export const LANDING_SCHEMA = {
                     title: { type: 'string' },
                     text: { type: 'string', description: 'Plain text' },
                     url: { type: 'string', description: 'Optional http, https, mailto or tel link for the title' },
+                    meta: { type: 'string', description: "Optional short line shown muted under the title, e.g. '2024 · Rust · Open source' (at most 80 characters)" },
                   },
                 },
               },
@@ -348,6 +350,38 @@ export const LANDING_SCHEMA = {
                   },
                 },
               },
+            },
+          },
+          {
+            type: 'object',
+            description: "Testimonials, at most 10; one without text isn't shown. Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'quotes' },
+              quotes: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    text: { type: 'string', description: 'Plain text, at most 600 characters' },
+                    name: { type: 'string', description: 'Who said it' },
+                    role: { type: 'string', description: "e.g. 'Engineering manager, Acme'" },
+                    url: { type: 'string', description: 'Optional http, https, mailto or tel link for the name' },
+                  },
+                },
+              },
+            },
+          },
+          {
+            type: 'object',
+            description:
+              "A short timeline of a resume's latest roles (title, company, location, dates; never descriptions or bullets) and a link to it, read from its published version when the page is requested, and shown only while it's public and published",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'experience' },
+              resumeId: { type: 'string' },
+              count: { type: 'integer', description: 'How many of its first experience entries shown on the web, 1 to 10 (default 3)' },
+              showDates: { type: 'boolean', description: 'Show dates (default true)' },
             },
           },
         ],

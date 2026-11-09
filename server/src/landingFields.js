@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { httpError } from './httpError.js';
+import { blocksForMode } from './publicBlocks.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -17,11 +18,18 @@ import { httpError } from './httpError.js';
 // published header photo), 'custom' (photoUrl) or 'none'. `sections` is
 // shown in order under the headline, each `{ id, kind, title, ... }` with
 // the fields of its kind (SECTION_FIELDS):
-//   text    — body: plain text, a blank line between paragraphs
-//   items   — items: [{ title, text, url }], e.g. projects
-//   links   — links: [{ type, label, url }]
-//   resumes — cards: [{ resumeId, label, blurb, showPdf }] linking to
-//             resumes, with the PDF next to the page when showPdf is on
+//   text       — body: plain text, a blank line between paragraphs
+//   items      — items: [{ title, text, url, meta? }], e.g. projects; meta
+//                is a short muted line under the title ("2024 · Rust")
+//   links      — links: [{ type, label, url }]
+//   resumes    — cards: [{ resumeId, label, blurb, showPdf }] linking to
+//                resumes, with the PDF next to the page when showPdf is on
+//   quotes     — quotes: [{ text, name, role, url }], testimonials
+//   experience — resumeId, count, showDates: the first `count` roles of
+//                that resume, read from its published snapshot when the
+//                page is requested (issue #90), never copied into the draft
+// Any section may also be `hidden: true` (issue #90): kept in the draft,
+// never shown. `hidden` and an item's `meta` are only stored when set.
 // `id` only tells sections apart in the editor; it never leaves the server
 // publicly. `seo` is { title, description, noindex } (issue #87): what
 // the page's <title>, description and link previews say instead of the
@@ -56,6 +64,12 @@ export const LANDING_LIMITS = {
   cards: 12,
   cardLabel: 100,
   blurb: 400,
+  itemMeta: 80,
+  quotes: 10,
+  quoteText: 600,
+  quoteName: 100,
+  quoteRole: 120,
+  experienceCount: 10,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -71,7 +85,7 @@ export const PHOTO_SOURCES = ['resume', 'custom', 'none'];
 // the badge a link is drawn with.
 export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience'];
 
 export const ACTION_TYPES = ['link', 'resume'];
 export const ACTION_OPENS = ['page', 'pdf'];
@@ -79,12 +93,17 @@ export const ACTION_OPENS = ['page', 'pdf'];
 const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'sections', 'seo', 'homeLink', 'homeLinkLabel'];
 const SEO_FIELDS = ['title', 'description', 'noindex'];
 const SECTION_FIELDS = {
-  text: ['id', 'kind', 'title', 'body'],
-  items: ['id', 'kind', 'title', 'items'],
-  links: ['id', 'kind', 'title', 'links'],
-  resumes: ['id', 'kind', 'title', 'cards'],
+  text: ['id', 'kind', 'title', 'hidden', 'body'],
+  items: ['id', 'kind', 'title', 'hidden', 'items'],
+  links: ['id', 'kind', 'title', 'hidden', 'links'],
+  resumes: ['id', 'kind', 'title', 'hidden', 'cards'],
+  quotes: ['id', 'kind', 'title', 'hidden', 'quotes'],
+  experience: ['id', 'kind', 'title', 'hidden', 'resumeId', 'count', 'showDates'],
 };
-const ITEM_FIELDS = ['title', 'text', 'url'];
+const ITEM_FIELDS = ['title', 'text', 'url', 'meta'];
+const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
+// What an experience section shows when it's added without saying.
+export const EXPERIENCE_DEFAULTS = { count: 3, showDates: true };
 const LINK_FIELDS = ['type', 'label', 'url'];
 const CARD_FIELDS = ['resumeId', 'label', 'blurb', 'showPdf'];
 const ACTION_FIELDS = {
@@ -145,10 +164,14 @@ export function upgradeLanding(stored) {
   return upgraded;
 }
 
-// Every resume `landing` names: a card's in any section, or a hero action's.
+// Every resume `landing` names: a card's in any section, an experience
+// section's, or a hero action's.
 export function referencedResumeIds(landing) {
   return new Set([
-    ...(landing.sections || []).flatMap((section) => (section.kind === 'resumes' ? section.cards.map((card) => card.resumeId) : [])),
+    ...(landing.sections || []).flatMap((section) => {
+      if (section.kind === 'resumes') return section.cards.map((card) => card.resumeId);
+      return section.kind === 'experience' ? [section.resumeId] : [];
+    }),
     ...(landing.actions || []).flatMap((action) => (action.type === 'resume' ? [action.resumeId] : [])),
   ]);
 }
@@ -273,6 +296,20 @@ function checkItem(item, label) {
     url: checkString(item.url ?? '', LANDING_LIMITS.url, `${label}.url`),
   };
   if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
+  const meta = checkString(item.meta ?? '', LANDING_LIMITS.itemMeta, `${label}.meta`);
+  if (meta !== '') out.meta = meta;
+  return out;
+}
+
+function checkQuote(quote, label) {
+  checkKeys(quote, QUOTE_FIELDS, label);
+  const out = {
+    text: checkString(quote.text ?? '', LANDING_LIMITS.quoteText, `${label}.text`),
+    name: checkString(quote.name ?? '', LANDING_LIMITS.quoteName, `${label}.name`),
+    role: checkString(quote.role ?? '', LANDING_LIMITS.quoteRole, `${label}.role`),
+    url: checkString(quote.url ?? '', LANDING_LIMITS.url, `${label}.url`),
+  };
+  if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
   return out;
 }
 
@@ -288,6 +325,7 @@ function checkSection(section, i, refs, ids) {
   if (ids.has(id)) throw httpError(400, `${label}.id is used by another section`);
   ids.add(id);
   const out = { id, kind: section.kind, title: checkString(section.title ?? '', LANDING_LIMITS.sectionTitle, `${label}.title`) };
+  if (checkBoolean(section.hidden ?? false, `${label}.hidden`)) out.hidden = true;
   switch (section.kind) {
     case 'text':
       out.body = checkString(section.body ?? '', LANDING_LIMITS.text, `${label}.body`);
@@ -305,6 +343,18 @@ function checkSection(section, i, refs, ids) {
       );
       break;
     }
+    case 'quotes':
+      out.quotes = checkList(section.quotes, LANDING_LIMITS.quotes, `${label}.quotes`).map((quote, j) => checkQuote(quote, `${label}.quotes[${j}]`));
+      break;
+    case 'experience':
+      // The same reference rules as a card's.
+      out.resumeId = checkResumeRef(section.resumeId, `${label}.resumeId`, refs);
+      out.count = section.count ?? EXPERIENCE_DEFAULTS.count;
+      if (!Number.isInteger(out.count) || out.count < 1 || out.count > LANDING_LIMITS.experienceCount) {
+        throw httpError(400, `${label}.count must be a whole number from 1 to ${LANDING_LIMITS.experienceCount}`);
+      }
+      out.showDates = checkBoolean(section.showDates ?? EXPERIENCE_DEFAULTS.showDates, `${label}.showDates`);
+      break;
   }
   return out;
 }
@@ -422,9 +472,11 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // since drops off at once and a renamed one links to its new slug:
 //   context.photoUrl — the default resume's published header photo
 //   context.site     — the default resume's published site settings
-//   context.resumes  — Map of resume id → { href, title, pdfHref } for the
-//                      resumes a visitor may see (public and published);
-//                      pdfHref is '' while the resume has no rendered PDF
+//   context.resumes  — Map of resume id → { href, title, pdfHref, experience }
+//                      for the resumes a visitor may see (public and
+//                      published); pdfHref is '' while the resume has no
+//                      rendered PDF, experience is experienceRoles() of its
+//                      published blocks
 // Cards and actions carry no resume ids and never a resume's internal name:
 // a card with no label of its own uses the resume's published header title.
 // A card's `pdfHref` is there only when it asks for one and the PDF exists;
@@ -432,7 +484,10 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // PDF) is there, a link action unless its URL is safe. Each resolved action
 // is { label, href }. A section
 // left with nothing to show (no text, no item, every link half typed, every
-// card's resume hidden) is left out, title and all; sections lose their ids.
+// card's resume hidden, every quote empty) is left out, title and all, and
+// so is a hidden one; sections lose their ids. An experience section
+// resolves to { roles, href }: its resume's first `count` roles, and that
+// resume's link for "Full resume".
 // `seo` goes along whole: everything in it ends up in the page's head and
 // its X-Robots-Tag anyway.
 export function resolveLanding(landing, context) {
@@ -447,7 +502,7 @@ export function resolveLanding(landing, context) {
     }),
     photoUrl,
     sections: landing.sections.flatMap((section) => {
-      const shown = resolveSection(section, context);
+      const shown = section.hidden ? null : resolveSection(section, context);
       return shown ? [{ kind: section.kind, title: section.title, ...shown }] : [];
     }),
     seo: { ...emptySeo(), ...landing.seo },
@@ -474,7 +529,12 @@ function resolveSection(section, context) {
     case 'items': {
       const items = section.items
         .filter((item) => item.title.trim() || item.text.trim())
-        .map((item) => ({ title: item.title, text: item.text, url: item.url !== '' && isSafeUrl(item.url) ? item.url : '' }));
+        .map((item) => ({
+          title: item.title,
+          text: item.text,
+          url: item.url !== '' && isSafeUrl(item.url) ? item.url : '',
+          ...(item.meta?.trim() ? { meta: item.meta } : {}),
+        }));
       return items.length ? { items } : null;
     }
     case 'links': {
@@ -492,7 +552,54 @@ function resolveSection(section, context) {
       });
       return cards.length ? { cards } : null;
     }
+    case 'quotes': {
+      const quotes = section.quotes
+        .filter((quote) => quote.text.trim())
+        .map((quote) => ({ text: quote.text, name: quote.name, role: quote.role, url: quote.url !== '' && isSafeUrl(quote.url) ? quote.url : '' }));
+      return quotes.length ? { quotes } : null;
+    }
+    case 'experience': {
+      const target = context.resumes.get(section.resumeId);
+      const roles = (target?.experience ?? []).slice(0, section.count).map((role) => ({
+        jobTitle: role.jobTitle,
+        company: role.company,
+        companyUrl: role.companyUrl !== '' && isSafeUrl(role.companyUrl) ? role.companyUrl : '',
+        location: role.location,
+        dates: section.showDates ? roleDates(role) : '',
+      }));
+      return roles.length ? { roles, href: target.href } : null;
+    }
     default:
       return null;
   }
+}
+
+function roleDates({ startDate, endDate }) {
+  if (startDate && endDate) return `${startDate} – ${endDate}`;
+  return startDate || endDate;
+}
+
+const roleText = (value) => (typeof value === 'string' ? value.trim() : '');
+
+// The roles an experience section may show from a resume's published
+// `blocks`: its experience blocks shown on the web (publicBlocks.js's
+// filter), in the snapshot's order, with only what the section shows (never
+// a description or a bullet), and no more than a section can ask for. One
+// with neither a title nor a company has nothing to show and is skipped.
+export function experienceRoles(blocks) {
+  return blocksForMode(Array.isArray(blocks) ? blocks : [], 'web')
+    .filter((block) => block.type === 'experience' && !block.hidden)
+    .map((block) => {
+      const data = isPlainObject(block.data) ? block.data : {};
+      return {
+        jobTitle: roleText(data.jobTitle),
+        company: roleText(data.company),
+        companyUrl: roleText(data.companyUrl),
+        location: roleText(data.location),
+        startDate: roleText(data.startDate),
+        endDate: roleText(data.endDate),
+      };
+    })
+    .filter((role) => role.jobTitle || role.company)
+    .slice(0, LANDING_LIMITS.experienceCount);
 }

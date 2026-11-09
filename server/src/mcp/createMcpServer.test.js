@@ -4,6 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from './createMcpServer.js';
 import { BLOCK_TYPES, mergeShallow } from '../resumeStore.js';
+import { SECTION_KINDS } from '../landingFields.js';
 
 // Drives the tools end to end through the SDK (client ↔ in-memory transport
 // ↔ McpServer) against a fake store, so what's tested is the tool surface —
@@ -477,6 +478,14 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi', subheadline: null, sections }, { merge: true }]);
   // a section's kind picks its fields
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'html', body: '<b>' }] })).isError, true);
+  const more = [
+    { kind: 'quotes', hidden: true, quotes: [{ text: 'Great', name: 'Ann', role: 'Manager', url: '' }] },
+    { kind: 'experience', resumeId: 'sales', count: 2, showDates: false },
+    { kind: 'items', items: [{ title: 'Tool', meta: '2024 · Rust' }] },
+  ];
+  await call('update_landing_page', { sections: more });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: more }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'experience' }] })).isError, true);
   // a resumeId isn't a landing page field (the page belongs to the install)
   await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi' }, { merge: true }]);
@@ -494,7 +503,7 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   assert.equal((await call('set_landing_page_enabled', {})).isError, true);
 
   const schemas = (await call('get_block_schemas')).json;
-  assert.equal(schemas.landing.properties.sections.items.oneOf.length, 4);
+  assert.deepEqual(schemas.landing.properties.sections.items.oneOf.map((s) => s.properties.kind.const), SECTION_KINDS);
 });
 
 test('cover letter tools: create, merge or replace on update, delete, scoped by resumeId', async (t) => {

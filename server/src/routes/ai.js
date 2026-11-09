@@ -274,8 +274,11 @@ async function landingRewrite(req, res) {
   }
   let landing;
   let profile;
+  let resumes;
   try {
     landing = copy === undefined ? store.getLanding() : store.checkLandingDraft(copy);
+    // What an experience section shows, which is public already.
+    resumes = new Map(store.getLandingContext().resumes.map((target) => [target.id, target]));
     // A blurb is about its card's resume; everything else about the person,
     // whose resume is the default. Either only while it's public and
     // published (visibleResumeSnapshot), never from a draft.
@@ -290,7 +293,7 @@ async function landingRewrite(req, res) {
     return res.status(409).json({ error: 'AI rewriting is not set up. Add an API key in Account Settings.' });
   }
   try {
-    res.json(await rewriteLanding({ landing, target, instruction, settings, profile }));
+    res.json(await rewriteLanding({ landing, target, instruction, settings, profile, resumes }));
   } catch (err) {
     if (err instanceof AiError) return res.status(err.status).json({ error: err.message });
     console.error('AI landing rewrite failed:', err);

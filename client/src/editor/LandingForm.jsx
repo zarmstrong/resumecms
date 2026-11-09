@@ -7,17 +7,29 @@ import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
-// SECTION_KINDS), what each is called here, and what a new one starts with.
+// SECTION_KINDS), what each is called here, and what a new one starts with
+// (given the editor's list of resumes).
 const SECTION_KINDS = [
   { kind: 'text', label: 'Text', addLabel: 'Text', empty: () => ({ body: '' }) },
   { kind: 'items', label: 'List', addLabel: 'List (e.g. projects)', empty: () => ({ items: [emptyItem()] }) },
   { kind: 'links', label: 'Links', addLabel: 'Links', empty: () => ({ links: [] }) },
   { kind: 'resumes', label: 'Resume cards', addLabel: 'Resume cards', empty: () => ({ cards: [] }) },
+  { kind: 'quotes', label: 'Quotes', addLabel: 'Quotes (testimonials)', empty: () => ({ quotes: [emptyQuote()] }) },
+  {
+    kind: 'experience',
+    label: 'Experience',
+    addLabel: 'Experience (latest roles from a resume)',
+    empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id, count: 3, showDates: true }),
+  },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
 function emptyItem() {
-  return { title: '', text: '', url: '' };
+  return { title: '', text: '', url: '', meta: '' };
+}
+
+function emptyQuote() {
+  return { text: '', name: '', role: '', url: '' };
 }
 
 // Only tells sections apart (React keys, and the server keeps it); not
@@ -32,11 +44,16 @@ function hasContent(section) {
     case 'text':
       return Boolean(section.body.trim());
     case 'items':
-      return section.items.some((item) => item.title.trim() || item.text.trim() || item.url.trim());
+      return section.items.some((item) => item.title.trim() || item.text.trim() || item.url.trim() || item.meta?.trim());
     case 'links':
       return section.links.length > 0;
     case 'resumes':
       return section.cards.length > 0;
+    case 'quotes':
+      return section.quotes.some((quote) => quote.text.trim() || quote.name.trim() || quote.role.trim() || quote.url.trim());
+    case 'experience':
+      // Nothing typed but its heading: its roles come from the resume.
+      return false;
     default:
       return false;
   }
@@ -105,7 +122,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
   };
   const addSection = (kind) => {
     const config = SECTION_KINDS.find((k) => k.kind === kind);
-    setSections([...sections, { id: newSectionId(), kind, title: '', ...config.empty() }]);
+    setSections([...sections, { id: newSectionId(), kind, title: '', ...config.empty(resumes) }]);
   };
 
   return (
@@ -193,6 +210,11 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai })
               placeholder="Heading (optional)"
               aria-label="Section heading"
             />
+            <label className="ed-field ed-checkbox-field">
+              <input type="checkbox" checked={Boolean(section.hidden)} onChange={(e) => setSection(i, { hidden: e.target.checked })} />
+              Hide this section
+            </label>
+            {section.hidden && <span className="ed-field-hint">Kept here, but not shown on the page.</span>}
             <SectionFields
               section={section}
               onChange={(patch) => setSection(i, patch)}
@@ -377,9 +399,118 @@ function SectionFields({ section, onChange, resumes, context, limits, ai }) {
           ai={ai}
         />
       );
+    case 'quotes':
+      return <QuotesFields quotes={section.quotes} onChange={(quotes) => onChange({ quotes })} limits={limits} />;
+    case 'experience':
+      return <ExperienceFields section={section} onChange={onChange} resumes={resumes} context={context} limits={limits} />;
     default:
       return null;
   }
+}
+
+// Testimonials (issue #90). No ✨ here: they're someone else's words.
+function QuotesFields({ quotes, onChange, limits }) {
+  const setQuote = (i, patch) => onChange(quotes.map((quote, idx) => (idx === i ? { ...quote, ...patch } : quote)));
+  return (
+    <>
+      {quotes.map((quote, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Quote {i + 1}</span>
+            <RowActions
+              index={i}
+              count={quotes.length}
+              onMove={(delta) => onChange(moved(quotes, i, delta))}
+              onRemove={() => onChange(quotes.filter((_, idx) => idx !== i))}
+              what="quote"
+            />
+          </div>
+          <textarea
+            className="ed-input"
+            rows={3}
+            value={quote.text}
+            maxLength={limits?.quoteText}
+            onChange={(e) => setQuote(i, { text: e.target.value })}
+            placeholder="What they said"
+            aria-label="Quote"
+          />
+          <input
+            className="ed-input"
+            value={quote.name}
+            maxLength={limits?.quoteName}
+            onChange={(e) => setQuote(i, { name: e.target.value })}
+            placeholder="Who said it, e.g. Jane Smith"
+            aria-label="Quote by"
+          />
+          <input
+            className="ed-input"
+            value={quote.role}
+            maxLength={limits?.quoteRole}
+            onChange={(e) => setQuote(i, { role: e.target.value })}
+            placeholder="Their role (optional), e.g. Engineering manager, Acme"
+            aria-label="Their role"
+          />
+          <input
+            className="ed-input"
+            value={quote.url}
+            maxLength={limits?.url}
+            onChange={(e) => setQuote(i, { url: e.target.value })}
+            placeholder="Link for their name (optional), https://…"
+            aria-label="Quote link"
+          />
+        </div>
+      ))}
+      {(!limits || quotes.length < limits.quotes) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...quotes, emptyQuote()])}>
+          + Add quote
+        </button>
+      )}
+      <span className="ed-field-hint">A quote without text isn't shown.</span>
+    </>
+  );
+}
+
+// A short timeline of a resume's latest roles (issue #90), read from what
+// it has published each time the page is shown: nothing is copied here.
+function ExperienceFields({ section, onChange, resumes, context, limits }) {
+  const known = resumes.some((r) => r.id === section.resumeId);
+  const status = cardStatus(section.resumeId, resumes, context);
+  const roles = context.resumes.find((r) => r.id === section.resumeId)?.experience ?? [];
+  const max = limits?.experienceCount ?? 10;
+  return (
+    <>
+      <select className="ed-input" value={section.resumeId} onChange={(e) => onChange({ resumeId: e.target.value })} aria-label="Which resume">
+        {!known && <option value={section.resumeId}>Deleted resume</option>}
+        {resumes.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.name}
+          </option>
+        ))}
+      </select>
+      {status && <span className="ed-field-hint ed-landing-card-status">{status}</span>}
+      {!status && roles.length === 0 && (
+        <span className="ed-field-hint ed-landing-card-status">Its published version has no experience shown on the web, so nothing is shown.</span>
+      )}
+      <label className="ed-field">
+        <span>Roles to show</span>
+        <select className="ed-input" value={section.count} onChange={(e) => onChange({ count: Number(e.target.value) })}>
+          {Array.from({ length: max }, (_, n) => n + 1).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="ed-field ed-checkbox-field">
+        <input type="checkbox" checked={Boolean(section.showDates)} onChange={(e) => onChange({ showDates: e.target.checked })} />
+        Show dates
+      </label>
+      <span className="ed-field-hint">
+        The first experience entries the resume shows on the web, as last published: title, company, location and dates, never
+        descriptions or bullets. Ends with a link to the full resume.
+      </span>
+    </>
+  );
 }
 
 function ItemsFields({ sectionId, items, onChange, limits, ai }) {
@@ -405,6 +536,14 @@ function ItemsFields({ sectionId, items, onChange, limits, ai }) {
             onChange={(e) => setItem(i, { title: e.target.value })}
             placeholder="Title, e.g. a project's name"
             aria-label="Item title"
+          />
+          <input
+            className="ed-input"
+            value={item.meta ?? ''}
+            maxLength={limits?.itemMeta}
+            onChange={(e) => setItem(i, { meta: e.target.value })}
+            placeholder="A short line under the title (optional), e.g. 2024 · Rust · Open source"
+            aria-label="Item details"
           />
           <input
             className="ed-input"

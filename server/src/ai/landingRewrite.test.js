@@ -194,3 +194,60 @@ test('rewriteLanding needs an instruction except for an intro, and a valid targe
   const { proposals } = await rewriteLanding({ landing, target: { kind: 'intro', sectionId: 'intro' }, instruction: '', settings, callModel });
   assert.equal(proposals.length, 3);
 });
+
+test('quotes, experience sections and meta lines are never a target', async () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      { id: 'quotes', kind: 'quotes', title: 'Kind words', quotes: [{ text: 'Great to work with.', name: 'Ann', role: 'Manager', url: '' }] },
+      { id: 'work', kind: 'experience', title: 'Recent work', resumeId: 'r1', count: 2, showDates: true },
+    ],
+  };
+  for (const target of [
+    { kind: 'quote', sectionId: 'quotes', index: 0 },
+    { kind: 'quotes', sectionId: 'quotes' },
+    { kind: 'item', sectionId: 'quotes', index: 0 },
+    { kind: 'text', sectionId: 'quotes' },
+    { kind: 'experience', sectionId: 'work' },
+    { kind: 'text', sectionId: 'work' },
+    { kind: 'meta', sectionId: 'proj', index: 0 },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+  let called = false;
+  const callModel = async () => {
+    called = true;
+    return { explanation: '', rewrite: { text: 'Rewritten' } };
+  };
+  const target = { kind: 'quote', sectionId: 'quotes', index: 0 };
+  await assert.rejects(rewriteLanding({ landing: page, target, instruction: 'Punchier', settings, callModel }), { status: 400 });
+  assert.equal(called, false);
+});
+
+test('the page context leaves hidden sections out, and shows quotes, meta lines and roles as a visitor reads them', () => {
+  const page = {
+    ...landing,
+    sections: [
+      { id: 'intro', kind: 'text', title: '', body: 'I build things.' },
+      { id: 'now', kind: 'text', title: 'Now', body: 'Reading a secret book.', hidden: true },
+      { id: 'proj', kind: 'items', title: 'Projects', items: [{ title: 'Widget', text: 'A widget.', url: '', meta: '2024 · Rust' }] },
+      { id: 'quotes', kind: 'quotes', title: '', quotes: [{ text: 'Great to work with.', name: 'Ann', role: 'Manager', url: 'https://ann.example' }] },
+      { id: 'work', kind: 'experience', title: 'Recent work', resumeId: 'r1', count: 1, showDates: true },
+    ],
+  };
+  const experience = [
+    { jobTitle: 'SRE', company: 'Acme', companyUrl: 'https://acme.example', location: 'Remote', startDate: '2022', endDate: 'Present' },
+    { jobTitle: 'Dev', company: 'Beta', companyUrl: '', location: '', startDate: '2019', endDate: '2022' },
+  ];
+  const resumes = new Map([['r1', { href: '/r/eng', title: 'Engineer', experience }]]);
+  const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null, resumes);
+  assert.ok(!user.includes('secret book'));
+  for (const shown of ['2024 · Rust', 'Great to work with.', 'Ann', 'SRE', 'Acme', '2022 – Present']) assert.ok(user.includes(shown), shown);
+  for (const left of ['Beta', 'https://', '/r/eng', '"r1"']) assert.ok(!user.includes(left), left);
+  // A hidden section the target is in stays, so its spot is marked.
+  const inHidden = buildLandingPrompt(page, { kind: 'text', sectionId: 'now' }, 'Shorter', null, resumes).user;
+  const context = inHidden.slice(inHidden.indexOf('The rest of the page'), inHidden.indexOf('Section to rewrite'));
+  assert.match(context, /"title": "Now"/);
+  assert.match(context, /\[the part being rewritten\]/);
+});

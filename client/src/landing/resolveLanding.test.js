@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { textParagraphs, resolveLanding } from './resolveLanding.js';
+import * as server from '../../../server/src/landingFields.js';
 
 const draft = {
   headline: 'Jo',
@@ -105,6 +106,52 @@ test('hero actions and card PDFs resolve like the server does', () => {
   assert.deepEqual(resolveLanding(draft, ctx).actions, []);
   assert.equal(resolveLanding(draft, ctx).availability, '');
   assert.deepEqual(resolveLanding(landing, null).actions.map((a) => a.label), ['Email me', 'https://cal.example/jo']);
+});
+
+test('hidden sections, quotes, meta lines and experience resolve exactly like the server', () => {
+  const roles = [
+    { jobTitle: 'SRE', company: 'Acme', companyUrl: 'https://acme.example', location: 'Remote', startDate: '2022', endDate: 'Present' },
+    { jobTitle: 'Dev', company: 'Beta', companyUrl: 'java\tscript:alert(1)', location: '', startDate: '2019', endDate: '' },
+    { jobTitle: '', company: 'Gamma', companyUrl: '', location: '', startDate: '', endDate: '2018' },
+  ];
+  const resumes = [
+    { id: 'main', href: '/resume', title: 'Engineer', pdfHref: '', experience: roles },
+    { id: 'empty', href: '/r/empty', title: '', pdfHref: '', experience: [] },
+  ];
+  const landing = {
+    ...draft,
+    sections: [
+      { id: 'now', kind: 'text', title: 'Now', body: 'Reading', hidden: true },
+      { id: 'proj', kind: 'items', title: '', items: [{ title: 'Tool', text: '', url: '', meta: '2024 · Rust' }, { title: 'B', text: '', url: '', meta: ' ' }] },
+      {
+        id: 'q',
+        kind: 'quotes',
+        title: 'Kind words',
+        quotes: [
+          { text: 'Great.', name: 'Ann', role: 'Manager', url: 'https://ann.example' },
+          { text: ' ', name: 'Nobody', role: '', url: '' },
+          { text: 'Fine.', name: '', role: '', url: 'java\tscript:x' },
+        ],
+      },
+      { id: 'q2', kind: 'quotes', title: 'Empty', quotes: [] },
+      { id: 'x', kind: 'experience', title: 'Recent', resumeId: 'main', count: 2, showDates: true },
+      { id: 'y', kind: 'experience', title: '', resumeId: 'main', count: 10, showDates: false },
+      { id: 'z', kind: 'experience', title: 'Private', resumeId: 'private', count: 3, showDates: true },
+      { id: 'e', kind: 'experience', title: 'None', resumeId: 'empty', count: 3, showDates: true },
+      { id: 'h', kind: 'experience', title: 'Hidden', resumeId: 'main', count: 1, showDates: true, hidden: true },
+    ],
+  };
+  const out = resolveLanding(landing, { ...context, resumes });
+  const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map(resumes.map((r) => [r.id, r])) });
+  assert.deepEqual(out.sections, fromServer.sections);
+  assert.deepEqual(out.sections.map((s) => s.title), ['', 'Kind words', 'Recent', '']);
+  assert.equal(out.sections[2].roles[0].dates, '2022 – Present');
+  assert.equal(out.sections[2].roles[1].companyUrl, '');
+
+  // The editor's preview keeps a hidden section, marked, for it to dim.
+  const preview = resolveLanding(landing, { ...context, resumes }, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.filter((s) => s.hidden).map((s) => s.id), ['now', 'h']);
+  assert.equal(preview.sections.find((s) => s.id === 'now').body, 'Reading');
 });
 
 test('a text section splits into paragraphs on blank lines', () => {

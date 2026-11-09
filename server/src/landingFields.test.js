@@ -4,6 +4,7 @@ import {
   LANDING_LIMITS,
   referencedResumeIds,
   emptyLanding,
+  experienceRoles,
   initialLanding,
   isSafeUrl,
   mergeLandingPatch,
@@ -487,4 +488,174 @@ test('homeLinkLabel is a short string, empty unless set, and never part of what 
   assert.equal(upgradeLanding(old).homeLinkLabel, '');
   assert.equal(upgradeLanding(named).homeLinkLabel, 'Jo');
   assert.equal('homeLinkLabel' in resolveLanding(named, { resumes: new Map() }), false);
+});
+
+test('any section can be hidden: kept in the draft, never shown', () => {
+  const draft = validateLanding(
+    {
+      sections: [
+        { id: 'now', kind: 'text', title: 'Now', body: 'Reading', hidden: true },
+        { id: 'intro', kind: 'text', body: 'Hi', hidden: false },
+      ],
+    },
+    known()
+  );
+  // Only stored when set.
+  assert.deepEqual(draft.sections, [
+    { id: 'now', kind: 'text', title: 'Now', body: 'Reading', hidden: true },
+    { id: 'intro', kind: 'text', title: '', body: 'Hi' },
+  ]);
+  const out = resolveLanding(draft, { resumes: new Map() });
+  assert.deepEqual(out.sections, [{ kind: 'text', title: '', body: 'Hi' }]);
+  assert.equal(JSON.stringify(out).includes('Reading'), false);
+  assert.equal(status(() => validateLanding({ sections: [{ id: 's', kind: 'links', hidden: 'yes' }] }, known())), 400);
+});
+
+test('an item may carry a short meta line, stored and shown only when set', () => {
+  const draft = validateLanding(
+    { sections: [{ id: 'i', kind: 'items', items: [{ title: 'Tool', meta: '2024 · Rust' }, { title: 'Other', meta: '' }, { title: 'Third', meta: '  ' }] }] },
+    known()
+  );
+  assert.deepEqual(draft.sections[0].items, [
+    { title: 'Tool', text: '', url: '', meta: '2024 · Rust' },
+    { title: 'Other', text: '', url: '' },
+    { title: 'Third', text: '', url: '', meta: '  ' },
+  ]);
+  assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections[0].items, [
+    { title: 'Tool', text: '', url: '', meta: '2024 · Rust' },
+    { title: 'Other', text: '', url: '' },
+    { title: 'Third', text: '', url: '' },
+  ]);
+  const item = (meta) => ({ sections: [{ id: 'i', kind: 'items', items: [{ title: 'T', meta }] }] });
+  assert.equal(status(() => validateLanding(item('x'.repeat(LANDING_LIMITS.itemMeta + 1)), known())), 400);
+  assert.equal(status(() => validateLanding(item(5), known())), 400);
+});
+
+test('quotes are checked strictly, and an empty one is dropped', () => {
+  const quotes = (list) => ({ sections: [{ id: 'q', kind: 'quotes', title: 'Kind words', quotes: list }] });
+  const first = { text: 'Great to work with.', name: 'Ann', role: 'Manager, Acme', url: 'https://ann.example' };
+  const draft = validateLanding(quotes([first, { name: 'Nobody' }]), known());
+  assert.deepEqual(draft.sections[0].quotes, [first, { text: '', name: 'Nobody', role: '', url: '' }]);
+  assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections, [{ kind: 'quotes', title: 'Kind words', quotes: [first] }]);
+  // A section with no quote left to show goes, heading and all.
+  assert.deepEqual(resolveLanding(validateLanding(quotes([{ text: ' ', name: 'Ann' }]), known()), { resumes: new Map() }).sections, []);
+  const half = validateLanding(quotes([{ text: 'Hi', url: 'https://' }]), known());
+  assert.equal(resolveLanding(half, { resumes: new Map() }).sections[0].quotes[0].url, '');
+
+  const bad = [
+    quotes([{ text: 'x'.repeat(LANDING_LIMITS.quoteText + 1) }]),
+    quotes([{ text: 'Hi', name: 'x'.repeat(LANDING_LIMITS.quoteName + 1) }]),
+    quotes([{ text: 'Hi', role: 'x'.repeat(LANDING_LIMITS.quoteRole + 1) }]),
+    quotes([{ text: 'Hi', url: 'java\tscript:alert(1)' }]),
+    quotes([{ text: 'Hi', photo: 'x' }]),
+    quotes([{ text: 5 }]),
+    quotes('Hi'),
+    quotes(Array.from({ length: LANDING_LIMITS.quotes + 1 }, () => ({ text: 'Hi' }))),
+    { sections: [{ id: 'q', kind: 'quotes', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
+});
+
+test('an experience section follows the reference rules of a card, with a count from 1 to 10', () => {
+  const section = (extra) => ({ sections: [{ id: 'x', kind: 'experience', ...extra }] });
+  assert.deepEqual(validateLanding(section({ resumeId: 'a' }), known('a')).sections[0], {
+    id: 'x',
+    kind: 'experience',
+    title: '',
+    resumeId: 'a',
+    count: 3,
+    showDates: true,
+  });
+  const set = validateLanding(section({ resumeId: 'a', count: 10, showDates: false }), known('a')).sections[0];
+  assert.deepEqual([set.count, set.showDates], [10, false]);
+  for (const extra of [
+    { resumeId: 'gone' },
+    {},
+    { resumeId: 'a', count: 0 },
+    { resumeId: 'a', count: LANDING_LIMITS.experienceCount + 1 },
+    { resumeId: 'a', count: 2.5 },
+    { resumeId: 'a', count: '3' },
+    { resumeId: 'a', showDates: 'yes' },
+    { resumeId: 'a', blockIds: ['b1'] },
+  ]) {
+    assert.equal(status(() => validateLanding(section(extra), known('a'))), 400, JSON.stringify(extra));
+  }
+  // One already in the draft may outlive its resume, and counts as a reference.
+  const kept = validateLanding(section({ resumeId: 'gone' }), { knownResumeIds: new Set(['a']), previousResumeIds: new Set(['gone']) });
+  assert.equal(kept.sections[0].resumeId, 'gone');
+  assert.deepEqual([...referencedResumeIds(kept)], ['gone']);
+});
+
+test('experienceRoles reads only web-visible experience entries, in order, without descriptions or bullets', () => {
+  const block = (id, type, data, flags = {}) => ({ id, type, parentId: null, visibleWeb: true, visiblePrint: true, data, ...flags });
+  const blocks = [
+    block('h', 'heading', { text: 'Experience' }),
+    block('e1', 'experience', {
+      jobTitle: ' SRE ',
+      company: 'Acme',
+      companyUrl: 'https://acme.example',
+      location: 'Remote',
+      startDate: '2022',
+      endDate: 'Present',
+      description: 'Secret sauce',
+      bullets: [{ text: 'Did a thing' }],
+    }),
+    block('e2', 'experience', { jobTitle: 'Print only', company: 'Hidden Co' }, { visibleWeb: false }),
+    block('s', 'summary', { text: 'Not a role' }),
+    block('e3', 'experience', { jobTitle: '', company: '' }),
+    block('e4', 'experience', { company: 'Beta' }),
+    block('e5', 'experience', null),
+  ];
+  assert.deepEqual(experienceRoles(blocks), [
+    { jobTitle: 'SRE', company: 'Acme', companyUrl: 'https://acme.example', location: 'Remote', startDate: '2022', endDate: 'Present' },
+    { jobTitle: '', company: 'Beta', companyUrl: '', location: '', startDate: '', endDate: '' },
+  ]);
+  assert.deepEqual(experienceRoles(undefined), []);
+  const many = Array.from({ length: 15 }, (_, i) => block(`m${i}`, 'experience', { jobTitle: `Role ${i}` }));
+  assert.equal(experienceRoles(many).length, LANDING_LIMITS.experienceCount);
+});
+
+test("an experience section resolves its resume's first roles, without ids", () => {
+  const roles = [
+    { jobTitle: 'SRE', company: 'Acme', companyUrl: 'https://acme.example', location: 'Remote', startDate: '2022', endDate: 'Present' },
+    { jobTitle: 'Dev', company: 'Beta', companyUrl: 'java\tscript:alert(1)', location: '', startDate: '2019', endDate: '' },
+    { jobTitle: 'Intern', company: 'Gamma', companyUrl: '', location: '', startDate: '', endDate: '2018' },
+  ];
+  const context = { resumes: new Map([['main', { href: '/resume', title: 'Engineer', pdfHref: '', experience: roles }]]) };
+  const landing = {
+    ...emptyLanding(),
+    sections: [
+      { id: 'x', kind: 'experience', title: 'Recently', resumeId: 'main', count: 2, showDates: true },
+      { id: 'y', kind: 'experience', title: 'No dates', resumeId: 'main', count: 10, showDates: false },
+      { id: 'z', kind: 'experience', title: 'Private', resumeId: 'private', count: 3, showDates: true },
+      { id: 'w', kind: 'experience', title: 'Hidden', resumeId: 'main', count: 3, showDates: true, hidden: true },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  assert.deepEqual(out.sections, [
+    {
+      kind: 'experience',
+      title: 'Recently',
+      href: '/resume',
+      roles: [
+        { jobTitle: 'SRE', company: 'Acme', companyUrl: 'https://acme.example', location: 'Remote', dates: '2022 – Present' },
+        { jobTitle: 'Dev', company: 'Beta', companyUrl: '', location: '', dates: '2019' },
+      ],
+    },
+    {
+      kind: 'experience',
+      title: 'No dates',
+      href: '/resume',
+      roles: [
+        { jobTitle: 'SRE', company: 'Acme', companyUrl: 'https://acme.example', location: 'Remote', dates: '' },
+        { jobTitle: 'Dev', company: 'Beta', companyUrl: '', location: '', dates: '' },
+        { jobTitle: 'Intern', company: 'Gamma', companyUrl: '', location: '', dates: '' },
+      ],
+    },
+  ]);
+  const body = JSON.stringify(out);
+  for (const leak of ['resumeId', '"main"', 'private', 'Private', 'Hidden']) assert.equal(body.includes(leak), false, leak);
+  // A resume with no roles to show takes the section off.
+  const none = { resumes: new Map([['main', { href: '/resume', title: '', pdfHref: '', experience: [] }]]) };
+  assert.deepEqual(resolveLanding(landing, none).sections, []);
 });

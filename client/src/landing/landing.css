@@ -152,6 +152,13 @@ a.l-item-title:hover {
   overflow-wrap: anywhere;
 }
 
+.l-item-meta {
+  margin: 0;
+  font-size: 0.88em;
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+}
+
 .l-links {
   list-style: none;
   display: flex;
@@ -242,6 +249,117 @@ a.l-item-title:hover {
   padding-top: 6px;
   font-size: 0.9em;
   color: var(--r-accent, var(--slate));
+}
+
+/* Quotes and the experience timeline (issue #90). */
+.l-quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.l-quote {
+  margin: 0;
+  padding-left: 18px;
+  border-left: 3px solid color-mix(in srgb, var(--r-accent, var(--ink)) 55%, transparent);
+}
+
+.l-quote-text {
+  margin: 0;
+  font-size: 1.05em;
+  font-style: italic;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.l-quote-by {
+  margin-top: 6px;
+  font-size: 0.9em;
+  opacity: 0.8;
+}
+
+.l-quote-name {
+  font-weight: 600;
+  color: inherit;
+}
+
+a.l-quote-name,
+a.l-role-company,
+.l-roles-more {
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);
+}
+
+a.l-quote-name:hover,
+a.l-role-company:hover,
+.l-roles-more:hover {
+  border-bottom-color: var(--r-accent, var(--ink));
+}
+
+.l-roles {
+  list-style: none;
+  padding: 0 0 0 18px;
+  margin: 0 0 14px;
+  border-left: 2px solid color-mix(in srgb, var(--r-text, var(--ink)) 18%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.l-role {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A dot on the timeline's line. */
+.l-role::before {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 0.5em;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--r-accent, var(--ink));
+}
+
+.l-role-title {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+a.l-role-company {
+  color: inherit;
+}
+
+.l-role-meta {
+  font-size: 0.88em;
+  opacity: 0.7;
+}
+
+.l-roles-more {
+  color: var(--r-accent, var(--slate));
+  font-size: 0.95em;
+}
+
+/* The editor's preview: a section hidden from the page. */
+.l-section-hidden > :not(.l-hidden-label) {
+  opacity: 0.35;
+}
+
+.l-hidden-label {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--r-text, var(--ink));
+  background: color-mix(in srgb, var(--r-text, var(--ink)) 10%, transparent);
 }
 
 @media (max-width: 560px) {

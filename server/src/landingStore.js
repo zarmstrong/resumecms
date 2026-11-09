@@ -1,7 +1,16 @@
 import { httpError } from './httpError.js';
 import { createSettings, createResumeSettings } from './settings.js';
 import { requestHostKey } from './hostnames.js';
-import { HOME_LINK, initialLanding, mergeLandingPatch, referencedResumeIds, resolveLanding, upgradeLanding, validateLanding } from './landingFields.js';
+import {
+  HOME_LINK,
+  experienceRoles,
+  initialLanding,
+  mergeLandingPatch,
+  referencedResumeIds,
+  resolveLanding,
+  upgradeLanding,
+  validateLanding,
+} from './landingFields.js';
 import { pdfPathFor, pdfVersionOf } from './pdfPaths.js';
 
 // The landing page's storage and publishing (issue #70), composed into the
@@ -124,8 +133,9 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
 
   // What the page's references point at right now, for resolveLanding():
   // the default resume's published photo and look, and every resume a
-  // visitor may open (public and published) with its link and its PDF's.
-  // The default lives at /resume while the landing page holds `/`.
+  // visitor may open (public and published) with its link, its PDF's and
+  // the roles an experience section may show from it. The default lives at
+  // /resume while the landing page holds `/`.
   function landingContext() {
     const defaultId = defaultResumeId();
     const defaultPublished = publishedResumeOf(defaultId);
@@ -143,6 +153,7 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
           href: row.id === defaultId ? '/resume' : `/r/${row.slug}`,
           title: JSON.parse(row.value)?.header?.title || '',
           pdfHref: pdfHref(row, row.id === defaultId),
+          experience: experienceRoles(JSON.parse(row.value)?.blocks),
         },
       ])
     );
@@ -151,7 +162,8 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
 
   // The same, as JSON for the editor, whose preview resolves the draft
   // against it as someone types (client/src/landing/resolveLanding.js
-  // mirrors resolveLanding()).
+  // mirrors resolveLanding()). Also what an AI rewrite of the page reads an
+  // experience section's roles from.
   function getLandingContext() {
     const { photoUrl, site, resumes } = landingContext();
     return { photoUrl, site, resumes: [...resumes].map(([id, target]) => ({ id, ...target })) };
