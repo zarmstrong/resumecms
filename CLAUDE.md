@@ -248,7 +248,9 @@ install, not to a resume, so it lives in the global `settings` table:
 `server/src/landingStore.js` holds the operations and is composed into the
 store by `createResumeStore()`; validation and the public shape are pure, in
 `landingFields.js`. It isn't blocks: `{ headline, subheadline, photo,
-photoUrl, sections }`, where `sections` is an ordered list of
+photoUrl, sections, seo }` (`seo` is `{ title, description, noindex }`, see
+"Search and link previews"; `mergeLandingPatch()` merges it one level
+deep), where `sections` is an ordered list of
 `{ id, kind, title, ... }` with only the fields of its kind
 (`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url }]`),
 `links` and `resumes` (cards `{ resumeId, label, blurb }`). The `id` is
@@ -317,6 +319,50 @@ logout. Its preview resolves the local draft with
 rewrites" below. While the page is shown (`landingShown()` in
 `resumeLinks.js`), `publicUrl()` gives the default resume's link as
 `/resume`.
+
+### Search and link previews
+
+Issue #87. Link-preview crawlers and most search crawlers don't run the
+app's JavaScript, so the HTML shell carries each public page's `<title>`,
+description, Open Graph/Twitter tags, canonical link and (landing page and
+a resume at `/` or `/resume`, never `/r/<slug>`) a JSON-LD `Person`.
+`clientStatic.js` reads `index.html` (re-read when its mtime changes,
+`shellWatcher()`) and swaps its `<title>` for `headFor(req)`'s tags;
+`shellHead.js` decides which page a path is by asking the store exactly
+what that page's own fetch would (`landingForHost()`, `forHost()`,
+`forPublicSlug()`), and returns null (index.html's generic tags) for
+everything else, for an unknown, private or unpublished slug, and when the
+store throws. The tags themselves are pure, in `pageMeta.js`
+(`resumePage()`, `landingPage()`, `headTags()`, all escaping in one
+place); `client/src/share/pageMeta.js` mirrors its title and description
+rules for the editor's preview and the public pages' `document.title`,
+and its test compares the two directly. Everything comes from published
+snapshots (a resume's `getPublishedResume('web')`, so a block hidden on
+the web is a placeholder and never the description), and from what the
+page shows. A resume's overrides are `site.title` (also the tab title) and
+`site.description`, so they're drafted, published and discarded with the
+site settings; the landing page's are its `seo`. `seo.noindex` adds
+`X-Robots-Tag: noindex` to `/` while the landing page is what it shows.
+
+The image is a share card when one is drawn, else the photo.
+`shareImages.js` (pure) keys both by a hash of what they show: a photo by
+its `data:` URL, a card by `cardContent()` (name, title, photo and only the
+colors and fonts it's drawn in) plus `CARD_DESIGN_VERSION`, which must be
+bumped when `client/src/share/ShareCard.jsx` changes. `shareStore.js`
+(composed into the store like the landing store) renders cards on the PDF
+queue (`withPdfLock`, the render timeout) as `<pdfDir>/cards/<key>.png`:
+`publish()`, `publishLanding()`, `setLandingEnabled()` and boot call
+`refreshShareCards()`, and a page whose card isn't drawn yet names the
+photo and queues it (`readyCardKey()`). A failed render isn't retried for
+`CARD_RETRY_MS`, cards no public page shows are deleted after each render,
+and nobody waits on a card: a publish never fails over one. The renderer
+(`renderShareCard()`) loads `/print/card` with the content set as
+`window.__SHARE_CARD__` before the page's scripts run, so no endpoint
+serves card content, and screenshots 1200×630. `GET
+/api/public/images/:key` serves an image only while `publicPages()` (the
+shown landing page and every public, published resume) still shows it, so
+taking a resume private takes its photo and card down with it; keep that
+check if you add an image.
 
 ### Route mount order matters
 
@@ -764,7 +810,9 @@ Chromium's children.
 
 Every public response carries an explicit `Cache-Control` from
 `server/src/cacheHeaders.js`: `no-cache` for `/api/public/resume`,
-`/api/public/resumes/:slug` and the HTML shell, `private, no-cache` for
+`/api/public/resumes/:slug`, `/api/public/images/:key` and the HTML shell
+(which also sends `HOST_HEADERS` as `Vary`, since its tags name the
+host's resume and origin; see "Search and link previews"), `private, no-cache` for
 every PDF route, `immutable` for the hashed
 files Vite's build manifest lists (`build.manifest` in
 `client/vite.config.js` → `dist/.vite/manifest.json`, re-read whenever its

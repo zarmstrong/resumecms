@@ -7,6 +7,7 @@ import { accessLogger } from './logger.js';
 import { store } from './store.js';
 import { applyTrustProxy } from './trustProxy.js';
 import { mountClient } from './clientStatic.js';
+import { createShellHead } from './shellHead.js';
 import { closeBrowser } from './pdfRenderer.js';
 import { createShutdown } from './shutdown.js';
 
@@ -61,7 +62,7 @@ app.use(
 // route further down actually matches) and get rejected there instead.
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/totp', totpRoutes); // /api/auth/totp/status, /setup, /confirm, /disable (auth-gated)
-app.use('/api/public', publicRoutes); // /api/public/resume, /api/public/home, /api/public/resumes/:slug, /api/public/letter (renderer only)
+app.use('/api/public', publicRoutes); // /api/public/resume, /api/public/home, /api/public/resumes/:slug, /api/public/images/:key, /api/public/letter (renderer only)
 app.use('/api/public', pdfRoutes); // /api/public/resume.pdf, /api/public/resumes/:slug/resume.pdf
 app.use('/api/ai', aiRoutes); // /api/ai/settings, /api/ai/rewrite (auth-gated)
 app.use('/api/resumes', resumeRoutes); // /api/resumes[/:id], plus every editor route under /api/resumes/:id/ (auth-gated)
@@ -78,8 +79,9 @@ app.use('/api', (req, res) => {
 });
 
 // Serve the built client (Vite output) for everything else — see
-// clientStatic.js for the SPA fallback and the cache policy.
-mountClient(app, path.join(__dirname, '..', '..', 'client', 'dist'));
+// clientStatic.js for the SPA fallback and the cache policy, and
+// shellHead.js for the public pages' titles and link previews.
+mountClient(app, path.join(__dirname, '..', '..', 'client', 'dist'), { headFor: createShellHead(store) });
 
 const server = app.listen(PORT, () => {
   console.log(`resume server listening on port ${PORT}`);
@@ -102,6 +104,8 @@ const server = app.listen(PORT, () => {
       errors.forEach(({ resumeId, error }) => console.error(`Initial PDF generation failed for resume ${resumeId}:`, error))
     )
     .catch((err) => console.error('Initial PDF generation failed:', err));
+  // And the link previews' cards (shareStore.js), queued behind those.
+  store.refreshShareCards();
 });
 
 const shutdown = createShutdown({ server, closeBrowser, closeDb: () => db.close() });

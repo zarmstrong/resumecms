@@ -1,6 +1,40 @@
 import express from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import { NOINDEX, REVALIDATE, hashedAssetsWatcher, looksLikeFile, staticCacheControl } from './cacheHeaders.js';
+import { HOST_HEADERS } from './hostnames.js';
+
+// index.html's text, re-read whenever its mtime changes (as
+// hashedAssetsWatcher re-reads the manifest), so a rebuild under a running
+// server is picked up. Null while there's no file.
+export function shellWatcher(indexHtml) {
+  let loadedMtime = null;
+  let html = null;
+  return () => {
+    let mtime = null;
+    try {
+      mtime = fs.statSync(indexHtml).mtimeMs;
+    } catch {
+      return null;
+    }
+    if (mtime !== loadedMtime) {
+      try {
+        html = fs.readFileSync(indexHtml, 'utf8');
+        loadedMtime = mtime;
+      } catch {
+        return null;
+      }
+    }
+    return html;
+  };
+}
+
+// `html` with a page's own head tags (shellHead.js) in place of its
+// generic <title>, or added at the end of its head if it has none.
+export function withHead(html, head) {
+  if (/<title>[\s\S]*?<\/title>/i.test(html)) return html.replace(/<title>[\s\S]*?<\/title>/i, () => head);
+  return html.replace(/<\/head>/i, () => `${head}\n  </head>`);
+}
 
 // Serve the built client (Vite output) for everything the API routes didn't
 // claim, including client-side routes like /editor and /print — the SPA
@@ -11,7 +45,12 @@ import { NOINDEX, REVALIDATE, hashedAssetsWatcher, looksLikeFile, staticCacheCon
 // instead of letting express.static answer it with its own defaults, and
 // `redirect: false` keeps it from answering a directory path (`/assets`)
 // with a 301 that carries no cache policy of ours.
-export function mountClient(app, clientDist) {
+//
+// `headFor(req)` (shellHead.js) gives a public page's own title,
+// description and link-preview tags, or null to keep index.html's; it
+// depends on the host (which resume, which origin in the URLs), so every
+// shell response varies on it.
+export function mountClient(app, clientDist, { headFor = () => null } = {}) {
   const hashedAssets = hashedAssetsWatcher(clientDist);
   app.use(
     express.static(clientDist, {
@@ -23,24 +62,24 @@ export function mountClient(app, clientDist) {
     })
   );
 
-  // The file is a fixed path of ours, not derived from the request, so
-  // `dotfiles: 'allow'` is safe — without it sendFile 404s whenever the
-  // checkout lives under a dot directory (e.g. a .claude/worktrees clone).
-  // (express.static above is unaffected: its dotfiles check only looks at
-  // the request path, not the root.)
   // Express 5: `/*splat` alone needs at least one character after the slash,
-  // so the braces make it optional and let this answer `/` too.
-  const indexHtml = path.join(clientDist, 'index.html');
+  // so the braces make it optional and let this answer `/` too. res.send
+  // adds an ETag, so an unchanged shell is still a 304.
+  const shell = shellWatcher(path.join(clientDist, 'index.html'));
   app.get('/{*splat}', (req, res) => {
     res.set('Cache-Control', REVALIDATE);
+    res.vary(HOST_HEADERS);
     // A resume's own link (/r/<slug>) is unlisted; see cacheHeaders.js.
     if (/^\/r(\/|$)/i.test(req.path)) res.set('X-Robots-Tag', NOINDEX);
-    if (looksLikeFile(req.path)) {
-      // A file express.static didn't find (see looksLikeFile): a plain 404,
-      // never the HTML shell.
+    const html = looksLikeFile(req.path) ? null : shell();
+    if (html === null) {
+      // A file express.static didn't find (see looksLikeFile), or no build
+      // at all: a plain 404, never the HTML shell.
       res.status(404).type('text/plain').send('Not found');
       return;
     }
-    res.sendFile(indexHtml, { cacheControl: false, dotfiles: 'allow' });
+    const meta = headFor(req);
+    if (meta?.noindex) res.set('X-Robots-Tag', NOINDEX);
+    res.type('html').send(meta ? withHead(html, meta.head) : html);
   });
 }

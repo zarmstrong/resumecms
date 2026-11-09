@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { mountClient } from './clientStatic.js';
+import { mountClient, shellWatcher, withHead } from './clientStatic.js';
 import {
   IMMUTABLE,
   PDF,
@@ -170,3 +170,68 @@ function rawStatus(url, headers) {
     }).on('error', reject);
   });
 }
+
+// A public page's head tags (issue #87), from a stand-in for shellHead.js
+// that names the host it was asked about.
+const metaDist = path.join(dotDir, 'meta-dist');
+fs.mkdirSync(metaDist);
+const metaIndex = path.join(metaDist, 'index.html');
+fs.writeFileSync(metaIndex, '<!doctype html><head><title>Resume</title></head><body>v1</body>');
+const metaApp = express();
+mountClient(metaApp, metaDist, {
+  headFor: (req) =>
+    req.path === '/' ? { head: `<title>${req.hostname}</title>`, noindex: req.hostname === 'hidden.test' } : null,
+});
+const metaServer = metaApp.listen(0);
+const metaBase = () => `http://127.0.0.1:${metaServer.address().port}`;
+after(() => metaServer.close());
+
+// Plain node:http, so the Host header can be set.
+function rawGet(url, headers) {
+  return new Promise((resolve, reject) => {
+    http.get(url, { headers }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => (body += chunk));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));
+    }).on('error', reject);
+  });
+}
+
+test("a page's own head replaces the generic title, and the shell varies by host", async () => {
+  const home = await rawGet(`${metaBase()}/`, { Host: 'jo.example' });
+  assert.equal(home.status, 200);
+  assert.match(home.body, /<title>jo\.example<\/title>/);
+  assert.doesNotMatch(home.body, /<title>Resume/);
+  assert.equal(home.headers.vary, 'Host, X-Forwarded-Host');
+  assert.equal(home.headers['cache-control'], REVALIDATE);
+  assert.equal(home.headers['x-robots-tag'], undefined);
+  // Every shell varies, the generic ones included.
+  const editor = await rawGet(`${metaBase()}/editor`, { Host: 'jo.example' });
+  assert.match(editor.body, /<title>Resume<\/title>/);
+  assert.equal(editor.headers.vary, 'Host, X-Forwarded-Host');
+  // The landing page's seo.noindex.
+  assert.equal((await rawGet(`${metaBase()}/`, { Host: 'hidden.test' })).headers['x-robots-tag'], 'noindex');
+  // File-like paths are still a plain 404, never asked about.
+  const missing = await rawGet(`${metaBase()}/robots.txt`, { Host: 'jo.example' });
+  assert.equal(missing.status, 404);
+  assert.doesNotMatch(missing.headers['content-type'], /html/);
+});
+
+test('a rebuilt index.html is picked up without a restart', async () => {
+  const watch = shellWatcher(metaIndex);
+  assert.match(watch(), /v1/);
+  fs.writeFileSync(metaIndex, '<!doctype html><head><title>Resume</title></head><body>v2</body>');
+  // A different mtime even on a filesystem with coarse timestamps.
+  const later = new Date(Date.now() + 5000);
+  fs.utimesSync(metaIndex, later, later);
+  assert.match(watch(), /v2/);
+  assert.match((await rawGet(`${metaBase()}/editor`)).body, /v2/);
+  assert.equal(shellWatcher(path.join(metaDist, 'missing.html'))(), null);
+});
+
+test('withHead swaps the title, or adds the tags to a head without one', () => {
+  assert.equal(withHead('<head><title>Resume</title></head>', '<title>Jo</title>'), '<head><title>Jo</title></head>');
+  // `$&` in the tags is text, not a replacement pattern.
+  assert.equal(withHead('<head></head>', '<title>$&</title>'), '<head><title>$&</title>\n  </head>');
+});

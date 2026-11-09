@@ -13,6 +13,8 @@ import { blocksForMode } from './publicBlocks.js';
 import { normalizeBrief } from './ai/brief.js';
 import { createLandingStore } from './landingStore.js';
 import { createCoverLetterStore, removeLetterPdf } from './coverLetterStore.js';
+import { createShareStore } from './shareStore.js';
+import { landingPage, resumePage } from './pageMeta.js';
 
 // The single implementation of every content operation the editor's REST
 // routes and the MCP tools expose: blocks, header, site settings, publish
@@ -155,10 +157,13 @@ const RESUME_METHODS = [
 // letters' under letters/ (letterPdfPathFor). `renderPdf` is called as
 // renderPdf({ signal, resumeId }), `renderLetterPdf` as
 // renderLetterPdf({ signal, letterId }); without one, a letter's PDF is a 500.
+// `renderShareCard` as renderShareCard({ signal, content }) for a link
+// preview's card (shareStore.js); without one, previews use the photo.
 export function createResumeStore({
   db,
   renderPdf,
   renderLetterPdf,
+  renderShareCard,
   pdfDir,
   pdfTimeoutMs = DEFAULT_PDF_TIMEOUT_MS,
   pdfWaitMs = DEFAULT_PDF_WAIT_MS,
@@ -537,9 +542,54 @@ export function createResumeStore({
   // The install's landing page (issue #70), see landingStore.js.
   const landing = createLandingStore({ db, defaultResumeId });
 
+  // Every page a visitor can open right now, as pageMeta.js describes it:
+  // the landing page while it's shown, and every public, published resume.
+  function publicPages() {
+    const pages = [];
+    const shown = landing.shownLanding();
+    if (shown) pages.push(landingPage(shown, scopedStore(defaultResumeId()).getPublishedResume('web').header));
+    const ids = db
+      .prepare(
+        `SELECT r.id FROM resumes r JOIN resume_settings s ON s.resume_id = r.id AND s.key = 'published_resume'
+         WHERE r.is_public = 1`
+      )
+      .all();
+    for (const { id } of ids) pages.push(resumePage(scopedStore(id).getPublishedResume('web')));
+    return pages;
+  }
+
+  // Link previews' images (issue #87), see shareStore.js. Cards render on
+  // the PDF queue like everything else Chromium draws.
+  const share = createShareStore({
+    pdfDir,
+    withPdfLock,
+    publicPages,
+    renderCard: renderShareCard
+      ? (content) =>
+          withTimeout(
+            ({ signal }) => renderShareCard({ signal, content }),
+            pdfTimeoutMs,
+            `Share card render timed out after ${pdfTimeoutMs} ms and was abandoned`
+          )
+      : null,
+  });
+
+  // What the landing page shows changed (or whether it's shown at all),
+  // so its card may need drawing.
+  function withCardRefresh(fn) {
+    return (...args) => {
+      const result = fn(...args);
+      share.refreshShareCards();
+      return result;
+    };
+  }
+
   return {
     ...delegates,
     ...landing,
+    publishLanding: withCardRefresh(landing.publishLanding),
+    setLandingEnabled: withCardRefresh(landing.setLandingEnabled),
+    ...share,
     forResume,
     forHost,
     forPublicSlug,
@@ -989,6 +1039,9 @@ export function createResumeStore({
           return { publishedAt, pdfVersion: pdfVersion(), pdfPending: false };
         })
       );
+      // Behind the PDF on the queue: this resume's card, and the landing
+      // page's, which uses the default resume's photo and look.
+      share.refreshShareCards();
 
       return settleWithin(
         render,

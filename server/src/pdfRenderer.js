@@ -6,9 +6,11 @@ import {
   RENDERED_RESUME_HEADER,
   renderCookieValue,
 } from './renderAccess.js';
+import { CARD_HEIGHT, CARD_WIDTH } from './shareImages.js';
 
-// Renders a PDF and returns its bytes; the store decides where they go
-// (see pdfPaths.js and resumeStore.js's writePdf).
+// Renders a PDF (or a link preview's card, as a PNG) and returns its bytes;
+// the store decides where they go (see pdfPaths.js, resumeStore.js's
+// writePdf and shareStore.js).
 
 let browserPromise = null;
 function getBrowser() {
@@ -102,10 +104,48 @@ export function renderLetterPdf({ signal, letterId }) {
   });
 }
 
+// A link preview's share card (issue #87): /print/card drawing `content`
+// (shareImages.js's cardContent()) at 1200×630, as a PNG. The content is
+// handed to the page before its scripts run, so there's no endpoint to
+// fetch it from and nothing for anyone else to ask for.
+export function renderShareCard({ signal, content }) {
+  return renderPage({
+    signal,
+    pagePath: '/print/card',
+    async prepare(page) {
+      await page.setViewport({ width: CARD_WIDTH, height: CARD_HEIGHT, deviceScaleFactor: 1 });
+      await page.evaluateOnNewDocument((card) => {
+        window.__SHARE_CARD__ = card;
+      }, content);
+    },
+    capture: (page) => page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: CARD_WIDTH, height: CARD_HEIGHT } }),
+  });
+}
+
+function printPdf(page) {
+  return page.pdf({
+    format: 'Letter',
+    printBackground: true,
+    margin: { top: '0.5in', bottom: '0.5in', left: '0.5in', right: '0.5in' },
+  });
+}
+
 // Loads `pagePath` with `cookie` set and prints it, once the page has
 // said it's ready and `apiPath`'s response named `expectedId` in its
 // `servedHeader` (a page that got the wrong content is no PDF of ours).
-async function renderPage({ signal, pagePath, cookie, apiPath, servedHeader, expectedId, describeServed }) {
+// `prepare(page)` runs before it loads, and `capture(page)` instead of
+// printing it, for the share card.
+async function renderPage({
+  signal,
+  pagePath,
+  cookie = null,
+  apiPath = null,
+  servedHeader = null,
+  expectedId = null,
+  describeServed = null,
+  prepare = null,
+  capture = printPdf,
+}) {
   const port = process.env.PORT || 4000;
   const host = '127.0.0.1';
   const printUrl = `http://${host}:${port}${pagePath}`;
@@ -122,9 +162,10 @@ async function renderPage({ signal, pagePath, cookie, apiPath, servedHeader, exp
       await untilAborted(context.setCookie({ ...cookie, domain: host, path: '/', httpOnly: true }), signal);
     }
     const page = await untilAborted(context.newPage(), signal);
+    if (prepare) await untilAborted(prepare(page), signal);
     let servedId = null;
     page.on('response', (response) => {
-      if (new URL(response.url()).pathname === apiPath) {
+      if (apiPath && new URL(response.url()).pathname === apiPath) {
         servedId = response.headers()[servedHeader.toLowerCase()] ?? null;
       }
     });
@@ -133,17 +174,10 @@ async function renderPage({ signal, pagePath, cookie, apiPath, servedHeader, exp
     await untilAborted(page.waitForFunction('window.__PDF_READY__ === true', { timeout: 15000 }), signal);
     if (expectedId && servedId !== expectedId) throw new Error(describeServed(servedId));
 
-    const pdfBytes = await untilAborted(
-      page.pdf({
-        format: 'Letter',
-        printBackground: true,
-        margin: { top: '0.5in', bottom: '0.5in', left: '0.5in', right: '0.5in' },
-      }),
-      signal
-    );
+    const bytes = await untilAborted(capture(page), signal);
     // Puppeteer returns a Uint8Array; callers that hand this to res.send() or
     // fs.writeFile() need a real Buffer.
-    return Buffer.from(pdfBytes);
+    return Buffer.from(bytes);
   } finally {
     signal?.removeEventListener('abort', onAbort);
     // A failed render must not leave a context open in the shared browser.

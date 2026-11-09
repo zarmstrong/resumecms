@@ -175,6 +175,31 @@ test('mergeLandingPatch replaces fields, resets null ones, and ignores __proto__
   assert.equal(validateLanding(merged, known()).subheadline, '');
 });
 
+test('seo is checked strictly, filled in, merged one level deep and shown whole', () => {
+  assert.deepEqual(validateLanding({}, known()).seo, { title: '', description: '', noindex: false });
+  const seo = { title: 'Jo Doe', description: 'Engineer', noindex: true };
+  assert.deepEqual(validateLanding({ seo }, known()).seo, seo);
+  assert.equal(status(() => validateLanding({ seo: { image: 'x' } }, known())), 400);
+  assert.equal(status(() => validateLanding({ seo: 'Jo' }, known())), 400);
+  assert.equal(status(() => validateLanding({ seo: { noindex: 'yes' } }, known())), 400);
+  assert.equal(status(() => validateLanding({ seo: { title: 7 } }, known())), 400);
+  assert.equal(status(() => validateLanding({ seo: { title: 'x'.repeat(LANDING_LIMITS.seoTitle + 1) } }, known())), 400);
+  assert.equal(status(() => validateLanding({ seo: { description: 'x'.repeat(LANDING_LIMITS.seoDescription + 1) } }, known())), 400);
+  assert.equal(validateLanding({ seo: { title: 'x'.repeat(LANDING_LIMITS.seoTitle) } }, known()).seo.title.length, LANDING_LIMITS.seoTitle);
+
+  // The MCP merge keeps the title when only the description is sent, and
+  // a null resets one field.
+  const merged = mergeLandingPatch({ ...emptyLanding(), seo }, { seo: { description: 'New', noindex: null } });
+  assert.deepEqual(validateLanding(merged, known()).seo, { title: 'Jo Doe', description: 'New', noindex: false });
+  assert.deepEqual(validateLanding(mergeLandingPatch({ ...emptyLanding(), seo }, { seo: null }), known()).seo, emptyLanding().seo);
+
+  const context = { photoUrl: '', site: null, resumes: new Map() };
+  assert.deepEqual(resolveLanding({ ...emptyLanding(), seo }, context).seo, seo);
+  // A draft stored before seo reads with the empty one.
+  const { seo: _, ...old } = emptyLanding();
+  assert.deepEqual(upgradeLanding(old).seo, emptyLanding().seo);
+});
+
 test('a draft stored before sections reads as the sections it showed, in order', () => {
   const old = {
     headline: 'Jo',
@@ -198,6 +223,7 @@ test('a draft stored before sections reads as the sections it showed, in order',
       { id: 'links', kind: 'links', title: '', links: old.links },
       { id: 'resumes', kind: 'resumes', title: '', cards: old.resumes },
     ],
+    seo: { title: '', description: '', noindex: false },
   });
   // Stable, and the new shape (or nothing) passes through untouched.
   assert.deepEqual(upgradeLanding(old), upgraded);

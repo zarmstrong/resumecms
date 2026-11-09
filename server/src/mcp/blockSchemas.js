@@ -203,7 +203,16 @@ export const HEADER_SCHEMA = {
 export const SITE_SCHEMA = {
   description: 'Site-wide settings: templates, typography, colors (a singleton).',
   properties: {
-    title: { type: 'string', description: 'Browser tab title' },
+    title: {
+      type: 'string',
+      description:
+        "The page's title: browser tab, search results and link previews (about 70 characters at most). '' = the header's name and title",
+    },
+    description: {
+      type: 'string',
+      description:
+        "What search results and link previews say about the resume (about 200 characters at most). '' = the first summary or executive summary shown on the web",
+    },
     template: {
       type: 'string',
       description: 'Header template id — a folder name under templates/headers/ (e.g. classic, centered, banner, compact)',
@@ -310,6 +319,15 @@ export const LANDING_SCHEMA = {
             },
           },
         ],
+      },
+    },
+    seo: {
+      type: 'object',
+      description: "Search results and link previews; merged one level deep by update_landing_page",
+      properties: {
+        title: { type: 'string', description: "At most 70 characters; '' = the headline" },
+        description: { type: 'string', description: "At most 200 characters; '' = the subheadline, else the first text section" },
+        noindex: { type: 'boolean', description: 'Ask search engines not to list the page (X-Robots-Tag: noindex)' },
       },
     },
   },

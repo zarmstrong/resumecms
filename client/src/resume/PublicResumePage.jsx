@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { ResumeView } from './ResumeView.jsx';
 import { PDF_URL_PATH, publicPdfPath } from './pdfUrl.js';
 import { usePublicFetch } from './usePublicFetch.js';
+import { resumePageMeta } from '../share/pageMeta.js';
 
 // A publish stamps the snapshot with publishedAt and a render changes
 // pdfVersion, so those two identify what's on screen. Only a snapshot
@@ -45,6 +46,7 @@ export function LoadError({ message }) {
 // A published resume as the public API sends it.
 export function PublishedResume({ resume, mode, pdfPath = PDF_URL_PATH }) {
   const { header, site, blocks, pdfVersion } = resume;
-  if (site?.title) document.title = site.title;
+  // The same title the server put in the shell (share/pageMeta.js).
+  document.title = resumePageMeta(header, site, blocks).title;
   return <ResumeView header={header} site={site} blocks={blocks} mode={mode} pdfVersion={pdfVersion} pdfPath={pdfPath} />;
 }
