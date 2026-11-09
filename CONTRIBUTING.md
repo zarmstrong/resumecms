@@ -44,3 +44,9 @@ throwaway container and never touches a real deployment's data.
 For non-template changes (bug fixes, new block types, editor features,
 etc.), open a PR against `main` as usual. There's no formal issue process —
 just describe what changed and why, and how you tested it.
+
+A PR can only merge into `main` once CI's `ci-passed` check is green. CI
+runs the server tests, the client tests and build, and the template
+validator, each only when the PR touches its part. Run the same locally
+first: `npm test` in `server/` and `client/`, and the two commands above
+for templates.

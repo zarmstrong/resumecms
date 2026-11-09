@@ -1,0 +1,145 @@
+name: CI
+
+# One workflow for every PR into main (issue #97). `changes` decides which
+# parts the PR touches and only those jobs run; `ci-passed` is the single
+# check the ruleset on main requires. A required check whose workflow never
+# runs stays pending forever, so the workflow itself has no `paths:` filter
+# and a job that isn't needed is skipped instead, which the gate counts as
+# a pass.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.diff.outputs.server }}
+      client: ${{ steps.diff.outputs.client }}
+      templates: ${{ steps.diff.outputs.templates }}
+    steps:
+      # A pull_request run checks out GitHub's merge of the PR into main, so
+      # its first parent is main and the diff against it is the whole PR.
+      # --no-renames lists a moved file's old path too, and quotePath off
+      # keeps a non-ASCII path unquoted; the patterns allow a leading quote
+      # for the few characters git still quotes.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - id: diff
+        run: |
+          files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD)
+          printf '%s\n' "$files"
+          has() { printf '%s\n' "$files" | grep -Eq "$1" && echo true || echo false; }
+          # Editing CI runs all of CI.
+          all=$(has '^\.github/workflows/')
+          server=$(has '^"?server/')
+          # Client tests import server modules they mirror (pageMeta.js and
+          # shareImages.js today), so a server change runs them too.
+          client=$(has '^"?(client|server)/')
+          templates=$(has '^"?(templates/|client/src/resume/templateRegistry\.js"?$|scripts/validate-templates\.mjs"?$)')
+          [ "$all" = true ] && server=true client=true templates=true
+          {
+            echo "server=$server"
+            echo "client=$client"
+            echo "templates=$templates"
+          } >> "$GITHUB_OUTPUT"
+
+  server:
+    name: server tests
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: |
+          cd server
+          npm ci
+
+      - name: Run server tests
+        run: |
+          cd server
+          npm test
+
+  # Templates are built into the client, so a template change builds it too
+  # (the build is what catches a broken template component).
+  client:
+    name: client tests and build
+    needs: changes
+    if: needs.changes.outputs.client == 'true' || needs.changes.outputs.templates == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install client dependencies
+        run: |
+          cd client
+          npm ci
+
+      - name: Run client tests
+        run: |
+          cd client
+          npm test
+
+      - name: Build client
+        run: |
+          cd client
+          npm run build
+
+  templates:
+    name: templates
+    needs: changes
+    if: needs.changes.outputs.templates == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Validate templates/ metadata
+        run: node scripts/validate-templates.mjs
+
+  # The one required check. It runs whatever happened above: a skipped job
+  # passes, anything else that isn't a success (including `changes` itself
+  # failing, or a cancelled job) fails it.
+  ci-passed:
+    name: ci-passed
+    needs: [changes, server, client, templates]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          failed=$(printf '%s' "$RESULTS" | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
+          printf '%s' "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if [ -n "$failed" ]; then
+            echo "::error::Not passing: $(echo $failed)"
+            exit 1
+          fi

@@ -51,13 +51,19 @@ that doesn't need a live HTTP server or a DOM — run them with `npm test`
 from the respective package. No test imports `server/src/db.js` (importing
 it opens and seeds the real SQLite file); `resumeStore.test.js` instead
 builds the store over a `better-sqlite3` `:memory:` database via
-`ensureSchema()`, and the MCP tool tests inject a fake store. CI has three independent workflows,
-each scoped by path so it only runs when relevant:
-`.github/workflows/templates.yml` runs `scripts/validate-templates.mjs` and
-a client build when `templates/**`, `templateRegistry.js`, or the validator
-itself changes; `.github/workflows/server-tests.yml` runs `npm test` in
-`server/` when `server/**` changes; `.github/workflows/client-tests.yml`
-runs `npm test` in `client/` when `client/**` changes. When touching
+`ensureSchema()`, and the MCP tool tests inject a fake store. CI is one workflow,
+`.github/workflows/ci.yml`, run on every PR into `main` (issue #97): a
+`changes` job diffs the PR and only the jobs it touches run (`server
+tests` for `server/**`; `client tests and build` for `client/**`,
+`server/**` (client tests import the server modules they mirror) or
+anything a template build reads; `templates`, the validator, for
+`templates/**`, `templateRegistry.js` or the validator itself; all of
+them when `.github/workflows/` changes). `ci-passed` gathers them and is
+the only check the ruleset on `main` requires, so a PR can't merge
+until it's green; a skipped job counts as passing. Keep a new job
+behind `changes` and in `ci-passed`'s `needs`, and never put a `paths:`
+filter on the workflow itself: a required check that never runs stays
+pending forever. When touching
 templates, run both templates commands locally before considering the
 change done; when touching `server/src`, run `npm test` from `server/`;
 when touching `client/src`, run `npm test` from `client/`. There's no root
