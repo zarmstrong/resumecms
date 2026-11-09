@@ -344,9 +344,12 @@ copy (`api.js`), the routes take it off with `splitTextFormat()`, and the
 store's `setLanding()`/`checkLandingDraft()` escape a write without it
 (`{ textFormat: 'plain' }`, `escapeLandingText()`) before checking it. Such
 an editor may also have re-read the escaped draft (a GET on mount, a
-Discard), so a field equal to the stored draft's at its place (a text
-section's body by section id, an item's text to any item's in that
-section) is kept as it is and only a field that differs is escaped: an
+Discard), so a field equal to the stored draft's at its place is kept as
+it is and only a field that differs is escaped. A text section's body is
+matched by section id. An item's text is kept when it equals the stored
+item at its index, escaped when its escaped form equals some stored item
+in that section (an original the editor never re-read), kept when it
+equals one (a moved echo), and escaped otherwise (`keepItem()`). So an
 echoed field is never escaped twice, and an edited one reads as that
 editor showed it, backslashes included. The marker is never stored. The store's default is `'inline'`, so MCP writes (whose
 tool descriptions document the syntax) and tests are taken as inline.
