@@ -75,6 +75,17 @@ export function tailorItems(blocks, types) {
   return items;
 }
 
+// A run's tailoring plan (issue #84, editor/tailorPlan.js): one request
+// for the whole resume, suggesting what to hide (`hide`, from `hideFrom`)
+// and a section order (`order`). It goes first and alone (`barrier`), so
+// the rewrites of blocks it suggests hiding can be skipped before they're
+// sent. `label` names it in the list of what failed.
+export const PLAN_KEY = 'plan';
+export function planItem({ hide = false, order = false, hideFrom }) {
+  const label = hide && order ? 'Suggestions of what to hide and a section order' : hide ? 'Suggestions of what to hide' : 'A suggested section order';
+  return { key: PLAN_KEY, kind: 'plan', barrier: true, plan: { hide, order, hideFrom }, label };
+}
+
 // "Experience Entry: Engineer, Acme", for the list of sections that failed.
 function blockLabel(block) {
   const data = block.data || {};
@@ -94,10 +105,13 @@ function blockLabel(block) {
 // order. `run` resolves with { ok: true }, { ok: false, error } or
 // { superseded: true } (another request for the same spot took over, or
 // the block was deleted: counted as skipped, since there's nothing to
-// review or retry); a rejection counts as a failure. `onUpdate(state)`
-// gets { total, done, skipped, failed: [{ item, error }], running,
-// cancelled, finished } after every change, the first time synchronously
-// from here.
+// review or retry); a rejection counts as a failure. An item marked
+// `barrier` (the plan) runs on its own: nothing starts with it or until it
+// settles, and its { ok: true, skipBlockIds } takes the queued items for
+// those blocks out of the run, counted as `suggestedHidden`.
+// `onUpdate(state)` gets { total, done, skipped, suggestedHidden, failed:
+// [{ item, error }], running, cancelled, finished } after every change, the
+// first time synchronously from here.
 //
 // cancel() sends nothing more and forgets what's in flight, so a late
 // result changes nothing; it returns those items, whose requests the
@@ -108,12 +122,14 @@ export function createTailorRun({ items, run, onUpdate, concurrency = TAILOR_CON
   const failed = [];
   let done = 0;
   let skipped = 0;
+  let suggestedHidden = 0;
   let cancelled = false;
 
   const snapshot = () => ({
     total: items.length,
     done,
     skipped,
+    suggestedHidden,
     failed: [...failed],
     running: inFlight.size,
     cancelled,
@@ -125,11 +141,21 @@ export function createTailorRun({ items, run, onUpdate, concurrency = TAILOR_CON
     if (result?.ok) done += 1;
     else if (result?.superseded) skipped += 1;
     else failed.push({ item, error: result?.error || 'The rewrite failed.' });
+    if (result?.ok && result.skipBlockIds?.size) {
+      for (let i = queue.length - 1; i >= 0; i -= 1) {
+        if (!queue[i].barrier && result.skipBlockIds.has(queue[i].blockId)) {
+          queue.splice(i, 1);
+          suggestedHidden += 1;
+        }
+      }
+    }
     pump();
   }
 
   function pump() {
-    while (!cancelled && inFlight.size < concurrency && queue.length > 0) {
+    const barrierRunning = () => [...inFlight].some((item) => item.barrier);
+    while (!cancelled && inFlight.size < concurrency && queue.length > 0 && !barrierRunning()) {
+      if (queue[0].barrier && inFlight.size > 0) break;
       const item = queue.shift();
       inFlight.add(item);
       Promise.resolve()

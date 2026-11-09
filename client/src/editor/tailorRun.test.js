@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_TAILOR_TYPES, TAILOR_TYPES, createTailorRun, tailorItems } from './tailorRun.js';
+import { DEFAULT_TAILOR_TYPES, PLAN_KEY, TAILOR_TYPES, createTailorRun, planItem, tailorItems } from './tailorRun.js';
 
 const block = (id, type, data, { web = true, print = true } = {}) => ({ id, type, data, visibleWeb: web, visiblePrint: print });
 
@@ -71,8 +71,7 @@ function deferred() {
 }
 const flush = () => new Promise((r) => setImmediate(r));
 
-function harness(count, concurrency = 2) {
-  const items = Array.from({ length: count }, (_, i) => ({ key: `k${i}` }));
+function harness(count, concurrency = 2, items = Array.from({ length: count }, (_, i) => ({ key: `k${i}` }))) {
   const pending = new Map();
   const started = [];
   const updates = [];
@@ -94,7 +93,7 @@ test('runs at most `concurrency` at a time, in order, and finishes with every re
   const h = harness(4);
   await flush();
   assert.deepEqual(h.started, ['k0', 'k1']);
-  assert.deepEqual({ ...h.last(), failed: undefined }, { total: 4, done: 0, skipped: 0, failed: undefined, running: 2, cancelled: false, finished: false });
+  assert.deepEqual({ ...h.last(), failed: undefined }, { total: 4, done: 0, skipped: 0, suggestedHidden: 0, failed: undefined, running: 2, cancelled: false, finished: false });
 
   h.pending.get('k1').resolve({ ok: true });
   await flush();
@@ -132,7 +131,7 @@ test('cancel sends nothing more, returns what was in flight, and ignores its lat
 
 test('an empty run is finished straight away', () => {
   const h = harness(0);
-  assert.deepEqual(h.updates, [{ total: 0, done: 0, skipped: 0, failed: [], running: 0, cancelled: false, finished: true }]);
+  assert.deepEqual(h.updates, [{ total: 0, done: 0, skipped: 0, suggestedHidden: 0, failed: [], running: 0, cancelled: false, finished: true }]);
 });
 
 test('cancelling a run that has finished changes nothing', async () => {
@@ -144,4 +143,45 @@ test('cancelling a run that has finished changes nothing', async () => {
   assert.deepEqual(h.run.cancel(), []);
   assert.equal(h.updates.length, updates);
   assert.equal(h.last().cancelled, false, 'its failures can still be retried');
+});
+
+test('the plan goes first and alone, and its hides take their blocks\' rewrites out of the run', async () => {
+  const items = [
+    planItem({ hide: true, order: true, hideFrom: 'both' }),
+    { key: 'a:block', blockId: 'a' },
+    { key: 'b:block', blockId: 'b' },
+    { key: 'b:description', blockId: 'b' },
+    { key: 'c:block', blockId: 'c' },
+  ];
+  const h = harness(0, 3, items);
+  await flush();
+  assert.deepEqual(h.started, [PLAN_KEY], 'nothing starts alongside the plan');
+  assert.equal(h.last().total, 5);
+  h.pending.get(PLAN_KEY).resolve({ ok: true, skipBlockIds: new Set(['b']) });
+  await flush();
+  assert.deepEqual(h.started, [PLAN_KEY, 'a:block', 'c:block']);
+  assert.equal(h.last().suggestedHidden, 2);
+  h.pending.get('a:block').resolve({ ok: true });
+  h.pending.get('c:block').resolve({ ok: true });
+  await flush();
+  assert.deepEqual({ done: h.last().done, suggestedHidden: h.last().suggestedHidden, finished: h.last().finished }, { done: 3, suggestedHidden: 2, finished: true });
+});
+
+test('a failed plan lets the rewrites go ahead', async () => {
+  const h = harness(0, 2, [planItem({ hide: true }), { key: 'a:block', blockId: 'a' }]);
+  await flush();
+  h.pending.get(PLAN_KEY).resolve({ ok: false, error: 'AI is down' });
+  await flush();
+  assert.deepEqual(h.started, [PLAN_KEY, 'a:block']);
+  assert.deepEqual(h.last().failed.map((f) => f.item.label), ['Suggestions of what to hide']);
+});
+
+test('a plan waits for rewrites already out, as on a retry', async () => {
+  const h = harness(0, 2, [{ key: 'a:block', blockId: 'a' }, planItem({ order: true }), { key: 'c:block', blockId: 'c' }]);
+  await flush();
+  assert.deepEqual(h.started, ['a:block']);
+  h.pending.get('a:block').resolve({ ok: true });
+  await flush();
+  assert.deepEqual(h.started, ['a:block', PLAN_KEY]);
+  assert.equal(planItem({ order: true }).label, 'A suggested section order');
 });

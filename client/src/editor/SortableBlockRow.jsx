@@ -11,6 +11,7 @@ import { CustomForm } from './blockForms/CustomForm.jsx';
 import { VisibilityToggle } from './VisibilityToggle.jsx';
 import { BlockStyleForm } from './BlockStyleForm.jsx';
 import { AiRewritePanel } from './AiRewritePanel.jsx';
+import { PlanHideList } from './PlanHidePanel.jsx';
 import { AI_REWRITABLE_TYPES, targetKey } from './aiReview.js';
 
 // One block's open AI proposals, keyed by targetKey, or null when it has none.
@@ -55,7 +56,8 @@ function summarize(block) {
   }
 }
 
-export function SortableBlockRow({ block, nested, drop, nestTarget, moving, ai, onChangeData, onChangeVisibility, onDelete }) {
+// `plan` is the tailoring plan's open hides (EditorPage's, see PlanHidePanel).
+export function SortableBlockRow({ block, nested, drop, nestTarget, moving, ai, plan, onChangeData, onChangeVisibility, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const { attributes, listeners, setNodeRef: setDragRef, setActivatorNodeRef, isDragging } = useDraggable({ id: block.id });
   const { setNodeRef: setDropRef } = useDroppable({ id: block.id });
@@ -109,6 +111,8 @@ export function SortableBlockRow({ block, nested, drop, nestTarget, moving, ai, 
           ✕
         </button>
       </div>
+
+      <PlanHideList blockId={block.id} plan={plan} />
 
       {expanded && (
         <div className="ed-block-row-body">

@@ -12,6 +12,7 @@ import { hasRewritableShape } from '../ai/rewritableFields.js';
 import { normalizeBrief, outlineScope, resumeOutline } from '../ai/brief.js';
 import { hasLetterShape, rewriteLetter } from '../ai/letterWriting.js';
 import { landingProfile, rewriteLanding } from '../ai/landingRewrite.js';
+import { normalizePlanRequest, suggestTailoring } from '../ai/tailorPlan.js';
 
 const router = Router();
 
@@ -208,7 +209,41 @@ async function rewriteLetterRoute(req, res, storeFor) {
   }
 }
 
+// A tailoring plan (issue #84, ai/tailorPlan.js): what to hide for a brief
+// and what to put first, read from the resume's stored draft. Like a
+// rewrite it returns a proposal ({ plan }) and writes nothing; the editor
+// saves accepted parts through the block and reorder routes. The brief is
+// required, so it always counts against tailorLimiter: one request per run.
+// Mounted like rewriteHandlers, the resume picked by the URL prefix.
+export function tailorPlanHandlers(storeFor) {
+  return [tailorLimiter, (req, res) => tailorPlan(req, res, storeFor)];
+}
+
+async function tailorPlan(req, res, storeFor) {
+  let request;
+  let blocks;
+  try {
+    request = normalizePlanRequest(req.body);
+    blocks = storeFor(req).listBlocks();
+  } catch (err) {
+    return sendError(res, err);
+  }
+
+  const settings = normalizeAiSettings(getSetting('ai'));
+  if (!publicAiSettings(settings).available) {
+    return res.status(409).json({ error: 'AI rewriting is not set up. Add an API key in Account Settings.' });
+  }
+  try {
+    res.json({ plan: await suggestTailoring({ blocks, request, settings }) });
+  } catch (err) {
+    if (err instanceof AiError) return res.status(err.status).json({ error: err.message });
+    console.error('AI tailoring plan failed:', err);
+    res.status(500).json({ error: 'AI tailoring failed unexpectedly.' });
+  }
+}
+
 router.post('/rewrite', ...rewriteHandlers(() => store));
+router.post('/tailor-plan', ...tailorPlanHandlers(() => store));
 
 // The landing page's rewrite (issue #73, ai/landingRewrite.js), mounted by
 // routes/landing.js at POST /api/landing/rewrite behind its requireAuth. It

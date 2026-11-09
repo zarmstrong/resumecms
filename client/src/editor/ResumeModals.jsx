@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api.js';
 import { parseHostnames, publicUrl, resumePatch } from './resumeLinks.js';
-import { TailorFields, emptyTailorForm, tailorBrief, tailorCount } from './TailorModal.jsx';
+import { TailorFields, emptyTailorForm, tailorBrief, tailorCount, tailorPlanOptions } from './TailorModal.jsx';
 
 // The two dialogs behind the editor's resume switcher (issue #53). Like
 // SettingsModal, they close only through their own buttons.
@@ -12,7 +12,8 @@ import { TailorFields, emptyTailorForm, tailorBrief, tailorCount } from './Tailo
 // and switches to it; it's EditorPage's, which first saves any edit still
 // waiting, so the copy has it. A copy can also be tailored with AI (when
 // `ai` says it's set up): its brief goes in `input.tailoring`, and
-// `tailor` ({ brief, types }) asks the new copy's editor to start the run.
+// `tailor` ({ brief, types, plan }) asks the new copy's editor to start the
+// run.
 export function NewResumeModal({ resume, defaultResume, blocks, ai, onCreate, onClose }) {
   const [name, setName] = useState('');
   const [copy, setCopy] = useState(true);
@@ -22,6 +23,8 @@ export function NewResumeModal({ resume, defaultResume, blocks, ai, onCreate, on
   const [busy, setBusy] = useState(false);
   const tailor = copy && tailoring && ai?.available;
   const count = tailor ? tailorCount(tailorForm, blocks) : null;
+  const plan = tailor ? tailorPlanOptions(tailorForm) : null;
+  const nothingToTailor = tailor && count === 0 && !plan;
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -32,7 +35,7 @@ export function NewResumeModal({ resume, defaultResume, blocks, ai, onCreate, on
       // one if a failed save made the user stop.
       if (tailor) {
         const brief = tailorBrief(tailorForm);
-        await onCreate({ name, copyFrom: resume.id, tailoring: brief }, { brief, types: tailorForm.types });
+        await onCreate({ name, copyFrom: resume.id, tailoring: brief }, { brief, types: tailorForm.types, plan });
       } else {
         await onCreate({ name, ...(copy ? { copyFrom: resume.id } : {}) });
       }
@@ -90,9 +93,9 @@ export function NewResumeModal({ resume, defaultResume, blocks, ai, onCreate, on
             <button
               type="submit"
               className="ed-btn ed-btn-primary"
-              disabled={busy || !name.trim() || (tailor && (!tailorForm.audience.trim() || count === 0))}
+              disabled={busy || !name.trim() || (tailor && (!tailorForm.audience.trim() || nothingToTailor))}
             >
-              {busy ? 'Creating…' : tailor ? (count === 0 ? 'Nothing to tailor' : 'Create and tailor') : 'Create'}
+              {busy ? 'Creating…' : tailor ? (nothingToTailor ? 'Nothing to tailor' : 'Create and tailor') : 'Create'}
             </button>
           </div>
         </div>

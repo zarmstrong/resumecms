@@ -557,6 +557,56 @@ loaded and takes it. A run stops when its page unmounts. "Accept all" saves
 whole-block proposals whose block was edited since, which the preview
 still shows but a bulk accept mustn't apply without asking.
 
+A tailoring *plan* (issue #84, `server/src/ai/tailorPlan.js`, behind `POST
+…/ai/tailor-plan` via `tailorPlanHandlers(storeFor)`, on `tailorLimiter`
+only, since its brief is required) suggests what to hide and a section
+order instead of rewriting text, and writes nothing either. The model sees
+`planOutline()` of the stored draft: short refs (`B3`, `B3.2`, `B3.2.1`,
+bullets by index path) instead of ids, and nothing hidden on both web and
+print, as in `letterResumeContext()`; keep both if you add fields.
+A heading's section is its nested blocks *plus* the top-level blocks after
+it up to the next heading (`draftTree()`; the editor's `sectionMembers()`
+mirrors it), since a resume made before nesting, the sample content
+included, has headings that only title what follows them; moving or
+hiding a section takes all of it, and an order puts a section's nested
+blocks first so `reorderBlocks()` accepts it.
+`checkPlan()` drops, one at a time, any suggestion naming an unknown ref,
+something already hidden on the `hideFrom` surfaces, a summary or
+executive summary, a resume's last shown experience entry (per surface),
+or an entry's last shown bullet, checking each against the hides kept so
+far (sections, then blocks, then bullets) so any subset of the plan still
+follows the rules. A heading's ref hides its whole section. The order is
+kept only as an exact permutation of what was sent, top level and within
+each section, never across one; blocks not sent keep their slots, so
+`order.blockIds` passes `reorderBlocks()` unchanged. Hide keys are
+`<blockId>:hide` and `<blockId>:hide:<path>` (`hideKey()`), the editor's
+`proposalKey()` with a `hide` target.
+
+In the editor the plan is a third kind of proposal, kept apart from
+`aiProposals`: `EditorPage`'s `planHides` (by key) and `planOrder`, with
+the pure helpers in `client/src/editor/tailorPlan.js` and the panels in
+`PlanHidePanel.jsx` (under each block's row; the order's banner above
+the preview). `receivePlan()` stamps each hide with its surfaces, a
+bullet hide with the `anchorData` that `relocateHide()` follows it from
+(`relocateTarget()`'s rules), and the order with the nesting it was made
+for. A hide is stale once what it was made for changed (`isHideStale()`),
+gone once it's in effect (`isHideApplied()`), and left out of the preview
+under a rewrite that may move its bullet; an order is stale once the ids
+or nesting differ (`isOrderStale()`), and then can only be discarded.
+Accepting goes through the existing saves: `handleVisibilityChange()`
+per block, `handleBlockDataChange()` for a bullet, `handleReorder()` for
+the order. Accepting a bullet hide rebases that block's open rewrites
+(`rebaseOnBulletHide()`) so they don't go stale over the flag, or undo
+the hide when accepted later; `acceptAllWithPlan()` extends
+`acceptAllPlan()`. `handleReorder()` keeps each block's local content
+when its response lands, since an Accept all's data edits (or any edit
+on its debounce) aren't in it yet. In a run, the plan is
+`tailorRun.js`'s `planItem()`, a `barrier` item that runs alone first;
+its `skipBlockIds` take the rewrites of blocks it suggests hiding out of
+the run (`suggestedHidden`). `pendingTailor` carries the options as
+`plan` across New resume's switch. Discard, Discard all and switching
+resume drop the plan.
+
 The landing page has its own rewrite (issue #73):
 `server/src/ai/landingRewrite.js`, served by `landingRewriteHandlers()` in
 `routes/ai.js` and mounted at `POST /api/landing/rewrite` by

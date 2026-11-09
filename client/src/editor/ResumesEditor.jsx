@@ -57,7 +57,8 @@ export function ResumesEditor({ onLogout }) {
   const requestedId = searchParams.get('resume');
   const current = resumes && pickResume(resumes, requestedId);
 
-  // A tailoring run asked for with a new copy ({ resumeId, brief, types }):
+  // A tailoring run asked for with a new copy ({ resumeId, brief, types,
+  // plan }, plan being the tailoring plan's options or null):
   // it runs in the copy's EditorPage, which only exists once the switch
   // below has mounted it, so it waits here until that one takes it.
   const [pendingTailor, setPendingTailor] = useState(null);

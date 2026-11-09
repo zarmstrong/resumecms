@@ -13,6 +13,7 @@ import {
   textSimilarity,
 } from './rewritableFields.js';
 import { letterOutputSchema } from './letterWriting.js';
+import { planOutputSchema } from './tailorPlan.js';
 
 const bullet = (text, flags = {}, children = []) => ({ text, visibleWeb: true, visiblePrint: true, children, ...flags });
 
@@ -263,6 +264,9 @@ test('output schemas satisfy strict structured-output rules', () => {
   check(outputSchema('custom', { kind: 'item', index: 0 }), 'custom/item');
   check(letterOutputSchema(), 'cover letter');
   check(letterOutputSchema({ kind: 'paragraph', index: 0 }), 'cover letter/paragraph');
+  check(planOutputSchema(), 'tailoring plan');
+  check(planOutputSchema({ hide: true, order: false }), 'tailoring plan/hide');
+  check(planOutputSchema({ hide: false, order: true }), 'tailoring plan/order');
 });
 
 test('output schemas list only the target\'s fields', () => {

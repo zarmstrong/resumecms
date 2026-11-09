@@ -14,9 +14,24 @@ import { publicUrl } from './resumeLinks.js';
 import { ResumeSelect } from './ResumeSelect.jsx';
 import { NewResumeModal, ResumeSettingsModal } from './ResumeModals.jsx';
 import { TailorModal } from './TailorModal.jsx';
-import { createTailorRun, tailorItems } from './tailorRun.js';
+import { PLAN_KEY, createTailorRun, planItem, tailorItems } from './tailorRun.js';
 import {
-  acceptAllPlan,
+  acceptAllWithPlan,
+  applyOrder,
+  hideBulletInData,
+  hidePatches,
+  isHideApplied,
+  isHideStale,
+  isOrderStale,
+  previewPlan,
+  previewedHides,
+  rebaseOnBulletHide,
+  receivePlan,
+  relocateHide,
+  suggestedHiddenIds,
+} from './tailorPlan.js';
+import { PlanOrderBanner } from './PlanHidePanel.jsx';
+import {
   applyProposal,
   describeTarget,
   isProposalStale,
@@ -44,6 +59,14 @@ function loadLeftPaneWidth() {
     // localStorage unavailable (private browsing, etc.) — fall back below.
   }
   return LEFT_PANE_DEFAULT;
+}
+
+// What a plan found, for the tailoring bar.
+function planSummaryText({ hides, order }) {
+  const parts = [];
+  if (hides !== null) parts.push(hides ? `${hides} thing${hides === 1 ? '' : 's'} to hide` : 'nothing to hide');
+  if (order !== null) parts.push(order ? 'a new section order' : 'no change to the section order');
+  return `The AI suggests ${parts.join(' and ')}.`;
 }
 
 function timeAgo(iso) {
@@ -112,7 +135,15 @@ export function EditorPage({
   // flight or under review at the same time:
   // { blockId, target, instruction, status: 'loading' | 'ready' | 'error', proposal, error }
   const [aiProposals, setAiProposals] = useState({});
-  const [tailorOpen, setTailorOpen] = useState(false);
+  // A tailoring plan under review (issue #84, tailorPlan.js): its hides by
+  // proposal key, and its section order or null. Each is a proposal like a
+  // rewrite, saved only when accepted.
+  const [planHides, setPlanHides] = useState({});
+  const [planOrder, setPlanOrder] = useState(null);
+  // What the last plan found, for the tailoring bar: { hides, order }.
+  const [planSummary, setPlanSummary] = useState(null);
+  // 'tailor' for "Tailor…", 'plan' for "Suggest what to hide…", or null.
+  const [tailorMode, setTailorMode] = useState(null);
   // The tailoring run on screen: createTailorRun's state plus its brief and
   // items (for Retry), or null.
   const [tailorRun, setTailorRun] = useState(null);
@@ -136,6 +167,9 @@ export function EditorPage({
   // key; the entry is removed once it settles.
   const aiRequestsRef = useRef({});
   const aiRequestCounterRef = useRef(0);
+  // The latest plan request; a response for an older one (or after the
+  // plan was discarded) is ignored.
+  const planRequestRef = useRef(0);
   // Tracks the in-progress width during a drag so handleUp can persist the
   // final value directly — avoids a synchronous localStorage write on every
   // pointermove (one per pixel dragged), which was making the resize feel
@@ -278,7 +312,7 @@ export function EditorPage({
     if (loading || !pendingTailor) return undefined;
     const timer = setTimeout(() => {
       onPendingTailorTaken();
-      startTailoring(pendingTailor.brief, tailorItems(blocksRef.current, pendingTailor.types));
+      startTailoring(pendingTailor.brief, tailorItems(blocksRef.current, pendingTailor.types), pendingTailor.plan);
     }, 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when it has loaded
@@ -302,7 +336,7 @@ export function EditorPage({
     afterSaving(() => onSwitch(id));
   }
 
-  // `tailor` ({ brief, types }) tailors the copy once it's open.
+  // `tailor` ({ brief, types, plan }) tailors the copy once it's open.
   async function handleCreateResume(input, tailor = null) {
     let created;
     await afterSaving(async () => {
@@ -317,10 +351,14 @@ export function EditorPage({
 
   // AI tailoring (issue #53): one rewrite per item (tailorRun.js), each a
   // normal proposal under review, `brief` sent with every one. Starting a
-  // run replaces one still going; its open proposals stay.
-  function startTailoring(brief, items) {
+  // run replaces one still going; its open proposals stay. With `plan`
+  // (the tailoring plan's options, issue #84) the plan goes first, and the
+  // rewrites of blocks it suggests hiding are skipped.
+  function startTailoring(brief, items, plan = null) {
     if (!mountedRef.current) return;
     runnerRef.current?.cancel();
+    if (plan) items = [planItem(plan), ...items];
+    if (items.some((item) => item.kind === 'plan')) setPlanSummary(null);
     // Only the latest run updates the bar; it reports its first state
     // before createTailorRun returns.
     const token = {};
@@ -333,9 +371,11 @@ export function EditorPage({
     runnerRef.current = createTailorRun({
       items,
       run: (item) =>
-        takenSince(proposalKey(item.blockId, item.target))
-          ? { superseded: true }
-          : handleAiRequest(item.blockId, item.target, '', undefined, null, { brief }),
+        item.kind === 'plan'
+          ? handlePlanRequest(brief, item.plan)
+          : takenSince(proposalKey(item.blockId, item.target))
+            ? { superseded: true }
+            : handleAiRequest(item.blockId, item.target, '', undefined, null, { brief }),
       onUpdate: (state) => {
         if (runTokenRef.current === token) setTailorRun({ ...state, brief, items });
       },
@@ -344,16 +384,47 @@ export function EditorPage({
 
   function cancelTailoring() {
     const abandoned = runnerRef.current?.cancel() ?? [];
+    if (abandoned.some((item) => item.key === PLAN_KEY)) planRequestRef.current += 1;
     // Their requests are forgotten too, so a late one doesn't turn up.
     const keys = new Set(abandoned.map((item) => proposalKey(item.blockId, item.target)));
     dropAiProposals((entry) => entry.status === 'loading' && keys.has(proposalKey(entry.blockId, entry.target)));
   }
 
-  // "Tailor…": saves the brief on the resume, then runs.
-  async function handleTailor(brief, types) {
+  // "Tailor…" (and "Suggest what to hide…", with no types): saves the
+  // brief on the resume, then runs.
+  async function handleTailor(brief, types, plan = null) {
     await api.updateResume(resume.id, { tailoring: brief });
     onResumesChanged().catch(() => {});
-    startTailoring(brief, tailorItems(blocksRef.current, types));
+    startTailoring(brief, tailorItems(blocksRef.current, types), plan);
+  }
+
+  // A tailoring plan: one request for the whole resume, read from the
+  // stored draft, so edits still on their debounce go out first. Replaces
+  // the open plan's hides, its order, or both, whichever it asked for.
+  // Resolves for the run like handleAiRequest, with the blocks whose
+  // rewrites to skip.
+  async function handlePlanRequest(brief, { hide, order, hideFrom }) {
+    const id = ++planRequestRef.current;
+    await saves.flush();
+    if (planRequestRef.current !== id) return { superseded: true };
+    try {
+      const { plan } = await rapi.tailorPlan({ brief, hide, order, hideFrom });
+      if (planRequestRef.current !== id || !mountedRef.current) return { superseded: true };
+      const received = receivePlan(plan, blocksRef.current, hideFrom);
+      if (hide) setPlanHides(received.hides);
+      if (order) setPlanOrder(received.order);
+      setPlanSummary({ hides: hide ? Object.keys(received.hides).length : null, order: order ? Boolean(received.order) : null });
+      return { ok: true, skipBlockIds: suggestedHiddenIds(received.hides) };
+    } catch (err) {
+      if (planRequestRef.current !== id) return { superseded: true };
+      return { ok: false, error: err.message };
+    }
+  }
+
+  function dropPlan() {
+    planRequestRef.current += 1;
+    setPlanHides({});
+    setPlanOrder(null);
   }
 
   async function handleResumeDeleted() {
@@ -444,6 +515,7 @@ export function EditorPage({
     // tailoring run would go on adding more.
     runnerRef.current?.cancel();
     dropAiProposals(() => true);
+    dropPlan();
     setTailorRun(null); // it pointed at rewrites that are gone
     setHeader(draft.header);
     setSite(draft.site);
@@ -495,7 +567,13 @@ export function EditorPage({
     try {
       const { blocks: canonical } = await saves.track(rapi.reorderBlocks(createBlockReorderItems(reordered, blocks)));
       if (reorderRequestIdRef.current !== requestId) return;
-      setBlocks(canonical);
+      // The server's order and nesting, but each block's content as it is
+      // here: an edit still on its debounce (or one an Accept all made with
+      // this reorder) isn't in the response yet.
+      setBlocks((prev) => {
+        const local = new Map(prev.map((b) => [b.id, b]));
+        return canonical.map((b) => (local.has(b.id) ? { ...local.get(b.id), parentId: b.parentId, position: b.position } : b));
+      });
       flashSaved();
     } catch (err) {
       console.error('Failed to save block order', err);
@@ -638,6 +716,82 @@ export function EditorPage({
     dropAiProposals((entry) => proposalKey(entry.blockId, entry.target) === key);
   }
 
+  // Keeps the plan's hides attached to what they were made for: a bullet
+  // hide follows its bullet (relocateHide) and goes with it, a hide of a
+  // block that's gone goes, and so does one that's already in effect
+  // (hidden by hand since: nothing left to accept).
+  useEffect(() => {
+    let changed = false;
+    const next = {};
+    for (const hide of Object.values(planHides)) {
+      const block = blocks.find((b) => b.id === hide.blockId);
+      // A bullet hide is checked where its bullet is now, not where it was.
+      const placed = block && (hide.path ? relocateHide(hide, block.data) : hide);
+      if (placed !== hide) changed = true;
+      // Gone, already in effect, or two on one bullet: the one already
+      // there wins.
+      if (!placed || isHideApplied(blocks, placed) || next[placed.key]) {
+        changed = true;
+        continue;
+      }
+      next[placed.key] = placed;
+    }
+    if (changed) setPlanHides(next);
+  }, [blocks, planHides]);
+
+  // Saves one hide: a block or section through the visibility path, a
+  // bullet through the block's data, with that block's open rewrites
+  // rebased so the hide doesn't make them stale (or come undone when one
+  // is accepted later).
+  function acceptHide(hide) {
+    if (!hide.path) {
+      for (const { blockId, patch } of hidePatches(blocks, hide)) handleVisibilityChange(blockId, patch).catch(saveFailed);
+      return;
+    }
+    const block = blocks.find((b) => b.id === hide.blockId);
+    if (!block) return;
+    handleBlockDataChange(block.id, hideBulletInData(block.data, hide.path, hide.surfaces));
+    setAiProposals((prev) => {
+      let changed = false;
+      const next = {};
+      for (const [key, entry] of Object.entries(prev)) {
+        const rebased =
+          entry.blockId === block.id && entry.status === 'ready'
+            ? rebaseOnBulletHide(block.type, entry.proposal, block.data, hide.path, hide.surfaces)
+            : entry.proposal;
+        next[key] = rebased === entry.proposal ? entry : { ...entry, proposal: rebased };
+        changed ||= rebased !== entry.proposal;
+      }
+      return changed ? next : prev;
+    });
+  }
+
+  function handleHideReject(key) {
+    setPlanHides((prev) => {
+      if (!prev[key]) return prev;
+      const { [key]: _dropped, ...rest } = prev;
+      return rest;
+    });
+  }
+
+  function handleHideAccept(key) {
+    const hide = planHides[key];
+    if (!hide) return;
+    if (isHideStale(blocks, hide) && !window.confirm("You've changed this since the AI suggested hiding it. Hide it anyway?")) return;
+    acceptHide(hide);
+    handleHideReject(key);
+  }
+
+  function handleOrderAccept() {
+    if (!planOrder) return;
+    if (isOrderStale(blocks, planOrder)) {
+      window.alert('The sections have changed since this order was suggested, so it can’t be applied. Ask for a new one.');
+      return;
+    }
+    handleReorder(applyOrder(blocks, planOrder));
+    setPlanOrder(null);
+  }
+
   // `tense` is what a custom block's rewrite is sent with; `pickedTense` is
   // the user's own pick in the panel, or null when the picker was left on the
   // setting's default, so a reopened panel restores only a real pick. Both
@@ -681,13 +835,22 @@ export function EditorPage({
   }
 
   // "Accept all" in the preview banner: saves what the preview shows
-  // (acceptAllPlan), except whole-block rewrites whose block was edited
-  // since, which stay open to be accepted one by one.
+  // (acceptAllWithPlan: the rewrites, the plan's hides and its order),
+  // except whole-block rewrites whose block was edited since and stale
+  // suggestions, which stay open to be accepted one by one. The order goes
+  // first, so the blocks it sets are the ones the edits below land on.
   function handleAcceptAll() {
-    const { changes, accepted } = acceptAllPlan(blocks, readyProposals);
-    for (const { blockId, data } of changes) handleBlockDataChange(blockId, data);
-    const keys = new Set(accepted.map((p) => proposalKey(p.blockId, p.target)));
+    const plan = acceptAllWithPlan(blocks, readyProposals, planHides, planOrder);
+    if (plan.order) {
+      handleReorder(applyOrder(blocks, plan.order));
+      setPlanOrder(null);
+    }
+    for (const { blockId, data } of plan.changes) handleBlockDataChange(blockId, data);
+    for (const { blockId, patch } of plan.patches) handleVisibilityChange(blockId, patch).catch(saveFailed);
+    const keys = new Set(plan.accepted.map((p) => proposalKey(p.blockId, p.target)));
     dropAiProposals((entry) => entry.status === 'ready' && keys.has(proposalKey(entry.blockId, entry.target)));
+    const hides = new Set(plan.hides);
+    setPlanHides((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => !hides.has(key))));
   }
 
   function handleAiAccept(key) {
@@ -723,21 +886,38 @@ export function EditorPage({
     if (shown.length) previewedByBlock.set(b.id, shown);
   }
   const previewed = [...previewedByBlock.values()].flat();
-  const aiHighlightIds = new Set(previewedByBlock.keys());
-  const previewBlocks = previewed.length
+  const rewrittenBlocks = previewed.length
     ? blocks.map((b) =>
         previewedByBlock.has(b.id)
           ? { ...b, data: previewedByBlock.get(b.id).reduce((data, p) => applyProposal(b.type, data, p), b.data) }
           : b
       )
     : blocks;
-  // With exactly one rewrite in the preview, the banner can accept it directly.
-  const soleReadyKey = previewed.length === 1 ? proposalKey(previewed[0].blockId, previewed[0].target) : null;
+  // The plan's hides and order go over the rewrites; a stale one, or a
+  // bullet hide under a rewrite that may move bullets, isn't shown.
+  const shownHides = previewedHides(blocks, planHides, readyProposals);
+  const shownHideKeys = new Set(shownHides.map((h) => h.key));
+  const orderShown = Boolean(planOrder) && !isOrderStale(blocks, planOrder);
+  const previewBlocks = previewPlan(rewrittenBlocks, blocks, planHides, planOrder, readyProposals);
+  const aiHighlightIds = new Set([...previewedByBlock.keys(), ...shownHides.flatMap((h) => h.blockIds)]);
+  const planHideCount = Object.keys(planHides).length;
+  // With exactly one rewrite in the preview and nothing else, the banner
+  // can accept it directly.
+  const soleReadyKey =
+    previewed.length === 1 && shownHides.length === 0 && !orderShown ? proposalKey(previewed[0].blockId, previewed[0].target) : null;
   const soleReadyBlock = soleReadyKey && blocks.find((b) => b.id === previewed[0].blockId);
-  const openRewriteCount = Object.keys(aiProposals).length;
+  const openSuggestionCount = Object.keys(aiProposals).length + planHideCount + (planOrder ? 1 : 0);
   const tailoringNow = Boolean(tailorRun && !tailorRun.finished);
   // With several in the preview, the banner can accept them all at once.
-  const acceptAll = previewed.length > 1 ? acceptAllPlan(blocks, readyProposals) : null;
+  const previewedCount = previewed.length + shownHides.length + (orderShown ? 1 : 0);
+  const acceptAll = previewedCount > 1 ? acceptAllWithPlan(blocks, readyProposals, planHides, planOrder) : null;
+  const acceptAllCount = acceptAll ? acceptAll.accepted.length + acceptAll.hides.length + (acceptAll.order ? 1 : 0) : 0;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const previewedParts = [
+    previewed.length ? plural(previewed.length, 'AI rewrite', 'AI rewrites') : null,
+    shownHides.length ? plural(shownHides.length, 'suggested hide', 'suggested hides') : null,
+    orderShown ? 'a suggested section order' : null,
+  ].filter(Boolean);
 
   function handleLogout() {
     // Before the session ends, or the waiting saves would go out without it.
@@ -775,11 +955,21 @@ export function EditorPage({
           {aiSettings?.available && (
             <button
               className="ed-btn ed-btn-ghost"
-              onClick={() => setTailorOpen(true)}
+              onClick={() => setTailorMode('tailor')}
               disabled={switching || tailoringNow}
               title="Rewrite this resume's sections for an audience or a job posting, for you to review"
             >
               Tailor…
+            </button>
+          )}
+          {aiSettings?.available && (
+            <button
+              className="ed-btn ed-btn-ghost"
+              onClick={() => setTailorMode('plan')}
+              disabled={switching || tailoringNow}
+              title="Ask the AI what to hide for an audience or a job posting, and in what order to put the sections, for you to review"
+            >
+              Suggest what to hide…
             </button>
           )}
           {resume.tailoring && (
@@ -855,17 +1045,23 @@ export function EditorPage({
         <div className="ed-tailor-bar" role="status">
           <span className="ed-tailor-bar-text">
             {!tailorRun.finished
-              ? `Tailoring for “${tailorRun.brief.audience}”: ${tailorRun.done + tailorRun.skipped + tailorRun.failed.length} of ${tailorRun.total}…`
+              ? `Tailoring for “${tailorRun.brief.audience}”: ${tailorRun.done + tailorRun.skipped + tailorRun.suggestedHidden + tailorRun.failed.length} of ${tailorRun.total}…`
               : tailorRun.cancelled
                 ? tailorRun.done === 0
                   ? 'Tailoring cancelled before any rewrite came back.'
                   : `Tailoring cancelled: ${tailorRun.done} of ${tailorRun.total} rewritten. Review them in the preview.`
+                : tailorRun.items.every((item) => item.kind === 'plan') && planSummary
+                  ? `For “${tailorRun.brief.audience}”: ${planSummaryText(planSummary)}${
+                      planSummary.hides || planSummary.order ? ' Review it in the list of sections and the preview.' : ''
+                    }`
                 : tailorRun.total === 0
                   ? 'Nothing to tailor: no section of the chosen kinds has text to work from.'
                   : `Tailored for “${tailorRun.brief.audience}”: ${tailorRun.done} of ${tailorRun.total} ready to review in the preview.${
                       tailorRun.skipped
                         ? ` ${tailorRun.skipped} skipped: rewritten some other way or deleted meanwhile.`
                         : ''
+                    }${tailorRun.suggestedHidden ? ` ${tailorRun.suggestedHidden} not rewritten: suggested hidden.` : ''}${
+                      planSummary && tailorRun.items.some((item) => item.kind === 'plan') ? ` ${planSummaryText(planSummary)}` : ''
                     }`}
           </span>
           {tailorRun.finished && tailorRun.failed.length > 0 && (
@@ -935,6 +1131,7 @@ export function EditorPage({
             <div className="ed-panel-label">Resume Sections</div>
             <BlockList
               blocks={blocks}
+              plan={{ hides: planHides, shown: shownHideKeys, onAccept: handleHideAccept, onReject: handleHideReject }}
               onReorder={handleReorder}
               onChangeData={handleBlockDataChange}
               onChangeVisibility={handleVisibilityChange}
@@ -976,18 +1173,22 @@ export function EditorPage({
         />
 
         <div className="ed-right-pane">
-          {previewed.length > 0 ? (
+          {previewed.length + shownHides.length > 0 ? (
             <div className="ed-preview-label ed-ai-preview-banner">
               <span>
                 {soleReadyBlock
                   ? `Previewing AI rewrite of ${BLOCK_TYPE_LABELS[soleReadyBlock.type] || 'block'}${
                       describeTarget(previewed[0].target) ? ` (${describeTarget(previewed[0].target)})` : ''
                     }, outlined — not saved yet`
-                  : `Previewing ${previewed.length} AI rewrites (outlined) — not saved yet.`}
+                  : `Previewing ${previewedParts.join(' and ')} (outlined) — not saved yet.`}
                 {acceptAll?.skipped.length > 0 &&
                   ` ${acceptAll.skipped.length} ${acceptAll.skipped.length === 1 ? 'is' : 'are'} for a part you've edited since or can't be previewed: accept ${
                     acceptAll.skipped.length === 1 ? 'it' : 'those'
                   } in ${acceptAll.skipped.length === 1 ? 'its' : 'their'} block.`}
+                {planHideCount > shownHides.length &&
+                  ` ${plural(planHideCount - shownHides.length, 'suggested hide is', 'suggested hides are')} out of date or can't be previewed: review ${
+                    planHideCount - shownHides.length === 1 ? 'it' : 'them'
+                  } in the list of sections.`}
               </span>
               <button
                 type="button"
@@ -998,24 +1199,33 @@ export function EditorPage({
                 onClick={() => {
                   runnerRef.current?.cancel();
                   dropAiProposals(() => true);
+                  dropPlan();
                   setTailorRun(null); // it pointed at rewrites that are gone
                 }}
               >
-                {openRewriteCount === 1 ? 'Discard' : 'Discard all'}
+                {openSuggestionCount === 1 ? 'Discard' : 'Discard all'}
               </button>
               {soleReadyKey && (
                 <button type="button" className="ed-btn ed-btn-primary" onClick={() => handleAiAccept(soleReadyKey)}>
                   Accept
                 </button>
               )}
-              {acceptAll?.accepted.length > 0 && (
+              {acceptAllCount > 0 && (
                 <button type="button" className="ed-btn ed-btn-primary" onClick={handleAcceptAll}>
-                  Accept all ({acceptAll.accepted.length})
+                  Accept all ({acceptAllCount})
                 </button>
               )}
             </div>
           ) : (
             <div className="ed-preview-label">Draft preview — dimmed blocks are hidden from web and/or print</div>
+          )}
+          {planOrder && (
+            <PlanOrderBanner
+              order={planOrder}
+              stale={!orderShown}
+              onAccept={handleOrderAccept}
+              onReject={() => setPlanOrder(null)}
+            />
           )}
           <div className="ed-preview-frame">
             <ResumeView
@@ -1039,13 +1249,14 @@ export function EditorPage({
           onClose={() => setNewResumeOpen(false)}
         />
       )}
-      {tailorOpen && (
+      {tailorMode && (
         <TailorModal
           resume={resume}
           blocks={blocks}
           limits={aiSettings?.briefLimits}
+          planOnly={tailorMode === 'plan'}
           onTailor={handleTailor}
-          onClose={() => setTailorOpen(false)}
+          onClose={() => setTailorMode(null)}
         />
       )}
       {resumeSettingsOpen && (
