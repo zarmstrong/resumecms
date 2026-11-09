@@ -279,7 +279,7 @@ install, not to a resume, so it lives in the global `settings` table:
 `server/src/landingStore.js` holds the operations and is composed into the
 store by `createResumeStore()`; validation and the public shape are pure, in
 `landingFields.js`. It isn't blocks: `{ headline, subheadline, availability, actions,
-photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel }` (`seo` is `{ title, description, noindex, image? }`, see
+photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel, template, style }` (`seo` is `{ title, description, noindex, image? }`, see
 "Search and link previews"; `mergeLandingPatch()` merges it one level
 deep; `actions` are the hero's buttons, issue #88, a `link` or a `resume`
 opening its `page` or `pdf`), where `sections` is an ordered list of
@@ -312,6 +312,38 @@ must name an existing resume, but one already in the draft may outlive its resum
 (`referencedResumeIds()`), so a deletion doesn't make the draft unsavable. Publishing it is separate from
 publishing any resume, and `landing_enabled` isn't drafted: it takes
 effect at once, and does nothing until a snapshot exists.
+
+Its look (issue #93) is `template` and `style`, pure in
+`server/src/landingStyle.js`. `template` names a folder under
+`templates/landing/` (see "Pluggable header/layout templates"); the
+server never scans templates, so it keeps any well-formed id and the
+client draws an unknown one as `classic`. `style` is `{ source, colors,
+font, nameFont, darkColors? }`: `source: 'resume'` (the default, and what
+a draft stored before it reads as) draws the page in the default
+resume's published site settings as before, `'custom'` in its own four
+colors (`accent`, `heading`, `text`, `background`, `#rrggbb` or `''` for
+the site settings' default) and fonts (a site font id or `''`). Those
+are the site settings' rules, which live client-side in `siteColors.js`,
+so `landingStyle.js` mirrors `FONT_OPTIONS`, `DEFAULT_FONT` and the four
+`DEFAULT_SITE_COLORS`, and a bad value is a 400 (site settings
+themselves are still stored unchecked). `darkColors`, stored only when
+set and used with either source (a resume has none), is drawn under
+`prefers-color-scheme: dark`, an empty key as `DEFAULT_DARK_COLORS`.
+`resolveLanding()` sends `template`, `site` (`landingSite()`: the
+context's site, or the page's own colors and fonts normalized into the
+site settings' shape) and `darkColors` (`darkPalette()`, or null);
+`client/src/landing/landingStyle.js` mirrors both for the preview, and
+its test compares the two copies and the mirrored constants with
+`siteColors.js`. `mergeLandingPatch()` merges `style` one level deep and
+its palettes one more. "Apply to the default resume" (the landing
+editor's Look group, `POST /api/landing/apply-style`, MCP
+`apply_landing_style_to_resume`) is the store's
+`applyLandingStyleToResume()`: the stored draft's own colors and fonts
+(`resumeSitePatch()`, as the page draws them, never the dark palette)
+merged into the default resume's site settings *draft* through its
+`setSite(…, { merge: true })`, so its other settings stay and its
+`touchDraft()` runs; nothing is published, and it's a 400 while
+`source` is `'resume'`. The editor flushes its saves before calling it.
 
 A text section's `body` and an item's `text` (issue #91, nothing else: a
 quote's `text`, an item's `meta`, an image section's `caption`, an
@@ -511,6 +543,9 @@ The image is the landing page's `seo.image` when it has one (issue #92:
 and then no card is drawn), else a share card when one is drawn, else the
 photo (an uploaded hero photo by its public path, which `cardContent()`
 also accepts).
+A landing page card is drawn from the page's resolved `site`, so in its
+own colors and fonts when it has them (never its dark palette, and its
+template doesn't matter); `ShareCard.jsx` didn't change for that.
 `shareImages.js` (pure) keys both by a hash of what they show: a photo by
 its `data:` URL, a card by `cardContent()` (name, title, photo and only the
 colors and fonts it's drawn in) plus `CARD_DESIGN_VERSION`, which must be
@@ -617,8 +652,9 @@ columns, alternating by section).
 
 ### Pluggable header/layout templates
 
-Templates live at the repo root under `templates/headers/<id>/` and
-`templates/layouts/<id>/`, each with a `template.json`
+Templates live at the repo root under `templates/headers/<id>/`,
+`templates/layouts/<id>/` and `templates/landing/<id>/` (the landing
+page's, issue #93, see below), each with a `template.json`
 (`label`/`description`/`author`, layouts also allow `skillsDisplay` and
 `columns: true` for layouts that honor a heading's column placement).
 Headers require an `index.jsx` component; layouts' `index.jsx` is optional
@@ -626,9 +662,27 @@ Headers require an `index.jsx` component; layouts' `index.jsx` is optional
 default flat block list; see `templateRegistry.js`'s comment on
 `skillsDisplayFor`).
 
+A landing template needs a `style.css` with every rule scoped under
+`.l-template-<id>` (the validator checks the class appears; `classic`,
+the fallback, must exist), and its `index.jsx` is optional. `LandingView`
+renders the page root (`.l-page .l-template-<id>`, the colors as `--l-*`
+and `--l-dark-*` custom properties that `landing.css` turns into the
+`--r-*` ones, switched to the dark ones by `.l-dark-auto` under
+`prefers-color-scheme: dark` or `.l-dark-on` in the editor's dark
+preview) and hands a component `{ landing, renderHero, renderSection,
+colors, darkColors, preview }`; without one the hero and the sections
+go in turn into an `.l-main`. `landing.css` holds only what every
+template shares (the look of each part), never the arrangement: `classic`
+is the pre-#93 layout moved out of it unchanged, and must stay
+pixel-identical to it. `centered` and `split` size themselves with
+container queries on the page root, so the editor's narrower preview
+matches a phone. A template must render every section kind
+(`LandingView`'s `SectionBody` draws them; the template only arranges).
+
 `client/src/resume/templateRegistry.js` builds the registry at **build
 time** via `import.meta.glob` (eager, one glob per kind — the glob path
-must be a static literal, so headers and layouts can't share one call). New
+must be a static literal, so headers, layouts and landing templates can't
+share one call; `LANDING_TEMPLATES`, `getLandingTemplate()`). New
 templates become selectable just by adding files under `templates/`, no
 registration step. The server never renders resume markup — it only serves
 the built client + JSON APIs — so there is no matching runtime scan.
@@ -643,7 +697,10 @@ templates live outside `client/src`. `client/vite.config.js` also sets
 checks folder naming (lowercase kebab-case), required `template.json`
 fields, and — for the `templates/presets/` kind it also supports (not yet
 populated) — that a preset's `header`/`layout` references exist and its
-`colors` are recognized `#rrggbb` keys. Run it after adding or editing any
+`colors` are recognized `#rrggbb` keys, and a landing template's scoped
+`style.css`. It takes an optional templates folder as its argument, which
+`client/src/resume/validateTemplates.test.js` uses to run it over
+fixtures. Run it after adding or editing any
 template; CI runs it plus a client build on PRs touching `templates/**`.
 
 ### Resume rendering pipeline

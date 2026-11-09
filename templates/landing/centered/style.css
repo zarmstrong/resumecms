@@ -1,0 +1,175 @@
+/* Centered (issue #93): the hero centered over a wider page, each heading
+   centered with a short rule under it, running text kept to a readable
+   measure, and resume cards, list entries and quotes as cards in a grid.
+   No index.jsx, so LandingView arranges it (the hero, then the sections, in
+   an .l-main). Sized by the page's own width (a container query), so the
+   editor's narrower preview shows what a phone would. */
+.l-template-centered {
+  container-type: inline-size;
+}
+
+.l-template-centered .l-main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 88px 32px 104px;
+}
+
+.l-template-centered .l-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  max-width: 680px;
+  margin: 0 auto 64px;
+  text-align: center;
+}
+
+.l-template-centered .l-photo {
+  width: 144px;
+  height: 144px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--r-accent, var(--ink)) 16%, transparent);
+}
+
+.l-template-centered .l-headline {
+  font-size: 3em;
+}
+
+.l-template-centered .l-subheadline {
+  font-size: 1.3em;
+  margin-top: 8px;
+}
+
+.l-template-centered .l-actions {
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.l-template-centered .l-section {
+  margin: 0 0 60px;
+}
+
+.l-template-centered .l-section:last-child {
+  margin-bottom: 0;
+}
+
+.l-template-centered .l-section-title {
+  font-size: 1.4em;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.l-template-centered .l-section-title::after {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 2px;
+  margin: 12px auto 0;
+  background: var(--r-accent, var(--ink));
+}
+
+/* Text, links, the timeline and an image keep to a column you can read
+   across, centered on the page. */
+.l-template-centered .l-section-text,
+.l-template-centered .l-section-links,
+.l-template-centered .l-section-experience,
+.l-template-centered .l-section-image {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.l-template-centered .l-section-text {
+  text-align: center;
+}
+
+.l-template-centered .l-links {
+  justify-content: center;
+}
+
+.l-template-centered .l-figure {
+  text-align: center;
+}
+
+.l-template-centered .l-figure-image {
+  margin: 0 auto;
+}
+
+/* The grids: rows of cards, centered, so one card alone stays card-sized. */
+.l-template-centered .l-cards,
+.l-template-centered .l-items,
+.l-template-centered .l-quotes {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+}
+
+.l-template-centered .l-card,
+.l-template-centered .l-item,
+.l-template-centered .l-quote {
+  flex: 1 1 250px;
+  max-width: 300px;
+  padding: 20px 22px;
+  border: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--r-text, var(--ink)) 3%, transparent);
+}
+
+/* An entry's thumbnail goes across the top of its card. */
+.l-template-centered .l-item-with-image {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.l-template-centered .l-item-image {
+  width: calc(100% + 44px);
+  height: 160px;
+  margin: -20px -22px 14px;
+  border-radius: 10px 10px 0 0;
+}
+
+.l-template-centered .l-quote {
+  display: flex;
+  flex-direction: column;
+}
+
+.l-template-centered .l-quote-text::before {
+  content: '\201C';
+  display: block;
+  font-family: Georgia, serif;
+  font-size: 2.6em;
+  line-height: 0.8;
+  font-style: normal;
+  color: var(--r-accent, var(--ink));
+}
+
+.l-template-centered .l-quote-by {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+@container (max-width: 600px) {
+  .l-template-centered .l-main {
+    padding: 48px 18px 64px;
+  }
+  .l-template-centered .l-hero {
+    margin-bottom: 44px;
+  }
+  .l-template-centered .l-photo {
+    width: 116px;
+    height: 116px;
+  }
+  .l-template-centered .l-headline {
+    font-size: 2.2em;
+  }
+  .l-template-centered .l-section {
+    margin-bottom: 44px;
+  }
+  .l-template-centered .l-card,
+  .l-template-centered .l-item,
+  .l-template-centered .l-quote {
+    max-width: none;
+  }
+}

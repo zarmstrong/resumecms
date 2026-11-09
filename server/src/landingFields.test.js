@@ -270,6 +270,8 @@ test('a draft stored before sections reads as the sections it showed, in order',
     seo: { title: '', description: '', noindex: false },
     homeLink: true,
     homeLinkLabel: '',
+    template: 'classic',
+    style: { source: 'resume', colors: { accent: '', heading: '', text: '', background: '' }, font: '', nameFont: '' },
   });
   // Stable, and the new shape (or nothing) passes through untouched.
   assert.deepEqual(upgradeLanding(old), upgraded);

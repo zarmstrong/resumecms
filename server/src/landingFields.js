@@ -3,13 +3,14 @@ import { httpError } from './httpError.js';
 import { blocksForMode } from './publicBlocks.js';
 import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inlineText.js';
 import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImageFields.js';
+import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, emptyStyle, landingSite, mergeStylePatch } from './landingStyle.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
 // here; landingStore.js stores it and decides which hosts get it.
 //
 // The draft is a fixed set of fields, all always present once stored:
-//   { headline, subheadline, availability, actions, photo, photoUrl, sections, seo, homeLink, homeLinkLabel }
+//   { headline, subheadline, availability, actions, photo, photoUrl, sections, seo, homeLink, homeLinkLabel, template, style }
 // `availability` is a short line shown above the headline ("Open to senior
 // backend roles · Remote"), '' for none. `actions` (issue #88) are the
 // hero's buttons, at most three, the first drawn as the primary one:
@@ -49,8 +50,11 @@ import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImag
 // not nulls. `homeLink` (issue #89) is whether a resume
 // page shows a "← Home" link back here while this page holds `/` (see
 // landingStore.js's homeLinkForHost()), and `homeLinkLabel` what it says
-// after the arrow ('' for "Home"). A draft stored before sections, `seo`
-// or `homeLink` existed is read through upgradeLanding().
+// after the arrow ('' for "Home"). `template` and `style` (issue #93,
+// landingStyle.js) are the page's look: which template arranges it, and
+// whether it's drawn in the default resume's colors and fonts or its own,
+// with an optional dark palette. A draft stored before sections, `seo`,
+// `homeLink` or `style` existed is read through upgradeLanding().
 //
 // Everything here ends up in front of every visitor, so it's checked more
 // strictly than the header: unknown keys, wrong types and oversized values
@@ -102,7 +106,7 @@ export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'ex
 export const ACTION_TYPES = ['link', 'resume'];
 export const ACTION_OPENS = ['page', 'pdf'];
 
-const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'photoImage', 'sections', 'seo', 'homeLink', 'homeLinkLabel'];
+const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'photoImage', 'sections', 'seo', 'homeLink', 'homeLinkLabel', 'template', 'style'];
 const SEO_FIELDS = ['title', 'description', 'noindex', 'image'];
 const SECTION_FIELDS = {
   text: ['id', 'kind', 'title', 'hidden', 'body'],
@@ -133,7 +137,20 @@ function emptySeo() {
 }
 
 export function emptyLanding() {
-  return { headline: '', subheadline: '', availability: '', actions: [], photo: 'resume', photoUrl: '', sections: [], seo: emptySeo(), homeLink: true, homeLinkLabel: '' };
+  return {
+    headline: '',
+    subheadline: '',
+    availability: '',
+    actions: [],
+    photo: 'resume',
+    photoUrl: '',
+    sections: [],
+    seo: emptySeo(),
+    homeLink: true,
+    homeLinkLabel: '',
+    template: DEFAULT_LANDING_TEMPLATE,
+    style: emptyStyle(),
+  };
 }
 
 // What a resume page's link back to the landing page points at, and says
@@ -145,7 +162,9 @@ export const HOME_LINK = { href: '/', label: 'Home' };
 // `intro`, `links` and `resumes` as fields of their own), turned into the
 // sections it showed, in the order it showed them, one stored before `seo`,
 // `availability`, `actions` or `homeLinkLabel` given the empty ones, one
-// stored before `homeLink` given it switched on, and a card stored before
+// stored before `homeLink` given it switched on, one stored before
+// `template` or `style` the look it had (classic, the default resume's
+// colors and fonts), and a card stored before
 // `showPdf` given false. The ids are fixed, so reading the same
 // stored draft twice gives the same sections; one already in the current
 // shape comes back as it is.
@@ -165,6 +184,8 @@ export function upgradeLanding(stored) {
   if (!Array.isArray(upgraded.actions)) upgraded = { ...upgraded, actions: [] };
   if (typeof upgraded.homeLink !== 'boolean') upgraded = { ...upgraded, homeLink: true };
   if (typeof upgraded.homeLinkLabel !== 'string') upgraded = { ...upgraded, homeLinkLabel: '' };
+  if (typeof upgraded.template !== 'string') upgraded = { ...upgraded, template: DEFAULT_LANDING_TEMPLATE };
+  if (!isPlainObject(upgraded.style)) upgraded = { ...upgraded, style: emptyStyle() };
   const needsShowPdf = (section) => section?.kind === 'resumes' && Array.isArray(section.cards) && section.cards.some((card) => isPlainObject(card) && !('showPdf' in card));
   if (upgraded.sections.some(needsShowPdf)) {
     upgraded = {
@@ -437,6 +458,8 @@ export function validateLanding(input, { knownResumeIds, previousResumeIds = new
   out.homeLink = input.homeLink ?? base.homeLink;
   if (typeof out.homeLink !== 'boolean') throw httpError(400, 'homeLink must be a boolean');
   out.homeLinkLabel = checkString(input.homeLinkLabel ?? base.homeLinkLabel, LANDING_LIMITS.homeLinkLabel, 'homeLinkLabel');
+  out.template = checkTemplate(input.template ?? base.template);
+  out.style = checkStyle(input.style ?? base.style);
   return out;
 }
 
@@ -444,7 +467,8 @@ export function validateLanding(input, { knownResumeIds, previousResumeIds = new
 // `patch` replace the draft's, `sections` and `actions` as a whole, and a null resets one
 // to its empty value. `seo` is merged one level deeper, the way setSite()
 // merges `colors`, so a description can be set without restating the
-// title. The result still goes through validateLanding().
+// title, and `style` the same with its palettes one more (mergeStylePatch()).
+// The result still goes through validateLanding().
 export function mergeLandingPatch(current, patch) {
   if (!isPlainObject(patch)) throw httpError(400, 'landing page must be an object');
   const out = { ...current };
@@ -452,6 +476,7 @@ export function mergeLandingPatch(current, patch) {
     if (key === '__proto__') continue;
     if (value === null) delete out[key];
     else if (key === 'seo' && isPlainObject(value)) out.seo = mergeLandingPatch(isPlainObject(current.seo) ? current.seo : {}, value);
+    else if (key === 'style' && isPlainObject(value)) out.style = mergeStylePatch(current.style, value);
     else out[key] = value;
   }
   return out;
@@ -512,7 +537,8 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // not of the publish, so a resume made private, unpublished or deleted
 // since drops off at once and a renamed one links to its new slug:
 //   context.photoUrl — the default resume's published header photo
-//   context.site     — the default resume's published site settings
+//   context.site     — the default resume's published site settings, the
+//                      page's `site` unless it has colors of its own
 //   context.resumes  — Map of resume id → { href, title, pdfHref, experience }
 //                      for the resumes a visitor may see (public and
 //                      published); pdfHref is '' while the resume has no
@@ -537,7 +563,10 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // reference resolves to { src, alt, width, height }, or is left out (a
 // photo, a thumbnail, the share image) when its image is gone; an image
 // section without one is left out. An uploaded hero photo is `photoUrl`
-// (its src), with its alt as `photoAlt`.
+// (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
+// `template` (an id the client may not know, and then draws as classic),
+// `site` (context.site, or the page's own colors and fonts in the site
+// settings' shape) and `darkColors` (its dark palette, or null).
 export function resolveLanding(landing, context) {
   const upload = landing.photo === 'upload' ? resolveImage(landing.photoImage, context.images) : null;
   const photoUrl =
@@ -559,7 +588,9 @@ export function resolveLanding(landing, context) {
       return shown ? [{ kind: section.kind, title: section.title, ...shown }] : [];
     }),
     seo: { ...emptySeo(), ...seo, ...(seoImage ? { image: seoImage } : {}) },
-    site: context.site ?? null,
+    template: landing.template || DEFAULT_LANDING_TEMPLATE,
+    site: landingSite(landing.style, context.site),
+    darkColors: darkPalette(landing.style),
   };
 }
 

@@ -1333,6 +1333,30 @@
   padding: 0 12px 12px;
 }
 
+/* The landing page preview's label, with its Light/Dark switch while the
+   draft has a dark palette (issue #93). */
+.ed-landing-preview-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ed-landing-preview-label > span:first-child {
+  flex: 1;
+}
+
+.ed-landing-scheme {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ed-landing-scheme .is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--panel);
+}
+
 /* The link preview (LinkPreview.jsx): a card like a social feed's. */
 .ed-link-preview {
   width: 360px;

@@ -335,3 +335,65 @@ test('visibleResumeSnapshot only returns a public, published resume', async () =
   assert.equal(store.visibleResumeSnapshot(unpublished), null);
   assert.equal(store.visibleResumeSnapshot('missing'), null);
 });
+
+test("its own colors and fonts can be applied to the default resume's site settings draft, merged, and nothing published", async () => {
+  const { store, defaultId } = await makeStore();
+  store.setSite({ title: 'Jo', layout: 'sidebar', fontSize: 'large', colors: { accent: '#123456', datesPill: '#2c5f7c' } });
+  await store.publish();
+  const published = store.getPublishedResume('web');
+  assert.equal(store.getPublishStatus().isDirty, false);
+
+  // Nothing to give while the page uses the resume's own.
+  assert.equal(status(() => store.applyLandingStyleToResume()), 400);
+  assert.equal(store.getPublishStatus().isDirty, false);
+
+  store.setLanding({
+    ...store.getLanding(),
+    style: { source: 'custom', colors: { accent: '#aa0000', background: '#fafafa' }, font: 'inter', nameFont: '', darkColors: { background: '#000000' } },
+  });
+  store.setLandingEnabled(true);
+  store.publishLanding();
+  const landingStatus = store.getLandingStatus();
+
+  const result = store.applyLandingStyleToResume();
+  assert.equal(result.resumeId, defaultId);
+  // Every other site setting and color stays; empty colors arrive as the
+  // defaults the page is drawn in; no dark palette.
+  assert.deepEqual(result.site, {
+    title: 'Jo',
+    layout: 'sidebar',
+    fontSize: 'large',
+    font: 'inter',
+    nameFont: '',
+    colors: { accent: '#aa0000', heading: '#14181c', text: '#14181c', background: '#fafafa', datesPill: '#2c5f7c' },
+  });
+  assert.deepEqual(store.getSite(), result.site);
+  // A draft edit of the resume, published on its own.
+  assert.equal(store.getPublishStatus().isDirty, true);
+  assert.deepEqual(store.getPublishedResume('web').site, published.site);
+  assert.deepEqual(store.getLandingStatus(), landingStatus);
+  // The landing page keeps drawing itself in its own colors.
+  assert.equal(store.landingForHost('example.com').site.colors.background, '#fafafa');
+
+  // It follows the default when that moves, and never another resume.
+  const other = await publicResume(store, 'Other', 'other');
+  store.updateResume(other, { isDefault: true });
+  const before = store.forResume(defaultId).getSite();
+  assert.equal(store.applyLandingStyleToResume().resumeId, other);
+  assert.equal(store.forResume(other).getSite().font, 'inter');
+  assert.deepEqual(store.forResume(defaultId).getSite(), before);
+});
+
+test("the page's template and style are checked on save and resolve publicly", async () => {
+  const { store } = await makeStore();
+  assert.equal(status(() => store.setLanding({ style: { source: 'custom', colors: { accent: 'tomato' } } })), 400);
+  assert.equal(status(() => store.setLanding({ template: '../x' })), 400);
+  assert.equal(status(() => store.setLanding({ headline: 'Hi', style: { colors: { accent: 'tomato' } } }, { merge: true })), 400);
+  store.setLanding({ headline: 'Hi', template: 'split', style: { source: 'custom', colors: { accent: '#aa0000' } } }, { merge: true });
+  store.setLandingEnabled(true);
+  store.publishLanding();
+  const page = store.landingForHost('example.com');
+  assert.equal(page.template, 'split');
+  assert.equal(page.site.colors.accent, '#aa0000');
+  assert.equal(page.darkColors, null);
+});

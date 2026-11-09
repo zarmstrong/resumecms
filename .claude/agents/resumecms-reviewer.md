@@ -25,7 +25,12 @@ in prose; check the diff against the ones that apply, especially:
   filters kept.
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
-  link types, `NESTABLE_TYPES`, letter dates, …).
+  link types, `NESTABLE_TYPES`, letter dates, the landing page's style vs
+  `siteColors.js`, …).
+- `landing.css` holds only what every landing template shares; an
+  arrangement belongs in a template's `style.css`, scoped under
+  `.l-template-<id>`, so a change for one template can't move another
+  (issue #93).
 - New public routes set a `cacheHeaders.js` constant before any early
   return; host-resolved ones send `HOST_HEADERS`.
 - Route mount order in `index.js`: new auth-exempt or differently gated

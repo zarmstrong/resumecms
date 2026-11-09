@@ -1,22 +1,22 @@
 import { linkProps } from '../resume/safeUrl.js';
 import { linkGlyph } from '../resume/linkTypes.js';
-import {
-  normalizeSiteColors,
-  contrastTextFor,
-  normalizeResumeFont,
-  normalizeNameFont,
-  normalizeFontSize,
-  FONT_SIZE_CSS,
-  fontCssFor,
-} from '../resume/siteColors.js';
+import { getLandingTemplate } from '../resume/templateRegistry.js';
+import { darkClass, landingPageStyle } from './landingStyle.js';
 import { textParagraphs } from './resolveLanding.js';
 import { renderInline } from './renderInline.js';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
 // API sends (server/src/landingFields.js's resolveLanding(); the editor's
-// preview builds the same from its draft). It takes the default resume's
-// colors and fonts, so the two pages match. Everything is rendered as text,
+// preview builds the same from its draft). It's drawn in the page's `site`
+// colors and fonts (the default resume's, unless it has its own) and, when
+// it has a dark palette, in that one under the visitor's dark setting;
+// `scheme` ('auto', 'light' or 'dark') lets the editor's preview choose
+// instead. Its template (templates/landing/<id>/, issue #93) arranges the
+// parts: one with an index.jsx is handed the page, renderHero() and
+// renderSection(section, index) and lays them out, one without gets the
+// hero and then each section in an .l-main; either way its style.css,
+// scoped under .l-template-<id>, does the rest. Everything is rendered as text,
 // apart from the links and emphasis a text section or an item's text may
 // hold (issue #91, renderInline.js), which become elements, never HTML; every
 // href still goes through safeHref() (by way of linkProps()) although the
@@ -25,56 +25,66 @@ import './landing.css';
 // 'hero' for the headline and subheadline, otherwise a section's id (the
 // preview resolves its draft `withIds`). A section marked `hidden` (only
 // the preview resolves those, `withHidden`) is dimmed and labelled.
-export function LandingView({ landing, preview = false, highlightIds = null }) {
-  const { site } = landing;
-  const colors = normalizeSiteColors(site);
-  const style = {
-    '--r-accent': colors.accent,
-    '--r-heading': colors.heading,
-    '--r-text': colors.text,
-    '--r-bg': colors.background,
-    '--r-on-accent': contrastTextFor(colors.accent),
-    '--font-resume': fontCssFor(normalizeResumeFont(site)),
-    '--r-font-size': FONT_SIZE_CSS[normalizeFontSize(site)],
-  };
-  const nameFont = normalizeNameFont(site);
-  if (nameFont) style['--r-name-font'] = fontCssFor(nameFont);
+export function LandingView({ landing, preview = false, highlightIds = null, scheme = 'auto' }) {
+  const template = getLandingTemplate(landing.template);
+  const { colors, style } = landingPageStyle(landing.site, landing.darkColors);
+  const dark = darkClass(landing.darkColors, scheme);
+  const Arrangement = template.Component || DefaultArrangement;
+
+  const renderHero = () => (
+    <header className={`l-hero${highlightIds?.has('hero') ? ' l-ai-preview' : ''}`}>
+      {landing.photoUrl && <img className="l-photo" src={landing.photoUrl} alt={landing.photoAlt || ''} />}
+      <div className="l-hero-text">
+        {landing.availability && <p className="l-availability">{landing.availability}</p>}
+        {landing.headline && <h1 className="l-headline">{landing.headline}</h1>}
+        {landing.subheadline && <p className="l-subheadline">{landing.subheadline}</p>}
+        {landing.actions?.length > 0 && (
+          <div className="l-actions">
+            {landing.actions.map((action, i) => (
+              <a key={i} className={`l-action${i === 0 ? ' l-action-primary' : ''}`} {...hrefProps(action.href)}>
+                {action.label}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </header>
+  );
+
+  const renderSection = (section, i) => (
+    <section
+      key={section.id ?? i}
+      className={`l-section l-section-${section.kind}${section.hidden ? ' l-section-hidden' : ''}${
+        highlightIds?.has(section.id) ? ' l-ai-preview' : ''
+      }`}
+    >
+      {section.hidden && <span className="l-hidden-label">Hidden</span>}
+      {section.title && <h2 className="l-section-title">{section.title}</h2>}
+      <SectionBody section={section} />
+    </section>
+  );
 
   return (
-    <div className={`l-page${preview ? ' l-preview' : ''}`} style={style}>
-      <main className="l-main">
-        <header className={`l-hero${highlightIds?.has('hero') ? ' l-ai-preview' : ''}`}>
-          {landing.photoUrl && <img className="l-photo" src={landing.photoUrl} alt={landing.photoAlt || ''} />}
-          <div>
-            {landing.availability && <p className="l-availability">{landing.availability}</p>}
-            {landing.headline && <h1 className="l-headline">{landing.headline}</h1>}
-            {landing.subheadline && <p className="l-subheadline">{landing.subheadline}</p>}
-            {landing.actions?.length > 0 && (
-              <div className="l-actions">
-                {landing.actions.map((action, i) => (
-                  <a key={i} className={`l-action${i === 0 ? ' l-action-primary' : ''}`} {...hrefProps(action.href)}>
-                    {action.label}
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        </header>
-
-        {landing.sections.map((section, i) => (
-          <section
-            key={section.id ?? i}
-            className={`l-section l-section-${section.kind}${section.hidden ? ' l-section-hidden' : ''}${
-              highlightIds?.has(section.id) ? ' l-ai-preview' : ''
-            }`}
-          >
-            {section.hidden && <span className="l-hidden-label">Hidden</span>}
-            {section.title && <h2 className="l-section-title">{section.title}</h2>}
-            <SectionBody section={section} />
-          </section>
-        ))}
-      </main>
+    <div className={`l-page l-template-${template.id}${preview ? ' l-preview' : ''}${dark ? ` ${dark}` : ''}`} style={style}>
+      <Arrangement
+        landing={landing}
+        renderHero={renderHero}
+        renderSection={renderSection}
+        colors={colors}
+        darkColors={landing.darkColors}
+        preview={preview}
+      />
     </div>
+  );
+}
+
+// A template with no component of its own: the hero, then each section.
+function DefaultArrangement({ landing, renderHero, renderSection }) {
+  return (
+    <main className="l-main">
+      {renderHero()}
+      {landing.sections.map(renderSection)}
+    </main>
   );
 }
 
