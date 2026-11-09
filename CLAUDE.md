@@ -54,7 +54,8 @@ builds the store over a `better-sqlite3` `:memory:` database via
 `ensureSchema()`, and the MCP tool tests inject a fake store. CI is one workflow,
 `.github/workflows/ci.yml`, run on every PR into `main` (issue #97): a
 `changes` job diffs the PR and only the jobs it touches run (`server
-tests` for `server/**`; `client tests and build` for `client/**` or
+tests` for `server/**`; `client tests and build` for `client/**`,
+`server/**` (client tests import the server modules they mirror) or
 anything a template build reads; `templates`, the validator, for
 `templates/**`, `templateRegistry.js` or the validator itself; all of
 them when `.github/workflows/` changes). `ci-passed` gathers them and is

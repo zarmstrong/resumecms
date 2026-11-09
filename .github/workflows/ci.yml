@@ -29,20 +29,25 @@ jobs:
     steps:
       # A pull_request run checks out GitHub's merge of the PR into main, so
       # its first parent is main and the diff against it is the whole PR.
+      # --no-renames lists a moved file's old path too, and quotePath off
+      # keeps a non-ASCII path unquoted; the patterns allow a leading quote
+      # for the few characters git still quotes.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
       - id: diff
         run: |
-          files=$(git diff --name-only HEAD^1 HEAD)
+          files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD)
           printf '%s\n' "$files"
           has() { printf '%s\n' "$files" | grep -Eq "$1" && echo true || echo false; }
           # Editing CI runs all of CI.
           all=$(has '^\.github/workflows/')
-          server=$(has '^server/')
-          client=$(has '^client/')
-          templates=$(has '^(templates/|client/src/resume/templateRegistry\.js$|scripts/validate-templates\.mjs$)')
+          server=$(has '^"?server/')
+          # Client tests import server modules they mirror (pageMeta.js,
+          # tailorPlan.js, ...), so a server change runs them too.
+          client=$(has '^"?(client|server)/')
+          templates=$(has '^"?(templates/|client/src/resume/templateRegistry\.js"?$|scripts/validate-templates\.mjs"?$)')
           [ "$all" = true ] && server=true client=true templates=true
           {
             echo "server=$server"
