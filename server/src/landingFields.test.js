@@ -579,37 +579,25 @@ test("any section may go in a template's side column: stored only when 'side', a
   }
 });
 
-test('a divider is only a title, shown between two sections', () => {
+test('a divider is only a title, and is always shown unless hidden', () => {
   const draft = validateLanding(
     {
       sections: [
         { id: 'a', kind: 'divider' },
-        { id: 't1', kind: 'text', body: 'One' },
         { id: 'b', kind: 'divider', title: 'Or', column: 'side' },
         { id: 'c', kind: 'divider', hidden: true },
-        { id: 'gone', kind: 'text', body: ' ' },
-        { id: 'd', kind: 'divider', title: 'Twice' },
-        { id: 't2', kind: 'text', body: 'Two' },
-        { id: 'e', kind: 'divider', title: 'Last' },
-        { id: 'cards', kind: 'resumes', cards: [] },
       ],
     },
     known()
   );
-  assert.deepEqual(draft.sections.slice(0, 4), [
+  assert.deepEqual(draft.sections, [
     { id: 'a', kind: 'divider', title: '' },
-    { id: 't1', kind: 'text', title: '', body: 'One' },
     { id: 'b', kind: 'divider', title: 'Or', column: 'side' },
     { id: 'c', kind: 'divider', title: '', hidden: true },
   ]);
-  // The first one divides the hero from the sections; the hidden one and
-  // the empty section don't count, so 'd' follows 'b' and goes; 'e' has
-  // nothing shown after it.
   assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections, [
     { kind: 'divider', title: '' },
-    { kind: 'text', title: '', body: 'One' },
     { kind: 'divider', title: 'Or', column: 'side' },
-    { kind: 'text', title: '', body: 'Two' },
   ]);
   assert.equal(status(() => validateLanding({ sections: [{ id: 's', kind: 'divider', body: 'x' }] }, known())), 400);
   assert.equal(status(() => validateLanding({ sections: [{ id: 's', kind: 'divider', title: 'x'.repeat(LANDING_LIMITS.sectionTitle + 1) }] }, known())), 400);

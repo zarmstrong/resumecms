@@ -186,13 +186,17 @@ missing id is drawn as `classic`, which must always exist.
   structure (like `split`, which puts the hero in a side column).
   Default-exports:
   ```jsx
-  export default function MyLanding({ landing, renderHero, renderSection, colors, darkColors, preview }) {
+  export default function MyLanding({ landing, renderHero, renderSection, dropStrayDividers, colors, darkColors, preview }) {
     // landing: the resolved page (headline, sections, …) — read it, but
     //   draw the parts with the two functions below, so every template
     //   shows every kind of section the same way
     // renderHero(): the hero, an <header class="l-hero">
     // renderSection(section, index): one section; landing.sections.map(renderSection)
-    //   (with `columns: true`, split them on section.column === 'side')
+    //   (with `columns: true`, split them on section.column === 'side', and
+    //   pass each column through dropStrayDividers(sections, { atStart }),
+    //   atStart true when something sits above it, so it draws only the
+    //   dividers it has something to divide; without `columns`, the list
+    //   comes already tidied)
     // colors / darkColors: the normalized palettes (darkColors null if none)
     // preview: true in the editor
     return (

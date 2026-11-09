@@ -289,8 +289,9 @@ opening its `page` or `pdf`), where `sections` is an ordered list of
 (`[{ text, name, role, url }]`), `experience` (`resumeId`, `count`,
 `showDates`; issue #90), `image` (`{ image, caption }`, `image` null
 until one is uploaded; issue #92) and `divider` (only its `title`, a label
-on the rule; never empty, but dropped by `dropStrayDividers()`, both
-copies, after another divider or with no section after it). Any section may be `hidden: true`: kept in the
+on the rule; always resolved, but only drawn between two things it
+divides: `client/src/landing/dividers.js`, applied by `LandingView`, since
+which sections end up next to each other depends on the template). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -699,14 +700,16 @@ the fallback, must exist), and its `index.jsx` is optional. Its
 `template.json` may say `columns: true` (only with an `index.jsx`) when
 the component draws a section with `column: 'side'` in a side column, as
 `split` does under the hero (and stops the column being sticky while it
-holds any); the editor shows each section's "side column" box only for
+holds any). `LandingView` then leaves the stray-divider rule to it,
+handing it `dropStrayDividers(sections, { atStart })` to apply to each
+column (a template without columns gets its list already tidied); the editor shows each section's "side column" box only for
 such a template, and every other template ignores `column`. `LandingView`
 renders the page root (`.l-page .l-template-<id>`, the colors as `--l-*`
 and `--l-dark-*` custom properties that `landing.css` turns into the
 `--r-*` ones, switched to the dark ones by `.l-dark-auto` under
 `prefers-color-scheme: dark` or `.l-dark-on` in the editor's dark
 preview) and hands a component `{ landing, renderHero, renderSection,
-colors, darkColors, preview }`; without one the hero and the sections
+dropStrayDividers, colors, darkColors, preview }`; without one the hero and the sections
 go in turn into an `.l-main`. `landing.css` holds only what every
 template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
