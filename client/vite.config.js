@@ -28,6 +28,9 @@ export default defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
       },
+      // The site's icon is drawn by the server too (server/src/routes/favicon.js).
+      '/favicon.svg': { target: 'http://localhost:4000', changeOrigin: true },
+      '/apple-touch-icon.png': { target: 'http://localhost:4000', changeOrigin: true },
     },
     fs: {
       // templates/ lives at the repo root, outside client/'s root — allow

@@ -396,7 +396,7 @@ store, pure parts in `landingImageFields.js`. `POST /api/landing/images`
 takes the raw file (`express.raw()` on that route only, after the login
 check) and `upload_landing_image` (MCP) base64 under a smaller cap, both
 into `uploadLandingImage()`. `imageUpload.js`, the only module that loads
-`sharp` (a pinned dependency; it ships prebuilt binaries for the Docker
+`sharp` besides the favicon's `faviconRaster.js` (a pinned dependency; it ships prebuilt binaries for the Docker
 image's glibc), tells the type by its bytes (JPEG/PNG/WebP, never the
 `Content-Type`), refuses more than 50 MP before decoding, and *always*
 re-encodes: EXIF orientation applied, at most 1600 px on the long side,
@@ -565,6 +565,32 @@ shown landing page and every public, published resume) still shows it, so
 taking a resume private takes its photo and card down with it; keep that
 check if you add an image (the landing page's uploads have the same rule,
 see "Landing page").
+
+### Favicon
+
+Issue #104. `GET /favicon.svg` and `GET /apple-touch-icon.png`
+(`routes/favicon.js`, linked from `index.html`) are the person's initials
+on the accent color. `contentFor()` there asks the store what `/`'s own
+fetch would, like `shellHead.js`: while `landingForHost()` shows the
+landing page, the default resume's *published* name (its headline only
+when that has none) and the page's resolved `site` accent (its own palette
+when `style.source` is custom), plus its `darkColors` accent under
+`prefers-color-scheme: dark` in the SVG; otherwise `forHost()`'s
+published header and site. Only published data, so nothing before the
+first publish (and a name with no letters) gets the neutral mark (three
+lines), and a store that throws gets it in a neutral slate, never a 500.
+The markup is pure, in `favicon.js`: `initialsOf()` (first letters of the
+first and last words, by grapheme, skipping words without a letter), only
+`#rrggbb` colors, and the text through `pageMeta.js`'s `escapeHtml()`. The
+PNG is the same SVG in the light colors, square and opaque (iOS rounds it
+itself), drawn by `faviconRaster.js` with `sharp` off the PDF queue and
+cached in memory by the SVG's hash, least recently used first out at
+`RASTER_CACHE_ENTRIES`. Both send `REVALIDATE`, `HOST_HEADERS`, `nosniff`
+and a strong ETag of the bytes sent (so a rename or recolor is a new
+one), the SVG a CSP too. They're mounted in `index.js` after the `/api`
+routes and before `mountClient()`, whose SPA fallback 404s any path with
+an extension; there's no `client/public`, so the build ships no icon of
+its own (`vite.config.js` proxies both to the server in dev).
 
 ### Route mount order matters
 
@@ -1049,7 +1075,7 @@ Chromium's children.
 Every public response carries an explicit `Cache-Control` from
 `server/src/cacheHeaders.js`: `no-cache` for `/api/public/resume`,
 `/api/public/resumes/:slug`, `/api/public/images/:key`,
-`/api/public/landing/images/:id` and the HTML shell
+`/api/public/landing/images/:id`, the favicons (see "Favicon") and the HTML shell
 (which also sends `HOST_HEADERS` as `Vary`, since its tags name the
 host's resume and origin; see "Search and link previews"), `private, no-cache` for
 every PDF route, `immutable` for the hashed

@@ -235,3 +235,12 @@ test('withHead swaps the title, or adds the tags to a head without one', () => {
   // `$&` in the tags is text, not a replacement pattern.
   assert.equal(withHead('<head></head>', '<title>$&</title>'), '<head><title>$&</title>\n  </head>');
 });
+
+test("the real index.html links the icons (issue #104), and a page's own title keeps them", () => {
+  const html = fs.readFileSync(new URL('../../client/index.html', import.meta.url), 'utf8');
+  const out = withHead(html, '<title>Jo Doe</title>\n    <meta name="description" content="x" />');
+  assert.match(out, /<title>Jo Doe<\/title>/);
+  assert.doesNotMatch(out, /<title>Resume<\/title>/);
+  assert.match(out, /<link rel="icon" href="\/favicon\.svg" type="image\/svg\+xml" \/>/);
+  assert.match(out, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png" \/>/);
+});

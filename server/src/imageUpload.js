@@ -9,9 +9,9 @@ import { LANDING_IMAGE_LIMITS, sniffImageType } from './landingImageFields.js';
 // included), XMP, comments and text chunks off the public page: sharp
 // writes no metadata unless asked to. On the way it applies the EXIF
 // orientation, scales the image down to LANDING_IMAGE_LIMITS.longSide, and
-// keeps only the first frame of an animation. The only module that loads
-// sharp, so nothing else (the client's tests import some server modules)
-// pulls in the native binary.
+// keeps only the first frame of an animation. With faviconRaster.js, the
+// only module that loads sharp, so nothing else (the client's tests import
+// some server modules) pulls in the native binary.
 //
 // Resolves with { id, mime, width, height, bytes }, `id` the sha256 of
 // `bytes`; rejects with a 400 (not a JPEG, PNG or WebP, or unreadable) or
