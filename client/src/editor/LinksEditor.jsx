@@ -1,4 +1,4 @@
-import { LINK_TYPES, DEFAULT_LINK_TYPE, linkTypeConfig, inferLinkType, followLabelUrl } from '../resume/linkTypes.js';
+import { LINK_TYPE_GROUPS, DEFAULT_LINK_TYPE, linkTypeConfig, inferLinkType, followLabelUrl } from '../resume/linkTypes.js';
 
 // A list of { type, label, url } links: pick a type (which prefills an
 // empty label and URL), edit, add, remove. An email or phone link's URL is
@@ -35,14 +35,18 @@ export function LinksEditor({ links, onChange, label = 'Links' }) {
       {label && <span>{label}</span>}
       {links.map((link, i) => {
         const type = inferLinkType(link);
-        const placeholders = PLACEHOLDERS[type] || PLACEHOLDERS.default;
+        const placeholders = PLACEHOLDERS[type] || placeholdersFor(type);
         return (
           <div className="ed-link-item" key={i}>
             <select className="ed-input" value={link.type || type} onChange={(e) => setLinkType(i, e.target.value)}>
-              {LINK_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
+              {LINK_TYPE_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.types.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <div className="ed-field-row">
@@ -75,5 +79,10 @@ export function LinksEditor({ links, onChange, label = 'Links' }) {
 const PLACEHOLDERS = {
   email: { label: 'Email address, e.g. you@example.com', url: 'mailto:…' },
   phone: { label: 'Phone number, e.g. +1 555 555 0100', url: 'tel:…' },
-  default: { label: 'Label, e.g. linkedin.com/in/you', url: 'https://…' },
 };
+
+// Any other type suggests a label like its own default (Custom has none).
+function placeholdersFor(type) {
+  const example = linkTypeConfig(type).defaultLabel;
+  return { label: example ? `Label, e.g. ${example}` : 'Label', url: 'https://…' };
+}

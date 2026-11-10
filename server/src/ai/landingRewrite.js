@@ -1,6 +1,7 @@
 import { LANDING_LIMITS } from '../landingFields.js';
 import { AiError, callProvider } from './providers.js';
 import { inlineLength, mapLinks } from '../inlineText.js';
+import { hasPassed, utcToday } from '../dateText.js';
 
 // AI rewrites on the landing page (issue #73). Like a block rewrite
 // (rewrite.js) it only proposes: the editor shows each proposal in its
@@ -17,13 +18,22 @@ import { inlineLength, mapLinks } from '../inlineText.js';
 //   { kind: 'card', sectionId, resumeId }   a resume card's blurb
 //   { kind: 'intro', sectionId }            headline, subheadline and that
 //                                           text section's body together
+//   { kind: 'answer', sectionId, index }    an FAQ entry's answer (issue
+//                                           #123; never its question)
 // Sections and cards are addressed by id, so moving them doesn't move a
-// proposal onto something else; items have no ids, so theirs is a position.
+// proposal onto something else; items and FAQ entries have no ids, so
+// theirs is a position.
 // Deliberately not targets (issue #90): a quote, which is someone else's
-// words; an experience section, which is read from a resume as published;
-// an item's meta line; and an image section's or a gallery's captions
-// (issue #120), plain text about a picture the model can't see, so the page
-// context gives either only its kind and title.
+// words; an experience section, which is read from a resume as published,
+// and so are an education or skills section (issue #126); an item's meta
+// line; and an FAQ question. Nor is a stat (issue #125): a
+// model mustn't make up figures, so it only ever reads them, in the page
+// context.
+// Nor is a credential (issue #119): its name, issuer, number and dates
+// are facts, not prose.
+// Nor are an image section's or a gallery's captions (issue #120): plain
+// text about a picture the model can't see, so the page context gives
+// either only its kind and title.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*
@@ -31,15 +41,16 @@ import { inlineLength, mapLinks } from '../inlineText.js';
 // that's public and published. A resume's internal name and its tailoring
 // brief are never part of it.
 //
-// A text section's body and an item's text may hold links (issue #91), and
-// the model must never be able to put a URL on the page. It never sees one:
-// in the text it rewrites, each link's URL becomes a placeholder (`#L1`,
-// `#L2`, … linkPlaceholders()), and in the rest of the page a link is just
-// its label. Its answer gets the URLs back (unmaskLinks()), and a link to
-// anything but one of those placeholders makes the whole answer an error.
-// It may reword a label, move a link or drop it.
+// A text section's body, an item's text and an FAQ answer may hold links
+// (issue #91), and the model must never be able to put a URL on the page.
+// It never sees one: in the text it rewrites, each link's URL becomes a
+// placeholder (`#L1`, `#L2`, … linkPlaceholders()), and in the rest of the
+// page a link is just its label. Its answer gets the URLs back
+// (unmaskLinks()), and a link to anything but one of those placeholders
+// makes the whole answer an error. It may reword a label, move a link or
+// drop it.
 
-export const LANDING_TARGET_KINDS = ['headline', 'subheadline', 'text', 'item', 'card', 'intro'];
+export const LANDING_TARGET_KINDS = ['headline', 'subheadline', 'text', 'item', 'card', 'intro', 'answer'];
 
 export class InvalidLandingTargetError extends Error {}
 
@@ -53,13 +64,14 @@ const FIELD_LIMITS = {
   text: LANDING_LIMITS.text,
   item: LANDING_LIMITS.itemText,
   card: LANDING_LIMITS.blurb,
+  answer: LANDING_LIMITS.faqAnswer,
 };
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // The single-field targets whose text may hold links and emphasis, and how
 // the page finds its links (a text section's one paragraph at a time).
-const INLINE_KINDS = ['text', 'item'];
+const INLINE_KINDS = ['text', 'item', 'answer'];
 const linkScope = (kind) => ({ paragraphs: kind === 'text' });
 
 function findSection(landing, sectionId, kind) {
@@ -98,6 +110,13 @@ export function normalizeLandingTarget(landing, target) {
       }
       return { kind: 'card', sectionId: target.sectionId, resumeId: target.resumeId };
     }
+    case 'answer': {
+      const section = findSection(landing, target.sectionId, 'faq');
+      if (!Number.isInteger(target.index) || target.index < 0 || target.index >= section.entries.length) {
+        throw new InvalidLandingTargetError('That question is no longer in its section');
+      }
+      return { kind: 'answer', sectionId: target.sectionId, index: target.index };
+    }
     default:
       throw new InvalidLandingTargetError('Unknown target');
   }
@@ -123,6 +142,8 @@ export function landingSlice(landing, target) {
       return section?.kind === 'items' ? (section.items[target.index]?.text ?? null) : null;
     case 'card':
       return section?.kind === 'resumes' ? (section.cards.find((c) => c.resumeId === target.resumeId)?.blurb ?? null) : null;
+    case 'answer':
+      return section?.kind === 'faq' ? (section.entries[target.index]?.answer ?? null) : null;
     default:
       return null;
   }
@@ -220,7 +241,8 @@ const PLACEHOLDER = '[the part being rewritten]';
 // The rest of the page, as the model sees it: what a visitor reads, with
 // the target's spot marked. No URLs, ids or photo. A hidden section isn't
 // read, unless the target is in it. `resumes` is the landing context's
-// (landingStore.js), for what an experience section shows.
+// (landingStore.js), for what an experience, education or skills section
+// shows.
 function pageContext(landing, target, resumes) {
   const spots = new Set((target.kind === 'intro' ? introParts(target.sectionId) : [target]).map(spotKey));
   const mark = (spot, value) => (spots.has(spotKey(spot)) ? PLACEHOLDER : value);
@@ -255,6 +277,16 @@ function pageContext(landing, target, resumes) {
           };
         case 'quotes':
           return { ...base, quotes: section.quotes.filter((q) => q.text.trim()).map((q) => ({ text: q.text, name: q.name, role: q.role })) };
+        case 'stats':
+          return { ...base, stats: section.stats.filter((stat) => stat.value.trim()).map((stat) => ({ value: stat.value, label: stat.label })) };
+        case 'faq':
+          return {
+            ...base,
+            entries: section.entries.map((entry, index) => ({
+              question: entry.question,
+              answer: mark({ kind: 'answer', sectionId: section.id, index }, linkLabels(entry.answer, 'answer')),
+            })),
+          };
         case 'experience':
           return {
             ...base,
@@ -264,6 +296,27 @@ function pageContext(landing, target, resumes) {
               location: role.location,
               ...(section.showDates ? { dates: dates(role.startDate, role.endDate) } : {}),
             })),
+          };
+        case 'education':
+          return {
+            ...base,
+            entries: (resumes.get(section.resumeId)?.education ?? []).slice(0, section.count).map((entry) => ({
+              degree: entry.degree,
+              institution: entry.institution,
+              location: entry.location,
+              ...(section.showDates ? { dates: dates(entry.startDate, entry.endDate) } : {}),
+            })),
+          };
+        case 'skills':
+          return { ...base, groups: (resumes.get(section.resumeId)?.skills ?? []).map((group) => ({ category: group.category, items: group.items })) };
+        case 'credentials':
+          // The ones a visitor sees (none expired), without the number or
+          // link, which give the model nothing to write from.
+          return {
+            ...base,
+            credentials: section.credentials
+              .filter((c) => c.name.trim() && !hasPassed(c.expires, utcToday()))
+              .map((c) => ({ kind: c.kind, name: c.name, issuer: c.issuer })),
           };
         default:
           return base;
@@ -314,6 +367,8 @@ function fieldRule(target, limit, item) {
       return `"text" is a line or two about one entry in a list on the page${item?.title ? ` (its title, which you don't change, is "${item.title}")` : ''}. At most ${limit} characters.`;
     case 'card':
       return `"text" is the short blurb on a card that links to one of the person's resumes. Say what that resume is for or who it suits. At most ${limit} characters.`;
+    case 'answer':
+      return `"text" is the answer to a question visitors ask, shown under it on the page${item?.question ? ` (the question, which you don't change, is "${item.question}")` : ''}. Answer it directly, in a few sentences at most. At most ${limit} characters.`;
     default:
       return null;
   }
@@ -343,7 +398,8 @@ export function buildLandingPrompt(landing, target, instruction, profile, resume
   ];
   if (target.kind === 'intro') rules.push(INTRO_RULE);
   else {
-    const item = target.kind === 'item' ? landing.sections.find((s) => s.id === target.sectionId)?.items[target.index] : null;
+    const section = landing.sections.find((s) => s.id === target.sectionId);
+    const item = target.kind === 'item' ? section?.items[target.index] : target.kind === 'answer' ? section?.entries[target.index] : null;
     rules.push(fieldRule(target, FIELD_LIMITS[target.kind], item));
   }
   if (profile) {
@@ -390,7 +446,7 @@ function checkLength(value, limit, label, length = value.length) {
   return value;
 }
 
-const LABELS = { headline: 'headline', subheadline: 'subheadline', text: 'text section', item: 'item', card: 'card' };
+const LABELS = { headline: 'headline', subheadline: 'subheadline', text: 'text section', item: 'item', card: 'card', answer: 'answer' };
 
 // The proposals the model's `rewrite` makes against `landing`, one per field
 // it changed, with their links' URLs back. A field it left alone (give or

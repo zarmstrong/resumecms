@@ -95,6 +95,34 @@
   margin: 0 auto;
 }
 
+/* Questions and answers keep to the same column, read left to right. */
+.l-template-centered .l-section-faq {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Education keeps to the same column as the timeline it's drawn on, and
+   skills center there like the links (issue #126). */
+.l-template-centered .l-section-education,
+.l-template-centered .l-section-skills {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.l-template-centered .l-section-skills {
+  text-align: center;
+}
+
+.l-template-centered .l-skill-group {
+  align-items: center;
+}
+
+.l-template-centered .l-skill-list {
+  justify-content: center;
+}
+
 /* A gallery takes the page's full width, its captions centered. */
 .l-template-centered .l-gallery {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -159,6 +187,48 @@
 .l-template-centered .l-quote-by {
   margin-top: auto;
   padding-top: 12px;
+}
+
+/* Stats centered under their heading. */
+.l-template-centered .l-stat {
+  align-items: center;
+  text-align: center;
+}
+
+/* Credentials (issue #119): cards like the list entries, centered, each
+   with its kind over its name. */
+.l-template-centered .l-credentials {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+}
+
+.l-template-centered .l-credential {
+  flex: 1 1 220px;
+  max-width: 300px;
+  align-items: center;
+  text-align: center;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--r-text, var(--ink)) 3%, transparent);
+}
+
+.l-template-centered .l-credential-head {
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 6px;
+}
+
+.l-template-centered .l-credential-meta {
+  margin-top: 4px;
+}
+
+@container (max-width: 600px) {
+  .l-template-centered .l-credential {
+    max-width: none;
+  }
 }
 
 @container (max-width: 600px) {

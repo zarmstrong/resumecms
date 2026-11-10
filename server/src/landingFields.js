@@ -4,6 +4,7 @@ import { blocksForMode } from './publicBlocks.js';
 import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inlineText.js';
 import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImageFields.js';
 import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, emptyStyle, landingSite, mergeStylePatch } from './landingStyle.js';
+import { hasPassed, utcToday } from './dateText.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -36,6 +37,20 @@ import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, empty
 //   image      — image (a reference, or null until one is uploaded), caption
 //   divider    — nothing but its title: a rule across the page, the title
 //                (if any) a label on it
+//   stats      — stats: [{ value, label }], a few large figures ("2,000+",
+//                "$4.2M", "15 years") each over a short label (issue #125);
+//                both plain text, so a value needn't be a number
+//   faq        — entries: [{ question, answer }] (issue #123), each answer
+//                collapsed under its question
+//   education  — resumeId, count, showDates: the first `count` education
+//                entries of that resume, read like experience's (issue #126)
+//   skills     — resumeId: every skill group that resume shows on the web,
+//                read like experience's (issue #126)
+//   credentials — credentials: [{ kind, name, issuer, number, issued,
+//                expires, url }], licenses, certifications and memberships
+//                (issue #119); `kind` only picks the label shown with it,
+//                the dates are free-form (dateText.js reads them) and `url`
+//                is the issuer's page to verify it on
 //   gallery    — images: [{ image, caption }] (issue #120), drawn as a grid
 //                that opens each larger; an entry's image is a reference, or
 //                null until its upload lands, and its caption plain text
@@ -44,9 +59,10 @@ import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, empty
 // template that has one (template.json's `columns`, e.g. split's column
 // under the hero) and in the main flow by every other. `hidden`, `column`
 // and an item's `meta` are only stored when set.
-// A text section's body and an item's text may hold links and emphasis
-// (issue #91, inlineText.js); every other string, a quote's text and an
-// item's meta included, is plain text.
+// A text section's body, an item's text and an FAQ answer may hold links
+// and emphasis (issue #91, inlineText.js); every other string, a quote's
+// text, an item's meta, a stat and an FAQ question included, is plain
+// text.
 // `id` only tells sections apart in the editor; it never leaves the server
 // publicly. `seo` is { title, description, noindex } (issue #87): what
 // the page's <title>, description and link previews say instead of the
@@ -94,6 +110,18 @@ export const LANDING_LIMITS = {
   quoteName: 100,
   quoteRole: 120,
   experienceCount: 10,
+  stats: 6,
+  statValue: 16,
+  statLabel: 80,
+  faqEntries: 15,
+  faqQuestion: 200,
+  faqAnswer: 1500,
+  educationCount: 10,
+  credentials: 20,
+  credentialName: 120,
+  credentialIssuer: 120,
+  credentialNumber: 60,
+  credentialDate: 40,
   galleryImages: 24,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
@@ -107,10 +135,21 @@ export const LANDING_LIMITS = {
 export const PHOTO_SOURCES = ['resume', 'custom', 'upload', 'none'];
 
 // The header's link types (client/src/resume/linkTypes.js), which only pick
-// the badge a link is drawn with.
-export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'];
+// the badge a link is drawn with, in the same order (issue #129; the
+// client's linkTypes.test.js compares them).
+export const LINK_TYPES = [
+  'website', 'portfolio', 'email', 'phone', 'booking', 'shop', 'publications', 'newsletter',
+  'linkedin', 'twitter', 'facebook', 'tiktok', 'threads', 'bluesky', 'mastodon', 'substack', 'medium',
+  'github', 'gitlab', 'stackoverflow',
+  'instagram', 'behance', 'dribbble', 'artstation', 'vimeo', 'youtube',
+  'soundcloud', 'bandcamp', 'spotify',
+  'orcid', 'googlescholar', 'researchgate',
+  'imdb',
+  'houzz', 'nextdoor', 'googlebusiness',
+  'custom',
+];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'gallery'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -128,13 +167,25 @@ const SECTION_FIELDS = {
   experience: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId', 'count', 'showDates'],
   image: ['id', 'kind', 'title', 'hidden', 'column', 'image', 'caption'],
   divider: ['id', 'kind', 'title', 'hidden', 'column'],
+  stats: ['id', 'kind', 'title', 'hidden', 'column', 'stats'],
+  faq: ['id', 'kind', 'title', 'hidden', 'column', 'entries'],
+  education: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId', 'count', 'showDates'],
+  skills: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId'],
+  credentials: ['id', 'kind', 'title', 'hidden', 'column', 'credentials'],
   gallery: ['id', 'kind', 'title', 'hidden', 'column', 'images'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
+const STAT_FIELDS = ['value', 'label'];
+const FAQ_FIELDS = ['question', 'answer'];
+const CREDENTIAL_FIELDS = ['kind', 'name', 'issuer', 'number', 'issued', 'expires', 'url'];
 const GALLERY_ENTRY_FIELDS = ['image', 'caption'];
+// What a credential is; only picks the label it's shown with.
+export const CREDENTIAL_KINDS = ['license', 'certification', 'membership'];
 // What an experience section shows when it's added without saying.
 export const EXPERIENCE_DEFAULTS = { count: 3, showDates: true };
+// And an education section.
+export const EDUCATION_DEFAULTS = { count: 3, showDates: true };
 const LINK_FIELDS = ['type', 'label', 'url'];
 const CARD_FIELDS = ['resumeId', 'label', 'blurb', 'showPdf'];
 const ACTION_FIELDS = {
@@ -212,13 +263,13 @@ export function upgradeLanding(stored) {
   return upgraded;
 }
 
-// Every resume `landing` names: a card's in any section, an experience
-// section's, or a hero action's.
+// Every resume `landing` names: a card's in any section, an experience,
+// education or skills section's, or a hero action's.
 export function referencedResumeIds(landing) {
   return new Set([
     ...(landing.sections || []).flatMap((section) => {
       if (section.kind === 'resumes') return section.cards.map((card) => card.resumeId);
-      return section.kind === 'experience' ? [section.resumeId] : [];
+      return ['experience', 'education', 'skills'].includes(section.kind) ? [section.resumeId] : [];
     }),
     ...(landing.actions || []).flatMap((action) => (action.type === 'resume' ? [action.resumeId] : [])),
   ]);
@@ -381,6 +432,41 @@ function checkQuote(quote, label) {
   return out;
 }
 
+function checkStat(stat, label) {
+  checkKeys(stat, STAT_FIELDS, label);
+  return {
+    value: checkString(stat.value ?? '', LANDING_LIMITS.statValue, `${label}.value`),
+    label: checkString(stat.label ?? '', LANDING_LIMITS.statLabel, `${label}.label`),
+  };
+}
+
+// An FAQ entry: the question is plain text, the answer takes links and
+// emphasis, read as a whole like an item's text.
+function checkFaqEntry(entry, label) {
+  checkKeys(entry, FAQ_FIELDS, label);
+  return {
+    question: checkString(entry.question ?? '', LANDING_LIMITS.faqQuestion, `${label}.question`),
+    answer: checkInlineText(entry.answer ?? '', LANDING_LIMITS.faqAnswer, `${label}.answer`),
+  };
+}
+
+function checkCredential(credential, label) {
+  checkKeys(credential, CREDENTIAL_FIELDS, label);
+  const kind = credential.kind ?? 'certification';
+  if (!CREDENTIAL_KINDS.includes(kind)) throw httpError(400, `${label}.kind must be one of ${CREDENTIAL_KINDS.join(', ')}`);
+  const out = {
+    kind,
+    name: checkString(credential.name ?? '', LANDING_LIMITS.credentialName, `${label}.name`),
+    issuer: checkString(credential.issuer ?? '', LANDING_LIMITS.credentialIssuer, `${label}.issuer`),
+    number: checkString(credential.number ?? '', LANDING_LIMITS.credentialNumber, `${label}.number`),
+    issued: checkString(credential.issued ?? '', LANDING_LIMITS.credentialDate, `${label}.issued`),
+    expires: checkString(credential.expires ?? '', LANDING_LIMITS.credentialDate, `${label}.expires`),
+    url: checkString(credential.url ?? '', LANDING_LIMITS.url, `${label}.url`),
+  };
+  if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
+  return out;
+}
+
 // A gallery entry: its image (null while the editor's upload for it is on
 // its way) and a caption, both always stored.
 function checkGalleryEntry(entry, label, refs) {
@@ -436,9 +522,34 @@ function checkSection(section, i, refs, ids) {
       }
       out.showDates = checkBoolean(section.showDates ?? EXPERIENCE_DEFAULTS.showDates, `${label}.showDates`);
       break;
+    case 'education':
+      // An experience section's rules.
+      out.resumeId = checkResumeRef(section.resumeId, `${label}.resumeId`, refs);
+      out.count = section.count ?? EDUCATION_DEFAULTS.count;
+      if (!Number.isInteger(out.count) || out.count < 1 || out.count > LANDING_LIMITS.educationCount) {
+        throw httpError(400, `${label}.count must be a whole number from 1 to ${LANDING_LIMITS.educationCount}`);
+      }
+      out.showDates = checkBoolean(section.showDates ?? EDUCATION_DEFAULTS.showDates, `${label}.showDates`);
+      break;
+    case 'skills':
+      out.resumeId = checkResumeRef(section.resumeId, `${label}.resumeId`, refs);
+      break;
     case 'image':
       out.image = section.image == null ? null : checkImageRef(section.image, `${label}.image`, refs);
       out.caption = checkString(section.caption ?? '', LANDING_IMAGE_LIMITS.caption, `${label}.caption`);
+      break;
+    case 'stats':
+      out.stats = checkList(section.stats, LANDING_LIMITS.stats, `${label}.stats`).map((stat, j) => checkStat(stat, `${label}.stats[${j}]`));
+      break;
+    case 'faq':
+      out.entries = checkList(section.entries, LANDING_LIMITS.faqEntries, `${label}.entries`).map((entry, j) =>
+        checkFaqEntry(entry, `${label}.entries[${j}]`)
+      );
+      break;
+    case 'credentials':
+      out.credentials = checkList(section.credentials, LANDING_LIMITS.credentials, `${label}.credentials`).map((credential, j) =>
+        checkCredential(credential, `${label}.credentials[${j}]`)
+      );
       break;
     case 'gallery':
       out.images = checkList(section.images, LANDING_LIMITS.galleryImages, `${label}.images`).map((entry, j) =>
@@ -571,14 +682,17 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 //   context.photoUrl — the default resume's published header photo
 //   context.site     — the default resume's published site settings, the
 //                      page's `site` unless it has colors of its own
-//   context.resumes  — Map of resume id → { href, title, pdfHref, experience }
-//                      for the resumes a visitor may see (public and
-//                      published); pdfHref is '' while the resume has no
-//                      rendered PDF, experience is experienceRoles() of its
-//                      published blocks
+//   context.resumes  — Map of resume id → { href, title, pdfHref, experience,
+//                      education, skills } for the resumes a visitor may
+//                      see (public and published); pdfHref is '' while the
+//                      resume has no rendered PDF, experience is
+//                      experienceRoles() of its published blocks, education
+//                      educationEntries() and skills skillGroups() of them
 //   context.images   — Map of image id → { src, width, height } for the
 //                      stored images (issue #92), `src` where a visitor
 //                      fetches it
+//   context.today    — 'YYYY-MM-DD', what a credential's expiry is read
+//                      against (dateText.js); today in UTC when not given
 // Cards and actions carry no resume ids and never a resume's internal name:
 // a card with no label of its own uses the resume's published header title.
 // A card's `pdfHref` is there only when it asks for one and the PDF exists;
@@ -586,13 +700,19 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // PDF) is there, a link action unless its URL is safe. Each resolved action
 // is { label, href }. A section
 // left with nothing to show (no text, no item, every link half typed, every
-// card's resume hidden, every quote empty) is left out, title and all, and
+// card's resume hidden, every quote empty, no stat with a value, no FAQ
+// entry with both a question and an answer) is left out, title and all, and
 // so is a hidden one; sections lose their ids, and keep `column` when set
 // (a divider always goes along: whether it has anything to divide depends
 // on how the template arranges the sections, so the client decides, in
 // client/src/landing/dividers.js). An experience section
 // resolves to { roles, href }: its resume's first `count` roles, and that
-// resume's link for "Full resume".
+// resume's link for "Full resume". An education section resolves the same
+// way to { entries, href }, and a skills section to { groups, href }, every
+// skill group of its resume. A credential without a name is left out, and
+// so is one whose `expires` has passed (hasPassed()), at the time of the
+// request, so a lapsed one leaves the page without a republish; one whose
+// date can't be read stays, the date shown as written.
 // `seo` goes along whole (everything in it ends up in the page's head and
 // its X-Robots-Tag anyway), its image resolved like the others. An image
 // reference resolves to { src, alt, width, height }, or is left out (a
@@ -699,6 +819,40 @@ function resolveSection(section, context) {
     }
     case 'divider':
       return {};
+    case 'stats': {
+      // A stat is its value; a label alone has nothing to show.
+      const stats = section.stats.filter((stat) => stat.value.trim()).map((stat) => ({ value: stat.value, label: stat.label }));
+      return stats.length ? { stats } : null;
+    }
+    case 'faq': {
+      // An entry missing its question or its answer has nothing to open.
+      const entries = section.entries
+        .filter((entry) => entry.question.trim() && entry.answer.trim())
+        .map((entry) => ({ question: entry.question, answer: entry.answer }));
+      return entries.length ? { entries } : null;
+    }
+    case 'education': {
+      const target = context.resumes.get(section.resumeId);
+      const entries = (target?.education ?? []).slice(0, section.count).map((entry) => ({
+        degree: entry.degree,
+        institution: entry.institution,
+        location: entry.location,
+        dates: section.showDates ? roleDates(entry) : '',
+      }));
+      return entries.length ? { entries, href: target.href } : null;
+    }
+    case 'skills': {
+      const target = context.resumes.get(section.resumeId);
+      const groups = (target?.skills ?? []).map((group) => ({ category: group.category, items: [...group.items] }));
+      return groups.length ? { groups, href: target.href } : null;
+    }
+    case 'credentials': {
+      const today = context.today ?? utcToday();
+      const credentials = section.credentials
+        .filter((credential) => credential.name.trim() && !hasPassed(credential.expires, today))
+        .map((credential) => resolveCredential(credential));
+      return credentials.length ? { credentials } : null;
+    }
     case 'gallery': {
       const images = section.images.flatMap((entry) => {
         const image = resolveImage(entry.image, context.images);
@@ -709,6 +863,11 @@ function resolveSection(section, context) {
     default:
       return null;
   }
+}
+
+function resolveCredential(credential) {
+  const { kind, name, issuer, number, issued, expires, url } = credential;
+  return { kind, name, issuer, number, issued, expires, url: url !== '' && isSafeUrl(url) ? url : '' };
 }
 
 function roleDates({ startDate, endDate }) {
@@ -739,4 +898,48 @@ export function experienceRoles(blocks) {
     })
     .filter((role) => role.jobTitle || role.company)
     .slice(0, LANDING_LIMITS.experienceCount);
+}
+
+// The entries an education section may show from a resume's published
+// `blocks`, read like experienceRoles(): its education blocks shown on the
+// web, in order, with only degree, institution, location and dates. One
+// with neither a degree nor an institution is skipped.
+export function educationEntries(blocks) {
+  return blocksForMode(Array.isArray(blocks) ? blocks : [], 'web')
+    .filter((block) => block.type === 'education' && !block.hidden)
+    .map((block) => {
+      const data = isPlainObject(block.data) ? block.data : {};
+      return {
+        degree: roleText(data.degree),
+        institution: roleText(data.institution),
+        location: roleText(data.location),
+        startDate: roleText(data.startDate),
+        endDate: roleText(data.endDate),
+      };
+    })
+    .filter((entry) => entry.degree || entry.institution)
+    .slice(0, LANDING_LIMITS.educationCount);
+}
+
+// A skill group's `items` as the resume draws them as chips: split on
+// commas, trimmed, blanks dropped. Mirrors splitItems() in
+// client/src/resume/skillItems.js (resolveLanding.test.js compares them).
+export function splitSkillItems(items) {
+  return (typeof items === 'string' ? items : '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+// The groups a skills section shows from a resume's published `blocks`:
+// its skills_group blocks shown on the web, in order, with only the
+// category and its items (splitSkillItems()). One with no items is skipped.
+export function skillGroups(blocks) {
+  return blocksForMode(Array.isArray(blocks) ? blocks : [], 'web')
+    .filter((block) => block.type === 'skills_group' && !block.hidden)
+    .map((block) => {
+      const data = isPlainObject(block.data) ? block.data : {};
+      return { category: roleText(data.category), items: splitSkillItems(data.items) };
+    })
+    .filter((group) => group.items.length > 0);
 }

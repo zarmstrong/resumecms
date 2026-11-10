@@ -41,7 +41,14 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* And smaller gallery thumbnails, three to a row. */
+/* And one stat per row, while it's beside the others. */
+@container (width > 820px) {
+  .l-template-split .l-split-side .l-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Smaller gallery thumbnails there, three to a row. */
 .l-template-split .l-split-side .l-gallery {
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 8px;
@@ -97,6 +104,11 @@
   padding-bottom: 8px;
   margin-bottom: 16px;
   border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+}
+
+/* The heading's hairline already tops a list of questions. */
+.l-template-split .l-section-title + .l-faq {
+  border-top: none;
 }
 
 .l-template-split .l-cards {

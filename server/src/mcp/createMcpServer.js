@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { BLOCK_TYPES } from '../resumeStore.js';
 import { httpError } from '../httpError.js';
-import { ACTION_OPENS, LANDING_LIMITS, LINK_TYPES, PHOTO_SOURCES, SECTION_COLUMNS } from '../landingFields.js';
+import { ACTION_OPENS, CREDENTIAL_KINDS, LANDING_LIMITS, LINK_TYPES, PHOTO_SOURCES, SECTION_COLUMNS } from '../landingFields.js';
 import { FONT_IDS, LANDING_STYLE_SOURCES } from '../landingStyle.js';
 import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
@@ -46,7 +46,7 @@ Draft vs published: every write tool changes the DRAFT only, of one resume. Noth
 
 Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
 
-Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, and galleries of images; any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, or seo.image for link previews.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), and galleries of images; any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, or seo.image for link previews.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -520,6 +520,32 @@ const landingQuote = () =>
     role: z.string().optional().describe('e.g. "Engineering manager, Acme".'),
     url: z.string().optional().describe('An optional http, https, mailto or tel link for their name.'),
   });
+const landingStat = () =>
+  z.object({
+    value: z.string().optional().describe(`The figure, plain text (at most 16 characters), e.g. "2,000+", "98%", "$4.2M", "15 years". A stat without a value isn't shown.`),
+    label: z.string().optional().describe('What it counts, shown under it (at most 80 characters), e.g. "patients cared for".'),
+  });
+const landingFaqEntry = () =>
+  z.object({
+    question: z.string().optional().describe('Plain text, at most 200 characters.'),
+    answer: z
+      .string()
+      .optional()
+      .describe("Shown collapsed under the question, at most 1500 characters; may hold [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is. An entry without both a question and an answer isn't shown."),
+  });
+const landingCredential = () =>
+  z.object({
+    kind: z.enum(CREDENTIAL_KINDS).optional().describe("Only picks the label shown with it (default 'certification')."),
+    name: z.string().optional().describe("e.g. \"Registered Nurse\". One without a name isn't shown."),
+    issuer: z.string().optional().describe('Who issued it, e.g. "Oregon State Board of Nursing".'),
+    number: z.string().optional().describe("An optional license or certificate number, shown as written. Some are public record, some aren't."),
+    issued: z.string().optional().describe('When it was issued, shown as written, e.g. "Mar 2021".'),
+    expires: z
+      .string()
+      .optional()
+      .describe('When it expires. Read as YYYY, YYYY-MM, MM/YYYY, "Mar 2027", "March 2027" or YYYY-MM-DD, it leaves the page once that has passed (UTC); anything else is shown as written.'),
+    url: z.string().optional().describe("An optional http, https, mailto or tel link, the issuer's page to verify it on, shown as \"Verify\"."),
+  });
 const sectionBase = {
   id: z.string().optional().describe("Keep an existing section's id from get_landing_page; omit it for a new section."),
   title: z.string().optional().describe('Heading shown above the section; empty shows none.'),
@@ -547,6 +573,25 @@ const landingSection = () =>
       caption: z.string().optional().describe('Plain text shown under it.'),
     }),
     z.object({ ...sectionBase, kind: z.literal('divider') }).describe('A rule across the page; its title, if any, is a label on the rule.'),
+    z.object({ ...sectionBase, kind: z.literal('stats'), stats: z.array(landingStat()).optional().describe('A few large figures, at most 6.') }),
+    z.object({ ...sectionBase, kind: z.literal('faq'), entries: z.array(landingFaqEntry()).optional().describe('Questions and answers, at most 15, each answer collapsed under its question.') }),
+    z.object({
+      ...sectionBase,
+      kind: z.literal('education'),
+      resumeId: z.string().describe("A resume id from list_resumes: its first education entries (degree, institution, location, dates) are shown from its published version, while it's public."),
+      count: z.number().int().optional().describe('How many entries to show, 1 to 10 (default 3).'),
+      showDates: z.boolean().optional().describe("Show each entry's dates (default true)."),
+    }),
+    z.object({
+      ...sectionBase,
+      kind: z.literal('skills'),
+      resumeId: z.string().describe("A resume id from list_resumes: every skill group it shows on the web (category and items) is shown from its published version, while it's public."),
+    }),
+    z.object({
+      ...sectionBase,
+      kind: z.literal('credentials'),
+      credentials: z.array(landingCredential()).optional().describe('Licenses, certifications and memberships, at most 20.'),
+    }),
     z
       .object({
         ...sectionBase,

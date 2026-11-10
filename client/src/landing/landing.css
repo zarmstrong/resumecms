@@ -404,6 +404,52 @@ a.l-role-company {
   font-size: 0.95em;
 }
 
+/* Education and skills from a resume (issue #126). Education is drawn on
+   the experience timeline above; skills are each group's category over its
+   items as chips, which wrap to whatever column they're in. */
+.l-school-institution {
+  font-weight: 400;
+}
+
+.l-skills {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.l-skill-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.l-skill-category {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+.l-skill-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.l-skill {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.9em;
+  border: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 30%, transparent);
+  background: color-mix(in srgb, var(--r-accent, var(--ink)) 7%, transparent);
+  overflow-wrap: anywhere;
+}
+
 /* A divider section: a hairline across the column, its title (if any) a
    small label in the middle of it. */
 .l-divider {
@@ -426,6 +472,205 @@ a.l-role-company {
 .l-divider-label {
   padding: 0 14px;
   overflow-wrap: anywhere;
+}
+
+/* A stats section (issue #125): each figure large, over its label, under a
+   short bar in the accent color. At most three a row (four as two by
+   two), then two and one as the column narrows; split's side column draws
+   them one a row (its style.css). */
+.l-stats {
+  --l-stats-across: 3;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(max(8.5em, calc((100% - (var(--l-stats-across) - 1) * 24px) / var(--l-stats-across))), 1fr)
+  );
+  gap: 22px 24px;
+  padding: 0;
+  margin: 0;
+}
+
+.l-stats:has(> .l-stat:nth-child(4):last-child) {
+  --l-stats-across: 2;
+}
+
+.l-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.l-stat::before {
+  content: '';
+  width: 32px;
+  height: 3px;
+  margin-bottom: 6px;
+  border-radius: 2px;
+  background: var(--r-accent, var(--ink));
+}
+
+.l-stat-value {
+  font-family: var(--r-name-font, inherit);
+  font-size: 2.2em;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--r-accent, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+.l-stat-label {
+  font-size: 0.95em;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
+/* Read by a screen reader, never shown. */
+.l-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Questions and answers (issue #123): each a <details> between hairlines,
+   its question the <summary>, with a + that turns into a − while open. */
+.l-faq {
+  border-top: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+}
+
+.l-faq-entry {
+  border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+}
+
+.l-faq-question {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  cursor: pointer;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.l-faq-question::-webkit-details-marker {
+  display: none;
+}
+
+/* Only a picture of the state: a screen reader announces it already. */
+.l-faq-question::after {
+  content: '+';
+  content: '+' / '';
+  flex-shrink: 0;
+  font-size: 1.25em;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--r-accent, var(--ink));
+}
+
+.l-faq-entry[open] > .l-faq-question::after {
+  content: '\2212';
+  content: '\2212' / '';
+}
+
+.l-faq-question:focus-visible {
+  outline: 2px solid var(--r-accent, var(--ink));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.l-faq-answer {
+  margin: 0 0 14px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Credentials (issue #119): each a name with its kind as a small tag, the
+   issuer under it, and a muted line of number, dates and "Verify". */
+.l-credentials {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  margin: 0;
+}
+
+.l-credential {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.l-credential-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.l-credential-name {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+.l-credential-kind {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--r-accent, var(--slate));
+  background: color-mix(in srgb, var(--r-accent, var(--ink)) 12%, transparent);
+}
+
+.l-credential-issuer {
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
+}
+
+.l-credential-meta {
+  font-size: 0.88em;
+  color: color-mix(in srgb, var(--r-text, var(--ink)) 72%, transparent);
+  overflow-wrap: anywhere;
+}
+
+a.l-credential-verify {
+  color: var(--r-accent, var(--slate));
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);
+}
+
+a.l-credential-verify:hover,
+a.l-credential-verify:focus-visible {
+  border-bottom-color: var(--r-accent, var(--ink));
+}
+
+/* The editor's preview: an expired credential, dimmed like a hidden
+   section (only once, inside a section that's dimmed already). */
+.l-credential-expired > :not(.l-hidden-label) {
+  opacity: 0.35;
+}
+
+.l-section-hidden .l-credential-expired > :not(.l-hidden-label) {
+  opacity: 1;
+}
+
+.l-credential .l-hidden-label {
+  margin-bottom: 2px;
 }
 
 /* The editor's preview: a section hidden from the page. */
