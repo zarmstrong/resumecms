@@ -95,6 +95,13 @@
   margin: 0 auto;
 }
 
+/* Questions and answers keep to the same column, read left to right. */
+.l-template-centered .l-section-faq {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* The grids: rows of cards, centered, so one card alone stays card-sized. */
 .l-template-centered .l-cards,
 .l-template-centered .l-items,

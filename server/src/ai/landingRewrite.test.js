@@ -339,3 +339,69 @@ test('an answer that links anywhere but its placeholders is refused', () => {
   );
   assert.equal(landingProposals(landing, { kind: 'headline' }, { text: '[Jo](https://evil.example)' })[0].after, '[Jo](https://evil.example)');
 });
+
+test('an FAQ answer is a target by index, its question never is, and only that answer is written', async () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      {
+        id: 'faq',
+        kind: 'faq',
+        title: 'Questions',
+        entries: [
+          { question: 'Do you relocate?', answer: 'Yes, see [my notes](https://jo.example/move).\n\nWithin *Europe*.' },
+          { question: 'When can you start?', answer: '' },
+        ],
+      },
+      { id: 'secret', kind: 'faq', title: '', hidden: true, entries: [{ question: 'Salary?', answer: 'A lot.' }] },
+    ],
+  };
+  const answer = { kind: 'answer', sectionId: 'faq', index: 0 };
+  assert.deepEqual(normalizeLandingTarget(page, { ...answer, extra: 1 }), answer);
+  assert.equal(landingSlice(page, { kind: 'answer', sectionId: 'faq', index: 1 }), '');
+  assert.equal(landingSlice(page, { kind: 'answer', sectionId: 'faq', index: 2 }), null);
+  for (const target of [
+    { kind: 'answer', sectionId: 'faq', index: 2 },
+    { kind: 'answer', sectionId: 'faq', index: '0' },
+    { kind: 'answer', sectionId: 'faq' },
+    { kind: 'answer', sectionId: 'proj', index: 0 },
+    { kind: 'item', sectionId: 'faq', index: 0 },
+    { kind: 'question', sectionId: 'faq', index: 0 },
+    { kind: 'text', sectionId: 'faq' },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+
+  // The answer's link is a placeholder, read as one paragraph; the question
+  // is context the model is told not to change; a hidden FAQ isn't read.
+  assert.deepEqual([...linkPlaceholders(page, answer)], [['https://jo.example/move', '#L1']]);
+  const { system, user } = buildLandingPrompt(page, answer, 'Shorter', null);
+  assert.match(system, /the question, which you don't change, is "Do you relocate\?"/);
+  assert.match(system, /keep its #L target exactly as it is/);
+  assert.ok(user.includes('"text": "Yes, see [my notes](#L1).\\n\\nWithin *Europe*."'));
+  assert.ok(user.includes('"question": "When can you start?"'));
+  assert.ok(user.includes('"answer": "[the part being rewritten]"'));
+  for (const hidden of ['jo.example', 'Salary', 'A lot.']) assert.ok(!user.includes(hidden), hidden);
+  // Another answer, outside the target, shows its link's label only.
+  const second = buildLandingPrompt(page, { kind: 'answer', sectionId: 'faq', index: 1 }, 'Write one', null).user;
+  assert.ok(second.includes('"answer": "Yes, see my notes.\\n\\nWithin *Europe*."'));
+
+  const result = await rewriteLanding({
+    landing: page,
+    target: answer,
+    instruction: 'Shorter',
+    settings,
+    callModel: async () => ({ explanation: 'Shorter.', rewrite: { text: 'Yes, within Europe: [details](#L1).' } }),
+  });
+  assert.deepEqual(result.proposals, [{ target: answer, before: page.sections[4].entries[0].answer, after: 'Yes, within Europe: [details](https://jo.example/move).' }]);
+
+  // A link the answer didn't have is refused, as for any other target.
+  for (const written of ['See [here](https://evil.example).', 'See [here](#L2).', 'Fine.\n\n[x](/r/secret)']) {
+    assert.throws(() => landingProposals(page, answer, { text: written }), { status: 502, message: /added a link/ }, written);
+  }
+  // Its cap counts as the field's does.
+  const escaped = `${'x'.repeat(LANDING_LIMITS.faqAnswer - 4)} \\*a\\*`;
+  assert.equal(landingProposals(page, answer, { text: escaped })[0].after, escaped);
+  assert.throws(() => landingProposals(page, answer, { text: `${escaped}x` }), { status: 502, message: /the answer allows/ });
+});

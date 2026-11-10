@@ -25,10 +25,10 @@ import './landing.css';
 // sees to that for a template without columns, and hands one with columns
 // `dropStrayDividers(sections, { atStart })` to apply to each column.
 // Everything is rendered as text,
-// apart from the links and emphasis a text section or an item's text may
-// hold (issue #91, renderInline.js), which become elements, never HTML; every
-// href still goes through safeHref() (by way of linkProps()) although the
-// server only stores safe ones. `highlightIds`
+// apart from the links and emphasis a text section, an item's text or an
+// FAQ answer may hold (issue #91, renderInline.js), which become elements,
+// never HTML; every href still goes through safeHref() (by way of
+// linkProps()) although the server only stores safe ones. `highlightIds`
 // (editor preview only) outlines the parts an AI suggestion is shown in:
 // 'hero' for the headline and subheadline, otherwise a section's id (the
 // preview resolves its draft `withIds`). A section marked `hidden` (only
@@ -80,7 +80,7 @@ export function LandingView({ landing, preview = false, highlightIds = null, sch
       >
         {section.hidden && <span className="l-hidden-label">Hidden</span>}
         {section.title && <h2 className="l-section-title">{section.title}</h2>}
-        <SectionBody section={section} />
+        <SectionBody section={section} preview={preview} />
       </section>
     );
   };
@@ -116,7 +116,7 @@ function hrefProps(href) {
   return /^\/(?!\/)/.test(href) ? { href } : linkProps(href);
 }
 
-function SectionBody({ section }) {
+function SectionBody({ section, preview }) {
   switch (section.kind) {
     case 'text':
       return textParagraphs(section.body).map((paragraph, i) => (
@@ -260,6 +260,20 @@ function SectionBody({ section }) {
             </li>
           ))}
         </ul>
+      );
+    case 'faq':
+      // Each answer collapsed under its question (issue #123): <details>
+      // needs no script, works with a keyboard and a screen reader, and a
+      // browser's find opens it. The editor's preview shows them all open.
+      return (
+        <div className="l-faq">
+          {section.entries.map((entry, i) => (
+            <details key={i} className="l-faq-entry" open={preview}>
+              <summary className="l-faq-question">{entry.question}</summary>
+              <p className="l-faq-answer">{renderInline(entry.answer)}</p>
+            </details>
+          ))}
+        </div>
       );
     default:
       return null;

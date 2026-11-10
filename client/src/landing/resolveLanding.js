@@ -145,6 +145,12 @@ function resolveSection(section, targets, images) {
       const stats = section.stats.filter((stat) => stat.value.trim()).map((stat) => ({ value: stat.value, label: stat.label }));
       return stats.length ? { stats } : null;
     }
+    case 'faq': {
+      const entries = section.entries
+        .filter((entry) => entry.question.trim() && entry.answer.trim())
+        .map((entry) => ({ question: entry.question, answer: entry.answer }));
+      return entries.length ? { entries } : null;
+    }
     default:
       return null;
   }

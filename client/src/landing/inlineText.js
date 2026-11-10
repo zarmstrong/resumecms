@@ -1,6 +1,7 @@
 // The landing page's inline syntax (issue #91): `[label](url)`, `**bold**`
 // and `*italic*` in a text section's body (one paragraph at a time, as
-// textParagraphs() splits it) and an item's text. A copy of the shared part
+// textParagraphs() splits it), an item's text and an FAQ answer (each as a
+// whole). A copy of the shared part
 // of server/src/inlineText.js, which documents the rules; the two are kept
 // in step by the cases in server/src/inlineText.cases.js, which
 // inlineText.test.js runs through both. Rendered by renderInline.js, as
