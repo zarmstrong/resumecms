@@ -426,6 +426,28 @@ export const LANDING_SCHEMA = {
             description: 'A rule across the page between two sections; its title, if any, is a label on the rule',
             properties: { ...LANDING_SECTION_BASE, kind: { const: 'divider' } },
           },
+          {
+            type: 'object',
+            description:
+              "A resume's first education entries (degree, institution, location, dates) and a link to it, read from its published version when the page is requested, and shown only while it's public and published",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'education' },
+              resumeId: { type: 'string' },
+              count: { type: 'integer', description: 'How many of its first education entries shown on the web, 1 to 10 (default 3)' },
+              showDates: { type: 'boolean', description: 'Show dates (default true)' },
+            },
+          },
+          {
+            type: 'object',
+            description:
+              "Every skill group a resume shows on the web (its category and items, split on commas like the resume's chips) and a link to it, read from its published version when the page is requested, and shown only while it's public and published",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'skills' },
+              resumeId: { type: 'string' },
+            },
+          },
         ],
       },
     },

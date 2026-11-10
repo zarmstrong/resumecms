@@ -243,6 +243,51 @@ function SectionBody({ section }) {
           {section.caption && <figcaption className="l-figure-caption">{section.caption}</figcaption>}
         </figure>
       );
+    case 'education':
+      // Drawn on the experience timeline (issue #126).
+      return (
+        <>
+          <ol className="l-roles l-schools">
+            {section.entries.map((entry, i) => (
+              <li key={i} className="l-role l-school">
+                <span className="l-role-title">
+                  {entry.degree}
+                  {entry.degree && entry.institution && ' · '}
+                  {entry.institution && <span className="l-school-institution">{entry.institution}</span>}
+                </span>
+                {(entry.location || entry.dates) && (
+                  <span className="l-role-meta">{[entry.dates, entry.location].filter(Boolean).join(' · ')}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+          <a className="l-roles-more" {...hrefProps(section.href)}>
+            Full resume →
+          </a>
+        </>
+      );
+    case 'skills':
+      return (
+        <>
+          <ul className="l-skills">
+            {section.groups.map((group, i) => (
+              <li key={i} className="l-skill-group">
+                {group.category && <span className="l-skill-category">{group.category}</span>}
+                <ul className="l-skill-list" aria-label={group.category || undefined}>
+                  {group.items.map((item, j) => (
+                    <li key={j} className="l-skill">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <a className="l-roles-more" {...hrefProps(section.href)}>
+            Full resume →
+          </a>
+        </>
+      );
     default:
       return null;
   }

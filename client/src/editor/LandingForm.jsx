@@ -28,6 +28,18 @@ const SECTION_KINDS = [
   },
   { kind: 'image', label: 'Image', addLabel: 'Image', empty: () => ({ image: null, caption: '' }) },
   { kind: 'divider', label: 'Divider', addLabel: 'Divider (a line between sections)', empty: () => ({}) },
+  {
+    kind: 'education',
+    label: 'Education',
+    addLabel: 'Education (latest entries from a resume)',
+    empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id, count: 3, showDates: true }),
+  },
+  {
+    kind: 'skills',
+    label: 'Skills',
+    addLabel: 'Skills (skill groups from a resume)',
+    empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id }),
+  },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -65,6 +77,10 @@ function hasContent(section) {
       return false;
     case 'image':
       return Boolean(section.image) || Boolean(section.caption.trim());
+    case 'education':
+    case 'skills':
+      // Like experience: what they show comes from the resume.
+      return false;
     default:
       return false;
   }
@@ -489,6 +505,10 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
           <span className="ed-field-hint">A section with no image yet is left off the page.</span>
         </>
       );
+    case 'education':
+      return <EducationFields section={section} onChange={onChange} resumes={resumes} context={context} limits={limits} />;
+    case 'skills':
+      return <SkillsFields section={section} onChange={onChange} resumes={resumes} context={context} />;
     default:
       return null;
   }
@@ -594,6 +614,84 @@ function ExperienceFields({ section, onChange, resumes, context, limits }) {
       <span className="ed-field-hint">
         The first experience entries the resume shows on the web, as last published: title, company, location and dates, never
         descriptions or bullets. Ends with a link to the full resume.
+      </span>
+    </>
+  );
+}
+
+// Which resume an education or skills section reads from (issue #126), and
+// where it stands for visitors: an experience section's picker.
+function SectionResumeFields({ section, onChange, resumes, context, nothing }) {
+  const known = resumes.some((r) => r.id === section.resumeId);
+  const status = cardStatus(section.resumeId, resumes, context);
+  return (
+    <>
+      <select className="ed-input" value={section.resumeId} onChange={(e) => onChange({ resumeId: e.target.value })} aria-label="Which resume">
+        {!known && <option value={section.resumeId}>Deleted resume</option>}
+        {resumes.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.name}
+          </option>
+        ))}
+      </select>
+      {status && <span className="ed-field-hint ed-landing-card-status">{status}</span>}
+      {!status && nothing && <span className="ed-field-hint ed-landing-card-status">{nothing}</span>}
+    </>
+  );
+}
+
+// A resume's latest education entries (issue #126), read from what it has
+// published each time the page is shown, like ExperienceFields.
+function EducationFields({ section, onChange, resumes, context, limits }) {
+  const entries = context.resumes.find((r) => r.id === section.resumeId)?.education ?? [];
+  const max = limits?.educationCount ?? 10;
+  return (
+    <>
+      <SectionResumeFields
+        section={section}
+        onChange={onChange}
+        resumes={resumes}
+        context={context}
+        nothing={entries.length === 0 ? 'Its published version has no education shown on the web, so nothing is shown.' : null}
+      />
+      <label className="ed-field">
+        <span>Entries to show</span>
+        <select className="ed-input" value={section.count} onChange={(e) => onChange({ count: Number(e.target.value) })}>
+          {Array.from({ length: max }, (_, n) => n + 1).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="ed-field ed-checkbox-field">
+        <input type="checkbox" checked={Boolean(section.showDates)} onChange={(e) => onChange({ showDates: e.target.checked })} />
+        Show dates
+      </label>
+      <span className="ed-field-hint">
+        The first education entries the resume shows on the web, as last published: degree, institution, location and dates. Ends
+        with a link to the full resume.
+      </span>
+    </>
+  );
+}
+
+// Every skill group a resume shows on the web (issue #126), as last
+// published: its category and its items, one chip each.
+function SkillsFields({ section, onChange, resumes, context }) {
+  const groups = context.resumes.find((r) => r.id === section.resumeId)?.skills ?? [];
+  return (
+    <>
+      <SectionResumeFields
+        section={section}
+        onChange={onChange}
+        resumes={resumes}
+        context={context}
+        nothing={groups.length === 0 ? 'Its published version has no skills shown on the web, so nothing is shown.' : null}
+      />
+      <span className="ed-field-hint">
+        Every skill group the resume shows on the web, as last published, in its order: the category and its items, split on commas.
+        Ends with a link to the full resume.
       </span>
     </>
   );

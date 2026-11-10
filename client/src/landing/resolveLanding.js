@@ -2,10 +2,12 @@
 // the way a visitor will see it once published, as someone types. Mirrors
 // resolveLanding() in server/src/landingFields.js (which is what the public
 // site actually gets); `context` is the `context` GET /api/landing returns:
-// { photoUrl, site, resumes: [{ id, href, title, pdfHref, experience }] },
-// the resumes a card or hero action can link to right now (pdfHref '' while
-// one has no PDF; experience the roles an experience section may show from
-// it, already filtered by the server's experienceRoles()), and images:
+// { photoUrl, site, resumes: [{ id, href, title, pdfHref, experience,
+// education, skills }] }, the resumes a card or hero action can link to
+// right now (pdfHref '' while one has no PDF; experience the roles an
+// experience section may show from it, already filtered by the server's
+// experienceRoles(), and education and skills likewise by its
+// educationEntries() and skillGroups()), and images:
 // [{ id, src, width, height }], the uploaded images (issue #92) at the
 // editor's own path, since a draft's may not be public yet. With `withIds`,
 // each section keeps its id, which the server never sends: the editor's
@@ -140,6 +142,21 @@ function resolveSection(section, targets, images) {
     }
     case 'divider':
       return {};
+    case 'education': {
+      const target = targets.get(section.resumeId);
+      const entries = (target?.education ?? []).slice(0, section.count).map((entry) => ({
+        degree: entry.degree,
+        institution: entry.institution,
+        location: entry.location,
+        dates: section.showDates ? roleDates(entry) : '',
+      }));
+      return entries.length ? { entries, href: target.href } : null;
+    }
+    case 'skills': {
+      const target = targets.get(section.resumeId);
+      const groups = (target?.skills ?? []).map((group) => ({ category: group.category, items: [...group.items] }));
+      return groups.length ? { groups, href: target.href } : null;
+    }
     default:
       return null;
   }

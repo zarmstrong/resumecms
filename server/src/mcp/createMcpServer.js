@@ -46,7 +46,7 @@ Draft vs published: every write tool changes the DRAFT only, of one resume. Noth
 
 Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
 
-Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, and dividers; any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, or seo.image for link previews.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, its latest education entries or its skill groups, images, cards linking to some of the resumes, and dividers; any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, or seo.image for link previews.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -542,6 +542,18 @@ const landingSection = () =>
       caption: z.string().optional().describe('Plain text shown under it.'),
     }),
     z.object({ ...sectionBase, kind: z.literal('divider') }).describe('A rule across the page; its title, if any, is a label on the rule.'),
+    z.object({
+      ...sectionBase,
+      kind: z.literal('education'),
+      resumeId: z.string().describe("A resume id from list_resumes: its first education entries (degree, institution, location, dates) are shown from its published version, while it's public."),
+      count: z.number().int().optional().describe('How many entries to show, 1 to 10 (default 3).'),
+      showDates: z.boolean().optional().describe("Show each entry's dates (default true)."),
+    }),
+    z.object({
+      ...sectionBase,
+      kind: z.literal('skills'),
+      resumeId: z.string().describe("A resume id from list_resumes: every skill group it shows on the web (category and items) is shown from its published version, while it's public."),
+    }),
   ]);
 
 const landingColor = (what) => z.string().nullable().optional().describe(`${what}: #rrggbb, or '' (or null) for the default.`);

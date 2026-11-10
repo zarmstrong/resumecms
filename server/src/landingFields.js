@@ -36,6 +36,10 @@ import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, empty
 //   image      — image (a reference, or null until one is uploaded), caption
 //   divider    — nothing but its title: a rule across the page, the title
 //                (if any) a label on it
+//   education  — resumeId, count, showDates: the first `count` education
+//                entries of that resume, read like experience's (issue #126)
+//   skills     — resumeId: every skill group that resume shows on the web,
+//                read like experience's (issue #126)
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown, and `column: 'side'`: drawn in the side column by a
 // template that has one (template.json's `columns`, e.g. split's column
@@ -91,6 +95,7 @@ export const LANDING_LIMITS = {
   quoteName: 100,
   quoteRole: 120,
   experienceCount: 10,
+  educationCount: 10,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -106,7 +111,7 @@ export const PHOTO_SOURCES = ['resume', 'custom', 'upload', 'none'];
 // the badge a link is drawn with.
 export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'education', 'skills'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -124,11 +129,15 @@ const SECTION_FIELDS = {
   experience: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId', 'count', 'showDates'],
   image: ['id', 'kind', 'title', 'hidden', 'column', 'image', 'caption'],
   divider: ['id', 'kind', 'title', 'hidden', 'column'],
+  education: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId', 'count', 'showDates'],
+  skills: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
 // What an experience section shows when it's added without saying.
 export const EXPERIENCE_DEFAULTS = { count: 3, showDates: true };
+// And an education section.
+export const EDUCATION_DEFAULTS = { count: 3, showDates: true };
 const LINK_FIELDS = ['type', 'label', 'url'];
 const CARD_FIELDS = ['resumeId', 'label', 'blurb', 'showPdf'];
 const ACTION_FIELDS = {
@@ -206,13 +215,13 @@ export function upgradeLanding(stored) {
   return upgraded;
 }
 
-// Every resume `landing` names: a card's in any section, an experience
-// section's, or a hero action's.
+// Every resume `landing` names: a card's in any section, an experience,
+// education or skills section's, or a hero action's.
 export function referencedResumeIds(landing) {
   return new Set([
     ...(landing.sections || []).flatMap((section) => {
       if (section.kind === 'resumes') return section.cards.map((card) => card.resumeId);
-      return section.kind === 'experience' ? [section.resumeId] : [];
+      return ['experience', 'education', 'skills'].includes(section.kind) ? [section.resumeId] : [];
     }),
     ...(landing.actions || []).flatMap((action) => (action.type === 'resume' ? [action.resumeId] : [])),
   ]);
@@ -420,6 +429,18 @@ function checkSection(section, i, refs, ids) {
       }
       out.showDates = checkBoolean(section.showDates ?? EXPERIENCE_DEFAULTS.showDates, `${label}.showDates`);
       break;
+    case 'education':
+      // An experience section's rules.
+      out.resumeId = checkResumeRef(section.resumeId, `${label}.resumeId`, refs);
+      out.count = section.count ?? EDUCATION_DEFAULTS.count;
+      if (!Number.isInteger(out.count) || out.count < 1 || out.count > LANDING_LIMITS.educationCount) {
+        throw httpError(400, `${label}.count must be a whole number from 1 to ${LANDING_LIMITS.educationCount}`);
+      }
+      out.showDates = checkBoolean(section.showDates ?? EDUCATION_DEFAULTS.showDates, `${label}.showDates`);
+      break;
+    case 'skills':
+      out.resumeId = checkResumeRef(section.resumeId, `${label}.resumeId`, refs);
+      break;
     case 'image':
       out.image = section.image == null ? null : checkImageRef(section.image, `${label}.image`, refs);
       out.caption = checkString(section.caption ?? '', LANDING_IMAGE_LIMITS.caption, `${label}.caption`);
@@ -550,11 +571,12 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 //   context.photoUrl — the default resume's published header photo
 //   context.site     — the default resume's published site settings, the
 //                      page's `site` unless it has colors of its own
-//   context.resumes  — Map of resume id → { href, title, pdfHref, experience }
-//                      for the resumes a visitor may see (public and
-//                      published); pdfHref is '' while the resume has no
-//                      rendered PDF, experience is experienceRoles() of its
-//                      published blocks
+//   context.resumes  — Map of resume id → { href, title, pdfHref, experience,
+//                      education, skills } for the resumes a visitor may
+//                      see (public and published); pdfHref is '' while the
+//                      resume has no rendered PDF, experience is
+//                      experienceRoles() of its published blocks, education
+//                      educationEntries() and skills skillGroups() of them
 //   context.images   — Map of image id → { src, width, height } for the
 //                      stored images (issue #92), `src` where a visitor
 //                      fetches it
@@ -571,7 +593,9 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // on how the template arranges the sections, so the client decides, in
 // client/src/landing/dividers.js). An experience section
 // resolves to { roles, href }: its resume's first `count` roles, and that
-// resume's link for "Full resume".
+// resume's link for "Full resume". An education section resolves the same
+// way to { entries, href }, and a skills section to { groups, href }, every
+// skill group of its resume.
 // `seo` goes along whole (everything in it ends up in the page's head and
 // its X-Robots-Tag anyway), its image resolved like the others. An image
 // reference resolves to { src, alt, width, height }, or is left out (a
@@ -677,6 +701,21 @@ function resolveSection(section, context) {
     }
     case 'divider':
       return {};
+    case 'education': {
+      const target = context.resumes.get(section.resumeId);
+      const entries = (target?.education ?? []).slice(0, section.count).map((entry) => ({
+        degree: entry.degree,
+        institution: entry.institution,
+        location: entry.location,
+        dates: section.showDates ? roleDates(entry) : '',
+      }));
+      return entries.length ? { entries, href: target.href } : null;
+    }
+    case 'skills': {
+      const target = context.resumes.get(section.resumeId);
+      const groups = (target?.skills ?? []).map((group) => ({ category: group.category, items: [...group.items] }));
+      return groups.length ? { groups, href: target.href } : null;
+    }
     default:
       return null;
   }
@@ -710,4 +749,48 @@ export function experienceRoles(blocks) {
     })
     .filter((role) => role.jobTitle || role.company)
     .slice(0, LANDING_LIMITS.experienceCount);
+}
+
+// The entries an education section may show from a resume's published
+// `blocks`, read like experienceRoles(): its education blocks shown on the
+// web, in order, with only degree, institution, location and dates. One
+// with neither a degree nor an institution is skipped.
+export function educationEntries(blocks) {
+  return blocksForMode(Array.isArray(blocks) ? blocks : [], 'web')
+    .filter((block) => block.type === 'education' && !block.hidden)
+    .map((block) => {
+      const data = isPlainObject(block.data) ? block.data : {};
+      return {
+        degree: roleText(data.degree),
+        institution: roleText(data.institution),
+        location: roleText(data.location),
+        startDate: roleText(data.startDate),
+        endDate: roleText(data.endDate),
+      };
+    })
+    .filter((entry) => entry.degree || entry.institution)
+    .slice(0, LANDING_LIMITS.educationCount);
+}
+
+// A skill group's `items` as the resume draws them as chips: split on
+// commas, trimmed, blanks dropped. Mirrors splitItems() in
+// client/src/resume/skillItems.js (resolveLanding.test.js compares them).
+export function splitSkillItems(items) {
+  return (typeof items === 'string' ? items : '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+// The groups a skills section shows from a resume's published `blocks`:
+// its skills_group blocks shown on the web, in order, with only the
+// category and its items (splitSkillItems()). One with no items is skipped.
+export function skillGroups(blocks) {
+  return blocksForMode(Array.isArray(blocks) ? blocks : [], 'web')
+    .filter((block) => block.type === 'skills_group' && !block.hidden)
+    .map((block) => {
+      const data = isPlainObject(block.data) ? block.data : {};
+      return { category: roleText(data.category), items: splitSkillItems(data.items) };
+    })
+    .filter((group) => group.items.length > 0);
 }
