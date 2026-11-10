@@ -5,6 +5,7 @@ import { darkClass, landingPageStyle } from './landingStyle.js';
 import { textParagraphs } from './resolveLanding.js';
 import { dropStrayDividers } from './dividers.js';
 import { renderInline } from './renderInline.js';
+import { LandingGallery } from './LandingGallery.jsx';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
@@ -243,6 +244,8 @@ function SectionBody({ section }) {
           {section.caption && <figcaption className="l-figure-caption">{section.caption}</figcaption>}
         </figure>
       );
+    case 'gallery':
+      return <LandingGallery images={section.images} label={section.title} />;
     default:
       return null;
   }

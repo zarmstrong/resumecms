@@ -891,3 +891,99 @@ test('an image the page would show needs a description to publish', () => {
     /the photo has no description \(photoImage\.alt\) \(and 1 more\)/
   );
 });
+
+test('a gallery holds up to 24 entries of { image, caption }, checked like every image reference', () => {
+  const ref = { imageId: IMG, alt: 'A cake' };
+  const out = validateLanding(
+    { sections: [{ id: 'g', kind: 'gallery', title: 'Work', images: [{ image: ref, caption: 'Wedding' }, { image: null }, {}] }] },
+    withImages(IMG)
+  );
+  // An entry starts without an image (the editor uploads into it), and both keys are always stored.
+  assert.deepEqual(out.sections[0], {
+    id: 'g',
+    kind: 'gallery',
+    title: 'Work',
+    images: [{ image: ref, caption: 'Wedding' }, { image: null, caption: '' }, { image: null, caption: '' }],
+  });
+  assert.deepEqual(validateLanding({ sections: [{ id: 'g', kind: 'gallery' }] }, withImages()).sections[0].images, []);
+
+  const entries = (n) => Array.from({ length: n }, () => ({ image: ref, caption: '' }));
+  assert.equal(validateLanding({ sections: [{ kind: 'gallery', images: entries(LANDING_LIMITS.galleryImages) }] }, withImages(IMG)).sections[0].images.length, 24);
+  const bad = [
+    { sections: [{ kind: 'gallery', images: entries(LANDING_LIMITS.galleryImages + 1) }] },
+    { sections: [{ kind: 'gallery', images: 'nope' }] },
+    { sections: [{ kind: 'gallery', images: [null] }] },
+    { sections: [{ kind: 'gallery', images: [{ image: ref, caption: 'x'.repeat(LANDING_IMAGE_LIMITS.caption + 1) }] }] },
+    { sections: [{ kind: 'gallery', images: [{ image: ref, caption: 3 }] }] },
+    { sections: [{ kind: 'gallery', images: [{ image: ref, url: 'https://example.com' }] }] },
+    { sections: [{ kind: 'gallery', images: [{ image: { imageId: IMG } }] }] }, // alt is required
+    { sections: [{ kind: 'gallery', images: [{ image: { imageId: IMG2, alt: '' } }] }] }, // not stored
+    { sections: [{ kind: 'gallery', image: ref }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, withImages(IMG))), 400, JSON.stringify(input).slice(0, 120));
+
+  // One already in the draft may outlive its image, and every one counts as referenced.
+  const kept = validateLanding(
+    { sections: [{ kind: 'gallery', images: [{ image: { imageId: IMG2, alt: '' } }] }] },
+    { ...withImages(IMG), previousImageIds: new Set([IMG2]) }
+  );
+  assert.equal(kept.sections[0].images[0].image.imageId, IMG2);
+  assert.deepEqual([...referencedImageIds({ sections: [...out.sections, ...kept.sections] })].sort(), [IMG, IMG2]);
+  // Captions are plain text, kept as written.
+  const caption = 'A *[b](javascript:x)*';
+  assert.equal(validateLanding({ sections: [{ kind: 'gallery', images: [{ image: ref, caption }] }] }, withImages(IMG)).sections[0].images[0].caption, caption);
+});
+
+test('a gallery resolves its stored images in order, dropping an entry whose image is gone and a gallery left with none', () => {
+  const src = `/api/public/landing/images/${IMG}`;
+  const context = { site: null, resumes: new Map(), images: new Map([[IMG, { src, width: 800, height: 600 }]]) };
+  const landing = {
+    ...emptyLanding(),
+    sections: [
+      {
+        id: 'g',
+        kind: 'gallery',
+        title: 'Work',
+        column: 'side',
+        images: [
+          { image: { imageId: IMG2, alt: 'Gone' }, caption: 'Gone' },
+          { image: { imageId: IMG, alt: 'A cake' }, caption: 'Wedding' },
+          { image: null, caption: 'Not yet' },
+        ],
+      },
+      { id: 'none', kind: 'gallery', title: 'Empty', images: [{ image: { imageId: IMG2, alt: 'x' }, caption: '' }] },
+      { id: 'hid', kind: 'gallery', title: 'Hidden', hidden: true, images: [{ image: { imageId: IMG, alt: 'x' }, caption: '' }] },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  assert.deepEqual(out.sections, [
+    { kind: 'gallery', title: 'Work', column: 'side', images: [{ image: { src, alt: 'A cake', width: 800, height: 600 }, caption: 'Wedding' }] },
+  ]);
+  assert.equal(JSON.stringify(out).includes('imageId'), false);
+  assert.deepEqual([...shownImageIds(out)], [IMG]);
+  assert.deepEqual(resolveLanding(landing, { ...context, images: new Map() }).sections, []);
+});
+
+test('a gallery image the page would show needs a description to publish', () => {
+  const stored = new Set([IMG]);
+  const gallery = (images, extra = {}) => ({
+    ...emptyLanding(),
+    sections: [{ id: 't', kind: 'text', title: '', body: 'x' }, { id: 'g', kind: 'gallery', title: '', images, ...extra }],
+  });
+  const fieldOf = (landing) => {
+    try {
+      assertImagesDescribed(landing, stored);
+    } catch (err) {
+      assert.equal(err.status, 400);
+      assert.match(err.message, /image \d+ of the gallery in section 2/);
+      return err.message.match(/\(([^)]*\.alt)\)/)[1];
+    }
+    return null;
+  };
+  const entry = (alt, imageId = IMG) => ({ image: { imageId, alt }, caption: '' });
+  assert.equal(fieldOf(gallery([entry('Cake'), entry(' ')])), 'sections[1].images[1].image.alt');
+  assert.equal(fieldOf(gallery([entry('Cake'), { image: null, caption: '' }])), null);
+  // One whose image is gone shows nothing; nor does a hidden gallery.
+  assert.equal(fieldOf(gallery([entry('', IMG2)])), null);
+  assert.equal(fieldOf(gallery([entry('')], { hidden: true })), null);
+});

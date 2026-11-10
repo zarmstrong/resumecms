@@ -140,6 +140,13 @@ function resolveSection(section, targets, images) {
     }
     case 'divider':
       return {};
+    case 'gallery': {
+      const shown = section.images.flatMap((entry) => {
+        const image = resolveImage(entry.image, images);
+        return image ? [{ image, caption: entry.caption }] : [];
+      });
+      return shown.length ? { images: shown } : null;
+    }
     default:
       return null;
   }

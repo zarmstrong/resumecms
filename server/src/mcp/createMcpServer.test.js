@@ -558,6 +558,11 @@ test('upload_landing_image decodes base64 (or a data: URL) under its own cap, an
   assert.deepEqual(store.calls.at(-1), ['setLanding', { photo: 'upload', photoImage: image, sections, seo: { image } }, { merge: true }]);
   // alt is required
   assert.equal((await call('update_landing_page', { photoImage: { imageId: 'a'.repeat(64) } })).isError, true);
+  // A gallery's entries (issue #120) pass through too, one without an image included.
+  const gallery = [{ kind: 'gallery', title: 'Work', images: [{ image, caption: 'A cake' }, { image: null, caption: '' }] }];
+  await call('update_landing_page', { sections: gallery });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: gallery }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'gallery', images: [{ image: { imageId: 'a'.repeat(64) } }] }] })).isError, true);
 });
 
 test('cover letter tools: create, merge or replace on update, delete, scoped by resumeId', async (t) => {

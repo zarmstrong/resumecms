@@ -426,6 +426,25 @@ export const LANDING_SCHEMA = {
             description: 'A rule across the page between two sections; its title, if any, is a label on the rule',
             properties: { ...LANDING_SECTION_BASE, kind: { const: 'divider' } },
           },
+          {
+            type: 'object',
+            description: 'Uploaded images in a grid, each opening larger when clicked; left out until one has an image. Captions are never rewritten by AI',
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'gallery' },
+              images: {
+                type: 'array',
+                description: 'At most 24, in order; an entry without an image is left out',
+                items: {
+                  type: 'object',
+                  properties: {
+                    image: { ...LANDING_IMAGE_REF, description: 'null until one is uploaded' },
+                    caption: { type: 'string', description: 'Plain text under the image, at most 300 characters' },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     },

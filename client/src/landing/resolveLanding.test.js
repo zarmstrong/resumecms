@@ -195,3 +195,39 @@ test('uploaded images resolve like the server does, at the editor path the conte
   assert.deepEqual(bare.sections.map((s) => s.kind), ['items']);
   assert.equal('image' in bare.seo, false);
 });
+
+test('a gallery resolves exactly like the server: stored images in order, the rest left out (issue #120)', () => {
+  const id = 'a'.repeat(64);
+  const gone = 'b'.repeat(64);
+  const src = `/api/landing/images/${id}`;
+  const images = [{ id, src, width: 800, height: 600 }];
+  const landing = {
+    ...draft,
+    sections: [
+      {
+        id: 'g',
+        kind: 'gallery',
+        title: 'Work',
+        column: 'side',
+        images: [
+          { image: { imageId: gone, alt: 'Gone' }, caption: '' },
+          { image: { imageId: id, alt: 'Cake' }, caption: 'Wedding' },
+          { image: null, caption: 'Not yet' },
+        ],
+      },
+      { id: 'none', kind: 'gallery', title: 'Empty', images: [{ image: null, caption: '' }] },
+      { id: 'hid', kind: 'gallery', title: 'Hidden', hidden: true, images: [{ image: { imageId: id, alt: 'x' }, caption: '' }] },
+    ],
+  };
+  const out = resolveLanding(landing, { ...context, images });
+  const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map(), images: new Map(images.map((i) => [i.id, i])) });
+  assert.deepEqual(out.sections, fromServer.sections);
+  assert.deepEqual(out.sections, [
+    { kind: 'gallery', title: 'Work', column: 'side', images: [{ image: { src, alt: 'Cake', width: 800, height: 600 }, caption: 'Wedding' }] },
+  ]);
+  const preview = resolveLanding(landing, { ...context, images }, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => [s.id, Boolean(s.hidden)]), [
+    ['g', false],
+    ['hid', true],
+  ]);
+});

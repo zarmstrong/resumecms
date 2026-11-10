@@ -36,6 +36,9 @@ import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, empty
 //   image      — image (a reference, or null until one is uploaded), caption
 //   divider    — nothing but its title: a rule across the page, the title
 //                (if any) a label on it
+//   gallery    — images: [{ image, caption }] (issue #120), drawn as a grid
+//                that opens each larger; an entry's image is a reference, or
+//                null until its upload lands, and its caption plain text
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown, and `column: 'side'`: drawn in the side column by a
 // template that has one (template.json's `columns`, e.g. split's column
@@ -91,6 +94,7 @@ export const LANDING_LIMITS = {
   quoteName: 100,
   quoteRole: 120,
   experienceCount: 10,
+  galleryImages: 24,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -106,7 +110,7 @@ export const PHOTO_SOURCES = ['resume', 'custom', 'upload', 'none'];
 // the badge a link is drawn with.
 export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'gallery'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -124,9 +128,11 @@ const SECTION_FIELDS = {
   experience: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId', 'count', 'showDates'],
   image: ['id', 'kind', 'title', 'hidden', 'column', 'image', 'caption'],
   divider: ['id', 'kind', 'title', 'hidden', 'column'],
+  gallery: ['id', 'kind', 'title', 'hidden', 'column', 'images'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
+const GALLERY_ENTRY_FIELDS = ['image', 'caption'];
 // What an experience section shows when it's added without saying.
 export const EXPERIENCE_DEFAULTS = { count: 3, showDates: true };
 const LINK_FIELDS = ['type', 'label', 'url'];
@@ -375,6 +381,16 @@ function checkQuote(quote, label) {
   return out;
 }
 
+// A gallery entry: its image (null while the editor's upload for it is on
+// its way) and a caption, both always stored.
+function checkGalleryEntry(entry, label, refs) {
+  checkKeys(entry, GALLERY_ENTRY_FIELDS, label);
+  return {
+    image: entry.image == null ? null : checkImageRef(entry.image, `${label}.image`, refs),
+    caption: checkString(entry.caption ?? '', LANDING_IMAGE_LIMITS.caption, `${label}.caption`),
+  };
+}
+
 // One section, with the fields of its kind and nothing else. A section
 // without an id (an MCP client adding one) gets a new one.
 function checkSection(section, i, refs, ids) {
@@ -423,6 +439,11 @@ function checkSection(section, i, refs, ids) {
     case 'image':
       out.image = section.image == null ? null : checkImageRef(section.image, `${label}.image`, refs);
       out.caption = checkString(section.caption ?? '', LANDING_IMAGE_LIMITS.caption, `${label}.caption`);
+      break;
+    case 'gallery':
+      out.images = checkList(section.images, LANDING_LIMITS.galleryImages, `${label}.images`).map((entry, j) =>
+        checkGalleryEntry(entry, `${label}.images[${j}]`, refs)
+      );
       break;
   }
   return out;
@@ -576,7 +597,8 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // its X-Robots-Tag anyway), its image resolved like the others. An image
 // reference resolves to { src, alt, width, height }, or is left out (a
 // photo, a thumbnail, the share image) when its image is gone; an image
-// section without one is left out. An uploaded hero photo is `photoUrl`
+// section without one is left out, and so is a gallery entry, then a
+// gallery with no entry left. An uploaded hero photo is `photoUrl`
 // (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
 // `template` (an id the client may not know, and then draws as classic),
 // `site` (context.site, or the page's own colors and fonts in the site
@@ -677,6 +699,13 @@ function resolveSection(section, context) {
     }
     case 'divider':
       return {};
+    case 'gallery': {
+      const images = section.images.flatMap((entry) => {
+        const image = resolveImage(entry.image, context.images);
+        return image ? [{ image, caption: entry.caption }] : [];
+      });
+      return images.length ? { images } : null;
+    }
     default:
       return null;
   }

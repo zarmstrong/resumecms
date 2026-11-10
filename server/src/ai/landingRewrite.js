@@ -21,7 +21,9 @@ import { inlineLength, mapLinks } from '../inlineText.js';
 // proposal onto something else; items have no ids, so theirs is a position.
 // Deliberately not targets (issue #90): a quote, which is someone else's
 // words; an experience section, which is read from a resume as published;
-// and an item's meta line.
+// an item's meta line; and an image section's or a gallery's captions
+// (issue #120), plain text about a picture the model can't see, so the page
+// context gives either only its kind and title.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*

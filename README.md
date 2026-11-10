@@ -214,9 +214,9 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/resumes/:id/cover-letters/:letterId/letter.pdf` | the letter as a PDF download, rendered on request and reused until the letter or its resume's header or site settings change. A render that waits more than 20 s behind another is a 503: it carries on, so asking again shortly gets the file |
 | `POST /api/resumes/:id/cover-letters/:letterId/rewrite` | `{ data?, target?, instruction?, brief? }` → `{ proposal }` for review; saves nothing. `target` is `{ kind: 'letter' }` (default: salutation, body and closing) or `{ kind: 'paragraph', index }`. A letter with an empty body is drafted without an instruction; otherwise an instruction or a `brief` is required. Shares `ai/rewrite`'s rate limits (a request with a `brief` counts as tailoring) |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`, `ai/tailor-plan`) for that resume. The unprefixed ones act on whichever resume is the default |
-| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, availability, actions, photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel }`, `actions` being up to 3 buttons, each `{ type: 'link', label, url }` or `{ type: 'resume', label, resumeId, open: 'page' | 'pdf' }`, `photo` one of `resume`, `custom` (`photoUrl`), `upload` (`photoImage`) or `none`, `seo` being `{ title, description, noindex, image? }`, each section `{ id, kind, title, hidden?, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url, meta?, image? }]`), `links` (`links`), `resumes` (`cards: [{ resumeId, label, blurb, showPdf }]`), `quotes` (`quotes: [{ text, name, role, url }]`), `experience` (`resumeId`, `count` 1–10, `showDates`), `image` (`image`, `caption`) or `divider` (nothing but its `title`, a label on the line); `hidden`, `column` (`'side'`, for a template with a side column, such as `split`), `meta` and an item's `image` are only there when set, an image is referenced as `{ imageId, alt }`, `homeLink` (default `true`) whether resume pages show a "← Home" link back to it, `homeLinkLabel` (up to 40 characters, `''` for "Home") what it says, `template` a landing template's folder name (`classic`, `centered`, `split`; an unknown one is drawn as `classic`), and `style` its look, `{ source: 'resume' \| 'custom', colors: { accent, heading, text, background }, font, nameFont, darkColors? }`, each color `#rrggbb` or `''` for the default and each font a site font id or `''`), its `status`, its fields' caps (`limits`, the images' under `limits.images`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card, button or experience section can link to (public and published), each with its PDF's link (`pdfHref`, `''` while it has none) and the roles an experience section may show from it (`experience`), and the uploaded images (`images: [{ id, src, width, height }]`). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links and its email an "Email me" button |
+| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, availability, actions, photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel }`, `actions` being up to 3 buttons, each `{ type: 'link', label, url }` or `{ type: 'resume', label, resumeId, open: 'page' | 'pdf' }`, `photo` one of `resume`, `custom` (`photoUrl`), `upload` (`photoImage`) or `none`, `seo` being `{ title, description, noindex, image? }`, each section `{ id, kind, title, hidden?, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url, meta?, image? }]`), `links` (`links`), `resumes` (`cards: [{ resumeId, label, blurb, showPdf }]`), `quotes` (`quotes: [{ text, name, role, url }]`), `experience` (`resumeId`, `count` 1–10, `showDates`), `image` (`image`, `caption`), `divider` (nothing but its `title`, a label on the line) or `gallery` (`images: [{ image, caption }]`, at most 24, an entry's `image` `null` until one is uploaded); `hidden`, `column` (`'side'`, for a template with a side column, such as `split`), `meta` and an item's `image` are only there when set, an image is referenced as `{ imageId, alt }`, `homeLink` (default `true`) whether resume pages show a "← Home" link back to it, `homeLinkLabel` (up to 40 characters, `''` for "Home") what it says, `template` a landing template's folder name (`classic`, `centered`, `split`; an unknown one is drawn as `classic`), and `style` its look, `{ source: 'resume' \| 'custom', colors: { accent, heading, text, background }, font, nameFont, darkColors? }`, each color `#rrggbb` or `''` for the default and each font a site font id or `''`), its `status`, its fields' caps (`limits`, the images' under `limits.images`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card, button or experience section can link to (public and published), each with its PDF's link (`pdfHref`, `''` while it has none) and the roles an experience section may show from it (`experience`), and the uploaded images (`images: [{ id, src, width, height }]`). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links and its email an "Email me" button |
 | `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL (or a `[label](url)` link inside a text section's `body` or an item's `text`) that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, an image reference without an `alt` string, a `style` color that isn't `#rrggbb` or `''`, a font that isn't one of the site settings', a `template` that isn't a lowercase kebab-case id, and a new card, button, experience section or image reference for an unknown resume or image are all a 400. An image's `alt` may be empty in the draft. The editor sends `textFormat: 'inline'` with it (never stored); a body without it is taken as plain text, its text sections' and items' markers escaped first, so an editor loaded before that syntax existed saves what it showed |
-| `POST /api/landing/images` | upload an image for the landing page: the JPEG, PNG or WebP file itself as the body (at most 15 MB; its type is told from its bytes, not `Content-Type`, though a body sent as `application/json` is a 400). It's re-encoded, which drops all metadata (EXIF and GPS position included), and scaled down to 1600 px on its long side; responds `201` with `{ id, mime, width, height, src }`. A 413 when it's too large, a 409 when the store is full (50 images or 30 MB; an image nothing uses is removed at the first landing publish, restart or full-store upload once it's a week old) |
+| `POST /api/landing/images` | upload an image for the landing page: the JPEG, PNG or WebP file itself as the body (at most 15 MB; its type is told from its bytes, not `Content-Type`, though a body sent as `application/json` is a 400). It's re-encoded, which drops all metadata (EXIF and GPS position included), and scaled down to 1600 px on its long side; responds `201` with `{ id, mime, width, height, src }`. A 413 when it's too large, a 409 when the store is full (100 images or 60 MB; an image nothing uses is removed at the first landing publish, restart or full-store upload once it's a week old) |
 | `GET /api/landing/images/:id` | a stored image, for the editor's preview |
 | `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
 | `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it). A 400 naming the field (e.g. `sections[2].image.alt`) while an image the page would show has an empty description |
@@ -433,8 +433,11 @@ list such as projects (each with a title, a line of text, an optional
 link, an optional short line under the title such as "2024 · Rust ·
 Open source" and an optional thumbnail), an image with a caption, links, quotes (testimonials, each with who said it and
 their role), an experience timeline, cards linking to whichever
-resumes you choose, and dividers (a line between two sections, with an
-optional label on it). The experience timeline shows the latest roles (one to
+resumes you choose, dividers (a line between two sections, with an
+optional label on it), and galleries (up to 24 images with optional
+captions, in a grid; a click, or Enter, opens one larger, where the arrow
+keys go through the rest and Escape closes it). **+ Add images** in a
+gallery takes several files at once. The experience timeline shows the latest roles (one to
 ten) of a resume you pick, as it's published and shown on the web: title,
 company, location and, if you like, dates, never descriptions or bullets,
 then a link to the full resume. It's read from the resume each time the
@@ -487,8 +490,8 @@ Its **Look** group picks how it's laid out and colored:
   whose device is set to dark mode, with either choice above. The
   preview has a Light/Dark switch while there is one.
 
-Images (a thumbnail, an image section, the photo when you pick "An
-uploaded image", and the share image) are uploaded to the server, which
+Images (a thumbnail, an image section, a gallery's images, the photo
+when you pick "An uploaded image", and the share image) are uploaded to the server, which
 keeps them in its database, so its backups include them. Every upload is
 re-encoded: anything the camera wrote into the file, its GPS position
 included, is dropped, and a large image is scaled down to 1600 px on its
@@ -496,7 +499,7 @@ long side. Each image needs a short description (its alt text): you can
 save without one while you type, but the page won't publish until every
 image it shows has one. An
 uploaded image is only public while the published landing page shows it,
-and one nothing uses any more is removed once it's a week old (at the next landing publish, restart or upload into a full store).
+and one nothing uses any more is removed once it's a week old (at the next landing publish, restart or upload into a full store). The server keeps at most 100 images, 60 MB in all.
 
 What visitors see:
 
@@ -850,8 +853,8 @@ section in one go. Each suggestion opens under its own field with a diff,
 shows outlined in the preview, and is accepted or discarded on its own (or
 all at once from the banner over the preview). Accepting saves a draft
 edit; publish the landing page to make it live. Item titles and short
-lines, links, card titles, section headings, image captions and the
-images are never
+lines, links, card titles, section headings, image and gallery captions
+and the images are never
 rewritten, and neither are quotes (someone else's words) or the
 experience timeline (it comes from the resume). Hidden sections aren't
 shown to the AI, apart from the one it's rewriting, and the intro draft
