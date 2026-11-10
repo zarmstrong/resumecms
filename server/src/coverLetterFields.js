@@ -89,10 +89,24 @@ function hasOwnDate(data) {
   return typeof data?.date === 'string' && data.date.trim() !== '';
 }
 
+// Bump when how a letter is drawn changes in a way that already-stored
+// content would show differently (client/src/letters/, the header
+// templates, or the colors they get from resume/pageStyle.js), so cached
+// PDFs are rendered again on their next download instead of keeping the
+// old look. 2: on-color text picked by WCAG contrast (issue #142).
+export const LETTER_RENDER_VERSION = 2;
+
 // Identifies everything a letter's PDF is rendered from: its data, its
-// resume's header and site settings, and today's date when the letter
-// shows the export date. A cached PDF with the same key is current.
+// resume's header and site settings, today's date when the letter shows
+// the export date, and LETTER_RENDER_VERSION. A cached PDF with the same
+// key is current.
 export function letterPdfKey({ data, header, site, today }) {
-  const content = JSON.stringify({ data, header: header ?? null, site: site ?? null, today: hasOwnDate(data) ? null : today });
+  const content = JSON.stringify({
+    version: LETTER_RENDER_VERSION,
+    data,
+    header: header ?? null,
+    site: site ?? null,
+    today: hasOwnDate(data) ? null : today,
+  });
   return createHash('sha256').update(content).digest('hex');
 }

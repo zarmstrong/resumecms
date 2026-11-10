@@ -16,7 +16,8 @@
    + and −, a credential's kind and "Verify", the gallery's buttons) is
    in the heading or text color here, and so are the focus rings. The
    primary button is filled with the heading color rather than the accent
-   (--r-on-accent, picked by brightness, isn't AA on every vivid accent),
+   (--r-on-accent, the better of white and near-black, isn't AA on every
+   mid-tone accent),
    and the link badges and skill chips are outlined. The accent only
    draws shapes: the bars, outlines, the timeline's dots, the offset
    blocks behind the photo, the primary button and a hovered card. Text

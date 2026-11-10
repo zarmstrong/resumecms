@@ -66,15 +66,27 @@ export function siteAccent(site) {
   return colorOf(site?.colors?.accent, null) ?? colorOf(site?.accent, DEFAULT_LANDING_COLORS.accent);
 }
 
-// Near-black or white, whichever reads better on `background` (WCAG
-// relative luminance; the two contrasts cross at about 0.18).
-export function inkFor(background) {
+// WCAG 2 relative luminance of a #rrggbb color.
+function relativeLuminance(hex) {
   const channel = (i) => {
-    const c = parseInt(background.slice(i, i + 2), 16) / 255;
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   };
-  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
-  return luminance > 0.179 ? '#14181c' : '#ffffff';
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+const INK = '#14181c';
+const INK_LUMINANCE = relativeLuminance(INK);
+
+// Near-black or white, whichever has the higher WCAG contrast ratio
+// against `background` (they cross at a luminance of about 0.2, a little
+// above black's 0.179, since the ink isn't quite black). The same choice
+// as the client's contrastTextFor() (client/src/resume/siteColors.js,
+// issue #142), whose siteColors.test.js checks the two agree.
+export function inkFor(background) {
+  const fill = relativeLuminance(background);
+  const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  return ratio(fill, INK_LUMINANCE) >= ratio(fill, 1) ? INK : '#ffffff';
 }
 
 // What the icon shows, and all it's drawn from: { initials, accent,

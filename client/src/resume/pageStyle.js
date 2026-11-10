@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import {
   normalizeSiteColors,
   contrastTextFor,
+  contrastTextAcross,
+  mixWithBlack,
   normalizePillPadding,
   PILL_PADDING_CSS,
   normalizeResumeFont,
@@ -16,6 +18,10 @@ import {
   BULLET_STYLE_CSS,
   fontCssFor,
 } from './siteColors.js';
+
+// How much of the accent the "gradient" header's far end keeps: resume.css's
+// `color-mix(in srgb, var(--r-accent) 55%, black)`.
+export const GRADIENT_SHADE = 0.55;
 
 // A resume's site settings as the CSS custom properties its page (an
 // `.r-page`) is styled through, plus the normalized colors. Shared by
@@ -37,6 +43,9 @@ export function resumePageStyle(site) {
     // Only used by the "banner" template, which paints the header in the
     // accent color and needs readable text on top of it.
     '--r-banner-text': contrastTextFor(colors.accent),
+    // The "gradient" header fades the accent into a darker shade
+    // (resume.css), so its text has to read on both ends.
+    '--r-gradient-text': contrastTextAcross([colors.accent, mixWithBlack(colors.accent, GRADIENT_SHADE)]),
   };
   const nameFont = normalizeNameFont(site);
   if (nameFont) style['--r-name-font'] = fontCssFor(nameFont);
