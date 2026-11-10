@@ -497,10 +497,27 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
     { kind: 'quotes', hidden: true, quotes: [{ text: 'Great', name: 'Ann', role: 'Manager', url: '' }] },
     { kind: 'experience', resumeId: 'sales', count: 2, showDates: false },
     { kind: 'items', items: [{ title: 'Tool', meta: '2024 · Rust' }] },
+    { kind: 'faq', title: 'Questions', entries: [{ question: 'Do you relocate?', answer: 'Yes, **within Europe**.' }, { question: 'When?' }] },
+    { kind: 'education', resumeId: 'sales', count: 1, showDates: true },
+    { kind: 'skills', resumeId: 'sales', column: 'side' },
   ];
   await call('update_landing_page', { sections: more });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: more }, { merge: true }]);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'experience' }] })).isError, true);
+  // a stats section (issue #125) passes through; a stat's value is text, not a number
+  const stats = [{ kind: 'stats', title: 'By the numbers', column: 'side', stats: [{ value: '2,000+', label: 'patients cared for' }] }];
+  await call('update_landing_page', { sections: stats });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: stats }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'stats', stats: [{ value: 2000 }] }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'faq', entries: [{ question: 'Q', answer: 3 }] }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'education' }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'skills' }] })).isError, true);
+  const credentials = [
+    { kind: 'credentials', column: 'side', credentials: [{ kind: 'license', name: 'RN', issuer: 'Board', number: '123', issued: '2019', expires: 'Dec 2027', url: 'https://board.example' }, { name: 'ServSafe' }] },
+  ];
+  await call('update_landing_page', { sections: credentials });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: credentials }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'credentials', credentials: [{ kind: 'degree', name: 'BSc' }] }] })).isError, true);
   // a resumeId isn't a landing page field (the page belongs to the install)
   await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi' }, { merge: true }]);
@@ -558,6 +575,11 @@ test('upload_landing_image decodes base64 (or a data: URL) under its own cap, an
   assert.deepEqual(store.calls.at(-1), ['setLanding', { photo: 'upload', photoImage: image, sections, seo: { image } }, { merge: true }]);
   // alt is required
   assert.equal((await call('update_landing_page', { photoImage: { imageId: 'a'.repeat(64) } })).isError, true);
+  // A gallery's entries (issue #120) pass through too, one without an image included.
+  const gallery = [{ kind: 'gallery', title: 'Work', images: [{ image, caption: 'A cake' }, { image: null, caption: '' }] }];
+  await call('update_landing_page', { sections: gallery });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: gallery }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'gallery', images: [{ image: { imageId: 'a'.repeat(64) } }] }] })).isError, true);
 });
 
 test('cover letter tools: create, merge or replace on update, delete, scoped by resumeId', async (t) => {

@@ -21,12 +21,9 @@ export function LandingImageField({ label, hint, value, images, limits, onUpload
     const file = e.target.files && e.target.files[0];
     e.target.value = ''; // so picking the same file again still uploads it
     if (!file) return;
-    if (!TYPES.includes(file.type)) {
-      setError('Please choose a JPEG, PNG or WebP image.');
-      return;
-    }
-    if (limits && file.size > limits.uploadBytes) {
-      setError(`That image is too large (at most ${Math.round(limits.uploadBytes / (1024 * 1024))} MB).`);
+    const problem = imageFileProblem(file, limits);
+    if (problem) {
+      setError(problem);
       return;
     }
     setError('');
@@ -91,3 +88,15 @@ export function withImageRef(obj, key, ref) {
   const { [key]: _removed, ...rest } = obj;
   return ref ? { ...rest, [key]: ref } : rest;
 }
+
+// What's wrong with `file` before it's sent (not a JPEG, PNG or WebP, or
+// over the upload cap of `limits`), or '' when nothing is. Also checks each
+// of the files a gallery's "Add images" takes at once (issue #120).
+export function imageFileProblem(file, limits) {
+  if (!TYPES.includes(file.type)) return 'Please choose a JPEG, PNG or WebP image.';
+  if (limits && file.size > limits.uploadBytes) return `That image is too large (at most ${Math.round(limits.uploadBytes / (1024 * 1024))} MB).`;
+  return '';
+}
+
+// The types the file pickers accept.
+export const IMAGE_TYPES = TYPES;

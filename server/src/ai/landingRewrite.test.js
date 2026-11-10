@@ -200,13 +200,15 @@ test('rewriteLanding needs an instruction except for an intro, and a valid targe
   assert.equal(proposals.length, 3);
 });
 
-test('quotes, experience sections and meta lines are never a target', async () => {
+test('quotes, experience, education and skills sections and meta lines are never a target', async () => {
   const page = {
     ...landing,
     sections: [
       ...landing.sections,
       { id: 'quotes', kind: 'quotes', title: 'Kind words', quotes: [{ text: 'Great to work with.', name: 'Ann', role: 'Manager', url: '' }] },
       { id: 'work', kind: 'experience', title: 'Recent work', resumeId: 'r1', count: 2, showDates: true },
+      { id: 'school', kind: 'education', title: 'Education', resumeId: 'r1', count: 2, showDates: true },
+      { id: 'skills', kind: 'skills', title: 'Skills', resumeId: 'r1' },
     ],
   };
   for (const target of [
@@ -216,6 +218,13 @@ test('quotes, experience sections and meta lines are never a target', async () =
     { kind: 'text', sectionId: 'quotes' },
     { kind: 'experience', sectionId: 'work' },
     { kind: 'text', sectionId: 'work' },
+    { kind: 'education', sectionId: 'school' },
+    { kind: 'text', sectionId: 'school' },
+    { kind: 'item', sectionId: 'school', index: 0 },
+    { kind: 'answer', sectionId: 'school', index: 0 },
+    { kind: 'skills', sectionId: 'skills' },
+    { kind: 'text', sectionId: 'skills' },
+    { kind: 'item', sectionId: 'skills', index: 0 },
     { kind: 'meta', sectionId: 'proj', index: 0 },
   ]) {
     assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
@@ -230,7 +239,58 @@ test('quotes, experience sections and meta lines are never a target', async () =
   assert.equal(called, false);
 });
 
-test('the page context leaves hidden sections out, and shows quotes, meta lines and roles as a visitor reads them', () => {
+test('a stats section is never a target, and the page context shows only the stats a visitor sees', async () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      { id: 'nums', kind: 'stats', title: 'By the numbers', stats: [{ value: '15 years', label: 'in commercial kitchens' }, { value: ' ', label: 'Unshown label' }] },
+    ],
+  };
+  for (const target of [
+    { kind: 'stats', sectionId: 'nums' },
+    { kind: 'stat', sectionId: 'nums', index: 0 },
+    { kind: 'item', sectionId: 'nums', index: 0 },
+    { kind: 'text', sectionId: 'nums' },
+    { kind: 'intro', sectionId: 'nums' },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+  const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null);
+  for (const shown of ['By the numbers', '15 years', 'in commercial kitchens']) assert.ok(user.includes(shown), shown);
+  assert.ok(!user.includes('Unshown label'));
+});
+
+test("a credential is never a target, and the page context shows the ones a visitor sees, without their numbers or links", () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      {
+        id: 'creds',
+        kind: 'credentials',
+        title: 'Licenses',
+        credentials: [
+          { kind: 'license', name: 'Registered Nurse', issuer: 'State Board', number: 'RN-0951', issued: '2019', expires: '2999', url: 'https://board.example/verify' },
+          { kind: 'certification', name: 'Lapsed cert', issuer: 'Old Board', number: '', issued: '', expires: '1999', url: '' },
+        ],
+      },
+    ],
+  };
+  for (const target of [
+    { kind: 'credential', sectionId: 'creds', index: 0 },
+    { kind: 'credentials', sectionId: 'creds' },
+    { kind: 'item', sectionId: 'creds', index: 0 },
+    { kind: 'text', sectionId: 'creds' },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+  const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null, new Map());
+  for (const shown of ['Licenses', 'Registered Nurse', 'State Board']) assert.ok(user.includes(shown), shown);
+  for (const left of ['RN-0951', 'board.example', 'Lapsed cert', 'Old Board']) assert.ok(!user.includes(left), left);
+});
+
+test('the page context leaves hidden sections out, and shows quotes, meta lines, roles, education and skills as a visitor reads them', () => {
   const page = {
     ...landing,
     sections: [
@@ -239,17 +299,26 @@ test('the page context leaves hidden sections out, and shows quotes, meta lines 
       { id: 'proj', kind: 'items', title: 'Projects', items: [{ title: 'Widget', text: 'A widget.', url: '', meta: '2024 · Rust' }] },
       { id: 'quotes', kind: 'quotes', title: '', quotes: [{ text: 'Great to work with.', name: 'Ann', role: 'Manager', url: 'https://ann.example' }] },
       { id: 'work', kind: 'experience', title: 'Recent work', resumeId: 'r1', count: 1, showDates: true },
+      { id: 'school', kind: 'education', title: 'Education', resumeId: 'r1', count: 1, showDates: false },
+      { id: 'skills', kind: 'skills', title: 'Skills', resumeId: 'r1' },
     ],
   };
   const experience = [
     { jobTitle: 'SRE', company: 'Acme', companyUrl: 'https://acme.example', location: 'Remote', startDate: '2022', endDate: 'Present' },
     { jobTitle: 'Dev', company: 'Beta', companyUrl: '', location: '', startDate: '2019', endDate: '2022' },
   ];
-  const resumes = new Map([['r1', { href: '/r/eng', title: 'Engineer', experience }]]);
+  const education = [
+    { degree: 'BSc Nursing', institution: 'State U', location: 'Ohio', startDate: '2010', endDate: '2014' },
+    { degree: 'Diploma', institution: 'Second School', location: '', startDate: '', endDate: '' },
+  ];
+  const skills = [{ category: 'Languages', items: ['Spanish (fluent)', 'ASL'] }];
+  const resumes = new Map([['r1', { href: '/r/eng', title: 'Engineer', experience, education, skills }]]);
   const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null, resumes);
   assert.ok(!user.includes('secret book'));
-  for (const shown of ['2024 · Rust', 'Great to work with.', 'Ann', 'SRE', 'Acme', '2022 – Present']) assert.ok(user.includes(shown), shown);
-  for (const left of ['Beta', 'https://', '/r/eng', '"r1"']) assert.ok(!user.includes(left), left);
+  for (const shown of ['2024 · Rust', 'Great to work with.', 'Ann', 'SRE', 'Acme', '2022 – Present', 'BSc Nursing', 'State U', 'Spanish (fluent)', 'Languages']) {
+    assert.ok(user.includes(shown), shown);
+  }
+  for (const left of ['Beta', 'https://', '/r/eng', '"r1"', 'Second School', '2010 – 2014']) assert.ok(!user.includes(left), left);
   // A hidden section the target is in stays, so its spot is marked.
   const inHidden = buildLandingPrompt(page, { kind: 'text', sectionId: 'now' }, 'Shorter', null, resumes).user;
   const context = inHidden.slice(inHidden.indexOf('The rest of the page'), inHidden.indexOf('Section to rewrite'));
@@ -316,4 +385,70 @@ test('an answer that links anywhere but its placeholders is refused', () => {
     '**See** \\[x](https://evil.example) [my blog](https://jo.example).'
   );
   assert.equal(landingProposals(landing, { kind: 'headline' }, { text: '[Jo](https://evil.example)' })[0].after, '[Jo](https://evil.example)');
+});
+
+test('an FAQ answer is a target by index, its question never is, and only that answer is written', async () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      {
+        id: 'faq',
+        kind: 'faq',
+        title: 'Questions',
+        entries: [
+          { question: 'Do you relocate?', answer: 'Yes, see [my notes](https://jo.example/move).\n\nWithin *Europe*.' },
+          { question: 'When can you start?', answer: '' },
+        ],
+      },
+      { id: 'secret', kind: 'faq', title: '', hidden: true, entries: [{ question: 'Salary?', answer: 'A lot.' }] },
+    ],
+  };
+  const answer = { kind: 'answer', sectionId: 'faq', index: 0 };
+  assert.deepEqual(normalizeLandingTarget(page, { ...answer, extra: 1 }), answer);
+  assert.equal(landingSlice(page, { kind: 'answer', sectionId: 'faq', index: 1 }), '');
+  assert.equal(landingSlice(page, { kind: 'answer', sectionId: 'faq', index: 2 }), null);
+  for (const target of [
+    { kind: 'answer', sectionId: 'faq', index: 2 },
+    { kind: 'answer', sectionId: 'faq', index: '0' },
+    { kind: 'answer', sectionId: 'faq' },
+    { kind: 'answer', sectionId: 'proj', index: 0 },
+    { kind: 'item', sectionId: 'faq', index: 0 },
+    { kind: 'question', sectionId: 'faq', index: 0 },
+    { kind: 'text', sectionId: 'faq' },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+
+  // The answer's link is a placeholder, read as one paragraph; the question
+  // is context the model is told not to change; a hidden FAQ isn't read.
+  assert.deepEqual([...linkPlaceholders(page, answer)], [['https://jo.example/move', '#L1']]);
+  const { system, user } = buildLandingPrompt(page, answer, 'Shorter', null);
+  assert.match(system, /the question, which you don't change, is "Do you relocate\?"/);
+  assert.match(system, /keep its #L target exactly as it is/);
+  assert.ok(user.includes('"text": "Yes, see [my notes](#L1).\\n\\nWithin *Europe*."'));
+  assert.ok(user.includes('"question": "When can you start?"'));
+  assert.ok(user.includes('"answer": "[the part being rewritten]"'));
+  for (const hidden of ['jo.example', 'Salary', 'A lot.']) assert.ok(!user.includes(hidden), hidden);
+  // Another answer, outside the target, shows its link's label only.
+  const second = buildLandingPrompt(page, { kind: 'answer', sectionId: 'faq', index: 1 }, 'Write one', null).user;
+  assert.ok(second.includes('"answer": "Yes, see my notes.\\n\\nWithin *Europe*."'));
+
+  const result = await rewriteLanding({
+    landing: page,
+    target: answer,
+    instruction: 'Shorter',
+    settings,
+    callModel: async () => ({ explanation: 'Shorter.', rewrite: { text: 'Yes, within Europe: [details](#L1).' } }),
+  });
+  assert.deepEqual(result.proposals, [{ target: answer, before: page.sections[4].entries[0].answer, after: 'Yes, within Europe: [details](https://jo.example/move).' }]);
+
+  // A link the answer didn't have is refused, as for any other target.
+  for (const written of ['See [here](https://evil.example).', 'See [here](#L2).', 'Fine.\n\n[x](/r/secret)']) {
+    assert.throws(() => landingProposals(page, answer, { text: written }), { status: 502, message: /added a link/ }, written);
+  }
+  // Its cap counts as the field's does.
+  const escaped = `${'x'.repeat(LANDING_LIMITS.faqAnswer - 4)} \\*a\\*`;
+  assert.equal(landingProposals(page, answer, { text: escaped })[0].after, escaped);
+  assert.throws(() => landingProposals(page, answer, { text: `${escaped}x` }), { status: 502, message: /the answer allows/ });
 });

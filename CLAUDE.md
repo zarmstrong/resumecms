@@ -315,10 +315,23 @@ opening its `page` or `pdf`), where `sections` is an ordered list of
 `links`, `resumes` (cards `{ resumeId, label, blurb }`), `quotes`
 (`[{ text, name, role, url }]`), `experience` (`resumeId`, `count`,
 `showDates`; issue #90), `image` (`{ image, caption }`, `image` null
-until one is uploaded; issue #92) and `divider` (only its `title`, a label
+until one is uploaded; issue #92), `divider` (only its `title`, a label
 on the rule; always resolved, but only drawn between two things it
 divides: `client/src/landing/dividers.js`, applied by `LandingView`, since
-which sections end up next to each other depends on the template). Any section may be `hidden: true`: kept in the
+which sections end up next to each other depends on the template),
+`stats` (`[{ value, label }]`, plain text, a stat without a value dropped
+by `resolveLanding()`; issue #125, never an AI rewrite target), `faq`
+(`entries: [{ question, answer }]`, issue #123: each a `<details>` with
+the question as its `<summary>`, open in the editor's preview; an entry
+missing either part is dropped), `education` (`resumeId`, `count`,
+`showDates`; issue #126), `skills` (`resumeId`; issue #126),
+`credentials` (`[{ kind, name, issuer, number, issued, expires, url }]`;
+issue #119, see below) and
+`gallery` (`images: [{ image, caption }]`, at most
+`LANDING_LIMITS.galleryImages` (24), an entry's `image` null until its
+upload lands; issue #120: a grid whose thumbnails open a modal
+`<dialog>` in `client/src/landing/LandingGallery.jsx`, keys in
+`gallery.js`, reordered with the same ↑ ↓ ✕ as items). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -338,9 +351,13 @@ a base64 JPEG/PNG/WebP `data:` URL (still accepted; uploads go to the image
 store below). A link's `type` only picks its badge;
 its names are `LINK_TYPES`, kept in step with the catalog in
 `client/src/resume/linkTypes.js` and the header enum in
-`mcp/blockSchemas.js`, and `telUrl()` (a fresh draft's phone link) mirrors
-the client's `telHref()`. A new card, resume action or experience section
-must name an existing resume, but one already in the draft may outlive its resume
+`mcp/blockSchemas.js`, in the same order (the client's
+`linkTypes.test.js` compares the three; issue #129 added the generic and
+per-field types, grouped in the editor's dropdown by the catalog's
+`group`, and `inferLinkType()` matches a site by exact host or subdomain),
+and `telUrl()` (a fresh draft's phone link) mirrors
+the client's `telHref()`. A new card, resume action or experience,
+education or skills section must name an existing resume, but one already in the draft may outlive its resume
 (`referencedResumeIds()`), so a deletion doesn't make the draft unsavable. Publishing it is separate from
 publishing any resume, and `landing_enabled` isn't drafted: it takes
 effect at once, and does nothing until a snapshot exists.
@@ -377,9 +394,10 @@ merged into the default resume's site settings *draft* through its
 `touchDraft()` runs; nothing is published, and it's a 400 while
 `source` is `'resume'`. The editor flushes its saves before calling it.
 
-A text section's `body` and an item's `text` (issue #91, nothing else: a
-quote's `text`, an item's `meta`, an image section's `caption`, an
-image's `alt` and every title or label stay plain text,
+A text section's `body`, an item's `text` and an FAQ entry's `answer`
+(issue #91, nothing else: a quote's `text`, an item's `meta`, an FAQ
+`question`, an image section's `caption`, an
+image's `alt`, a stat's `value` and every title or label stay plain text,
 never parsed, escaped or migrated) may
 hold `[label](url)`, `**bold**` and `*italic*`; a `\` before `\ * [ ]`
 escapes it, and an unmatched marker stays literal. The tokenizer,
@@ -387,12 +405,13 @@ escapes it, and an unmatched marker stays literal. The tokenizer,
 `client/src/landing/inlineText.js` (the shared part identical), kept in
 step by the cases in `server/src/inlineText.cases.js`, which the client's
 `inlineText.test.js` runs through both. A body is parsed one paragraph at a
-time (`textParagraphs()`, also in both), an item's text whole, and every
+time (`textParagraphs()`, also in both), an item's text and an answer
+whole, and every
 consumer has to read it the same way: `checkInlineText()` holds each
 link's URL to `isAllowedDraftUrl()` (a 400 naming the section and
 paragraph) and counts its cap with `inlineLength()`, every character as
 written except an escaping backslash (also in both copies; the landing
-rewrite's length check counts the same way, and the editor's two textareas
+rewrite's length check counts the same way, and the editor's three textareas
 refuse an edit past it with `inlineEdit()` instead of a `maxLength`, which
 can't be exact: typing inside an escape changes the count by two), so escaping never takes a field over its cap. `LandingView` renders the tokens as
 elements through `renderInline.js` (hrefs through `linkProps()`, never
@@ -414,7 +433,10 @@ it is and only a field that differs is escaped. A text section's body is
 matched by section id. An item's text is kept when it equals the stored
 item at its index, escaped when its escaped form equals some stored item
 in that section (an original the editor never re-read), kept when it
-equals one (a moved echo), and escaped otherwise (`keepItem()`). So an
+equals one (a moved echo), and escaped otherwise (`keepItem()`); an FAQ
+answer the same way among its stored section's answers (an FAQ came
+after the syntax, so only a plain write, never the migration, meets
+one). So an
 echoed field is never escaped twice, and an edited one reads as that
 editor showed it, backslashes included. The marker is never stored. The store's default is `'inline'`, so MCP writes (whose
 tool descriptions document the syntax) and tests are taken as inline.
@@ -434,13 +456,15 @@ image's glibc), tells the type by its bytes (JPEG/PNG/WebP, never the
 re-encodes: EXIF orientation applied, at most 1600 px on the long side,
 no metadata at all (EXIF/GPS, XMP, PNG text), a PNG too big for the cap
 kept as WebP. The id is the sha256 of the stored bytes; caps and the
-grace period are `LANDING_IMAGE_LIMITS` and `IMAGE_GRACE_MS`. The draft
+grace period are `LANDING_IMAGE_LIMITS` and `IMAGE_GRACE_MS` (100 images
+and 60 MB in all, raised for galleries; they're in SQLite, so every
+backup copies them). The draft
 refers to an image as `{ imageId, alt }` (`checkImageRef()`; `alt` a
 required string, '' allowed in a draft while it's typed, but
 `publishLanding()` refuses with a 400 naming the field while a reference
 the page would show has a blank one: `assertImagesDescribed()`) in `photoImage` (with
-`photo: 'upload'`), an item's `image`, an `image` section and
-`seo.image`; the optional ones are stored only when set. Like a card, a
+`photo: 'upload'`), an item's `image`, an `image` section, each
+`gallery` entry and `seo.image`; the optional ones are stored only when set. Like a card, a
 new reference must name a stored image and one already in the draft may
 outlive it (`referencedImageIds()`). After a publish and on boot,
 `pruneLandingImages()` deletes images neither the stored draft nor the
@@ -471,11 +495,20 @@ roles or block ids: the context carries each visible resume's
 `experience`, `experienceRoles()` of its published blocks (the experience
 entries `publicBlocks.js` shows on the web, in order, with only title,
 company, its URL, location and dates), and the section resolves to its
-first `count` of them plus the resume's `href`. An image reference resolves
+first `count` of them plus the resume's `href`. Education and skills
+sections (issue #126) work the same way: the context's `education` is
+`educationEntries()` (degree, institution, location and dates), resolved
+to the first `count` as `{ entries, href }`; its `skills` is
+`skillGroups()` (every web-shown `skills_group`'s `category` and its
+`items` split by `splitSkillItems()`, a mirror of the resume's chip split,
+`splitItems()` in `client/src/resume/skillItems.js`, which
+`resolveLanding.test.js` compares), resolved whole as `{ groups, href }`.
+`LandingView` draws education on the experience timeline's classes. An image reference resolves
 against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
-(no text, no item or quote, every card's resume hidden, no role, no image) is dropped, heading and
+(no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
+question and an answer, no named credential left unexpired, no gallery entry whose image is stored) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -483,6 +516,23 @@ kind needs `SECTION_FIELDS`, `checkSection()`, `resolveSection()` (both
 copies), the MCP `landingSection()` union, `LANDING_SCHEMA`, and a case in
 `LandingForm`'s `SectionFields` and `LandingView`'s `SectionBody` (or, for
 one that isn't a titled `<section>` like the divider, its `renderSection`).
+
+A credential (issue #119: a license, certification or membership; its
+`kind` only picks the tag shown with it) is plain text throughout, capped
+by `LANDING_LIMITS`, its `url` held to the item URL rules and drawn as
+"Verify". Its `issued` and `expires` are free-form, read by `readDate()`
+in `server/src/dateText.js` (`YYYY`, `YYYY-MM`, `MM/YYYY`, `Mon YYYY`,
+`Month YYYY`, `YYYY-MM-DD`; anything else is shown as written).
+`resolveLanding()` drops one whose `expires` `hasPassed()` the context's
+`today` (`utcToday()` when not given: the UTC date, so server and browser
+agree), per request, so a lapsed one leaves the page without a republish.
+`client/src/landing/dateText.js` is a copy of it (only its header comment
+differs), kept in step by `server/src/dateText.cases.js`, which the
+client's `dateText.test.js` runs through both and which also checks the two
+files match; publications (#127) are meant to reuse it. The client
+resolver, `withHidden`, keeps an expired entry as `expired: true` for the
+preview to dim and label "Expired", and a section of nothing else as
+`hidden` and `expired` ("Not shown: every entry has expired").
 
 `GET /api/public/home` is what `/` loads: `{ kind: 'landing' }` from
 `landingForHost()` when it's enabled, published and the host isn't in
@@ -530,12 +580,18 @@ queue and applies the reference before it settles, so a flush waits for
 both. It applies it to the draft as it is when the upload resolves
 (`landingRef`), never through a field's render-time closure, at the right
 target or not at all (`landingImages.js`: the hero, the share image, a
-section by id, and an item by a client-only key held in a `WeakMap` on
-the item object, never saved; anything that replaces an item with an
-edited copy passes it on with `carryItemKey()`, as `LandingForm` and
-`setLandingSlice()` do). A target that's gone by then (the hero switched
-away from an upload, the section or item removed, or an item whose key
-didn't follow it) drops the reference; content is never used to guess.
+section by id, and an item or a gallery entry by a client-only key held
+in a `WeakMap` on the object, never saved; anything that replaces an
+item or entry with an edited copy passes it on with `carryItemKey()`, as
+`LandingForm` and `setLandingSlice()` do). A gallery's "+ Add images"
+takes several files: it adds an empty entry for each to the draft first,
+then uploads each into its own entry. Every upload waits for one of two
+slots (`createLimiter()`, `editor/uploadLimit.js`), since the server
+buffers and re-encodes each, and is tracked on the save queue from the
+moment it's picked, so a flush waits for the queued ones too. A target that's gone by then (the
+hero switched away from an upload, the section, item or entry removed, or
+one whose key didn't follow it) drops the reference; content is never
+used to guess.
 A new image there starts with an empty `alt` (only the same image
 uploaded again keeps it), so the publish check asks for a description of
 the image actually shown.
@@ -963,24 +1019,33 @@ The landing page has its own rewrite (issue #73):
 is one string, so a proposal is `{ target, before, after }`, and one
 request returns a list (an `intro` target writes headline, subheadline and
 a text section, three proposals). Targets are an allowlist
-(`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items by
-index. Quotes (someone else's words), experience sections (read from a
-resume) and an item's `meta` are deliberately never targets. The page is
+(`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items
+and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
+words), experience, education and skills sections (read from a
+resume), stats (a model mustn't make up figures; the page context shows
+them read-only), an item's `meta`, an FAQ question, credentials
+(facts, not prose) and image and gallery captions (plain text; the page
+context gives those sections only their kind and title) are
+deliberately never targets. The page is
 public, so what the model sees is too: the route builds
 `landingProfile()` from `store.visibleResumeSnapshot()` (a resume's
 *published* snapshot, only while it's public; the card's resume for a
 blurb, the default otherwise), and the page context leaves out URLs, ids,
 the photo and hidden sections (but the one the target is in), and shows an
-experience section's roles from `getLandingContext()`. Keep both if you
+experience section's roles (and an education section's entries and a
+skills section's groups) from `getLandingContext()`, and only the
+unexpired credentials, without their numbers. Keep both if you
 add a target or a field to the profile.
 The editor copy it works on is checked by `store.checkLandingDraft()`. In
 the editor, `LandingEditorPage` holds the requests and proposals,
 `client/src/editor/landingAi.js` mirrors `landingSlice()` and follows an
-item's proposal when the item moves (`locateTarget()`), and each field's
+item's or an answer's proposal when its entry moves (`locateTarget()`, an
+answer's question standing for an item's title), and each field's
 panel is `LandingAiPanel.jsx`.
 
 The model must never be able to put a URL on the landing page (issue #91).
-In the text it rewrites (a `text`, an `item`, or an `intro`'s section),
+In the text it rewrites (a `text`, an `item`, an `answer`, or an `intro`'s
+section),
 each link's URL becomes a placeholder (`linkPlaceholders()`: `#L1`, `#L2`,
 …, one per URL, built from the draft alone so prompt and merge agree), and
 in the page context a link is just its label. `landingProposals()` maps

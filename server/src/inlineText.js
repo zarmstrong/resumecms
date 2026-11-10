@@ -1,8 +1,9 @@
 // The small inline syntax of the landing page's text (issue #91): a text
-// section's body and an item's text may hold `[label](url)`, `**bold**`
-// and `*italic*`, nothing more (no headings, lists, images or HTML). An
-// unmatched marker stays literal, and a backslash before `\`, `*`, `[` or
-// `]` makes it literal too (anywhere else a backslash is just a backslash).
+// section's body, an item's text and an FAQ answer (issue #123) may hold
+// `[label](url)`, `**bold**` and `*italic*`, nothing more (no headings,
+// lists, images or HTML). An unmatched marker stays literal, and a
+// backslash before `\`, `*`, `[` or `]` makes it literal too (anywhere
+// else a backslash is just a backslash).
 //
 // parseInline(text) returns a list of tokens:
 //   { t: 'text', text }
@@ -18,7 +19,8 @@
 // server-only part below, kept in step by the shared cases in
 // inlineText.cases.js (client/src/landing/inlineText.test.js runs both).
 // The body is parsed one paragraph at a time (textParagraphs()), as it's
-// shown; an item's text, which is one paragraph on the page, as a whole.
+// shown; an item's text, which is one paragraph on the page, as a whole,
+// and so is an FAQ answer.
 
 const ESCAPABLE = '\\*[]';
 const SPACE = /\s/;

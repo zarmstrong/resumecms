@@ -191,7 +191,22 @@ export const HEADER_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          type: { enum: ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'] },
+          type: {
+            // The link types of client/src/resume/linkTypes.js and
+            // landingFields.js's LINK_TYPES (linkTypes.test.js compares them).
+            enum: [
+              'website', 'portfolio', 'email', 'phone', 'booking', 'shop', 'publications', 'newsletter',
+              'linkedin', 'twitter', 'facebook', 'tiktok', 'threads', 'bluesky', 'mastodon', 'substack', 'medium',
+              'github', 'gitlab', 'stackoverflow',
+              'instagram', 'behance', 'dribbble', 'artstation', 'vimeo', 'youtube',
+              'soundcloud', 'bandcamp', 'spotify',
+              'orcid', 'googlescholar', 'researchgate',
+              'imdb',
+              'houzz', 'nextdoor', 'googlebusiness',
+              'custom',
+            ],
+            description: 'Picks the one-letter badge the link is drawn with; custom for any other link. twitter means Twitter / X.',
+          },
           label: { type: 'string', description: 'Display text, e.g. "github.com/you", or the address/number for an email/phone link' },
           url: { type: 'string', description: 'https URL; mailto:you@example.com for an email link, tel:+15555550100 for a phone link' },
         },
@@ -425,6 +440,112 @@ export const LANDING_SCHEMA = {
             type: 'object',
             description: 'A rule across the page between two sections; its title, if any, is a label on the rule',
             properties: { ...LANDING_SECTION_BASE, kind: { const: 'divider' } },
+          },
+          {
+            type: 'object',
+            description:
+              "A few large figures, each with a short label under it ('15 years' over 'in commercial kitchens'), at most 6; one without a value isn't shown. Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'stats' },
+              stats: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    value: { type: 'string', description: "Plain text, not a number, at most 16 characters: '2,000+', '98%', '$4.2M', '#1'" },
+                    label: { type: 'string', description: 'Plain text, at most 80 characters' },
+                  },
+                },
+              },
+            },
+          },
+          {
+            type: 'object',
+            description: "Questions and answers, at most 15, each answer collapsed under its question; an entry without both isn't shown",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'faq' },
+              entries: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    question: { type: 'string', description: 'Plain text, at most 200 characters' },
+                    answer: { type: 'string', description: 'At most 1500 characters; text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is' },
+                  },
+                },
+              },
+            },
+          },
+          {
+            type: 'object',
+            description:
+              "A resume's first education entries (degree, institution, location, dates) and a link to it, read from its published version when the page is requested, and shown only while it's public and published",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'education' },
+              resumeId: { type: 'string' },
+              count: { type: 'integer', description: 'How many of its first education entries shown on the web, 1 to 10 (default 3)' },
+              showDates: { type: 'boolean', description: 'Show dates (default true)' },
+            },
+          },
+          {
+            type: 'object',
+            description:
+              "Every skill group a resume shows on the web (its category and items, split on commas like the resume's chips) and a link to it, read from its published version when the page is requested, and shown only while it's public and published",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'skills' },
+              resumeId: { type: 'string' },
+            },
+          },
+          {
+            type: 'object',
+            description:
+              "Licenses, certifications and memberships, at most 20; one without a name isn't shown, nor one whose expires date has passed (read when the page is requested). Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'credentials' },
+              credentials: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    kind: { enum: ['license', 'certification', 'membership'], description: "Only picks the label shown with it (default 'certification')" },
+                    name: { type: 'string', description: "e.g. 'Registered Nurse' (at most 120 characters)" },
+                    issuer: { type: 'string', description: "Who issued it, e.g. 'Oregon State Board of Nursing' (at most 120 characters)" },
+                    number: { type: 'string', description: "Optional license or certificate number, shown as written (at most 60 characters); some are public record, some aren't" },
+                    issued: { type: 'string', description: "When it was issued, free-form, shown as written, e.g. 'Mar 2021'" },
+                    expires: {
+                      type: 'string',
+                      description:
+                        "When it expires, free-form (at most 40 characters). Read as YYYY, YYYY-MM, MM/YYYY, 'Mar 2027', 'March 2027' or YYYY-MM-DD, the entry leaves the page once that has passed (UTC); anything else is shown as written",
+                    },
+                    url: { type: 'string', description: "Optional http, https, mailto or tel link, the issuer's page to verify it on, shown as 'Verify'" },
+                  },
+                },
+              },
+            },
+          },
+          {
+            type: 'object',
+            description: 'Uploaded images in a grid, each opening larger when clicked; left out until one has an image. Captions are never rewritten by AI',
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'gallery' },
+              images: {
+                type: 'array',
+                description: 'At most 24, in order; an entry without an image is left out',
+                items: {
+                  type: 'object',
+                  properties: {
+                    image: { ...LANDING_IMAGE_REF, description: 'null until one is uploaded' },
+                    caption: { type: 'string', description: 'Plain text under the image, at most 300 characters' },
+                  },
+                },
+              },
+            },
           },
         ],
       },

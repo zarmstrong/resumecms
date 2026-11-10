@@ -2,10 +2,12 @@
 // the way a visitor will see it once published, as someone types. Mirrors
 // resolveLanding() in server/src/landingFields.js (which is what the public
 // site actually gets); `context` is the `context` GET /api/landing returns:
-// { photoUrl, site, resumes: [{ id, href, title, pdfHref, experience }] },
-// the resumes a card or hero action can link to right now (pdfHref '' while
-// one has no PDF; experience the roles an experience section may show from
-// it, already filtered by the server's experienceRoles()), and images:
+// { photoUrl, site, resumes: [{ id, href, title, pdfHref, experience,
+// education, skills }] }, the resumes a card or hero action can link to
+// right now (pdfHref '' while one has no PDF; experience the roles an
+// experience section may show from it, already filtered by the server's
+// experienceRoles(), and education and skills likewise by its
+// educationEntries() and skillGroups()), and images:
 // [{ id, src, width, height }], the uploaded images (issue #92) at the
 // editor's own path, since a draft's may not be public yet. With `withIds`,
 // each section keeps its id, which the server never sends: the editor's
@@ -13,9 +15,15 @@
 // resolved too and kept as `hidden: true`, for the preview to dim; the
 // server always leaves it out. Its look (issue #93) is `template`, `site`
 // (context.site, or its own colors and fonts) and `darkColors`, by
-// landingStyle.js's mirror of the server's.
+// landingStyle.js's mirror of the server's. A credential (issue #119) is
+// expired once context.today (today in UTC when the context doesn't say,
+// as the server reads it) is past its `expires` (dateText.js): left out,
+// or, `withHidden`, kept as `expired: true` for the preview to dim, and a
+// section of nothing but expired ones then comes back `hidden` and
+// `expired`, since the page won't show it.
 
 import { darkPalette, landingSite } from './landingStyle.js';
+import { hasPassed, utcToday } from './dateText.js';
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 
@@ -46,7 +54,7 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
     photoUrl,
     ...(upload ? { photoAlt: upload.alt } : {}),
     sections: landing.sections.flatMap((section) => {
-      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images);
+      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images, { today: context?.today ?? utcToday(), withHidden });
       if (!shown) return [];
       const hidden = section.hidden ? { hidden: true } : {};
       const column = section.column ? { column: section.column } : {};
@@ -83,7 +91,7 @@ function resolveImage(ref, images) {
 
 // A section as a visitor sees it, or null when nothing of it is left to
 // show (the server leaves those out, heading and all).
-function resolveSection(section, targets, images) {
+function resolveSection(section, targets, images, { today, withHidden }) {
   switch (section.kind) {
     case 'text':
       return section.body.trim() ? { body: section.body } : null;
@@ -140,9 +148,57 @@ function resolveSection(section, targets, images) {
     }
     case 'divider':
       return {};
+    case 'stats': {
+      // A stat is its value; a label alone has nothing to show.
+      const stats = section.stats.filter((stat) => stat.value.trim()).map((stat) => ({ value: stat.value, label: stat.label }));
+      return stats.length ? { stats } : null;
+    }
+    case 'faq': {
+      const entries = section.entries
+        .filter((entry) => entry.question.trim() && entry.answer.trim())
+        .map((entry) => ({ question: entry.question, answer: entry.answer }));
+      return entries.length ? { entries } : null;
+    }
+    case 'education': {
+      const target = targets.get(section.resumeId);
+      const entries = (target?.education ?? []).slice(0, section.count).map((entry) => ({
+        degree: entry.degree,
+        institution: entry.institution,
+        location: entry.location,
+        dates: section.showDates ? roleDates(entry) : '',
+      }));
+      return entries.length ? { entries, href: target.href } : null;
+    }
+    case 'skills': {
+      const target = targets.get(section.resumeId);
+      const groups = (target?.skills ?? []).map((group) => ({ category: group.category, items: [...group.items] }));
+      return groups.length ? { groups, href: target.href } : null;
+    }
+    case 'credentials': {
+      const credentials = section.credentials
+        .filter((credential) => credential.name.trim())
+        .map((credential) => ({ credential, expired: hasPassed(credential.expires, today) }))
+        .filter(({ expired }) => withHidden || !expired)
+        .map(({ credential, expired }) => ({ ...resolveCredential(credential), ...(expired ? { expired: true } : {}) }));
+      if (!credentials.length) return null;
+      const allExpired = credentials.every((credential) => credential.expired);
+      return { credentials, ...(allExpired && !section.hidden ? { hidden: true, expired: true } : {}) };
+    }
+    case 'gallery': {
+      const shown = section.images.flatMap((entry) => {
+        const image = resolveImage(entry.image, images);
+        return image ? [{ image, caption: entry.caption }] : [];
+      });
+      return shown.length ? { images: shown } : null;
+    }
     default:
       return null;
   }
+}
+
+function resolveCredential(credential) {
+  const { kind, name, issuer, number, issued, expires, url } = credential;
+  return { kind, name, issuer, number, issued, expires, url: url !== '' && isSafeUrl(url) ? url : '' };
 }
 
 function roleDates({ startDate, endDate }) {
