@@ -741,9 +741,16 @@ dropStrayDividers, colors, darkColors, preview }`; without one the hero and the 
 go in turn into an `.l-main`. `landing.css` holds only what every
 template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
-pixel-identical to it. `centered` and `split` size themselves with
-container queries on the page root, so the editor's narrower preview
-matches a phone. A template must render every section kind
+pixel-identical to it. `centered`, `split` and `bold` size themselves
+with container queries (and `bold` its type with container units) on the
+page root, so the editor's narrower preview matches a phone. `bold`
+(issue #130) bands every other *shown* section with
+`:nth-child(odd of section.l-section:not(.l-section-hidden))`: dividers
+are `<div>`s and the preview's hidden sections are skipped, so the
+preview bands what the page will. Its band is a `color-mix()` tint of the
+accent over the background, never the accent itself, and it draws no
+text in the accent, so any accent the person picks keeps its text
+readable. A template must render every section kind
 (`LandingView`'s `renderSection` and `SectionBody` draw them, a divider
 as a `role="separator"` rather than a `<section>`; the template only
 arranges).
