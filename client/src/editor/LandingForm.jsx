@@ -10,6 +10,7 @@ import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
 import { getLandingTemplate } from '../resume/templateRegistry.js';
+import { hasPassed, utcToday } from '../landing/dateText.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
 // SECTION_KINDS), what each is called here, and what a new one starts with
@@ -42,6 +43,12 @@ const SECTION_KINDS = [
     addLabel: 'Skills (skill groups from a resume)',
     empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id }),
   },
+  {
+    kind: 'credentials',
+    label: 'Credentials',
+    addLabel: 'Credentials (licenses, certifications, memberships)',
+    empty: () => ({ credentials: [emptyCredential()] }),
+  },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -59,6 +66,10 @@ function emptyStat() {
 
 function emptyFaqEntry() {
   return { question: '', answer: '' };
+}
+
+function emptyCredential() {
+  return { kind: 'certification', name: '', issuer: '', number: '', issued: '', expires: '', url: '' };
 }
 
 // Only tells sections apart (React keys, and the server keeps it); not
@@ -95,6 +106,8 @@ function hasContent(section) {
     case 'skills':
       // Like experience: what they show comes from the resume.
       return false;
+    case 'credentials':
+      return section.credentials.some((c) => [c.name, c.issuer, c.number, c.issued, c.expires, c.url].some((value) => value.trim()));
     default:
       return false;
   }
@@ -527,6 +540,8 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
       return <EducationFields section={section} onChange={onChange} resumes={resumes} context={context} limits={limits} />;
     case 'skills':
       return <SkillsFields section={section} onChange={onChange} resumes={resumes} context={context} />;
+    case 'credentials':
+      return <CredentialsFields credentials={section.credentials} onChange={(credentials) => onChange({ credentials })} limits={limits} />;
     default:
       return null;
   }
@@ -626,6 +641,105 @@ function FaqFields({ sectionId, entries, onChange, limits, ai }) {
         </button>
       )}
       <span className="ed-field-hint">Visitors open an answer by its question. One without both a question and an answer isn't shown.</span>
+    </>
+  );
+}
+
+// Licenses, certifications and memberships (issue #119). No ✨ here:
+// they're facts, not prose.
+function CredentialsFields({ credentials, onChange, limits }) {
+  const setCredential = (i, patch) => onChange(credentials.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const today = utcToday();
+  return (
+    <>
+      {credentials.map((credential, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Credential {i + 1}</span>
+            <RowActions
+              index={i}
+              count={credentials.length}
+              onMove={(delta) => onChange(moved(credentials, i, delta))}
+              onRemove={() => onChange(credentials.filter((_, idx) => idx !== i))}
+              what="credential"
+            />
+          </div>
+          <select
+            className="ed-input"
+            value={credential.kind}
+            onChange={(e) => setCredential(i, { kind: e.target.value })}
+            aria-label="Kind of credential"
+          >
+            <option value="license">License</option>
+            <option value="certification">Certification</option>
+            <option value="membership">Membership</option>
+          </select>
+          <input
+            className="ed-input"
+            value={credential.name}
+            maxLength={limits?.credentialName}
+            onChange={(e) => setCredential(i, { name: e.target.value })}
+            placeholder="Name, e.g. Registered Nurse"
+            aria-label="Credential name"
+          />
+          <input
+            className="ed-input"
+            value={credential.issuer}
+            maxLength={limits?.credentialIssuer}
+            onChange={(e) => setCredential(i, { issuer: e.target.value })}
+            placeholder="Issued by, e.g. Oregon State Board of Nursing"
+            aria-label="Issued by"
+          />
+          <input
+            className="ed-input"
+            value={credential.number}
+            maxLength={limits?.credentialNumber}
+            onChange={(e) => setCredential(i, { number: e.target.value })}
+            placeholder="License or certificate number (optional)"
+            aria-label="Credential number"
+          />
+          <div className="ed-landing-dates">
+            <input
+              className="ed-input"
+              value={credential.issued}
+              maxLength={limits?.credentialDate}
+              onChange={(e) => setCredential(i, { issued: e.target.value })}
+              placeholder={credential.kind === 'membership' ? 'Member since (optional)' : 'Issued (optional), e.g. Mar 2021'}
+              aria-label="Issued"
+            />
+            <input
+              className="ed-input"
+              value={credential.expires}
+              maxLength={limits?.credentialDate}
+              onChange={(e) => setCredential(i, { expires: e.target.value })}
+              placeholder="Expires (optional), e.g. Dec 2027"
+              aria-label="Expires"
+            />
+          </div>
+          {hasPassed(credential.expires, today) && (
+            <span className="ed-field-hint ed-landing-card-status">Expired: not shown on the page. Renew it, or change the date.</span>
+          )}
+          <input
+            className="ed-input"
+            value={credential.url}
+            maxLength={limits?.url}
+            onChange={(e) => setCredential(i, { url: e.target.value })}
+            placeholder="Link to verify it (optional), https://…"
+            aria-label="Verification link"
+          />
+        </div>
+      ))}
+      {(!limits || credentials.length < limits.credentials) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...credentials, emptyCredential()])}>
+          + Add credential
+        </button>
+      )}
+      <span className="ed-field-hint">
+        One without a name isn't shown. Once its expiry date (a year, a month such as Dec 2027 or 12/2027, or a day such as
+        2027-12-31) has passed, it leaves the page by itself; a date written any other way is shown as written. The link is
+        shown as "Verify", for the issuer's public lookup page. Some license numbers are public record and some aren't: leave
+        it out if yours isn't meant to be shared.
+      </span>
     </>
   );
 }

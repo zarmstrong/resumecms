@@ -512,6 +512,12 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'faq', entries: [{ question: 'Q', answer: 3 }] }] })).isError, true);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'education' }] })).isError, true);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'skills' }] })).isError, true);
+  const credentials = [
+    { kind: 'credentials', column: 'side', credentials: [{ kind: 'license', name: 'RN', issuer: 'Board', number: '123', issued: '2019', expires: 'Dec 2027', url: 'https://board.example' }, { name: 'ServSafe' }] },
+  ];
+  await call('update_landing_page', { sections: credentials });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: credentials }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'credentials', credentials: [{ kind: 'degree', name: 'BSc' }] }] })).isError, true);
   // a resumeId isn't a landing page field (the page belongs to the install)
   await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi' }, { merge: true }]);

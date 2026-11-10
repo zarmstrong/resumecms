@@ -592,6 +592,87 @@ a.l-role-company {
   overflow-wrap: anywhere;
 }
 
+/* Credentials (issue #119): each a name with its kind as a small tag, the
+   issuer under it, and a muted line of number, dates and "Verify". */
+.l-credentials {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  margin: 0;
+}
+
+.l-credential {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.l-credential-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.l-credential-name {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+.l-credential-kind {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--r-accent, var(--slate));
+  background: color-mix(in srgb, var(--r-accent, var(--ink)) 12%, transparent);
+}
+
+.l-credential-issuer {
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
+}
+
+.l-credential-meta {
+  font-size: 0.88em;
+  color: color-mix(in srgb, var(--r-text, var(--ink)) 72%, transparent);
+  overflow-wrap: anywhere;
+}
+
+a.l-credential-verify {
+  color: var(--r-accent, var(--slate));
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);
+}
+
+a.l-credential-verify:hover,
+a.l-credential-verify:focus-visible {
+  border-bottom-color: var(--r-accent, var(--ink));
+}
+
+/* The editor's preview: an expired credential, dimmed like a hidden
+   section (only once, inside a section that's dimmed already). */
+.l-credential-expired > :not(.l-hidden-label) {
+  opacity: 0.35;
+}
+
+.l-section-hidden .l-credential-expired > :not(.l-hidden-label) {
+  opacity: 1;
+}
+
+.l-credential .l-hidden-label {
+  margin-bottom: 2px;
+}
+
 /* The editor's preview: a section hidden from the page. */
 .l-section-hidden > :not(.l-hidden-label) {
   opacity: 0.35;

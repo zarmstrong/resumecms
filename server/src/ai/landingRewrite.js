@@ -1,6 +1,7 @@
 import { LANDING_LIMITS } from '../landingFields.js';
 import { AiError, callProvider } from './providers.js';
 import { inlineLength, mapLinks } from '../inlineText.js';
+import { hasPassed, utcToday } from '../dateText.js';
 
 // AI rewrites on the landing page (issue #73). Like a block rewrite
 // (rewrite.js) it only proposes: the editor shows each proposal in its
@@ -28,6 +29,8 @@ import { inlineLength, mapLinks } from '../inlineText.js';
 // line; and an FAQ question. Nor is a stat (issue #125): a
 // model mustn't make up figures, so it only ever reads them, in the page
 // context.
+// Nor is a credential (issue #119): its name, issuer, number and dates
+// are facts, not prose.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*
@@ -303,6 +306,15 @@ function pageContext(landing, target, resumes) {
           };
         case 'skills':
           return { ...base, groups: (resumes.get(section.resumeId)?.skills ?? []).map((group) => ({ category: group.category, items: group.items })) };
+        case 'credentials':
+          // The ones a visitor sees (none expired), without the number or
+          // link, which give the model nothing to write from.
+          return {
+            ...base,
+            credentials: section.credentials
+              .filter((c) => c.name.trim() && !hasPassed(c.expires, utcToday()))
+              .map((c) => ({ kind: c.kind, name: c.name, issuer: c.issuer })),
+          };
         default:
           return base;
       }

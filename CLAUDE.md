@@ -324,7 +324,9 @@ by `resolveLanding()`; issue #125, never an AI rewrite target), `faq`
 (`entries: [{ question, answer }]`, issue #123: each a `<details>` with
 the question as its `<summary>`, open in the editor's preview; an entry
 missing either part is dropped), `education` (`resumeId`, `count`,
-`showDates`; issue #126) and `skills` (`resumeId`; issue #126). Any section may be `hidden: true`: kept in the
+`showDates`; issue #126), `skills` (`resumeId`; issue #126) and
+`credentials` (`[{ kind, name, issuer, number, issued, expires, url }]`;
+issue #119, see below). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -499,7 +501,7 @@ against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
 (no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
-question and an answer) is dropped, heading and
+question and an answer, no named credential left unexpired) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -507,6 +509,23 @@ kind needs `SECTION_FIELDS`, `checkSection()`, `resolveSection()` (both
 copies), the MCP `landingSection()` union, `LANDING_SCHEMA`, and a case in
 `LandingForm`'s `SectionFields` and `LandingView`'s `SectionBody` (or, for
 one that isn't a titled `<section>` like the divider, its `renderSection`).
+
+A credential (issue #119: a license, certification or membership; its
+`kind` only picks the tag shown with it) is plain text throughout, capped
+by `LANDING_LIMITS`, its `url` held to the item URL rules and drawn as
+"Verify". Its `issued` and `expires` are free-form, read by `readDate()`
+in `server/src/dateText.js` (`YYYY`, `YYYY-MM`, `MM/YYYY`, `Mon YYYY`,
+`Month YYYY`, `YYYY-MM-DD`; anything else is shown as written).
+`resolveLanding()` drops one whose `expires` `hasPassed()` the context's
+`today` (`utcToday()` when not given: the UTC date, so server and browser
+agree), per request, so a lapsed one leaves the page without a republish.
+`client/src/landing/dateText.js` is a copy of it (only its header comment
+differs), kept in step by `server/src/dateText.cases.js`, which the
+client's `dateText.test.js` runs through both and which also checks the two
+files match; publications (#127) are meant to reuse it. The client
+resolver, `withHidden`, keeps an expired entry as `expired: true` for the
+preview to dim and label "Expired", and a section of nothing else as
+`hidden` and `expired` ("Not shown: every entry has expired").
 
 `GET /api/public/home` is what `/` loads: `{ kind: 'landing' }` from
 `landingForHost()` when it's enabled, published and the host isn't in
@@ -981,15 +1000,16 @@ a text section, three proposals). Targets are an allowlist
 and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
 words), experience, education and skills sections (read from a
 resume), stats (a model mustn't make up figures; the page context shows
-them read-only), an item's `meta` and an FAQ question are deliberately
-never targets. The page is
+them read-only), an item's `meta`, an FAQ question and credentials
+(facts, not prose) are deliberately never targets. The page is
 public, so what the model sees is too: the route builds
 `landingProfile()` from `store.visibleResumeSnapshot()` (a resume's
 *published* snapshot, only while it's public; the card's resume for a
 blurb, the default otherwise), and the page context leaves out URLs, ids,
 the photo and hidden sections (but the one the target is in), and shows an
 experience section's roles (and an education section's entries and a
-skills section's groups) from `getLandingContext()`. Keep both if you
+skills section's groups) from `getLandingContext()`, and only the
+unexpired credentials, without their numbers. Keep both if you
 add a target or a field to the profile.
 The editor copy it works on is checked by `store.checkLandingDraft()`. In
 the editor, `LandingEditorPage` holds the requests and proposals,

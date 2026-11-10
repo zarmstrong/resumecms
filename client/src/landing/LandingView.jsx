@@ -5,6 +5,7 @@ import { darkClass, landingPageStyle } from './landingStyle.js';
 import { textParagraphs } from './resolveLanding.js';
 import { dropStrayDividers } from './dividers.js';
 import { renderInline } from './renderInline.js';
+import { readDate } from './dateText.js';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
@@ -32,7 +33,9 @@ import './landing.css';
 // (editor preview only) outlines the parts an AI suggestion is shown in:
 // 'hero' for the headline and subheadline, otherwise a section's id (the
 // preview resolves its draft `withIds`). A section marked `hidden` (only
-// the preview resolves those, `withHidden`) is dimmed and labelled.
+// the preview resolves those, `withHidden`) is dimmed and labelled, and so
+// is an expired credential (issue #119), or a credentials section with
+// nothing else (`expired`).
 export function LandingView({ landing, preview = false, highlightIds = null, scheme = 'auto' }) {
   const template = getLandingTemplate(landing.template);
   const { colors, style } = landingPageStyle(landing.site, landing.darkColors);
@@ -78,7 +81,7 @@ export function LandingView({ landing, preview = false, highlightIds = null, sch
         key={section.id ?? i}
         className={`l-section l-section-${section.kind}${hidden}${highlightIds?.has(section.id) ? ' l-ai-preview' : ''}`}
       >
-        {section.hidden && <span className="l-hidden-label">Hidden</span>}
+        {section.hidden && <span className="l-hidden-label">{section.expired ? 'Not shown: every entry has expired' : 'Hidden'}</span>}
         {section.title && <h2 className="l-section-title">{section.title}</h2>}
         <SectionBody section={section} preview={preview} />
       </section>
@@ -320,9 +323,52 @@ function SectionBody({ section, preview }) {
           </a>
         </>
       );
+    case 'credentials':
+      return (
+        <ul className="l-credentials">
+          {section.credentials.map((credential, i) => (
+            <li key={i} className={`l-credential${credential.expired ? ' l-credential-expired' : ''}`}>
+              {credential.expired && <span className="l-hidden-label">Expired</span>}
+              <span className="l-credential-head">
+                <span className="l-credential-name">{credential.name}</span>
+                <span className="l-credential-kind">{CREDENTIAL_LABELS[credential.kind] || CREDENTIAL_LABELS.certification}</span>
+              </span>
+              {credential.issuer && <span className="l-credential-issuer">{credential.issuer}</span>}
+              <CredentialDetails credential={credential} />
+            </li>
+          ))}
+        </ul>
+      );
     default:
       return null;
   }
+}
+
+// The small label next to a credential's name.
+const CREDENTIAL_LABELS = { license: 'License', certification: 'Certification', membership: 'Membership' };
+
+// A credential's number, dates and "Verify" link, on one muted line. A date
+// dateText.js can read gets a word before it ("Expires Dec 2027"); any
+// other is shown just as written ("Renews yearly").
+function CredentialDetails({ credential }) {
+  const dated = (word, date) => (readDate(date) ? `${word} ${date}` : date);
+  const parts = [
+    credential.number && `No. ${credential.number}`,
+    credential.issued && dated(credential.kind === 'membership' ? 'Since' : 'Issued', credential.issued),
+    credential.expires && dated('Expires', credential.expires),
+  ].filter(Boolean);
+  if (!parts.length && !credential.url) return null;
+  return (
+    <span className="l-credential-meta">
+      {parts.join(' · ')}
+      {parts.length > 0 && credential.url && ' · '}
+      {credential.url && (
+        <a className="l-credential-verify" {...linkProps(credential.url)} aria-label={`Verify ${credential.name}`}>
+          Verify
+        </a>
+      )}
+    </span>
+  );
 }
 
 // An uploaded image (issue #92) as resolveLanding() gives it: its size is
