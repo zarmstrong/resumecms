@@ -254,6 +254,17 @@ a.l-item-title:hover {
   border-bottom-color: var(--r-accent, var(--ink));
 }
 
+/* A link's badge letter in the page's own on-accent color, which follows
+   the dark palette (resume.css draws it in --r-banner-text, which only a
+   resume sets, so here it was always white), and at full strength.
+   Through the property resume.css reads rather than `color`, so a
+   template that draws its own badge (formal, bold) still wins whatever
+   order the stylesheets load in. */
+.l-page .r-link-badge {
+  --r-banner-text: var(--r-on-accent);
+  opacity: 1;
+}
+
 .l-card {
   position: relative;
   display: flex;
