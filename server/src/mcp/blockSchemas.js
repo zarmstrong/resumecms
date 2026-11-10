@@ -426,6 +426,34 @@ export const LANDING_SCHEMA = {
             description: 'A rule across the page between two sections; its title, if any, is a label on the rule',
             properties: { ...LANDING_SECTION_BASE, kind: { const: 'divider' } },
           },
+          {
+            type: 'object',
+            description:
+              "Licenses, certifications and memberships, at most 20; one without a name isn't shown, nor one whose expires date has passed (read when the page is requested). Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'credentials' },
+              credentials: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    kind: { enum: ['license', 'certification', 'membership'], description: "Only picks the label shown with it (default 'certification')" },
+                    name: { type: 'string', description: "e.g. 'Registered Nurse' (at most 120 characters)" },
+                    issuer: { type: 'string', description: "Who issued it, e.g. 'Oregon State Board of Nursing' (at most 120 characters)" },
+                    number: { type: 'string', description: "Optional license or certificate number, shown as written (at most 60 characters); some are public record, some aren't" },
+                    issued: { type: 'string', description: "When it was issued, free-form, shown as written, e.g. 'Mar 2021'" },
+                    expires: {
+                      type: 'string',
+                      description:
+                        "When it expires, free-form (at most 40 characters). Read as YYYY, YYYY-MM, MM/YYYY, 'Mar 2027', 'March 2027' or YYYY-MM-DD, the entry leaves the page once that has passed (UTC); anything else is shown as written",
+                    },
+                    url: { type: 'string', description: "Optional http, https, mailto or tel link, the issuer's page to verify it on, shown as 'Verify'" },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     },

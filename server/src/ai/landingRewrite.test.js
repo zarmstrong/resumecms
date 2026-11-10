@@ -230,6 +230,35 @@ test('quotes, experience sections and meta lines are never a target', async () =
   assert.equal(called, false);
 });
 
+test("a credential is never a target, and the page context shows the ones a visitor sees, without their numbers or links", () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      {
+        id: 'creds',
+        kind: 'credentials',
+        title: 'Licenses',
+        credentials: [
+          { kind: 'license', name: 'Registered Nurse', issuer: 'State Board', number: 'RN-0951', issued: '2019', expires: '2999', url: 'https://board.example/verify' },
+          { kind: 'certification', name: 'Lapsed cert', issuer: 'Old Board', number: '', issued: '', expires: '1999', url: '' },
+        ],
+      },
+    ],
+  };
+  for (const target of [
+    { kind: 'credential', sectionId: 'creds', index: 0 },
+    { kind: 'credentials', sectionId: 'creds' },
+    { kind: 'item', sectionId: 'creds', index: 0 },
+    { kind: 'text', sectionId: 'creds' },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+  const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null, new Map());
+  for (const shown of ['Licenses', 'Registered Nurse', 'State Board']) assert.ok(user.includes(shown), shown);
+  for (const left of ['RN-0951', 'board.example', 'Lapsed cert', 'Old Board']) assert.ok(!user.includes(left), left);
+});
+
 test('the page context leaves hidden sections out, and shows quotes, meta lines and roles as a visitor reads them', () => {
   const page = {
     ...landing,

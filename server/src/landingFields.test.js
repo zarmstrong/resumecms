@@ -891,3 +891,109 @@ test('an image the page would show needs a description to publish', () => {
     /the photo has no description \(photoImage\.alt\) \(and 1 more\)/
   );
 });
+
+test('credentials are checked strictly, field by field, and stored whole', () => {
+  const credentials = (list) => ({ sections: [{ id: 'c', kind: 'credentials', title: 'Licenses', credentials: list }] });
+  const rn = {
+    kind: 'license',
+    name: 'Registered Nurse',
+    issuer: 'Oregon State Board of Nursing',
+    number: '095012345RN',
+    issued: '2019',
+    expires: 'Dec 2027',
+    url: 'https://osbn.example/verify',
+  };
+  const draft = validateLanding(credentials([rn, { name: 'ServSafe' }]), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'c',
+    kind: 'credentials',
+    title: 'Licenses',
+    credentials: [rn, { kind: 'certification', name: 'ServSafe', issuer: '', number: '', issued: '', expires: '', url: '' }],
+  });
+  for (const kind of ['license', 'certification', 'membership']) {
+    assert.equal(validateLanding(credentials([{ kind, name: 'X' }]), known()).sections[0].credentials[0].kind, kind);
+  }
+  // At every cap is fine.
+  const atCaps = {
+    name: 'n'.repeat(LANDING_LIMITS.credentialName),
+    issuer: 'i'.repeat(LANDING_LIMITS.credentialIssuer),
+    number: '1'.repeat(LANDING_LIMITS.credentialNumber),
+    issued: 'd'.repeat(LANDING_LIMITS.credentialDate),
+    expires: 'd'.repeat(LANDING_LIMITS.credentialDate),
+    url: 'mailto:board@osbn.example',
+  };
+  assert.equal(status(() => validateLanding(credentials(Array.from({ length: LANDING_LIMITS.credentials }, () => atCaps)), known())), null);
+
+  const bad = [
+    credentials([{ name: 'x'.repeat(LANDING_LIMITS.credentialName + 1) }]),
+    credentials([{ name: 'X', issuer: 'x'.repeat(LANDING_LIMITS.credentialIssuer + 1) }]),
+    credentials([{ name: 'X', number: '1'.repeat(LANDING_LIMITS.credentialNumber + 1) }]),
+    credentials([{ name: 'X', issued: 'x'.repeat(LANDING_LIMITS.credentialDate + 1) }]),
+    credentials([{ name: 'X', expires: 'x'.repeat(LANDING_LIMITS.credentialDate + 1) }]),
+    credentials([{ name: 'X', url: 'x'.repeat(LANDING_LIMITS.url + 1) }]),
+    credentials([{ name: 'X', url: 'java\tscript:alert(1)' }]),
+    credentials([{ name: 'X', url: 'data:text/html,hi' }]),
+    credentials([{ kind: 'degree', name: 'X' }]),
+    credentials([{ kind: 'License', name: 'X' }]),
+    credentials([{ name: 'X', state: 'OR' }]),
+    credentials([{ name: 5 }]),
+    credentials([{ name: 'X', expires: 2027 }]),
+    credentials(['Registered Nurse']),
+    credentials('RN'),
+    credentials(Array.from({ length: LANDING_LIMITS.credentials + 1 }, () => ({ name: 'X' }))),
+    { sections: [{ id: 'c', kind: 'credentials', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
+  // A half-typed link saves, and isn't shown.
+  const half = validateLanding(credentials([{ name: 'X', url: 'https://' }]), known());
+  assert.equal(resolveLanding(half, { resumes: new Map(), today: '2026-11-10' }).sections[0].credentials[0].url, '');
+});
+
+test('a credential leaves the page once it has expired, read against today; an unreadable date stays as written', () => {
+  const entry = (name, expires) => ({ kind: 'certification', name, issuer: 'Board', number: '', issued: '', expires, url: '' });
+  const landing = validateLanding(
+    {
+      sections: [
+        {
+          id: 'c',
+          kind: 'credentials',
+          title: 'Certifications',
+          column: 'side',
+          credentials: [
+            entry('Lapsed', '10/2026'),
+            entry('This month', 'November 2026'),
+            entry('This year', '2026'),
+            entry('No expiry', ''),
+            entry('Unreadable', 'Renewed yearly'),
+            entry('Yesterday', '2026-11-09'),
+            entry(' ', '2030'),
+          ],
+        },
+        { id: 'old', kind: 'credentials', title: 'Old ones', credentials: [entry('A', '2020'), entry('B', 'Jan 2025')] },
+        { id: 'none', kind: 'credentials', title: 'Empty', credentials: [] },
+        { id: 'hid', kind: 'credentials', title: 'Hidden', hidden: true, credentials: [entry('C', '')] },
+      ],
+    },
+    known()
+  );
+  const shown = (today) => resolveLanding(landing, { resumes: new Map(), today }).sections;
+  assert.deepEqual(shown('2026-11-10'), [
+    {
+      kind: 'credentials',
+      title: 'Certifications',
+      column: 'side',
+      credentials: [entry('This month', 'November 2026'), entry('This year', '2026'), entry('No expiry', ''), entry('Unreadable', 'Renewed yearly')],
+    },
+  ]);
+  // A month later, without a republish, the month's goes; the year's after the new year.
+  assert.deepEqual(shown('2026-12-01')[0].credentials.map((c) => c.name), ['This year', 'No expiry', 'Unreadable']);
+  assert.deepEqual(shown('2027-01-01')[0].credentials.map((c) => c.name), ['No expiry', 'Unreadable']);
+  // Earlier, every dated one shows, and the section of old ones too (a section never has an id).
+  assert.deepEqual(shown('2019-06-01').map((s) => s.title), ['Certifications', 'Old ones']);
+  assert.ok(shown('2019-06-01').every((s) => !('id' in s)));
+  // Without a today of its own, it's read against the clock (in UTC).
+  assert.deepEqual(
+    resolveLanding(landing, { resumes: new Map() }).sections[0].credentials.slice(-2).map((c) => c.name),
+    ['No expiry', 'Unreadable']
+  );
+});

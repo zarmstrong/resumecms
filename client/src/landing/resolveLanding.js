@@ -13,9 +13,15 @@
 // resolved too and kept as `hidden: true`, for the preview to dim; the
 // server always leaves it out. Its look (issue #93) is `template`, `site`
 // (context.site, or its own colors and fonts) and `darkColors`, by
-// landingStyle.js's mirror of the server's.
+// landingStyle.js's mirror of the server's. A credential (issue #119) is
+// expired once context.today (today in UTC when the context doesn't say,
+// as the server reads it) is past its `expires` (dateText.js): left out,
+// or, `withHidden`, kept as `expired: true` for the preview to dim, and a
+// section of nothing but expired ones then comes back `hidden` and
+// `expired`, since the page won't show it.
 
 import { darkPalette, landingSite } from './landingStyle.js';
+import { hasPassed, utcToday } from './dateText.js';
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 
@@ -46,7 +52,7 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
     photoUrl,
     ...(upload ? { photoAlt: upload.alt } : {}),
     sections: landing.sections.flatMap((section) => {
-      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images);
+      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images, { today: context?.today ?? utcToday(), withHidden });
       if (!shown) return [];
       const hidden = section.hidden ? { hidden: true } : {};
       const column = section.column ? { column: section.column } : {};
@@ -83,7 +89,7 @@ function resolveImage(ref, images) {
 
 // A section as a visitor sees it, or null when nothing of it is left to
 // show (the server leaves those out, heading and all).
-function resolveSection(section, targets, images) {
+function resolveSection(section, targets, images, { today, withHidden }) {
   switch (section.kind) {
     case 'text':
       return section.body.trim() ? { body: section.body } : null;
@@ -140,9 +146,24 @@ function resolveSection(section, targets, images) {
     }
     case 'divider':
       return {};
+    case 'credentials': {
+      const credentials = section.credentials
+        .filter((credential) => credential.name.trim())
+        .map((credential) => ({ credential, expired: hasPassed(credential.expires, today) }))
+        .filter(({ expired }) => withHidden || !expired)
+        .map(({ credential, expired }) => ({ ...resolveCredential(credential), ...(expired ? { expired: true } : {}) }));
+      if (!credentials.length) return null;
+      const allExpired = credentials.every((credential) => credential.expired);
+      return { credentials, ...(allExpired && !section.hidden ? { hidden: true, expired: true } : {}) };
+    }
     default:
       return null;
   }
+}
+
+function resolveCredential(credential) {
+  const { kind, name, issuer, number, issued, expires, url } = credential;
+  return { kind, name, issuer, number, issued, expires, url: url !== '' && isSafeUrl(url) ? url : '' };
 }
 
 function roleDates({ startDate, endDate }) {

@@ -1,6 +1,7 @@
 import { LANDING_LIMITS } from '../landingFields.js';
 import { AiError, callProvider } from './providers.js';
 import { inlineLength, mapLinks } from '../inlineText.js';
+import { hasPassed, utcToday } from '../dateText.js';
 
 // AI rewrites on the landing page (issue #73). Like a block rewrite
 // (rewrite.js) it only proposes: the editor shows each proposal in its
@@ -21,7 +22,8 @@ import { inlineLength, mapLinks } from '../inlineText.js';
 // proposal onto something else; items have no ids, so theirs is a position.
 // Deliberately not targets (issue #90): a quote, which is someone else's
 // words; an experience section, which is read from a resume as published;
-// and an item's meta line.
+// and an item's meta line. Nor is a credential (issue #119): its name,
+// issuer, number and dates are facts, not prose.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*
@@ -262,6 +264,15 @@ function pageContext(landing, target, resumes) {
               location: role.location,
               ...(section.showDates ? { dates: dates(role.startDate, role.endDate) } : {}),
             })),
+          };
+        case 'credentials':
+          // The ones a visitor sees (none expired), without the number or
+          // link, which give the model nothing to write from.
+          return {
+            ...base,
+            credentials: section.credentials
+              .filter((c) => c.name.trim() && !hasPassed(c.expires, utcToday()))
+              .map((c) => ({ kind: c.kind, name: c.name, issuer: c.issuer })),
           };
         default:
           return base;

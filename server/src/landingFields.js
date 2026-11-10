@@ -4,6 +4,7 @@ import { blocksForMode } from './publicBlocks.js';
 import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inlineText.js';
 import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImageFields.js';
 import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, emptyStyle, landingSite, mergeStylePatch } from './landingStyle.js';
+import { hasPassed, utcToday } from './dateText.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -36,6 +37,11 @@ import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, empty
 //   image      — image (a reference, or null until one is uploaded), caption
 //   divider    — nothing but its title: a rule across the page, the title
 //                (if any) a label on it
+//   credentials — credentials: [{ kind, name, issuer, number, issued,
+//                expires, url }], licenses, certifications and memberships
+//                (issue #119); `kind` only picks the label shown with it,
+//                the dates are free-form (dateText.js reads them) and `url`
+//                is the issuer's page to verify it on
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown, and `column: 'side'`: drawn in the side column by a
 // template that has one (template.json's `columns`, e.g. split's column
@@ -91,6 +97,11 @@ export const LANDING_LIMITS = {
   quoteName: 100,
   quoteRole: 120,
   experienceCount: 10,
+  credentials: 20,
+  credentialName: 120,
+  credentialIssuer: 120,
+  credentialNumber: 60,
+  credentialDate: 40,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -106,7 +117,7 @@ export const PHOTO_SOURCES = ['resume', 'custom', 'upload', 'none'];
 // the badge a link is drawn with.
 export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'credentials'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -124,9 +135,13 @@ const SECTION_FIELDS = {
   experience: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId', 'count', 'showDates'],
   image: ['id', 'kind', 'title', 'hidden', 'column', 'image', 'caption'],
   divider: ['id', 'kind', 'title', 'hidden', 'column'],
+  credentials: ['id', 'kind', 'title', 'hidden', 'column', 'credentials'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
+const CREDENTIAL_FIELDS = ['kind', 'name', 'issuer', 'number', 'issued', 'expires', 'url'];
+// What a credential is; only picks the label it's shown with.
+export const CREDENTIAL_KINDS = ['license', 'certification', 'membership'];
 // What an experience section shows when it's added without saying.
 export const EXPERIENCE_DEFAULTS = { count: 3, showDates: true };
 const LINK_FIELDS = ['type', 'label', 'url'];
@@ -375,6 +390,23 @@ function checkQuote(quote, label) {
   return out;
 }
 
+function checkCredential(credential, label) {
+  checkKeys(credential, CREDENTIAL_FIELDS, label);
+  const kind = credential.kind ?? 'certification';
+  if (!CREDENTIAL_KINDS.includes(kind)) throw httpError(400, `${label}.kind must be one of ${CREDENTIAL_KINDS.join(', ')}`);
+  const out = {
+    kind,
+    name: checkString(credential.name ?? '', LANDING_LIMITS.credentialName, `${label}.name`),
+    issuer: checkString(credential.issuer ?? '', LANDING_LIMITS.credentialIssuer, `${label}.issuer`),
+    number: checkString(credential.number ?? '', LANDING_LIMITS.credentialNumber, `${label}.number`),
+    issued: checkString(credential.issued ?? '', LANDING_LIMITS.credentialDate, `${label}.issued`),
+    expires: checkString(credential.expires ?? '', LANDING_LIMITS.credentialDate, `${label}.expires`),
+    url: checkString(credential.url ?? '', LANDING_LIMITS.url, `${label}.url`),
+  };
+  if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
+  return out;
+}
+
 // One section, with the fields of its kind and nothing else. A section
 // without an id (an MCP client adding one) gets a new one.
 function checkSection(section, i, refs, ids) {
@@ -423,6 +455,11 @@ function checkSection(section, i, refs, ids) {
     case 'image':
       out.image = section.image == null ? null : checkImageRef(section.image, `${label}.image`, refs);
       out.caption = checkString(section.caption ?? '', LANDING_IMAGE_LIMITS.caption, `${label}.caption`);
+      break;
+    case 'credentials':
+      out.credentials = checkList(section.credentials, LANDING_LIMITS.credentials, `${label}.credentials`).map((credential, j) =>
+        checkCredential(credential, `${label}.credentials[${j}]`)
+      );
       break;
   }
   return out;
@@ -558,6 +595,8 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 //   context.images   — Map of image id → { src, width, height } for the
 //                      stored images (issue #92), `src` where a visitor
 //                      fetches it
+//   context.today    — 'YYYY-MM-DD', what a credential's expiry is read
+//                      against (dateText.js); today in UTC when not given
 // Cards and actions carry no resume ids and never a resume's internal name:
 // a card with no label of its own uses the resume's published header title.
 // A card's `pdfHref` is there only when it asks for one and the PDF exists;
@@ -571,7 +610,10 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // on how the template arranges the sections, so the client decides, in
 // client/src/landing/dividers.js). An experience section
 // resolves to { roles, href }: its resume's first `count` roles, and that
-// resume's link for "Full resume".
+// resume's link for "Full resume". A credential without a name is left
+// out, and so is one whose `expires` has passed (hasPassed()), at the time
+// of the request, so a lapsed one leaves the page without a republish; one
+// whose date can't be read stays, the date shown as written.
 // `seo` goes along whole (everything in it ends up in the page's head and
 // its X-Robots-Tag anyway), its image resolved like the others. An image
 // reference resolves to { src, alt, width, height }, or is left out (a
@@ -677,9 +719,21 @@ function resolveSection(section, context) {
     }
     case 'divider':
       return {};
+    case 'credentials': {
+      const today = context.today ?? utcToday();
+      const credentials = section.credentials
+        .filter((credential) => credential.name.trim() && !hasPassed(credential.expires, today))
+        .map((credential) => resolveCredential(credential));
+      return credentials.length ? { credentials } : null;
+    }
     default:
       return null;
   }
+}
+
+function resolveCredential(credential) {
+  const { kind, name, issuer, number, issued, expires, url } = credential;
+  return { kind, name, issuer, number, issued, expires, url: url !== '' && isSafeUrl(url) ? url : '' };
 }
 
 function roleDates({ startDate, endDate }) {

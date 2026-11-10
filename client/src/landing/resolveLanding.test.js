@@ -195,3 +195,61 @@ test('uploaded images resolve like the server does, at the editor path the conte
   assert.deepEqual(bare.sections.map((s) => s.kind), ['items']);
   assert.equal('image' in bare.seo, false);
 });
+
+test('credentials resolve exactly like the server, expired ones dropped, or dimmed in the preview', () => {
+  const entry = (name, expires, extra = {}) => ({ kind: 'license', name, issuer: 'Board', number: '', issued: '', expires, url: '', ...extra });
+  const landing = {
+    ...draft,
+    sections: [
+      {
+        id: 'c',
+        kind: 'credentials',
+        title: 'Licenses',
+        column: 'side',
+        credentials: [
+          entry('RN', 'Dec 2026', { number: 'RN-1', issued: '2019', url: 'https://board.example/verify' }),
+          entry('Lapsed', '10/2026'),
+          entry('Bad link', '', { url: 'java\tscript:alert(1)' }),
+          entry('Unreadable', 'Renewed yearly', { kind: 'membership' }),
+          entry(' ', ''),
+        ],
+      },
+      { id: 'old', kind: 'credentials', title: 'Old', credentials: [entry('A', '2020'), entry('B', 'Jan 2025')] },
+      { id: 'hid', kind: 'credentials', title: 'Hidden', hidden: true, credentials: [entry('C', '2020')] },
+      { id: 'none', kind: 'credentials', title: 'None', credentials: [] },
+    ],
+  };
+  for (const today of ['2026-11-10', '2026-12-31', '2027-01-01', '2019-01-01']) {
+    const ctx = { ...context, today };
+    const fromServer = server.resolveLanding(landing, { ...ctx, resumes: new Map() });
+    assert.deepEqual(resolveLanding(landing, ctx).sections, fromServer.sections, today);
+  }
+  const out = resolveLanding(landing, { ...context, today: '2026-11-10' }).sections;
+  assert.deepEqual(out.map((s) => s.title), ['Licenses']);
+  assert.deepEqual(out[0].credentials.map((c) => c.name), ['RN', 'Bad link', 'Unreadable']);
+  assert.equal(out[0].credentials[0].url, 'https://board.example/verify');
+  assert.equal(out[0].credentials[1].url, '');
+
+  // The preview keeps expired entries, marked, and a section of nothing else
+  // as not shown; a hidden section stays plainly hidden.
+  const preview = resolveLanding(landing, { ...context, today: '2026-11-10' }, { withIds: true, withHidden: true }).sections;
+  assert.deepEqual(
+    preview.map((s) => [s.id, Boolean(s.hidden), Boolean(s.expired)]),
+    [
+      ['c', false, false],
+      ['old', true, true],
+      ['hid', true, false],
+    ]
+  );
+  assert.deepEqual(
+    preview[0].credentials.map((c) => [c.name, Boolean(c.expired)]),
+    [
+      ['RN', false],
+      ['Lapsed', true],
+      ['Bad link', false],
+      ['Unreadable', false],
+    ]
+  );
+  // Without a today in the context, it's read against the clock, in UTC.
+  assert.equal(resolveLanding(landing, context).sections.find((s) => s.title === 'Old'), undefined);
+});
