@@ -140,6 +140,12 @@ function resolveSection(section, targets, images) {
     }
     case 'divider':
       return {};
+    case 'faq': {
+      const entries = section.entries
+        .filter((entry) => entry.question.trim() && entry.answer.trim())
+        .map((entry) => ({ question: entry.question, answer: entry.answer }));
+      return entries.length ? { entries } : null;
+    }
     default:
       return null;
   }

@@ -426,6 +426,24 @@ export const LANDING_SCHEMA = {
             description: 'A rule across the page between two sections; its title, if any, is a label on the rule',
             properties: { ...LANDING_SECTION_BASE, kind: { const: 'divider' } },
           },
+          {
+            type: 'object',
+            description: "Questions and answers, at most 15, each answer collapsed under its question; an entry without both isn't shown",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'faq' },
+              entries: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    question: { type: 'string', description: 'Plain text, at most 200 characters' },
+                    answer: { type: 'string', description: 'At most 1500 characters; text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is' },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     },

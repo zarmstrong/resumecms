@@ -648,6 +648,56 @@ test('quotes are checked strictly, and an empty one is dropped', () => {
   for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
 });
 
+test('an FAQ section is checked strictly, its answers as inline text, and an entry without both parts is dropped', () => {
+  const faq = (entries) => ({ sections: [{ id: 'f', kind: 'faq', title: 'Questions', entries }] });
+  const message = (fn) => {
+    try {
+      fn();
+    } catch (err) {
+      return `${err.status} ${err.message}`;
+    }
+    return null;
+  };
+  const first = { question: 'Are you open to relocating?', answer: 'Yes, within **Europe**. [Ask me](mailto:jo@example.com).' };
+  const draft = validateLanding(faq([first, { question: 'When can you start?' }, { answer: 'An answer to nothing.' }, { question: ' ', answer: 'x' }]), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'f',
+    kind: 'faq',
+    title: 'Questions',
+    entries: [first, { question: 'When can you start?', answer: '' }, { question: '', answer: 'An answer to nothing.' }, { question: ' ', answer: 'x' }],
+  });
+  assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections, [{ kind: 'faq', title: 'Questions', entries: [first] }]);
+  // A section with no entry left to show goes, heading and all.
+  assert.deepEqual(resolveLanding(validateLanding(faq([{ question: 'Why?', answer: '  ' }]), known()), { resumes: new Map() }).sections, []);
+  assert.deepEqual(resolveLanding(validateLanding(faq([]), known()), { resumes: new Map() }).sections, []);
+
+  // An answer's links follow every other link's rules, read as one paragraph
+  // like an item's text; a question is plain text, never a link.
+  assert.equal(
+    message(() => validateLanding(faq([{ question: 'Q', answer: 'See\n\n[this](javascript:alert(1))' }]), known())),
+    '400 sections[0].entries[0].answer: the link "this" must be an http, https, mailto or tel link'
+  );
+  assert.equal(validateLanding(faq([{ question: '[x](javascript:alert(1))', answer: 'A' }]), known()).sections[0].entries[0].question, '[x](javascript:alert(1))');
+  // The answer's cap doesn't count an escaping backslash; the question's counts every character.
+  const atCap = `\\*${'a'.repeat(LANDING_LIMITS.faqAnswer - 1)}`;
+  assert.equal(validateLanding(faq([{ question: 'Q', answer: atCap }]), known()).sections[0].entries[0].answer, atCap);
+  const longest = 'x'.repeat(LANDING_LIMITS.faqQuestion);
+  assert.equal(validateLanding(faq([{ question: longest, answer: 'A' }]), known()).sections[0].entries[0].question, longest);
+
+  const bad = [
+    faq([{ question: 'x'.repeat(LANDING_LIMITS.faqQuestion + 1), answer: 'A' }]),
+    faq([{ question: 'Q', answer: 'x'.repeat(LANDING_LIMITS.faqAnswer + 1) }]),
+    faq([{ question: 'Q', answer: 'A', open: true }]),
+    faq([{ question: 5 }]),
+    faq([{ answer: ['A'] }]),
+    faq(['Q']),
+    faq('Q'),
+    faq(Array.from({ length: LANDING_LIMITS.faqEntries + 1 }, () => ({ question: 'Q', answer: 'A' }))),
+    { sections: [{ id: 'f', kind: 'faq', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
+});
+
 test('an experience section follows the reference rules of a card, with a count from 1 to 10', () => {
   const section = (extra) => ({ sections: [{ id: 'x', kind: 'experience', ...extra }] });
   assert.deepEqual(validateLanding(section({ resumeId: 'a' }), known('a')).sections[0], {

@@ -157,6 +157,35 @@ test('hidden sections, columns, quotes, meta lines, experience and dividers reso
   assert.equal(preview.sections.find((s) => s.id === 'now').body, 'Reading');
 });
 
+test('FAQ sections resolve exactly like the server, dropping an entry without both parts', () => {
+  const landing = {
+    ...draft,
+    sections: [
+      {
+        id: 'f',
+        kind: 'faq',
+        title: 'Questions',
+        column: 'side',
+        entries: [
+          { question: 'Do you relocate?', answer: 'Yes, **within Europe**.' },
+          { question: 'When?', answer: ' ' },
+          { question: '', answer: 'Orphan answer' },
+        ],
+      },
+      { id: 'f2', kind: 'faq', title: 'Empty', entries: [{ question: 'Q', answer: '' }] },
+      { id: 'f3', kind: 'faq', title: 'Later', hidden: true, entries: [{ question: 'Q', answer: 'A' }] },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map() });
+  assert.deepEqual(out.sections, fromServer.sections);
+  assert.deepEqual(out.sections, [
+    { kind: 'faq', title: 'Questions', column: 'side', entries: [{ question: 'Do you relocate?', answer: 'Yes, **within Europe**.' }] },
+  ]);
+  const preview = resolveLanding(landing, context, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => s.id), ['f', 'f3']);
+});
+
 test('a text section splits into paragraphs on blank lines', () => {
   assert.deepEqual(textParagraphs('One\nstill one\n\n  \nTwo\n'), ['One\nstill one', 'Two']);
   assert.deepEqual(textParagraphs(''), []);

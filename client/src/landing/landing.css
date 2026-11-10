@@ -428,6 +428,61 @@ a.l-role-company {
   overflow-wrap: anywhere;
 }
 
+/* Questions and answers (issue #123): each a <details> between hairlines,
+   its question the <summary>, with a + that turns into a − while open. */
+.l-faq {
+  border-top: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+}
+
+.l-faq-entry {
+  border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+}
+
+.l-faq-question {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  cursor: pointer;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.l-faq-question::-webkit-details-marker {
+  display: none;
+}
+
+/* Only a picture of the state: a screen reader announces it already. */
+.l-faq-question::after {
+  content: '+';
+  content: '+' / '';
+  flex-shrink: 0;
+  font-size: 1.25em;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--r-accent, var(--ink));
+}
+
+.l-faq-entry[open] > .l-faq-question::after {
+  content: '\2212';
+  content: '\2212' / '';
+}
+
+.l-faq-question:focus-visible {
+  outline: 2px solid var(--r-accent, var(--ink));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.l-faq-answer {
+  margin: 0 0 14px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 /* The editor's preview: a section hidden from the page. */
 .l-section-hidden > :not(.l-hidden-label) {
   opacity: 0.35;

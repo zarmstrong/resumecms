@@ -93,6 +93,11 @@
   border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
 }
 
+/* The heading's hairline already tops a list of questions. */
+.l-template-split .l-section-title + .l-faq {
+  border-top: none;
+}
+
 .l-template-split .l-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

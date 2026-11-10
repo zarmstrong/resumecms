@@ -497,10 +497,12 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
     { kind: 'quotes', hidden: true, quotes: [{ text: 'Great', name: 'Ann', role: 'Manager', url: '' }] },
     { kind: 'experience', resumeId: 'sales', count: 2, showDates: false },
     { kind: 'items', items: [{ title: 'Tool', meta: '2024 · Rust' }] },
+    { kind: 'faq', title: 'Questions', entries: [{ question: 'Do you relocate?', answer: 'Yes, **within Europe**.' }, { question: 'When?' }] },
   ];
   await call('update_landing_page', { sections: more });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: more }, { merge: true }]);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'experience' }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'faq', entries: [{ question: 'Q', answer: 3 }] }] })).isError, true);
   // a resumeId isn't a landing page field (the page belongs to the install)
   await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi' }, { merge: true }]);

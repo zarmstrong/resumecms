@@ -28,6 +28,7 @@ const SECTION_KINDS = [
   },
   { kind: 'image', label: 'Image', addLabel: 'Image', empty: () => ({ image: null, caption: '' }) },
   { kind: 'divider', label: 'Divider', addLabel: 'Divider (a line between sections)', empty: () => ({}) },
+  { kind: 'faq', label: 'Questions and answers', addLabel: 'Questions and answers (FAQ)', empty: () => ({ entries: [emptyFaqEntry()] }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -37,6 +38,10 @@ function emptyItem() {
 
 function emptyQuote() {
   return { text: '', name: '', role: '', url: '' };
+}
+
+function emptyFaqEntry() {
+  return { question: '', answer: '' };
 }
 
 // Only tells sections apart (React keys, and the server keeps it); not
@@ -65,6 +70,8 @@ function hasContent(section) {
       return false;
     case 'image':
       return Boolean(section.image) || Boolean(section.caption.trim());
+    case 'faq':
+      return section.entries.some((entry) => entry.question.trim() || entry.answer.trim());
     default:
       return false;
   }
@@ -424,7 +431,7 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
   );
 }
 
-// The syntax a text section and an item's text take (issue #91).
+// The syntax a text section, an item's text and an FAQ answer take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
 
 function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps }) {
@@ -489,9 +496,63 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
           <span className="ed-field-hint">A section with no image yet is left off the page.</span>
         </>
       );
+    case 'faq':
+      return <FaqFields sectionId={section.id} entries={section.entries} onChange={(entries) => onChange({ entries })} limits={limits} ai={ai} />;
     default:
       return null;
   }
+}
+
+// Questions and answers (issue #123), each answer collapsed under its
+// question on the page. Only the answer has a ✨: the question is what
+// visitors ask.
+function FaqFields({ sectionId, entries, onChange, limits, ai }) {
+  const setEntry = (i, patch) => onChange(entries.map((entry, idx) => (idx === i ? { ...entry, ...patch } : entry)));
+  return (
+    <>
+      {entries.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Question {i + 1}</span>
+            <RowActions
+              index={i}
+              count={entries.length}
+              onMove={(delta) => onChange(moved(entries, i, delta))}
+              onRemove={() => onChange(entries.filter((_, idx) => idx !== i))}
+              what="question"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={entry.question}
+            maxLength={limits?.faqQuestion}
+            onChange={(e) => setEntry(i, { question: e.target.value })}
+            placeholder="The question, e.g. Are you open to relocating?"
+            aria-label="Question"
+          />
+          <textarea
+            className="ed-input"
+            rows={3}
+            value={entry.answer}
+            onChange={(e) => {
+              const answer = inlineEdit(entry.answer, e.target.value, limits?.faqAnswer);
+              if (answer !== entry.answer) setEntry(i, { answer });
+            }}
+            placeholder="The answer"
+            aria-label="Answer"
+          />
+          <span className="ed-field-hint">{INLINE_HINT}</span>
+          <AiField ai={ai} target={{ kind: 'answer', sectionId, index: i }} current={entry.answer} />
+        </div>
+      ))}
+      {(!limits || entries.length < limits.faqEntries) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...entries, emptyFaqEntry()])}>
+          + Add question
+        </button>
+      )}
+      <span className="ed-field-hint">Visitors open an answer by its question. One without both a question and an answer isn't shown.</span>
+    </>
+  );
 }
 
 // Testimonials (issue #90). No ✨ here: they're someone else's words.
