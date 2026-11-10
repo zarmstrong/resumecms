@@ -1,0 +1,391 @@
+/* Editorial (issue #130): a magazine page. The hero is a masthead (the
+   availability line as a kicker, a large display headline, the
+   subheadline as an italic standfirst, the photo as a portrait beside
+   them) over a double rule; section titles sit under a hairline; the
+   first text section opens with a drop cap, and a text section of more
+   than one paragraph runs in two columns on a wide page; quotes are pull
+   quotes. Lists, cards and quotes are never split across columns: only a
+   text section's paragraphs flow.
+   It sets no font of its own: the page always has one (the site
+   settings' font, Source Serif 4 unless another was picked, and the
+   headline font when there is one), so a chosen font is never overridden.
+   No index.jsx, so LandingView arranges it (the hero, then the sections,
+   in an .l-main). Sized by the page's own width (a container query), so
+   the editor's narrower preview shows what a phone would. No motion. */
+.l-template-editorial {
+  container-type: inline-size;
+}
+
+.l-template-editorial .l-main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 72px 40px 104px;
+}
+
+/* The masthead: the text, and the photo to its right, over a double rule. */
+.l-template-editorial .l-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  column-gap: 40px;
+  padding-bottom: 36px;
+  margin-bottom: 56px;
+  border-bottom: 4px double var(--r-heading, var(--ink));
+}
+
+.l-template-editorial .l-hero-text {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.l-template-editorial .l-photo {
+  grid-column: 2;
+  grid-row: 1;
+  width: 168px;
+  height: 210px;
+  border-radius: 2px;
+}
+
+/* A kicker: small capitals in the accent color over a short rule. */
+.l-template-editorial .l-availability {
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0 0 6px;
+  margin: 0 0 18px;
+  border-radius: 0;
+  background: none;
+  border-bottom: 2px solid var(--r-accent, var(--ink));
+}
+
+.l-template-editorial .l-headline {
+  font-size: clamp(2.2em, 7cqi, 4.4em);
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+
+/* The standfirst. */
+.l-template-editorial .l-subheadline {
+  font-size: 1.4em;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--r-text, var(--ink));
+  max-width: 34em;
+  margin-top: 16px;
+}
+
+.l-template-editorial .l-actions {
+  margin-top: 28px;
+}
+
+.l-template-editorial .l-action {
+  border-radius: 2px;
+}
+
+.l-template-editorial .l-section {
+  margin: 0 0 56px;
+}
+
+.l-template-editorial .l-section:last-child {
+  margin-bottom: 0;
+}
+
+.l-template-editorial .l-section-title {
+  font-size: 1.7em;
+  line-height: 1.2;
+  padding-top: 14px;
+  margin-bottom: 20px;
+  border-top: 1px solid var(--r-heading, var(--ink));
+  overflow-wrap: break-word;
+}
+
+/* The masthead's double rule is enough over the first one. */
+.l-template-editorial .l-hero + .l-section > .l-section-title {
+  padding-top: 0;
+  border-top: none;
+}
+
+.l-template-editorial .l-text {
+  max-width: 40em;
+  orphans: 2;
+  widows: 2;
+  text-wrap: pretty;
+}
+
+/* The drop cap, on the first paragraph of the first text section shown
+   (in the editor's preview, the first one not hidden). ::first-letter
+   leaves the text whole for a screen reader, and reaches the letter
+   through a link or bold text; the paragraph holds its float
+   (flow-root), so a single short word grows it rather than letting the
+   letter hang into what follows. It isn't split between the two columns:
+   a column cut shorter than the letter would push the letter on into the
+   next one, away from its word. */
+.l-template-editorial
+  .l-section-text:not(.l-section-hidden):not(.l-section-text:not(.l-section-hidden) ~ *)
+  > .l-text:first-of-type {
+  display: flow-root;
+  break-inside: avoid;
+}
+
+.l-template-editorial
+  .l-section-text:not(.l-section-hidden):not(.l-section-text:not(.l-section-hidden) ~ *)
+  > .l-text:first-of-type::first-letter {
+  float: left;
+  font-family: var(--r-name-font, inherit);
+  font-size: 3.7em;
+  font-weight: 600;
+  font-style: normal;
+  line-height: 0.82;
+  margin: 0.06em 0.09em 0 0;
+  color: var(--r-accent, var(--ink));
+}
+
+/* Pull quotes: the words large, under a rule in the accent color, side
+   by side when there's room for two. */
+.l-template-editorial .l-quotes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 40px 48px;
+}
+
+.l-template-editorial .l-quote {
+  padding: 18px 0 0;
+  border-left: none;
+  border-top: 3px solid var(--r-accent, var(--ink));
+}
+
+.l-template-editorial .l-quote-text {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.5em;
+  line-height: 1.35;
+  color: var(--r-heading, var(--ink));
+}
+
+/* An opening mark, left out of what a screen reader reads where the
+   browser knows the alt-text syntax. */
+.l-template-editorial .l-quote-text::before {
+  content: '\201C';
+  content: '\201C' / '';
+  display: block;
+  height: 0.5em;
+  font-size: 2.4em;
+  line-height: 0.9;
+  font-style: normal;
+  color: var(--r-accent, var(--ink));
+}
+
+.l-template-editorial .l-quote-by {
+  margin-top: 14px;
+  font-size: 0.8em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* List entries, one under another between hairlines. */
+.l-template-editorial .l-items {
+  gap: 0;
+}
+
+.l-template-editorial .l-item {
+  padding: 18px 0;
+  border-top: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 16%, transparent);
+}
+
+.l-template-editorial .l-item:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.l-template-editorial .l-item:last-child {
+  padding-bottom: 0;
+}
+
+.l-template-editorial .l-item-title {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.2em;
+  line-height: 1.3;
+}
+
+.l-template-editorial .l-item-meta {
+  margin-top: 4px;
+  font-size: 0.76em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.l-template-editorial .l-item-text {
+  margin-top: 6px;
+}
+
+.l-template-editorial .l-item-with-image {
+  grid-template-columns: 160px minmax(0, 1fr);
+  column-gap: 22px;
+}
+
+.l-template-editorial .l-item-image {
+  grid-row: 1 / span 3;
+  width: 160px;
+  height: 112px;
+  border-radius: 2px;
+}
+
+/* Resume cards: a heavy rule over each, the accent one on hover, and no
+   lift. */
+.l-template-editorial .l-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 28px;
+}
+
+.l-template-editorial .l-card {
+  padding: 14px 0 0;
+  border: none;
+  border-top: 3px solid var(--r-heading, var(--ink));
+  border-radius: 0;
+}
+
+.l-template-editorial .l-card:hover,
+.l-template-editorial .l-card:focus-within {
+  border-top-color: var(--r-accent, var(--ink));
+  transform: none;
+}
+
+.l-template-editorial .l-card-label {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.3em;
+  line-height: 1.3;
+}
+
+.l-template-editorial .l-links {
+  gap: 10px 28px;
+}
+
+.l-template-editorial .l-role-meta {
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.l-template-editorial .l-figure-image {
+  border-radius: 2px;
+}
+
+.l-template-editorial .l-figure-caption {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+/* A divider: its label in italics on the rule, and with no label a
+   section break of three asterisks rather than a line. */
+.l-template-editorial .l-divider {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1em;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.l-template-editorial .l-divider:empty {
+  justify-content: center;
+}
+
+.l-template-editorial .l-divider:empty::before {
+  content: '*\2003*\2003*';
+  content: '*\2003*\2003*' / '';
+  flex: none;
+  border-top: none;
+  font-size: 1.3em;
+  font-style: normal;
+  line-height: 1;
+}
+
+.l-template-editorial .l-divider:empty::after {
+  content: none;
+}
+
+/* A focus ring on every link (a card's is drawn around the whole card by
+   landing.css). */
+.l-template-editorial a:not(.l-card-link):focus-visible {
+  outline: 2px solid var(--r-accent, var(--ink));
+  outline-offset: 3px;
+}
+
+/* Two columns of running text, with a hairline between them, for a text
+   section of more than one paragraph (a lone one keeps to its measure in
+   one column, rather than being cut in half). Only the paragraphs flow:
+   the title (and the preview's "Hidden" label) spans both. */
+@container (min-width: 820px) {
+  .l-template-editorial .l-section-text:has(> .l-text ~ .l-text) {
+    columns: 2;
+    column-gap: 48px;
+    column-rule: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+  }
+  .l-template-editorial .l-section-text > .l-section-title,
+  .l-template-editorial .l-section-text > .l-hidden-label {
+    column-span: all;
+  }
+  .l-template-editorial .l-section-text > .l-hidden-label {
+    display: block;
+    width: fit-content;
+  }
+}
+
+/* A narrow page: the photo above the text, everything a size down. */
+@container (max-width: 720px) {
+  .l-template-editorial .l-main {
+    padding: 48px 24px 72px;
+  }
+  .l-template-editorial .l-hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding-bottom: 28px;
+    margin-bottom: 44px;
+  }
+  .l-template-editorial .l-photo {
+    grid-column: 1;
+    width: 120px;
+    height: 150px;
+    margin-bottom: 22px;
+  }
+  .l-template-editorial .l-hero-text {
+    grid-row: 2;
+  }
+  .l-template-editorial .l-subheadline {
+    font-size: 1.2em;
+  }
+  .l-template-editorial .l-section {
+    margin-bottom: 44px;
+  }
+  .l-template-editorial .l-section-title {
+    font-size: 1.45em;
+  }
+  .l-template-editorial .l-quote-text {
+    font-size: 1.3em;
+  }
+}
+
+@container (max-width: 480px) {
+  .l-template-editorial .l-main {
+    padding: 36px 16px 64px;
+  }
+  .l-template-editorial .l-item-with-image {
+    grid-template-columns: 96px minmax(0, 1fr);
+    column-gap: 14px;
+  }
+  .l-template-editorial .l-item-image {
+    width: 96px;
+    height: 72px;
+  }
+  .l-template-editorial
+    .l-section-text:not(.l-section-hidden):not(.l-section-text:not(.l-section-hidden) ~ *)
+    > .l-text:first-of-type::first-letter {
+    font-size: 3.2em;
+  }
+}
