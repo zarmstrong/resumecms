@@ -306,6 +306,86 @@ test("an experience section shows a resume's latest published roles, only while 
   assert.equal(status(() => store.setLanding({ sections: [{ kind: 'experience', resumeId: 'nope' }] })), 400);
 });
 
+test("education and skills sections show a resume's published entries and skill groups, only while a visitor may open it", async () => {
+  const { store, defaultId } = await makeStore();
+  const nurseId = await publicResume(store, 'Nurse', 'nurse');
+  const nurse = store.forResume(nurseId);
+  const school = (degree, extra = {}) => nurse.createBlock({ type: 'education', data: { degree, institution: 'State U', startDate: '2010', endDate: '2014', ...extra } });
+  school('BSc Nursing');
+  const printOnly = school('Print only');
+  nurse.updateBlock(printOnly.id, { visibleWeb: false });
+  school('Diploma', { location: 'Ohio' });
+  school('Certificate');
+  nurse.createBlock({ type: 'skills_group', data: { category: 'Languages', items: 'Spanish (fluent), ASL (conversational)' } });
+  const secret = nurse.createBlock({ type: 'skills_group', data: { category: 'Secret skills', items: 'Lockpicking' } });
+  nurse.updateBlock(secret.id, { visibleWeb: false });
+  nurse.createBlock({ type: 'skills_group', data: { category: 'Clinical', items: 'Triage, IV therapy' } });
+  await nurse.publish();
+  // A draft edit after the publish isn't shown.
+  school('Unpublished');
+  nurse.createBlock({ type: 'skills_group', data: { category: 'Later', items: 'Unpublished skill' } });
+
+  store.setLanding({
+    sections: [
+      { id: 'e', kind: 'education', title: 'Education', resumeId: nurseId, count: 2 },
+      { id: 's', kind: 'skills', title: 'Skills', resumeId: nurseId, column: 'side' },
+    ],
+  });
+  store.setLandingEnabled(true);
+  store.publishLanding();
+  const page = store.landingForHost('example.com');
+  assert.deepEqual(page.sections, [
+    {
+      kind: 'education',
+      title: 'Education',
+      href: '/r/nurse',
+      entries: [
+        { degree: 'BSc Nursing', institution: 'State U', location: '', dates: '2010 – 2014' },
+        { degree: 'Diploma', institution: 'State U', location: 'Ohio', dates: '2010 – 2014' },
+      ],
+    },
+    {
+      kind: 'skills',
+      title: 'Skills',
+      column: 'side',
+      href: '/r/nurse',
+      groups: [
+        { category: 'Languages', items: ['Spanish (fluent)', 'ASL (conversational)'] },
+        { category: 'Clinical', items: ['Triage', 'IV therapy'] },
+      ],
+    },
+  ]);
+  const body = JSON.stringify(page);
+  for (const leak of [nurseId, printOnly.id, secret.id, 'Print only', 'Secret', 'Lockpicking', 'Unpublished']) assert.equal(body.includes(leak), false, leak);
+  // The editor's preview gets the same lists, already filtered.
+  const target = store.getLandingContext().resumes.find((r) => r.id === nurseId);
+  assert.deepEqual(target.education.map((e) => e.degree), ['BSc Nursing', 'Diploma', 'Certificate']);
+  assert.deepEqual(target.skills.map((g) => g.category), ['Languages', 'Clinical']);
+  assert.equal(JSON.stringify(target).includes('Lockpicking'), false);
+  assert.deepEqual(store.getLandingContext().resumes.find((r) => r.id === defaultId).skills, []);
+
+  // Private, then unpublished, then deleted: the sections go at once.
+  store.updateResume(nurseId, { isPublic: false });
+  assert.deepEqual(store.landingForHost('example.com').sections, []);
+  store.updateResume(nurseId, { isPublic: true });
+  assert.equal(store.landingForHost('example.com').sections.length, 2);
+  const unpublishedId = store.createResume({ name: 'Draft only', slug: 'draft-only' }).id;
+  store.forResume(unpublishedId).createBlock({ type: 'education', data: { degree: 'Draft degree' } });
+  store.forResume(unpublishedId).createBlock({ type: 'skills_group', data: { category: 'Draft', items: 'Draft skill' } });
+  store.updateResume(unpublishedId, { isPublic: true });
+  store.setLanding({ sections: [{ id: 'e', kind: 'education', resumeId: unpublishedId }, { id: 's', kind: 'skills', resumeId: unpublishedId }] });
+  store.publishLanding();
+  assert.deepEqual(store.landingForHost('example.com').sections, []);
+  store.setLanding({ sections: [{ id: 'e', kind: 'education', resumeId: nurseId }, { id: 's', kind: 'skills', resumeId: nurseId }] });
+  store.publishLanding();
+  store.deleteResume(nurseId);
+  assert.deepEqual(store.landingForHost('example.com').sections, []);
+  // The draft still saves with them, but a new one for an unknown id doesn't.
+  assert.deepEqual(store.setLanding(store.getLanding()).sections.map((s) => s.resumeId), [nurseId, nurseId]);
+  assert.equal(status(() => store.setLanding({ sections: [{ kind: 'education', resumeId: 'nope' }] })), 400);
+  assert.equal(status(() => store.setLanding({ sections: [{ kind: 'skills', resumeId: 'nope' }] })), 400);
+});
+
 test('checkLandingDraft validates like a save but stores nothing', async () => {
   const { store } = await makeStore();
   const before = store.getLandingStatus();

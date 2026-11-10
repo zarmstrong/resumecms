@@ -126,3 +126,40 @@ test('a replaced image keeps its alt text only when it is the same image again',
     assert.deepEqual(at(applyUploadedImage(landing, spot, OLD)), described, spot.target.kind);
   }
 });
+
+test('several uploads into a gallery each land on their own entry, wherever it went, or nowhere (issue #120)', () => {
+  const empty = () => ({ image: null, caption: '' });
+  const gallery = (images) => ({ ...draft, sections: [{ id: 'g', kind: 'gallery', title: '', images }] });
+  const entries = (landing) => landing.sections[0].images;
+  const ids = ['1', '2', '3'].map((c) => c.repeat(64));
+  // Three files picked at once: three empty entries no content tells apart,
+  // each with an upload of its own.
+  const [a, b, c] = [empty(), empty(), empty()];
+  const start = gallery([a, b, c]);
+  const spots = [0, 1, 2].map((index) => uploadSpot(start, { kind: 'gallery', sectionId: 'g', index }));
+
+  // They resolve out of order, while the entries move and are captioned
+  // (the form passes each edited entry's key on).
+  let now = gallery([c, carryItemKey(a, { ...a, caption: 'First' }), b]);
+  now = applyUploadedImage(now, spots[1], ids[1]);
+  now = applyUploadedImage(now, spots[0], ids[0]);
+  assert.deepEqual(
+    entries(now).map((e) => [e.image?.imageId ?? null, e.caption]),
+    [
+      [null, ''],
+      [ids[0], 'First'],
+      [ids[1], ''],
+    ]
+  );
+  // A new image starts with no description.
+  assert.equal(entries(now)[1].image.alt, '');
+  // The third entry is removed before its upload lands: nothing gets it,
+  // not even an empty entry added in its place.
+  const removed = gallery([...entries(now).slice(1), empty()]);
+  assert.equal(applyUploadedImage(removed, spots[2], ids[2]), null);
+  // Nor does a copy nobody passed the key to, or another kind of section.
+  assert.equal(applyUploadedImage(gallery([{ ...c }]), spots[2], ids[2]), null);
+  assert.equal(applyUploadedImage({ ...draft, sections: [{ id: 'g', kind: 'items', title: '', items: [c] }] }, spots[2], ids[2]), null);
+  assert.equal(uploadSpot(start, { kind: 'gallery', sectionId: 'g', index: 3 }), null);
+  assert.equal(uploadSpot(start, { kind: 'gallery', sectionId: 'nope', index: 0 }), null);
+});

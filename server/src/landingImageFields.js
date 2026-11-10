@@ -10,7 +10,8 @@ import { httpError } from './httpError.js';
 // stored image; one already in the draft may outlive its image, as a card
 // may outlive its resume, and then shows nothing. Where they're used: the
 // hero (`photo: 'upload'` with `photoImage`), an item's `image` (a
-// thumbnail), an `image` section, and `seo.image` (the link-preview image).
+// thumbnail), an `image` section, a `gallery` section's entries (issue
+// #120), and `seo.image` (the link-preview image).
 
 export const LANDING_IMAGE_LIMITS = {
   // What the editor may send. Everything is re-encoded, so this only bounds
@@ -25,10 +26,14 @@ export const LANDING_IMAGE_LIMITS = {
   inputPixels: 50_000_000,
   // After the re-encode, per image and for the whole store.
   storedBytes: 1.5 * 1024 * 1024,
-  count: 50,
-  totalBytes: 30 * 1024 * 1024,
+  // Room for a few full galleries (24 images each, issue #120) besides the
+  // hero, thumbnails and image sections, and for the images a draft has
+  // replaced but the snapshot still shows. They live in SQLite and every
+  // backup copies them, so not much more than that.
+  count: 100,
+  totalBytes: 60 * 1024 * 1024,
   alt: 200,
-  // An image section's caption.
+  // An image section's caption, and a gallery entry's.
   caption: 300,
 };
 
@@ -88,6 +93,9 @@ export function referencedImageIds(landing) {
     ...(Array.isArray(landing?.sections) ? landing.sections : []).flatMap((section) =>
       section?.kind === 'image' ? [section.image] : section?.kind === 'items' && Array.isArray(section.items) ? section.items.map((item) => item?.image) : []
     ),
+    ...(Array.isArray(landing?.sections) ? landing.sections : []).flatMap((section) =>
+      section?.kind === 'gallery' && Array.isArray(section.images) ? section.images.map((entry) => entry?.image) : []
+    ),
   ];
   return new Set(refs.filter((ref) => isPlainObject(ref) && isImageId(ref.imageId)).map((ref) => ref.imageId));
 }
@@ -97,7 +105,7 @@ export function referencedImageIds(landing) {
 // draft because the editor saves while it's typed. "Shown" as
 // resolveLanding() decides: nothing in a hidden section, the hero's only
 // with photo: 'upload', an item's only on an item with a title or text,
-// and only a reference whose image is among `storedIds` (one whose image
+// every gallery entry's, and only a reference whose image is among `storedIds` (one whose image
 // is gone shows nothing).
 export function assertImagesDescribed(landing, storedIds) {
   const missing = [];
@@ -113,6 +121,11 @@ export function assertImagesDescribed(landing, storedIds) {
         if (item?.title?.trim() || item?.text?.trim()) {
           check(item.image, `sections[${i}].items[${j}].image.alt`, `the thumbnail of item ${j + 1} in section ${i + 1}`);
         }
+      });
+    }
+    if (section?.kind === 'gallery' && Array.isArray(section.images)) {
+      section.images.forEach((entry, j) => {
+        check(entry?.image, `sections[${i}].images[${j}].image.alt`, `image ${j + 1} of the gallery in section ${i + 1}`);
       });
     }
   });
@@ -148,6 +161,7 @@ export function shownImageIds(resolved) {
     ...(resolved?.sections ?? []).flatMap((section) =>
       section.kind === 'image' ? [section.image?.src] : section.kind === 'items' ? section.items.map((item) => item.image?.src) : []
     ),
+    ...(resolved?.sections ?? []).flatMap((section) => (section.kind === 'gallery' ? section.images.map((entry) => entry.image?.src) : [])),
   ];
   return new Set(srcs.map(imageIdOfPath).filter(Boolean));
 }

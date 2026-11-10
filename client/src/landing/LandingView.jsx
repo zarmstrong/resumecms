@@ -5,6 +5,8 @@ import { darkClass, landingPageStyle } from './landingStyle.js';
 import { textParagraphs } from './resolveLanding.js';
 import { dropStrayDividers } from './dividers.js';
 import { renderInline } from './renderInline.js';
+import { readDate } from './dateText.js';
+import { LandingGallery } from './LandingGallery.jsx';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
@@ -25,14 +27,16 @@ import './landing.css';
 // sees to that for a template without columns, and hands one with columns
 // `dropStrayDividers(sections, { atStart })` to apply to each column.
 // Everything is rendered as text,
-// apart from the links and emphasis a text section or an item's text may
-// hold (issue #91, renderInline.js), which become elements, never HTML; every
-// href still goes through safeHref() (by way of linkProps()) although the
-// server only stores safe ones. `highlightIds`
+// apart from the links and emphasis a text section, an item's text or an
+// FAQ answer may hold (issue #91, renderInline.js), which become elements,
+// never HTML; every href still goes through safeHref() (by way of
+// linkProps()) although the server only stores safe ones. `highlightIds`
 // (editor preview only) outlines the parts an AI suggestion is shown in:
 // 'hero' for the headline and subheadline, otherwise a section's id (the
 // preview resolves its draft `withIds`). A section marked `hidden` (only
-// the preview resolves those, `withHidden`) is dimmed and labelled.
+// the preview resolves those, `withHidden`) is dimmed and labelled, and so
+// is an expired credential (issue #119), or a credentials section with
+// nothing else (`expired`).
 export function LandingView({ landing, preview = false, highlightIds = null, scheme = 'auto' }) {
   const template = getLandingTemplate(landing.template);
   const { colors, style } = landingPageStyle(landing.site, landing.darkColors);
@@ -78,9 +82,9 @@ export function LandingView({ landing, preview = false, highlightIds = null, sch
         key={section.id ?? i}
         className={`l-section l-section-${section.kind}${hidden}${highlightIds?.has(section.id) ? ' l-ai-preview' : ''}`}
       >
-        {section.hidden && <span className="l-hidden-label">Hidden</span>}
+        {section.hidden && <span className="l-hidden-label">{section.expired ? 'Not shown: every entry has expired' : 'Hidden'}</span>}
         {section.title && <h2 className="l-section-title">{section.title}</h2>}
-        <SectionBody section={section} />
+        <SectionBody section={section} preview={preview} />
       </section>
     );
   };
@@ -116,7 +120,7 @@ function hrefProps(href) {
   return /^\/(?!\/)/.test(href) ? { href } : linkProps(href);
 }
 
-function SectionBody({ section }) {
+function SectionBody({ section, preview }) {
   switch (section.kind) {
     case 'text':
       return textParagraphs(section.body).map((paragraph, i) => (
@@ -243,9 +247,131 @@ function SectionBody({ section }) {
           {section.caption && <figcaption className="l-figure-caption">{section.caption}</figcaption>}
         </figure>
       );
+    case 'stats':
+      // The comma is for a screen reader ("15 years, in commercial
+      // kitchens"); on screen the label goes under the figure.
+      return (
+        <ul className="l-stats">
+          {section.stats.map((stat, i) => (
+            <li key={i} className="l-stat">
+              <span className="l-stat-value">{stat.value}</span>
+              {stat.label && (
+                <>
+                  <span className="l-sr-only">, </span>
+                  <span className="l-stat-label">{stat.label}</span>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      );
+    case 'faq':
+      // Each answer collapsed under its question (issue #123): <details>
+      // needs no script, works with a keyboard and a screen reader, and a
+      // browser's find opens it. The editor's preview shows them all open.
+      return (
+        <div className="l-faq">
+          {section.entries.map((entry, i) => (
+            <details key={i} className="l-faq-entry" open={preview}>
+              <summary className="l-faq-question">{entry.question}</summary>
+              <p className="l-faq-answer">{renderInline(entry.answer)}</p>
+            </details>
+          ))}
+        </div>
+      );
+    case 'education':
+      // Drawn on the experience timeline (issue #126).
+      return (
+        <>
+          <ol className="l-roles l-schools">
+            {section.entries.map((entry, i) => (
+              <li key={i} className="l-role l-school">
+                <span className="l-role-title">
+                  {entry.degree}
+                  {entry.degree && entry.institution && ' · '}
+                  {entry.institution && <span className="l-school-institution">{entry.institution}</span>}
+                </span>
+                {(entry.location || entry.dates) && (
+                  <span className="l-role-meta">{[entry.dates, entry.location].filter(Boolean).join(' · ')}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+          <a className="l-roles-more" {...hrefProps(section.href)}>
+            Full resume →
+          </a>
+        </>
+      );
+    case 'skills':
+      return (
+        <>
+          <ul className="l-skills">
+            {section.groups.map((group, i) => (
+              <li key={i} className="l-skill-group">
+                {group.category && <span className="l-skill-category">{group.category}</span>}
+                <ul className="l-skill-list" aria-label={group.category || undefined}>
+                  {group.items.map((item, j) => (
+                    <li key={j} className="l-skill">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <a className="l-roles-more" {...hrefProps(section.href)}>
+            Full resume →
+          </a>
+        </>
+      );
+    case 'credentials':
+      return (
+        <ul className="l-credentials">
+          {section.credentials.map((credential, i) => (
+            <li key={i} className={`l-credential${credential.expired ? ' l-credential-expired' : ''}`}>
+              {credential.expired && <span className="l-hidden-label">Expired</span>}
+              <span className="l-credential-head">
+                <span className="l-credential-name">{credential.name}</span>
+                <span className="l-credential-kind">{CREDENTIAL_LABELS[credential.kind] || CREDENTIAL_LABELS.certification}</span>
+              </span>
+              {credential.issuer && <span className="l-credential-issuer">{credential.issuer}</span>}
+              <CredentialDetails credential={credential} />
+            </li>
+          ))}
+        </ul>
+      );
+    case 'gallery':
+      return <LandingGallery images={section.images} label={section.title} />;
     default:
       return null;
   }
+}
+
+// The small label next to a credential's name.
+const CREDENTIAL_LABELS = { license: 'License', certification: 'Certification', membership: 'Membership' };
+
+// A credential's number, dates and "Verify" link, on one muted line. A date
+// dateText.js can read gets a word before it ("Expires Dec 2027"); any
+// other is shown just as written ("Renews yearly").
+function CredentialDetails({ credential }) {
+  const dated = (word, date) => (readDate(date) ? `${word} ${date}` : date);
+  const parts = [
+    credential.number && `No. ${credential.number}`,
+    credential.issued && dated(credential.kind === 'membership' ? 'Since' : 'Issued', credential.issued),
+    credential.expires && dated('Expires', credential.expires),
+  ].filter(Boolean);
+  if (!parts.length && !credential.url) return null;
+  return (
+    <span className="l-credential-meta">
+      {parts.join(' · ')}
+      {parts.length > 0 && credential.url && ' · '}
+      {credential.url && (
+        <a className="l-credential-verify" {...linkProps(credential.url)} aria-label={`Verify ${credential.name}`}>
+          Verify
+        </a>
+      )}
+    </span>
+  );
 }
 
 // An uploaded image (issue #92) as resolveLanding() gives it: its size is
