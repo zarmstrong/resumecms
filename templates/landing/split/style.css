@@ -48,6 +48,12 @@
   }
 }
 
+/* Smaller gallery thumbnails there, three to a row. */
+.l-template-split .l-split-side .l-gallery {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
 .l-template-split .l-hero {
   display: flex;
   flex-direction: column;
@@ -130,6 +136,9 @@
   }
   .l-template-split .l-split-side .l-cards {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  .l-template-split .l-split-side .l-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
   .l-template-split .l-split-side-sections {
     margin-top: 36px;

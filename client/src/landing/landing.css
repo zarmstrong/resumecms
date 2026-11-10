@@ -697,3 +697,188 @@ a.l-credential-verify:focus-visible {
   outline: 2px dashed #2f6f4e;
   outline-offset: 4px;
 }
+
+/* A gallery section (issue #120): thumbnails in a grid as wide as the
+   column allows, each a button opening the image larger in a <dialog>
+   (LandingGallery.jsx). The stored width and height keep each image's
+   space while it loads; the grid crops them to one shape. */
+.l-gallery {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+}
+
+.l-gallery-figure {
+  margin: 0;
+}
+
+.l-gallery-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--r-text, var(--ink)) 6%, transparent);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.l-gallery-open:focus-visible {
+  outline: 2px solid var(--r-accent, var(--ink));
+  outline-offset: 2px;
+}
+
+.l-gallery-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  transition: transform 160ms ease;
+}
+
+.l-gallery-open:hover .l-gallery-image {
+  transform: scale(1.03);
+}
+
+.l-gallery-caption {
+  margin-top: 6px;
+  font-size: 0.88em;
+  opacity: 0.75;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* The enlarged view. It's in the page's tree, so it takes the page's
+   colors and fonts, dark ones included. */
+.l-gallery-dialog {
+  width: min(1100px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  color: var(--r-text, var(--ink));
+  background: var(--r-bg, var(--panel));
+  box-shadow: 0 12px 48px rgb(0 0 0 / 0.35);
+}
+
+.l-gallery-dialog[open] {
+  animation: l-gallery-in 160ms ease-out;
+}
+
+/* It's focused itself when it opens (and named by the section's title); its
+   buttons keep their own rings. */
+.l-gallery-dialog:focus-visible {
+  outline: none;
+}
+
+.l-gallery-dialog::backdrop {
+  background: rgb(0 0 0 / 0.78);
+}
+
+@keyframes l-gallery-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+.l-gallery-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 16px;
+}
+
+.l-gallery-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+
+.l-gallery-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.l-gallery-button {
+  min-width: 40px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 25%, transparent);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 1.15em;
+  line-height: 1;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.l-gallery-button:hover,
+.l-gallery-button:focus-visible {
+  border-color: var(--r-accent, var(--ink));
+  color: var(--r-accent, var(--ink));
+}
+
+.l-gallery-button:focus-visible {
+  outline: 2px solid var(--r-accent, var(--ink));
+  outline-offset: 2px;
+}
+
+.l-gallery-view-figure {
+  margin: 0;
+}
+
+.l-gallery-view-image {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 200px);
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 6px;
+}
+
+.l-gallery-view-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  text-align: center;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.l-gallery-view-alt {
+  font-size: 0.88em;
+  opacity: 0.7;
+}
+
+.l-gallery-nav {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .l-gallery-image {
+    transition: none;
+  }
+  .l-gallery-open:hover .l-gallery-image {
+    transform: none;
+  }
+  .l-gallery-dialog[open] {
+    animation: none;
+  }
+}

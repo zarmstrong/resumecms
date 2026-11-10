@@ -31,6 +31,9 @@ import { hasPassed, utcToday } from '../dateText.js';
 // context.
 // Nor is a credential (issue #119): its name, issuer, number and dates
 // are facts, not prose.
+// Nor are an image section's or a gallery's captions (issue #120): plain
+// text about a picture the model can't see, so the page context gives
+// either only its kind and title.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*

@@ -324,9 +324,14 @@ by `resolveLanding()`; issue #125, never an AI rewrite target), `faq`
 (`entries: [{ question, answer }]`, issue #123: each a `<details>` with
 the question as its `<summary>`, open in the editor's preview; an entry
 missing either part is dropped), `education` (`resumeId`, `count`,
-`showDates`; issue #126), `skills` (`resumeId`; issue #126) and
+`showDates`; issue #126), `skills` (`resumeId`; issue #126),
 `credentials` (`[{ kind, name, issuer, number, issued, expires, url }]`;
-issue #119, see below). Any section may be `hidden: true`: kept in the
+issue #119, see below) and
+`gallery` (`images: [{ image, caption }]`, at most
+`LANDING_LIMITS.galleryImages` (24), an entry's `image` null until its
+upload lands; issue #120: a grid whose thumbnails open a modal
+`<dialog>` in `client/src/landing/LandingGallery.jsx`, keys in
+`gallery.js`, reordered with the same ↑ ↓ ✕ as items). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -451,13 +456,15 @@ image's glibc), tells the type by its bytes (JPEG/PNG/WebP, never the
 re-encodes: EXIF orientation applied, at most 1600 px on the long side,
 no metadata at all (EXIF/GPS, XMP, PNG text), a PNG too big for the cap
 kept as WebP. The id is the sha256 of the stored bytes; caps and the
-grace period are `LANDING_IMAGE_LIMITS` and `IMAGE_GRACE_MS`. The draft
+grace period are `LANDING_IMAGE_LIMITS` and `IMAGE_GRACE_MS` (100 images
+and 60 MB in all, raised for galleries; they're in SQLite, so every
+backup copies them). The draft
 refers to an image as `{ imageId, alt }` (`checkImageRef()`; `alt` a
 required string, '' allowed in a draft while it's typed, but
 `publishLanding()` refuses with a 400 naming the field while a reference
 the page would show has a blank one: `assertImagesDescribed()`) in `photoImage` (with
-`photo: 'upload'`), an item's `image`, an `image` section and
-`seo.image`; the optional ones are stored only when set. Like a card, a
+`photo: 'upload'`), an item's `image`, an `image` section, each
+`gallery` entry and `seo.image`; the optional ones are stored only when set. Like a card, a
 new reference must name a stored image and one already in the draft may
 outlive it (`referencedImageIds()`). After a publish and on boot,
 `pruneLandingImages()` deletes images neither the stored draft nor the
@@ -501,7 +508,7 @@ against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
 (no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
-question and an answer, no named credential left unexpired) is dropped, heading and
+question and an answer, no named credential left unexpired, no gallery entry whose image is stored) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -573,12 +580,18 @@ queue and applies the reference before it settles, so a flush waits for
 both. It applies it to the draft as it is when the upload resolves
 (`landingRef`), never through a field's render-time closure, at the right
 target or not at all (`landingImages.js`: the hero, the share image, a
-section by id, and an item by a client-only key held in a `WeakMap` on
-the item object, never saved; anything that replaces an item with an
-edited copy passes it on with `carryItemKey()`, as `LandingForm` and
-`setLandingSlice()` do). A target that's gone by then (the hero switched
-away from an upload, the section or item removed, or an item whose key
-didn't follow it) drops the reference; content is never used to guess.
+section by id, and an item or a gallery entry by a client-only key held
+in a `WeakMap` on the object, never saved; anything that replaces an
+item or entry with an edited copy passes it on with `carryItemKey()`, as
+`LandingForm` and `setLandingSlice()` do). A gallery's "+ Add images"
+takes several files: it adds an empty entry for each to the draft first,
+then uploads each into its own entry. Every upload waits for one of two
+slots (`createLimiter()`, `editor/uploadLimit.js`), since the server
+buffers and re-encodes each, and is tracked on the save queue from the
+moment it's picked, so a flush waits for the queued ones too. A target that's gone by then (the
+hero switched away from an upload, the section, item or entry removed, or
+one whose key didn't follow it) drops the reference; content is never
+used to guess.
 A new image there starts with an empty `alt` (only the same image
 uploaded again keeps it), so the publish check asks for a description of
 the image actually shown.
@@ -1000,8 +1013,10 @@ a text section, three proposals). Targets are an allowlist
 and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
 words), experience, education and skills sections (read from a
 resume), stats (a model mustn't make up figures; the page context shows
-them read-only), an item's `meta`, an FAQ question and credentials
-(facts, not prose) are deliberately never targets. The page is
+them read-only), an item's `meta`, an FAQ question, credentials
+(facts, not prose) and image and gallery captions (plain text; the page
+context gives those sections only their kind and title) are
+deliberately never targets. The page is
 public, so what the model sees is too: the route builds
 `landingProfile()` from `store.visibleResumeSnapshot()` (a resume's
 *published* snapshot, only while it's public; the card's resume for a

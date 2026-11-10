@@ -184,6 +184,13 @@ function resolveSection(section, targets, images, { today, withHidden }) {
       const allExpired = credentials.every((credential) => credential.expired);
       return { credentials, ...(allExpired && !section.hidden ? { hidden: true, expired: true } : {}) };
     }
+    case 'gallery': {
+      const shown = section.images.flatMap((entry) => {
+        const image = resolveImage(entry.image, images);
+        return image ? [{ image, caption: entry.caption }] : [];
+      });
+      return shown.length ? { images: shown } : null;
+    }
     default:
       return null;
   }

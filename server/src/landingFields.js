@@ -51,6 +51,9 @@ import { hasPassed, utcToday } from './dateText.js';
 //                (issue #119); `kind` only picks the label shown with it,
 //                the dates are free-form (dateText.js reads them) and `url`
 //                is the issuer's page to verify it on
+//   gallery    — images: [{ image, caption }] (issue #120), drawn as a grid
+//                that opens each larger; an entry's image is a reference, or
+//                null until its upload lands, and its caption plain text
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown, and `column: 'side'`: drawn in the side column by a
 // template that has one (template.json's `columns`, e.g. split's column
@@ -119,6 +122,7 @@ export const LANDING_LIMITS = {
   credentialIssuer: 120,
   credentialNumber: 60,
   credentialDate: 40,
+  galleryImages: 24,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -145,7 +149,7 @@ export const LINK_TYPES = [
   'custom',
 ];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -168,12 +172,14 @@ const SECTION_FIELDS = {
   education: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId', 'count', 'showDates'],
   skills: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId'],
   credentials: ['id', 'kind', 'title', 'hidden', 'column', 'credentials'],
+  gallery: ['id', 'kind', 'title', 'hidden', 'column', 'images'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
 const STAT_FIELDS = ['value', 'label'];
 const FAQ_FIELDS = ['question', 'answer'];
 const CREDENTIAL_FIELDS = ['kind', 'name', 'issuer', 'number', 'issued', 'expires', 'url'];
+const GALLERY_ENTRY_FIELDS = ['image', 'caption'];
 // What a credential is; only picks the label it's shown with.
 export const CREDENTIAL_KINDS = ['license', 'certification', 'membership'];
 // What an experience section shows when it's added without saying.
@@ -461,6 +467,16 @@ function checkCredential(credential, label) {
   return out;
 }
 
+// A gallery entry: its image (null while the editor's upload for it is on
+// its way) and a caption, both always stored.
+function checkGalleryEntry(entry, label, refs) {
+  checkKeys(entry, GALLERY_ENTRY_FIELDS, label);
+  return {
+    image: entry.image == null ? null : checkImageRef(entry.image, `${label}.image`, refs),
+    caption: checkString(entry.caption ?? '', LANDING_IMAGE_LIMITS.caption, `${label}.caption`),
+  };
+}
+
 // One section, with the fields of its kind and nothing else. A section
 // without an id (an MCP client adding one) gets a new one.
 function checkSection(section, i, refs, ids) {
@@ -533,6 +549,11 @@ function checkSection(section, i, refs, ids) {
     case 'credentials':
       out.credentials = checkList(section.credentials, LANDING_LIMITS.credentials, `${label}.credentials`).map((credential, j) =>
         checkCredential(credential, `${label}.credentials[${j}]`)
+      );
+      break;
+    case 'gallery':
+      out.images = checkList(section.images, LANDING_LIMITS.galleryImages, `${label}.images`).map((entry, j) =>
+        checkGalleryEntry(entry, `${label}.images[${j}]`, refs)
       );
       break;
   }
@@ -696,7 +717,8 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // its X-Robots-Tag anyway), its image resolved like the others. An image
 // reference resolves to { src, alt, width, height }, or is left out (a
 // photo, a thumbnail, the share image) when its image is gone; an image
-// section without one is left out. An uploaded hero photo is `photoUrl`
+// section without one is left out, and so is a gallery entry, then a
+// gallery with no entry left. An uploaded hero photo is `photoUrl`
 // (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
 // `template` (an id the client may not know, and then draws as classic),
 // `site` (context.site, or the page's own colors and fonts in the site
@@ -830,6 +852,13 @@ function resolveSection(section, context) {
         .filter((credential) => credential.name.trim() && !hasPassed(credential.expires, today))
         .map((credential) => resolveCredential(credential));
       return credentials.length ? { credentials } : null;
+    }
+    case 'gallery': {
+      const images = section.images.flatMap((entry) => {
+        const image = resolveImage(entry.image, context.images);
+        return image ? [{ image, caption: entry.caption }] : [];
+      });
+      return images.length ? { images } : null;
     }
     default:
       return null;

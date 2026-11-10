@@ -89,6 +89,38 @@ test('the public gets an image only while the shown, published page shows it', a
   assert.equal(store.publicLandingImage('nope'), null);
 });
 
+test("a gallery's images are public only while it shows them, and gone after the next publish once removed", async () => {
+  const { db, store } = await makeStore();
+  const a = await store.uploadLandingImage(await png('#aa00aa'));
+  const b = await store.uploadLandingImage(await png('#00aaaa'));
+  const entry = (image, alt) => ({ image: { imageId: image.id, alt }, caption: '' });
+  store.setLandingEnabled(true);
+  store.setLanding({ headline: 'Jo', sections: [{ id: 'g', kind: 'gallery', images: [entry(a, 'Purple'), entry(b, '')] }] });
+  // Every gallery image the page would show needs a description.
+  await assert.rejects(async () => store.publishLanding(), /sections\[0\]\.images\[1\]\.image\.alt/);
+  store.setLanding({ headline: 'Jo', sections: [{ id: 'g', kind: 'gallery', images: [entry(a, 'Purple'), entry(b, 'Teal')] }] });
+  assert.equal(store.publicLandingImage(a.id), null); // in the draft only
+  store.publishLanding();
+  assert.ok(store.publicLandingImage(a.id));
+  assert.ok(store.publicLandingImage(b.id));
+  assert.deepEqual(
+    store.landingForHost('example.com').sections[0].images.map((e) => e.image.src),
+    [a, b].map((image) => `/api/public/landing/images/${image.id}`)
+  );
+
+  // Taken out of the draft: still shown until the next publish, then not
+  // served, and once it's old, pruned.
+  store.setLanding({ headline: 'Jo', sections: [{ id: 'g', kind: 'gallery', images: [entry(b, 'Teal')] }] });
+  assert.ok(store.publicLandingImage(a.id));
+  age(db);
+  assert.equal(store.pruneLandingImages(), 0); // the snapshot still names it
+  store.publishLanding();
+  assert.equal(store.publicLandingImage(a.id), null);
+  assert.ok(store.publicLandingImage(b.id));
+  assert.equal(store.landingImage(a.id), null);
+  assert.ok(store.landingImage(b.id));
+});
+
 test('clean-up keeps what the draft or the snapshot references, and anything recent', async () => {
   const { db, store } = await makeStore();
   const inDraft = await store.uploadLandingImage(await png('#111111'));

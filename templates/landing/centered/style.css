@@ -123,6 +123,16 @@
   justify-content: center;
 }
 
+/* A gallery takes the page's full width, its captions centered. */
+.l-template-centered .l-gallery {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.l-template-centered .l-gallery-caption {
+  text-align: center;
+}
+
 /* The grids: rows of cards, centered, so one card alone stays card-sized. */
 .l-template-centered .l-cards,
 .l-template-centered .l-items,
@@ -242,5 +252,9 @@
   .l-template-centered .l-item,
   .l-template-centered .l-quote {
     max-width: none;
+  }
+  .l-template-centered .l-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
   }
 }

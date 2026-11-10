@@ -6,6 +6,7 @@ import { textParagraphs } from './resolveLanding.js';
 import { dropStrayDividers } from './dividers.js';
 import { renderInline } from './renderInline.js';
 import { readDate } from './dateText.js';
+import { LandingGallery } from './LandingGallery.jsx';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
@@ -339,6 +340,8 @@ function SectionBody({ section, preview }) {
           ))}
         </ul>
       );
+    case 'gallery':
+      return <LandingGallery images={section.images} label={section.title} />;
     default:
       return null;
   }

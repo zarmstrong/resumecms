@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { PhotoUpload } from './PhotoUpload.jsx';
 import { LinksEditor } from './LinksEditor.jsx';
 import { LandingAiPanel } from './LandingAiPanel.jsx';
 import { introSectionId } from './landingAi.js';
 import { SearchSharingFields } from './SearchSharingFields.jsx';
 import { LandingLookFields } from './LandingLookFields.jsx';
-import { LandingImageField, withImageRef } from './LandingImageField.jsx';
+import { IMAGE_TYPES, LandingImageField, imageFileProblem, withImageRef } from './LandingImageField.jsx';
 import { carryItemKey } from './landingImages.js';
 import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
@@ -49,6 +50,7 @@ const SECTION_KINDS = [
     addLabel: 'Credentials (licenses, certifications, memberships)',
     empty: () => ({ credentials: [emptyCredential()] }),
   },
+  { kind: 'gallery', label: 'Gallery', addLabel: 'Gallery (several images in a grid)', empty: () => ({ images: [] }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -108,6 +110,8 @@ function hasContent(section) {
       return false;
     case 'credentials':
       return section.credentials.some((c) => [c.name, c.issuer, c.number, c.issued, c.expires, c.url].some((value) => value.trim()));
+    case 'gallery':
+      return section.images.some((entry) => Boolean(entry.image) || Boolean(entry.caption.trim()));
     default:
       return false;
   }
@@ -542,6 +546,8 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
       return <SkillsFields section={section} onChange={onChange} resumes={resumes} context={context} />;
     case 'credentials':
       return <CredentialsFields credentials={section.credentials} onChange={(credentials) => onChange({ credentials })} limits={limits} />;
+    case 'gallery':
+      return <GalleryFields sectionId={section.id} images={section.images} onChange={(images) => onChange({ images })} limits={limits} imageProps={imageProps} />;
     default:
       return null;
   }
@@ -739,6 +745,83 @@ function CredentialsFields({ credentials, onChange, limits }) {
         2027-12-31) has passed, it leaves the page by itself; a date written any other way is shown as written. The link is
         shown as "Verify", for the issuer's public lookup page. Some license numbers are public record and some aren't: leave
         it out if yours isn't meant to be shared.
+      </span>
+    </>
+  );
+}
+
+// A gallery (issue #120): its images in order, each with a caption. "Add
+// images" takes several files at once: each gets an entry of its own
+// straight away, with an empty description, and its upload lands on that
+// entry (known by its key, landingImages.js) wherever it has moved by then,
+// or nowhere if it was removed. No ✨: captions are plain text, never
+// rewritten by AI.
+function GalleryFields({ sectionId, images, onChange, limits, imageProps }) {
+  const [uploading, setUploading] = useState(0);
+  const [error, setError] = useState('');
+  const max = limits?.galleryImages ?? 24;
+  // An edited entry stays the same entry to an upload in flight.
+  const setEntry = (i, patch) => onChange(images.map((entry, idx) => (idx === i ? carryItemKey(entry, { ...entry, ...patch }) : entry)));
+
+  async function handleFiles(e) {
+    const files = [...(e.target.files || [])];
+    e.target.value = ''; // so picking the same files again still uploads them
+    if (!files.length) return;
+    const problems = files.map((file) => imageFileProblem(file, limits?.images)).filter(Boolean);
+    const fine = files.filter((file) => !imageFileProblem(file, limits?.images));
+    const taken = fine.slice(0, Math.max(0, max - images.length));
+    const notes = [...new Set(problems)];
+    if (problems.length) notes.unshift(problems.length === 1 ? "1 file wasn't added:" : `${problems.length} files weren't added:`);
+    if (taken.length < fine.length) notes.push(`A gallery holds at most ${max} images, so ${fine.length - taken.length} more weren't added.`);
+    setError(notes.join(' '));
+    if (!taken.length) return;
+    // The new entries go into the draft first, so each upload has its own
+    // entry to find (uploadSpot() reads the draft as it is now).
+    const start = images.length;
+    onChange([...images, ...taken.map(() => ({ image: null, caption: '' }))]);
+    setUploading((n) => n + taken.length);
+    const results = await Promise.allSettled(taken.map((file, j) => imageProps({ kind: 'gallery', sectionId, index: start + j }).onUpload(file)));
+    setUploading((n) => n - taken.length);
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length) setError(`${failed.length} of the images couldn't be uploaded: ${failed[0].reason?.message || 'Upload failed'}`);
+  }
+
+  return (
+    <>
+      {images.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Image {i + 1}</span>
+            <RowActions
+              index={i}
+              count={images.length}
+              onMove={(delta) => onChange(moved(images, i, delta))}
+              onRemove={() => onChange(images.filter((_, idx) => idx !== i))}
+              what="image"
+            />
+          </div>
+          <LandingImageField value={entry.image} onChange={(image) => setEntry(i, { image })} {...imageProps({ kind: 'gallery', sectionId, index: i })} />
+          <textarea
+            className="ed-input"
+            rows={2}
+            value={entry.caption}
+            maxLength={limits?.images?.caption}
+            onChange={(e) => setEntry(i, { caption: e.target.value })}
+            placeholder="Caption (optional)"
+            aria-label={`Caption of image ${i + 1}`}
+          />
+        </div>
+      ))}
+      {images.length < max && (
+        <label className={`ed-btn ed-btn-ghost${uploading ? ' ed-btn-inert' : ''}`}>
+          {uploading ? `Uploading ${uploading} image${uploading === 1 ? '' : 's'}…` : '+ Add images'}
+          <input type="file" accept={IMAGE_TYPES.join(',')} multiple onChange={handleFiles} disabled={uploading > 0} hidden />
+        </label>
+      )}
+      {error && <div className="ed-field-error">{error}</div>}
+      <span className="ed-field-hint">
+        Up to {max} images, shown in a grid that opens each one larger. Pick several files at once if you like. Each needs a
+        description before publishing; one with no image yet is left off the page.
       </span>
     </>
   );
