@@ -150,16 +150,54 @@ export function normalizeBulletStyle(site) {
   return BULLET_STYLE_CSS[value] ? value : DEFAULT_BULLET_STYLE;
 }
 
+const HEX6 = /^#?([0-9a-f]{6})$/i;
+const DARK_TEXT = '#14181c';
+const WHITE_TEXT = '#ffffff';
+
+// WCAG 2 relative luminance of a `#rrggbb` (or `rrggbb`) color, or null.
+export function relativeLuminance(hex) {
+  const match = HEX6.exec(hex || '');
+  if (!match) return null;
+  const channel = (i) => {
+    const c = parseInt(match[1].slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+}
+
+// The WCAG contrast ratio of two relative luminances (1 to 21).
+export function contrastRatio(a, b) {
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+const DARK_TEXT_LUMINANCE = relativeLuminance(DARK_TEXT);
+
 // Picks readable label text (white or near-black) for a given pill
 // background color, so a solid-color tag stays legible without the user
-// having to separately pick a matching text color.
+// having to separately pick a matching text color: whichever has the
+// higher WCAG contrast ratio against it (issue #142; a brightness cutoff
+// put white on vivid fills like #ff6600, where it fails AA). The
+// favicon's inkFor() (server/src/favicon.js) makes the same choice, and
+// siteColors.test.js checks that the two agree. White for anything that
+// isn't a 6-digit hex color.
 export function contrastTextFor(hex) {
-  const match = /^#?([0-9a-f]{6})$/i.exec(hex || '');
-  if (!match) return '#ffffff';
+  return contrastTextAcross([hex]);
+}
+
+// The same choice for text drawn across several fills (a gradient's
+// stops): whichever of the two reads better on the fill it reads worst on.
+export function contrastTextAcross(hexes) {
+  const fills = hexes.map(relativeLuminance);
+  if (fills.length === 0 || fills.includes(null)) return WHITE_TEXT;
+  const worst = (ink) => Math.min(...fills.map((fill) => contrastRatio(fill, ink)));
+  return worst(DARK_TEXT_LUMINANCE) >= worst(1) ? DARK_TEXT : WHITE_TEXT;
+}
+
+// `hex` mixed with black, keeping `share` (0 to 1) of it: CSS's
+// `color-mix(in srgb, <hex> <share>, black)`, as `#rrggbb`, or null.
+export function mixWithBlack(hex, share) {
+  const match = HEX6.exec(hex || '');
+  if (!match) return null;
   const n = parseInt(match[1], 16);
-  const r = (n >> 16) & 255;
-  const g = (n >> 8) & 255;
-  const b = n & 255;
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness >= 150 ? '#14181c' : '#ffffff';
+  return `#${[16, 8, 0].map((shift) => Math.round(((n >> shift) & 255) * share).toString(16).padStart(2, '0')).join('')}`;
 }

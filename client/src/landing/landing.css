@@ -21,6 +21,7 @@
   --r-text: var(--l-text);
   --r-bg: var(--l-bg);
   --r-on-accent: var(--l-on-accent);
+  --r-accent-hover-mix: var(--l-accent-hover-mix);
   min-height: 100vh;
   font-family: var(--font-resume);
   font-size: var(--r-font-size, 16px);
@@ -40,6 +41,7 @@
     --r-text: var(--l-dark-text);
     --r-bg: var(--l-dark-bg);
     --r-on-accent: var(--l-dark-on-accent);
+    --r-accent-hover-mix: var(--l-dark-accent-hover-mix);
     color-scheme: dark;
   }
 }
@@ -50,6 +52,7 @@
   --r-text: var(--l-dark-text);
   --r-bg: var(--l-dark-bg);
   --r-on-accent: var(--l-dark-on-accent);
+  --r-accent-hover-mix: var(--l-dark-accent-hover-mix);
   color-scheme: dark;
 }
 
@@ -131,7 +134,8 @@
 
 .l-action-primary:hover,
 .l-action-primary:focus-visible {
-  background: color-mix(in srgb, var(--r-accent, var(--ink)) 85%, var(--r-text, #000));
+  /* Away from the label (--r-accent-hover-mix), so it stays readable. */
+  background: color-mix(in srgb, var(--r-accent, var(--ink)) 85%, var(--r-accent-hover-mix, #000));
 }
 
 .l-section-title {
@@ -263,6 +267,17 @@ a.l-item-title:hover {
 
 .l-links a:hover {
   border-bottom-color: var(--r-accent, var(--ink));
+}
+
+/* A link's badge letter in the page's own on-accent color, which follows
+   the dark palette (resume.css draws it in --r-banner-text, which only a
+   resume sets, so here it was always white), and at full strength.
+   Through the property resume.css reads rather than `color`, so a
+   template that draws its own badge (formal, bold) still wins whatever
+   order the stylesheets load in. */
+.l-page .r-link-badge {
+  --r-banner-text: var(--r-on-accent);
+  opacity: 1;
 }
 
 .l-card {
@@ -777,11 +792,16 @@ a.l-credential-verify:focus-visible {
 }
 
 /* The enlarged view. It's in the page's tree, so it takes the page's
-   colors and fonts, dark ones included. */
+   colors and fonts, dark ones included. It's a column as tall as the
+   screen allows (dvh, so a phone's toolbars count; vh where that's
+   unknown): the bar, the caption and the buttons keep their own height
+   and the image gets what's left (issue #145), so the buttons are never
+   below the screen's edge. */
 .l-gallery-dialog {
   width: min(1100px, calc(100vw - 32px));
   max-width: none;
   max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   padding: 0;
   border: none;
   border-radius: 10px;
@@ -791,6 +811,8 @@ a.l-credential-verify:focus-visible {
 }
 
 .l-gallery-dialog[open] {
+  display: flex;
+  flex-direction: column;
   animation: l-gallery-in 160ms ease-out;
 }
 
@@ -813,13 +835,16 @@ a.l-credential-verify:focus-visible {
 
 .l-gallery-view {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-height: 0;
   gap: 12px;
   padding: 12px 16px 16px;
 }
 
 .l-gallery-bar {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   font-size: 0.9em;
@@ -861,24 +886,38 @@ a.l-credential-verify:focus-visible {
 }
 
 .l-gallery-view-figure {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
   margin: 0;
 }
 
+/* Shrinks to the height left and keeps its shape (its width follows its
+   height); contain in case a browser stretches it anyway. */
 .l-gallery-view-image {
   display: block;
+  flex: 0 1 auto;
+  min-height: 0;
   max-width: 100%;
-  max-height: calc(100vh - 200px);
   width: auto;
   height: auto;
   margin: 0 auto;
+  object-fit: contain;
   border-radius: 6px;
 }
 
+/* A long caption scrolls in its own space rather than pushing the
+   buttons off the screen or the image down to nothing. */
 .l-gallery-view-caption {
   display: flex;
+  flex: none;
   flex-direction: column;
   gap: 4px;
+  max-height: 25vh;
+  max-height: 25dvh;
   margin-top: 10px;
+  overflow-y: auto;
   text-align: center;
   white-space: pre-line;
   overflow-wrap: anywhere;
@@ -891,6 +930,7 @@ a.l-credential-verify:focus-visible {
 
 .l-gallery-nav {
   display: flex;
+  flex: none;
   justify-content: center;
   gap: 12px;
 }

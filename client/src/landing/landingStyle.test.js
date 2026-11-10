@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_DARK_COLORS, LANDING_COLOR_KEYS, darkClass, darkPalette, landingPageStyle, landingSite, ownStyleFrom } from './landingStyle.js';
+import {
+  DEFAULT_DARK_COLORS,
+  LANDING_COLOR_KEYS,
+  accentHoverMix,
+  darkClass,
+  darkPalette,
+  landingPageStyle,
+  landingSite,
+  ownStyleFrom,
+} from './landingStyle.js';
 import { resolveLanding } from './resolveLanding.js';
-import { DEFAULT_FONT, DEFAULT_SITE_COLORS, FONT_OPTIONS } from '../resume/siteColors.js';
+import { DEFAULT_FONT, DEFAULT_SITE_COLORS, FONT_OPTIONS, contrastRatio, relativeLuminance } from '../resume/siteColors.js';
 import * as server from '../../../server/src/landingStyle.js';
 import * as serverFields from '../../../server/src/landingFields.js';
 
@@ -97,4 +106,25 @@ test("its own colors start from what the page shows, and only once", () => {
   // Once picked, switching back and forth keeps what was chosen.
   const chosen = { source: 'resume', colors: { accent: '#aa0000', heading: '', text: '', background: '' }, font: '', nameFont: '' };
   assert.deepEqual(ownStyleFrom(chosen, resumeSite), { ...chosen, source: 'custom' });
+});
+
+// landing.css's hover: color-mix(in srgb, accent 85%, --r-accent-hover-mix).
+function mix85(accent, other) {
+  const ch = (hex, i) => parseInt(hex.slice(i, i + 2), 16);
+  return `#${[1, 3, 5].map((i) => Math.round(ch(accent, i) * 0.85 + ch(other, i) * 0.15).toString(16).padStart(2, '0')).join('')}`;
+}
+
+test("the primary button's hover moves away from its label, light and dark (issue #142)", () => {
+  const ratio = (a, b) => contrastRatio(relativeLuminance(a), relativeLuminance(b));
+  for (const accent of ['#ff6600', '#e63946', '#2f6f4e', '#14213d', '#00a0a0', '#ffd700', '#7cc4a0', '#777777', '#808080', '#ffffff', '#000000']) {
+    const { style } = landingPageStyle({ colors: { accent } }, { ...DEFAULT_DARK_COLORS, accent });
+    for (const prefix of ['--l-', '--l-dark-']) {
+      const label = style[`${prefix}on-accent`];
+      const toward = style[`${prefix}accent-hover-mix`];
+      assert.equal(toward, accentHoverMix(label));
+      assert.ok(ratio(mix85(accent, toward), label) >= ratio(accent, label), `${prefix} ${accent}`);
+    }
+  }
+  assert.equal(accentHoverMix('#ffffff'), '#000000');
+  assert.equal(accentHoverMix('#14181c'), '#ffffff');
 });
