@@ -191,7 +191,22 @@ export const HEADER_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          type: { enum: ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'] },
+          type: {
+            // The link types of client/src/resume/linkTypes.js and
+            // landingFields.js's LINK_TYPES (linkTypes.test.js compares them).
+            enum: [
+              'website', 'portfolio', 'email', 'phone', 'booking', 'shop', 'publications', 'newsletter',
+              'linkedin', 'twitter', 'facebook', 'tiktok', 'threads', 'bluesky', 'mastodon', 'substack', 'medium',
+              'github', 'gitlab', 'stackoverflow',
+              'instagram', 'behance', 'dribbble', 'artstation', 'vimeo', 'youtube',
+              'soundcloud', 'bandcamp', 'spotify',
+              'orcid', 'googlescholar', 'researchgate',
+              'imdb',
+              'houzz', 'nextdoor', 'googlebusiness',
+              'custom',
+            ],
+            description: 'Picks the one-letter badge the link is drawn with; custom for any other link. twitter means Twitter / X.',
+          },
           label: { type: 'string', description: 'Display text, e.g. "github.com/you", or the address/number for an email/phone link' },
           url: { type: 'string', description: 'https URL; mailto:you@example.com for an email link, tel:+15555550100 for a phone link' },
         },
