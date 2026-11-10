@@ -33,7 +33,10 @@ in prose; check the diff against the ones that apply, especially:
   (issue #93).
 - A new landing section kind or section-wide field is in `SECTION_FIELDS`,
   `checkSection()`, both `resolveSection()`/`resolveLanding()` copies, the
-  MCP union and `LANDING_SCHEMA`, `LandingForm` and `LandingView`; a
+  MCP union and `LANDING_SCHEMA`, `LandingForm` (its `SectionFields`, its
+  collapsed header's `sectionSummary()` and, if it holds images,
+  `needsDescription()`, which must match `assertImagesDescribed()`) and
+  `LandingView`; a
   section's `column` is read only by a template whose `template.json` says
   `columns: true`.
 - New public routes set a `cacheHeaders.js` constant before any early

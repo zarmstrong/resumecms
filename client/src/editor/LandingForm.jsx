@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { DndContext, DragOverlay, PointerSensor, useDndContext, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { PhotoUpload } from './PhotoUpload.jsx';
 import { LinksEditor } from './LinksEditor.jsx';
 import { LandingAiPanel } from './LandingAiPanel.jsx';
@@ -13,6 +15,7 @@ import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
 import { getLandingTemplate } from '../resume/templateRegistry.js';
 import { hasPassed, utcToday } from '../landing/dateText.js';
+import { applySectionDrop, liveCollapsedIds, moveSectionBy, projectSectionDrop } from './sectionDrag.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
 // SECTION_KINDS), what each is called here, and what a new one starts with
@@ -54,6 +57,16 @@ const SECTION_KINDS = [
   { kind: 'gallery', label: 'Gallery', addLabel: 'Gallery (several images in a grid)', empty: () => ({ images: [] }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
+
+const COLLAPSED_KEY = 'resumecms-landing-collapsed-sections';
+// How far above or below the section list a drag may wander and still
+// target its first or last section; beyond that the drop is cancelled.
+const LIST_REACH_PX = 40;
+// How long a move's announcement stays in the live region.
+const LIVE_MESSAGE_MS = 2000;
+const SCREEN_READER_INSTRUCTIONS = {
+  draggable: 'Press Up or Down to move this section. With a pointer, drag it to a new position.',
+};
 
 function emptyItem() {
   return { title: '', text: '', url: '', meta: '' };
@@ -115,6 +128,75 @@ function hasContent(section) {
       return section.images.some((entry) => Boolean(entry.image) || Boolean(entry.caption.trim()));
     default:
       return false;
+  }
+}
+
+// What a section's header says next to its kind: its heading, or a hint of
+// what's in it while it has none.
+function sectionSummary(section, resumes) {
+  const title = section.title.trim();
+  if (title) return title;
+  const count = (n, one) => (n ? `${n} ${one}${n === 1 ? '' : 's'}` : '');
+  switch (section.kind) {
+    case 'text':
+      return shorten(section.body.trim().split('\n')[0]);
+    case 'items':
+      return count(section.items.length, 'item');
+    case 'links':
+      return count(section.links.length, 'link');
+    case 'resumes':
+      return count(section.cards.length, 'card');
+    case 'quotes':
+      return count(section.quotes.length, 'quote');
+    case 'experience':
+    case 'education':
+    case 'skills': {
+      const resume = resumes.find((r) => r.id === section.resumeId);
+      return resume ? `From ${resume.name}` : '';
+    }
+    case 'image':
+      return shorten(section.caption.trim() || section.image?.alt?.trim() || (section.image ? '' : 'No image yet'));
+    case 'stats':
+      return count(section.stats.length, 'stat');
+    case 'faq':
+      return count(section.entries.length, 'question');
+    case 'credentials':
+      return count(section.credentials.length, 'credential');
+    case 'gallery':
+      return count(section.images.length, 'image') || 'No images yet';
+    default:
+      return '';
+  }
+}
+
+function shorten(text) {
+  return text.length > 60 ? `${text.slice(0, 60)}…` : text;
+}
+
+function lowerFirst(text) {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+// Whether publishing would refuse over this section: an image it shows with
+// no description, as server/src/landingImageFields.js's
+// assertImagesDescribed() decides. Its header says so, since the field may
+// be collapsed out of sight.
+function needsDescription(section, images) {
+  const blank = (ref) => Boolean(ref) && images.some((image) => image.id === ref.imageId) && !ref.alt?.trim();
+  if (section.hidden) return false;
+  if (section.kind === 'image') return blank(section.image);
+  if (section.kind === 'items') return section.items.some((item) => (item.title?.trim() || item.text?.trim()) && blank(item.image));
+  if (section.kind === 'gallery') return section.images.some((entry) => blank(entry.image));
+  return false;
+}
+
+// Which sections this browser has collapsed (SectionList), by id.
+function readCollapsed() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(COLLAPSED_KEY));
+    return new Set(Array.isArray(stored) ? stored.filter((id) => typeof id === 'string') : []);
+  } catch {
+    return new Set();
   }
 }
 
@@ -187,11 +269,6 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
   // Whether the page's template has a side column to put a section in.
   const hasColumns = Boolean(getLandingTemplate(landing.template)?.columns);
   const setSections = (next) => set({ sections: next });
-  const setSection = (i, patch) => setSections(sections.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
-  const removeSection = (i) => {
-    if (hasContent(sections[i]) && !window.confirm(`Remove this ${kindLabel(sections[i].kind).toLowerCase()} section?`)) return;
-    setSections(sections.filter((_, idx) => idx !== i));
-  };
   const addSection = (kind) => {
     const config = SECTION_KINDS.find((k) => k.kind === kind);
     setSections([...sections, { id: newSectionId(), kind, title: '', ...config.empty(resumes) }]);
@@ -274,52 +351,16 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
         <span className="ed-field-hint">
           Shown in this order under the headline{hasColumns ? ' (or under the photo, in the side column)' : ''}. One with nothing to show is left off the page.
         </span>
-        {sections.map((section, i) => (
-          <div className="ed-landing-section" key={section.id}>
-            <div className="ed-landing-card-head">
-              <strong>{kindLabel(section.kind)}</strong>
-              <RowActions
-                index={i}
-                count={sections.length}
-                onMove={(delta) => setSections(moved(sections, i, delta))}
-                onRemove={() => removeSection(i)}
-                what="section"
-              />
-            </div>
-            <input
-              className="ed-input"
-              value={section.title}
-              maxLength={limits?.sectionTitle}
-              onChange={(e) => setSection(i, { title: e.target.value })}
-              placeholder={section.kind === 'divider' ? 'Label on the line (optional)' : 'Heading (optional)'}
-              aria-label={section.kind === 'divider' ? 'Divider label' : 'Section heading'}
-            />
-            <label className="ed-field ed-checkbox-field">
-              <input type="checkbox" checked={Boolean(section.hidden)} onChange={(e) => setSection(i, { hidden: e.target.checked })} />
-              Hide this section
-            </label>
-            {section.hidden && <span className="ed-field-hint">Kept here, but not shown on the page.</span>}
-            {hasColumns && (
-              <label className="ed-field ed-checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={section.column === 'side'}
-                  onChange={(e) => setSections(sections.map((s, idx) => (idx === i ? withColumn(s, e.target.checked ? 'side' : 'main') : s)))}
-                />
-                Show in the side column, under the headline
-              </label>
-            )}
-            <SectionFields
-              section={section}
-              onChange={(patch) => setSection(i, patch)}
-              resumes={resumes}
-              context={context}
-              limits={limits}
-              ai={ai}
-              imageProps={imageProps}
-            />
-          </div>
-        ))}
+        <SectionList
+          sections={sections}
+          onChange={setSections}
+          hasColumns={hasColumns}
+          resumes={resumes}
+          context={context}
+          limits={limits}
+          ai={ai}
+          imageProps={imageProps}
+        />
         {(!limits || sections.length < limits.sections) && (
           <select className="ed-input" value="" onChange={(e) => e.target.value && addSection(e.target.value)} aria-label="Add a section">
             <option value="">+ Add a section…</option>
@@ -478,6 +519,317 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
     </div>
   );
 }
+
+// The sections, in order: each one collapsible, and dragged by its handle
+// (or moved with Up/Down on it) to reorder them. A collapsed section's
+// fields stay mounted, only hidden, so an upload in flight or an AI
+// instruction half typed is still there when it's opened again. Which ones
+// are collapsed is this browser's own convenience, kept in localStorage.
+function SectionList({ sections, onChange, hasColumns, resumes, context, limits, ai, imageProps }) {
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [liveMessage, setLiveMessage] = useState('');
+  const liveTimer = useRef(null);
+  const listRef = useRef(null);
+  // Rows are keyed by id, but React may still take the focused control's
+  // node out and back in on a move, which blurs it; refocus it (the handle,
+  // or the ↑/↓ button pressed, unless that's now disabled at an end) once
+  // the list we sent has rendered.
+  const pendingFocus = useRef(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  useEffect(() => () => clearTimeout(liveTimer.current), []);
+  useEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    pendingFocus.current = null;
+    if (sections !== pending.sections) return;
+    const { control } = pending;
+    if (control?.isConnected && !control.disabled) control.focus();
+    else listRef.current?.querySelector(`[data-section-id="${CSS.escape(pending.id)}"] .ed-drag-handle`)?.focus();
+  }, [sections]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(liveCollapsedIds(collapsed, sections)));
+    } catch {
+      // Storage unavailable (private browsing, etc.): it's only a convenience.
+    }
+  }, [collapsed]);
+
+  // A new suggestion in a collapsed section opens it, so it isn't left
+  // unseen behind the header (as useRowPanelOpen does for a row's panel).
+  const suggestions = sections.map((section) => ai?.suggestionsIn?.(section.id) || '');
+  // Only a suggestion id not seen before counts: one accepted or discarded
+  // out of several doesn't reopen what was closed.
+  const seenSuggestions = useRef(new Set());
+  useEffect(() => {
+    const seen = seenSuggestions.current;
+    const ids = suggestions.map((joined) => joined.split(' ').filter(Boolean));
+    const arrived = sections.filter((_, i) => ids[i].some((id) => !seen.has(id))).map((s) => s.id);
+    seenSuggestions.current = new Set(ids.flat());
+    if (arrived.length) setCollapsed((prev) => (arrived.some((id) => prev.has(id)) ? new Set([...prev].filter((id) => !arrived.includes(id))) : prev));
+  }, [suggestions.join('|')]);
+
+  function announce(message) {
+    clearTimeout(liveTimer.current);
+    setLiveMessage(message);
+    liveTimer.current = setTimeout(() => setLiveMessage(''), LIVE_MESSAGE_MS);
+  }
+  function toggle(id) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
+  function updateSection(id, update) {
+    onChange(sections.map((section) => (section.id === id ? update(section) : section)));
+  }
+  function removeSection(id) {
+    const section = sections.find((s) => s.id === id);
+    if (hasContent(section) && !window.confirm(`Remove this ${kindLabel(section.kind).toLowerCase()} section?`)) return;
+    onChange(sections.filter((s) => s.id !== id));
+  }
+  function moveSection(id, delta) {
+    const moved = moveSectionBy(sections, id, delta);
+    if (!moved) {
+      announce(delta < 0 ? 'Already first.' : 'Already last.');
+      return;
+    }
+    const control = listRef.current?.contains(document.activeElement) ? document.activeElement : null;
+    pendingFocus.current = { id, sections: moved.sections, control };
+    announce(`Moved to ${lowerFirst(moved.label)}.`);
+    onChange(moved.sections);
+  }
+
+  // Like the bullets' (ExperienceForm): sections stay put while one is
+  // dragged, and the pointer is projected onto the nearest other section,
+  // before or after it by its middle, so the gaps between them and the space
+  // past the last one resolve to a place. Rects are measured live, so a pane
+  // that scrolls during the drag can't leave them stale. Too far from the
+  // list cancels the drop.
+  function collisionDetection({ active, pointerCoordinates, droppableContainers }) {
+    const listRect = listRef.current?.getBoundingClientRect();
+    if (!pointerCoordinates || !listRect) return [];
+    const { x, y } = pointerCoordinates;
+    if (x < listRect.left || x > listRect.right) return [];
+    if (y < listRect.top - LIST_REACH_PX || y > listRect.bottom + LIST_REACH_PX) return [];
+    let nearest = null;
+    for (const container of droppableContainers) {
+      if (container.id === active.id) continue;
+      const rect = container.node.current?.getBoundingClientRect();
+      if (!rect) continue;
+      const distance = Math.max(rect.top - y, y - rect.bottom, 0);
+      if (!nearest || distance < nearest.distance) nearest = { id: container.id, rect, distance };
+    }
+    if (!nearest) return [];
+    const edge = y < nearest.rect.top + nearest.rect.height / 2 ? 'before' : 'after';
+    const projection = projectSectionDrop(sections, active.id, nearest.id, edge);
+    return projection ? [{ id: nearest.id, data: { projection } }] : [];
+  }
+
+  // dnd-kit reads the latest handler, so `sections` is the draft as it is at
+  // the drop, which is what the projection is applied to (sectionDrag.js).
+  function handleDragEnd({ collisions }) {
+    const applied = applySectionDrop(sections, collisions?.[0]?.data?.projection);
+    if (!applied) {
+      announce('Section returned to its original position.');
+      return;
+    }
+    announce(`Moved to ${lowerFirst(applied.label)}.`);
+    onChange(applied.sections);
+  }
+
+  // Only the pick-up goes through dnd-kit's live region; positions and the
+  // outcome are announced by the list's own (see SectionRows).
+  const announcements = {
+    onDragStart: ({ active }) => {
+      const section = sections.find((s) => s.id === active.id);
+      return section && `Picked up ${kindLabel(section.kind).toLowerCase()} section “${sectionSummary(section, resumes) || 'untitled'}”.`;
+    },
+    onDragOver: () => undefined,
+    onDragEnd: () => undefined,
+    onDragCancel: () => undefined,
+  };
+
+  const anyOpen = sections.some((section) => !collapsed.has(section.id));
+  return (
+    <>
+      {sections.length > 1 && (
+        <div className="ed-landing-sections-tools">
+          <button
+            type="button"
+            className="ed-btn ed-btn-ghost ed-btn-sub"
+            onClick={() => setCollapsed(anyOpen ? new Set(sections.map((section) => section.id)) : new Set())}
+          >
+            {anyOpen ? 'Collapse all' : 'Expand all'}
+          </button>
+        </div>
+      )}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collisionDetection}
+        onDragStart={() => liveMessage && announce('')}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => announce('Move cancelled. Section returned to its original position.')}
+        accessibility={{ screenReaderInstructions: SCREEN_READER_INSTRUCTIONS, announcements }}
+      >
+        <SectionRows
+          sections={sections}
+          listRef={listRef}
+          liveMessage={liveMessage}
+          collapsed={collapsed}
+          suggestions={suggestions}
+          rowProps={{ hasColumns, resumes, context, limits, ai, imageProps, toggle, updateSection, removeSection, moveSection }}
+        />
+      </DndContext>
+    </>
+  );
+}
+
+function SectionRows({ sections, listRef, liveMessage, collapsed, suggestions, rowProps }) {
+  const { active, collisions } = useDndContext();
+  const drop = collisions?.[0]?.data?.projection;
+  const dragged = active ? sections.find((s) => s.id === active.id) : null;
+  const draggedSummary = dragged && sectionSummary(dragged, rowProps.resumes);
+  return (
+    <>
+      <div className="ed-landing-section-list" ref={listRef}>
+        {sections.map((section, i) => (
+          <SectionEditor
+            key={section.id}
+            section={section}
+            index={i}
+            count={sections.length}
+            collapsed={collapsed.has(section.id)}
+            suggested={Boolean(suggestions[i])}
+            dragging={dragged === section}
+            dropEdge={drop?.anchorId === section.id ? drop.edge : null}
+            dropLabel={drop?.anchorId === section.id ? drop.label : null}
+            {...rowProps}
+          />
+        ))}
+      </div>
+      <div className="ed-sr-only" role="status" aria-live="polite">{drop?.label || liveMessage}</div>
+      {/* Portaled and always mounted, like the bullets' (see ExperienceForm). */}
+      {createPortal(
+        <DragOverlay dropAnimation={null} zIndex={4}>
+          {dragged ? <div className="ed-drag-preview">{kindLabel(dragged.kind)}{draggedSummary ? `: ${draggedSummary}` : ''}</div> : null}
+        </DragOverlay>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+// SectionRows re-renders on every pointer move, but a section's props only
+// change when something about it does, so a drag doesn't re-render every
+// section's fields per move. LandingForm itself doesn't render mid-drag, so
+// the shared props (rowProps) keep their identity.
+const SectionEditor = memo(function SectionEditor({
+  section, index, count, collapsed, suggested, dragging, dropEdge, dropLabel,
+  hasColumns, resumes, context, limits, ai, imageProps, toggle, updateSection, removeSection, moveSection,
+}) {
+  const { attributes, listeners, setNodeRef: setDragRef, setActivatorNodeRef } = useDraggable({ id: section.id });
+  const { setNodeRef: setDropRef } = useDroppable({ id: section.id });
+  function setNodeRef(node) {
+    setDragRef(node);
+    setDropRef(node);
+  }
+  const bodyId = `ed-landing-section-${section.id}`;
+  const summary = sectionSummary(section, resumes);
+  // What the buttons call it, so a list of them reads apart.
+  const name = `${kindLabel(section.kind).toLowerCase()} section${summary ? ` “${summary}”` : ''}`;
+  const undescribed = needsDescription(section, context.images || []);
+  const patch = (fields) => updateSection(section.id, (s) => ({ ...s, ...fields }));
+
+  function handleHandleKeyDown(e) {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    // As on a bullet's handle: modified keys are the browser's, and a held
+    // key doesn't repeat the move.
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat) return;
+    e.preventDefault();
+    moveSection(section.id, e.key === 'ArrowUp' ? -1 : 1);
+  }
+
+  return (
+    <div ref={setNodeRef} className={`ed-landing-section${dragging ? ' ed-landing-section-dragging' : ''}`} data-section-id={section.id}>
+      {dropEdge && <div className={`ed-drop-indicator ed-drop-${dropEdge}`}><span>{dropLabel}</span></div>}
+      <div className="ed-landing-section-head">
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          className="ed-drag-handle"
+          {...attributes}
+          {...listeners}
+          onKeyDown={handleHandleKeyDown}
+          aria-label={`Drag ${name} to reorder, or press Up or Down to move`}
+          aria-keyshortcuts="ArrowUp ArrowDown"
+          title="Drag to reorder, or press Up/Down to move"
+        >
+          ⠿
+        </button>
+        <button
+          type="button"
+          className="ed-landing-section-toggle"
+          aria-expanded={!collapsed}
+          aria-controls={bodyId}
+          onClick={() => toggle(section.id)}
+        >
+          <span className="ed-landing-section-caret" aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
+          <strong>{kindLabel(section.kind)}</strong>
+          {summary && <span className="ed-landing-section-summary">{summary}</span>}
+        </button>
+        {section.hidden && <span className="ed-landing-section-badge">Hidden</span>}
+        {hasColumns && section.column === 'side' && <span className="ed-landing-section-badge">Side column</span>}
+        {collapsed && suggested && <span className="ed-landing-section-badge ed-landing-section-badge-ai">✨ Suggestion</span>}
+        {undescribed && <span className="ed-landing-section-badge ed-landing-section-badge-warn">Needs a description</span>}
+        {/* Buttons as well as the handle: a screen reader's browse mode and
+            voice control can't press Up/Down on it. */}
+        <RowActions
+          index={index}
+          count={count}
+          onMove={(delta) => moveSection(section.id, delta)}
+          onRemove={() => removeSection(section.id)}
+          what={name}
+        />
+      </div>
+      <div className="ed-landing-section-body" id={bodyId} hidden={collapsed}>
+        <input
+          className="ed-input"
+          value={section.title}
+          maxLength={limits?.sectionTitle}
+          onChange={(e) => patch({ title: e.target.value })}
+          placeholder={section.kind === 'divider' ? 'Label on the line (optional)' : 'Heading (optional)'}
+          aria-label={section.kind === 'divider' ? 'Divider label' : 'Section heading'}
+        />
+        <label className="ed-field ed-checkbox-field">
+          <input type="checkbox" checked={Boolean(section.hidden)} onChange={(e) => patch({ hidden: e.target.checked })} />
+          Hide this section
+        </label>
+        {section.hidden && <span className="ed-field-hint">Kept here, but not shown on the page.</span>}
+        {hasColumns && (
+          <label className="ed-field ed-checkbox-field">
+            <input
+              type="checkbox"
+              checked={section.column === 'side'}
+              onChange={(e) => updateSection(section.id, (s) => withColumn(s, e.target.checked ? 'side' : 'main'))}
+            />
+            Show in the side column, under the headline
+          </label>
+        )}
+        <SectionFields
+          section={section}
+          onChange={patch}
+          resumes={resumes}
+          context={context}
+          limits={limits}
+          ai={ai}
+          imageProps={imageProps}
+        />
+      </div>
+    </div>
+  );
+});
 
 // The syntax a text section, an item's text and an FAQ answer take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
