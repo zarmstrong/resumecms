@@ -895,7 +895,10 @@ over more than one color uses `contrastTextAcross()` (the better of the
 two on the fill it reads worst on): the `gradient` header's
 `--r-gradient-text`, from the accent and the gradient's dark end
 (`mixWithBlack()` with `GRADIENT_SHADE`, mirroring resume.css's 55%).
-Between white and near-black, neither reaches 4.5:1 on some mid-tone
+The landing page's primary button keeps its label on hover by mixing the
+accent away from it (`accentHoverMix()` in `landing/landingStyle.js`,
+`--l-accent-hover-mix` and `--l-dark-accent-hover-mix`: white under a
+near-black label, black under a white one). Between white and near-black, neither reaches 4.5:1 on some mid-tone
 fills (the worst case is about 4.2:1), so a design that must be AA on any
 accent draws no text on it (as the `bold` landing template does). A
 change to how stored content is drawn reaches a resume's PDF only at its

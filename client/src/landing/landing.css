@@ -14,6 +14,7 @@
   --r-text: var(--l-text);
   --r-bg: var(--l-bg);
   --r-on-accent: var(--l-on-accent);
+  --r-accent-hover-mix: var(--l-accent-hover-mix);
   min-height: 100vh;
   font-family: var(--font-resume);
   font-size: var(--r-font-size, 16px);
@@ -33,6 +34,7 @@
     --r-text: var(--l-dark-text);
     --r-bg: var(--l-dark-bg);
     --r-on-accent: var(--l-dark-on-accent);
+    --r-accent-hover-mix: var(--l-dark-accent-hover-mix);
     color-scheme: dark;
   }
 }
@@ -43,6 +45,7 @@
   --r-text: var(--l-dark-text);
   --r-bg: var(--l-dark-bg);
   --r-on-accent: var(--l-dark-on-accent);
+  --r-accent-hover-mix: var(--l-dark-accent-hover-mix);
   color-scheme: dark;
 }
 
@@ -121,7 +124,8 @@
 
 .l-action-primary:hover,
 .l-action-primary:focus-visible {
-  background: color-mix(in srgb, var(--r-accent, var(--ink)) 85%, var(--r-text, #000));
+  /* Away from the label (--r-accent-hover-mix), so it stays readable. */
+  background: color-mix(in srgb, var(--r-accent, var(--ink)) 85%, var(--r-accent-hover-mix, #000));
 }
 
 .l-section-title {
