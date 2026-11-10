@@ -1,6 +1,6 @@
 /* Bold (issue #130): oversized, heavy type, high contrast, and every
-   other section on a band of the accent color that runs the page's full
-   width. No index.jsx, so LandingView arranges it (the hero, then the
+   other section on a band tinted with the accent color that runs the
+   page's full width. No index.jsx, so LandingView arranges it (the hero, then the
    sections, in an .l-main); every part of it spans the page and keeps its
    content to a column through its own side padding, so a band can reach
    both edges. Type is sized by the page's own width (container units and
