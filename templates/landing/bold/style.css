@@ -12,13 +12,17 @@
    own text and heading colors readable on it for any accent, pale or
    dark. No text is drawn in the accent or on it either: what's
    accent-colored text elsewhere (a card's "View resume", "Full resume",
-   the availability line, the buttons' labels) is in the heading or text
-   color here, the primary button is filled with the heading color rather
-   than the accent (--r-on-accent, picked by brightness, isn't AA on
-   every vivid accent), and the link badges are outlined. The accent only
-   draws shapes: the bars, the timeline's dots, the offset blocks behind
-   the photo, the primary button and a hovered card. Nothing moves: the
-   shared transitions and the card's lift are switched off.
+   the availability line, the buttons' labels, a stat's figure, an FAQ's
+   + and −, a credential's kind and "Verify", the gallery's buttons) is
+   in the heading or text color here, and so are the focus rings. The
+   primary button is filled with the heading color rather than the accent
+   (--r-on-accent, picked by brightness, isn't AA on every vivid accent),
+   and the link badges and skill chips are outlined. The accent only
+   draws shapes: the bars, outlines, the timeline's dots, the offset
+   blocks behind the photo, the primary button and a hovered card. Text
+   that's faded elsewhere (meta lines, captions, a stat's label) is at
+   full strength here. Nothing moves: the shared transitions, the card's
+   lift, the gallery's zoom and its view's fade are switched off.
 
    Words break anywhere they must, so a long name or label (big type on a
    phone) wraps instead of widening its box past the page. */
@@ -167,7 +171,8 @@
 .l-template-bold .l-card-pdf,
 .l-template-bold a.l-quote-name,
 .l-template-bold a.l-role-company,
-.l-template-bold .l-roles-more {
+.l-template-bold .l-roles-more,
+.l-template-bold a.l-credential-verify {
   border-bottom: none;
   text-decoration: underline;
   text-decoration-thickness: 2px;
@@ -179,13 +184,17 @@
 .l-template-bold .l-card-pdf:hover,
 .l-template-bold a.l-quote-name:hover,
 .l-template-bold a.l-role-company:hover,
-.l-template-bold .l-roles-more:hover {
+.l-template-bold .l-roles-more:hover,
+.l-template-bold a.l-credential-verify:hover {
   text-decoration-thickness: 4px;
 }
 
 /* A visible focus ring in the heading color, which reads on the
-   background and on a band alike. */
-.l-template-bold a:not(.l-card-link):focus-visible {
+   background and on a band alike: on links, an FAQ's questions and the
+   gallery's buttons (the shared ones are in the accent). */
+.l-template-bold a:not(.l-card-link):focus-visible,
+.l-template-bold button:focus-visible,
+.l-template-bold summary:focus-visible {
   outline: 3px solid var(--r-heading, var(--ink));
   outline-offset: 3px;
 }
@@ -373,6 +382,195 @@
   font-weight: 600;
 }
 
+/* Skills as square chips outlined in the heading color (the shared ones
+   are tinted with the accent), each group under a heading in capitals. */
+.l-template-bold .l-skills {
+  gap: 22px;
+  margin-bottom: 26px;
+}
+
+.l-template-bold .l-skill-group {
+  gap: 10px;
+}
+
+.l-template-bold .l-skill-category {
+  font-size: 0.85em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.l-template-bold .l-skill-list {
+  gap: 8px;
+}
+
+.l-template-bold .l-skill {
+  padding: 4px 12px;
+  border: 2px solid var(--r-heading, var(--ink));
+  border-radius: 0;
+  background: none;
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+}
+
+/* Stats: the figures big and heavy in the heading color (the shared ones
+   are in the accent), over a thicker accent bar. The shared grid sizes
+   its columns for a 24 px gap between them, so only the rows' gap grows. */
+.l-template-bold .l-stats {
+  row-gap: 32px;
+}
+
+.l-template-bold .l-stat::before {
+  width: 48px;
+  height: 8px;
+  border-radius: 0;
+  margin-bottom: 10px;
+}
+
+.l-template-bold .l-stat-value {
+  font-size: clamp(2.2em, 1.2em + 3cqi, 3.2em);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-stat-label {
+  opacity: 1;
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Questions and answers between heavy rules, the question large and its
+   + and − in the heading color (the shared ones are in the accent). */
+.l-template-bold .l-faq {
+  border-top: 4px solid var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-faq-entry {
+  border-bottom: 2px solid var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-faq-question {
+  padding: 18px 0;
+  font-size: 1.15em;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.l-template-bold .l-faq-question::after {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-faq-question:focus-visible {
+  border-radius: 0;
+}
+
+.l-template-bold .l-faq-answer {
+  max-width: 40em;
+  margin-bottom: 20px;
+}
+
+/* Credentials: the name heavy, its kind in capitals inside an accent
+   outline (the shared tag is accent text on an accent tint), and the
+   number, dates and "Verify" at full strength in the text color. */
+.l-template-bold .l-credentials {
+  gap: 24px;
+}
+
+.l-template-bold .l-credential {
+  gap: 4px;
+}
+
+.l-template-bold .l-credential-name {
+  font-size: 1.2em;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.l-template-bold .l-credential-kind {
+  padding: 2px 8px;
+  border: 2px solid var(--r-accent, var(--ink));
+  border-radius: 0;
+  background: none;
+  color: var(--r-heading, var(--ink));
+  font-weight: 800;
+}
+
+.l-template-bold .l-credential-meta {
+  color: var(--r-text, var(--ink));
+  font-size: 0.85em;
+}
+
+.l-template-bold a.l-credential-verify {
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+}
+
+/* A gallery: square corners, and nothing moves (the shared thumbnails
+   grow on hover and the view fades in). Its view's buttons and text are
+   in the heading and text colors, at full strength. */
+.l-template-bold .l-gallery {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 16px;
+}
+
+.l-template-bold .l-gallery-open {
+  border-radius: 0;
+}
+
+.l-template-bold .l-gallery-image {
+  transition: none;
+}
+
+.l-template-bold .l-gallery-open:hover .l-gallery-image {
+  transform: none;
+}
+
+.l-template-bold .l-gallery-caption {
+  opacity: 1;
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.l-template-bold .l-gallery-dialog {
+  border-radius: 0;
+}
+
+.l-template-bold .l-gallery-dialog[open] {
+  animation: none;
+}
+
+.l-template-bold .l-gallery-bar,
+.l-template-bold .l-gallery-view-alt {
+  opacity: 1;
+}
+
+.l-template-bold .l-gallery-view-image {
+  border-radius: 0;
+}
+
+.l-template-bold .l-gallery-view-text {
+  font-weight: 600;
+}
+
+.l-template-bold .l-gallery-button {
+  border: 2px solid var(--r-heading, var(--ink));
+  border-radius: 0;
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+}
+
+.l-template-bold .l-gallery-button:hover,
+.l-template-bold .l-gallery-button:focus-visible {
+  border-color: var(--r-heading, var(--ink));
+  color: var(--r-bg, var(--panel));
+  background: var(--r-heading, var(--ink));
+}
+
 /* A divider: a heavy rule, its label in heavy capitals. */
 .l-template-bold .l-section-divider {
   padding-top: clamp(28px, 5cqi, 48px);
@@ -412,5 +610,10 @@
   }
   .l-template-bold .l-quote {
     border-left-width: 6px;
+  }
+  /* Two thumbnails a row on a phone. */
+  .l-template-bold .l-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 128px), 1fr));
+    gap: 12px;
   }
 }
