@@ -797,10 +797,10 @@ dropStrayDividers, colors, darkColors, preview }`; without one the hero and the 
 go in turn into an `.l-main`. `landing.css` holds only what every
 template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
-pixel-identical to it. `centered`, `formal`, `split` and `bold` size
-themselves with container queries (and `bold` its type with container
-units) on the page root, so the editor's narrower preview matches a
-phone. `bold`
+pixel-identical to it. `bold`, `centered`, `editorial` (issue #130, pure
+CSS), `formal` and `split` size themselves with container queries (and
+`bold` its type with container units) on the page root, so the editor's
+narrower preview matches a phone. `bold`
 (issue #130) bands every other *shown* section with
 `:nth-child(odd of section.l-section:not(.l-section-hidden))`: dividers
 are `<div>`s and the preview's hidden sections are skipped, so the
