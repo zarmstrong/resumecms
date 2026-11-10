@@ -311,6 +311,80 @@
   content: none;
 }
 
+/* Questions and answers (issue #123): the questions in the headline font
+   like a list entry's title, the first one straight under the section's
+   title (whose rule is above it), and the answers kept to the text's
+   measure. */
+.l-template-editorial .l-section-title + .l-faq {
+  border-top: none;
+}
+
+.l-template-editorial .l-faq-question {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.1em;
+  line-height: 1.35;
+}
+
+.l-template-editorial .l-faq-answer {
+  max-width: 40em;
+}
+
+.l-template-editorial .l-skill {
+  border-radius: 2px;
+}
+
+/* Credentials (issue #119), one under another between hairlines like the
+   list entries. */
+.l-template-editorial .l-credentials {
+  gap: 0;
+}
+
+.l-template-editorial .l-credential {
+  padding: 16px 0;
+  border-top: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 16%, transparent);
+}
+
+.l-template-editorial .l-credential:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.l-template-editorial .l-credential:last-child {
+  padding-bottom: 0;
+}
+
+.l-template-editorial .l-credential-name {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.2em;
+  line-height: 1.3;
+}
+
+.l-template-editorial .l-credential-kind {
+  border-radius: 2px;
+}
+
+/* A gallery (issue #120): square corners like the other images, captions
+   in italics like an image section's, and no zoom on hover or fade-in of
+   the enlarged view. */
+.l-template-editorial .l-gallery-open,
+.l-template-editorial .l-gallery-view-image,
+.l-template-editorial .l-gallery-dialog,
+.l-template-editorial .l-gallery-button {
+  border-radius: 2px;
+}
+
+.l-template-editorial .l-gallery-caption {
+  font-style: italic;
+}
+
+.l-template-editorial .l-gallery-open:hover .l-gallery-image {
+  transform: none;
+}
+
+.l-template-editorial .l-gallery-dialog[open] {
+  animation: none;
+}
+
 /* A focus ring on every link (a card's is drawn around the whole card by
    landing.css). */
 .l-template-editorial a:not(.l-card-link):focus-visible {
@@ -382,6 +456,11 @@
   .l-template-editorial .l-item-image {
     width: 96px;
     height: 72px;
+  }
+  /* Two thumbnails a row, rather than each the width of a phone. */
+  .l-template-editorial .l-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
   }
   .l-template-editorial
     .l-section-text:not(.l-section-hidden):not(.l-section-text:not(.l-section-hidden) ~ *)
