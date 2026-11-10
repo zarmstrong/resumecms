@@ -21,7 +21,8 @@ import { inlineLength, mapLinks } from '../inlineText.js';
 // proposal onto something else; items have no ids, so theirs is a position.
 // Deliberately not targets (issue #90): a quote, which is someone else's
 // words; an experience section, which is read from a resume as published;
-// and an item's meta line.
+// and an item's meta line. Nor is a stat (issue #125): a model mustn't make
+// up figures, so it only ever reads them, in the page context.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*
@@ -253,6 +254,8 @@ function pageContext(landing, target, resumes) {
           };
         case 'quotes':
           return { ...base, quotes: section.quotes.filter((q) => q.text.trim()).map((q) => ({ text: q.text, name: q.name, role: q.role })) };
+        case 'stats':
+          return { ...base, stats: section.stats.filter((stat) => stat.value.trim()).map((stat) => ({ value: stat.value, label: stat.label })) };
         case 'experience':
           return {
             ...base,

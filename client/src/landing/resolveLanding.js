@@ -140,6 +140,11 @@ function resolveSection(section, targets, images) {
     }
     case 'divider':
       return {};
+    case 'stats': {
+      // A stat is its value; a label alone has nothing to show.
+      const stats = section.stats.filter((stat) => stat.value.trim()).map((stat) => ({ value: stat.value, label: stat.label }));
+      return stats.length ? { stats } : null;
+    }
     default:
       return null;
   }

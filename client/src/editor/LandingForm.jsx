@@ -28,6 +28,7 @@ const SECTION_KINDS = [
   },
   { kind: 'image', label: 'Image', addLabel: 'Image', empty: () => ({ image: null, caption: '' }) },
   { kind: 'divider', label: 'Divider', addLabel: 'Divider (a line between sections)', empty: () => ({}) },
+  { kind: 'stats', label: 'Stats', addLabel: 'Stats (by the numbers)', empty: () => ({ stats: [emptyStat()] }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -37,6 +38,10 @@ function emptyItem() {
 
 function emptyQuote() {
   return { text: '', name: '', role: '', url: '' };
+}
+
+function emptyStat() {
+  return { value: '', label: '' };
 }
 
 // Only tells sections apart (React keys, and the server keeps it); not
@@ -65,6 +70,8 @@ function hasContent(section) {
       return false;
     case 'image':
       return Boolean(section.image) || Boolean(section.caption.trim());
+    case 'stats':
+      return section.stats.some((stat) => stat.value.trim() || stat.label.trim());
     default:
       return false;
   }
@@ -489,9 +496,57 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
           <span className="ed-field-hint">A section with no image yet is left off the page.</span>
         </>
       );
+    case 'stats':
+      return <StatsFields stats={section.stats} onChange={(stats) => onChange({ stats })} limits={limits} />;
     default:
       return null;
   }
+}
+
+// A few large figures, each with a short label (issue #125). No ✨ here
+// either: an AI mustn't make up numbers.
+function StatsFields({ stats, onChange, limits }) {
+  const setStat = (i, patch) => onChange(stats.map((stat, idx) => (idx === i ? { ...stat, ...patch } : stat)));
+  return (
+    <>
+      {stats.map((stat, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Stat {i + 1}</span>
+            <RowActions
+              index={i}
+              count={stats.length}
+              onMove={(delta) => onChange(moved(stats, i, delta))}
+              onRemove={() => onChange(stats.filter((_, idx) => idx !== i))}
+              what="stat"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={stat.value}
+            maxLength={limits?.statValue}
+            onChange={(e) => setStat(i, { value: e.target.value })}
+            placeholder="The figure, e.g. 2,000+ or 15 years"
+            aria-label="Stat value"
+          />
+          <input
+            className="ed-input"
+            value={stat.label}
+            maxLength={limits?.statLabel}
+            onChange={(e) => setStat(i, { label: e.target.value })}
+            placeholder="What it counts, e.g. patients cared for"
+            aria-label="Stat label"
+          />
+        </div>
+      ))}
+      {(!limits || stats.length < limits.stats) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...stats, emptyStat()])}>
+          + Add stat
+        </button>
+      )}
+      <span className="ed-field-hint">Plain text, so 98%, $4.2M or #1 work too. A stat without a figure isn't shown.</span>
+    </>
+  );
 }
 
 // Testimonials (issue #90). No ✨ here: they're someone else's words.

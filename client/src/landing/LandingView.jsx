@@ -243,6 +243,24 @@ function SectionBody({ section }) {
           {section.caption && <figcaption className="l-figure-caption">{section.caption}</figcaption>}
         </figure>
       );
+    case 'stats':
+      // The comma is for a screen reader ("15 years, in commercial
+      // kitchens"); on screen the label goes under the figure.
+      return (
+        <ul className="l-stats">
+          {section.stats.map((stat, i) => (
+            <li key={i} className="l-stat">
+              <span className="l-stat-value">{stat.value}</span>
+              {stat.label && (
+                <>
+                  <span className="l-sr-only">, </span>
+                  <span className="l-stat-label">{stat.label}</span>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      );
     default:
       return null;
   }
