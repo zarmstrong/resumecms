@@ -10,6 +10,8 @@ import {
   resolveLanding,
   upgradeLanding,
   validateLanding,
+  educationEntries,
+  skillGroups,
 } from './landingFields.js';
 import { pdfPathFor, pdfVersionOf } from './pdfPaths.js';
 import { escapeLandingText } from './landingTextMigration.js';
@@ -199,7 +201,8 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   // What the page's references point at right now, for resolveLanding():
   // the default resume's published photo and look, and every resume a
   // visitor may open (public and published) with its link, its PDF's and
-  // the roles an experience section may show from it. The default lives at
+  // the roles an experience section may show from it (and the entries and
+  // skill groups an education or skills section may). The default lives at
   // /resume while the landing page holds `/`.
   function landingContext() {
     const defaultId = defaultResumeId();
@@ -219,6 +222,8 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
           title: JSON.parse(row.value)?.header?.title || '',
           pdfHref: pdfHref(row, row.id === defaultId),
           experience: experienceRoles(JSON.parse(row.value)?.blocks),
+          education: educationEntries(JSON.parse(row.value)?.blocks),
+          skills: skillGroups(JSON.parse(row.value)?.blocks),
         },
       ])
     );
@@ -238,7 +243,7 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
   // The same, as JSON for the editor, whose preview resolves the draft
   // against it as someone types (client/src/landing/resolveLanding.js
   // mirrors resolveLanding()). Also what an AI rewrite of the page reads an
-  // experience section's roles from. Its images are at the editor's own path,
+  // experience, education or skills section's entries from. Its images are at the editor's own path,
   // since a draft's may not be public yet.
   function getLandingContext() {
     const { photoUrl, site, resumes } = landingContext();

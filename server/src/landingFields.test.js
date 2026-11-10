@@ -2,9 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LANDING_LIMITS,
+  LINK_TYPES,
   referencedResumeIds,
   emptyLanding,
   experienceRoles,
+  educationEntries,
+  skillGroups,
+  splitSkillItems,
   initialLanding,
   isSafeUrl,
   mergeLandingPatch,
@@ -165,6 +169,15 @@ test('email and phone links save, show and keep their type', () => {
     { kind: 'items', title: '', items: [{ title: 'Call', text: '', url: 'tel:+15555550100' }] },
   ]);
   assert.equal(status(() => validateLanding(linksSection([{ type: 'fax', label: 'a', url: 'tel:1' }]), known())), 400);
+});
+
+test('a link of every type saves and shows with its type (issue #129)', () => {
+  for (const type of LINK_TYPES) {
+    const links = [{ type, label: type, url: 'https://example.com/jo' }];
+    const draft = validateLanding(linksSection(links), known());
+    assert.deepEqual(draft.sections[0].links, links, type);
+    assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections[0].links, links, type);
+  }
 });
 
 test('telUrl dials the digits of a number as typed, with its extension', () => {
@@ -648,6 +661,92 @@ test('quotes are checked strictly, and an empty one is dropped', () => {
   for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
 });
 
+test('stats are checked strictly, and one without a value is dropped', () => {
+  const stats = (list, extra = {}) => ({ sections: [{ id: 'n', kind: 'stats', title: 'By the numbers', stats: list, ...extra }] });
+  const first = { value: '15 years', label: 'in commercial kitchens' };
+  const draft = validateLanding(stats([first, { label: 'No value' }, { value: '#1' }, { value: ' ', label: 'Blank' }], { column: 'side' }), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'n',
+    kind: 'stats',
+    title: 'By the numbers',
+    column: 'side',
+    stats: [first, { value: '', label: 'No value' }, { value: '#1', label: '' }, { value: ' ', label: 'Blank' }],
+  });
+  assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections, [
+    { kind: 'stats', title: 'By the numbers', column: 'side', stats: [first, { value: '#1', label: '' }] },
+  ]);
+  // A section with no stat left to show goes, heading and all, as does an
+  // empty or hidden one.
+  assert.deepEqual(resolveLanding(validateLanding(stats([{ value: ' ', label: 'Only a label' }]), known()), { resumes: new Map() }).sections, []);
+  assert.deepEqual(resolveLanding(validateLanding({ sections: [{ id: 'n', kind: 'stats' }] }, known()), { resumes: new Map() }).sections, []);
+  assert.deepEqual(resolveLanding(validateLanding(stats([first], { hidden: true }), known()), { resumes: new Map() }).sections, []);
+  // At the caps is fine.
+  const full = Array.from({ length: LANDING_LIMITS.stats }, () => ({ value: 'x'.repeat(LANDING_LIMITS.statValue), label: 'y'.repeat(LANDING_LIMITS.statLabel) }));
+  assert.equal(validateLanding(stats(full), known()).sections[0].stats.length, LANDING_LIMITS.stats);
+
+  const bad = [
+    stats([{ value: 'x'.repeat(LANDING_LIMITS.statValue + 1) }]),
+    stats([{ value: '1', label: 'x'.repeat(LANDING_LIMITS.statLabel + 1) }]),
+    stats([{ value: 42 }]),
+    stats([{ value: '1', url: 'https://example.com' }]),
+    stats(['15 years']),
+    stats('15 years'),
+    stats(Array.from({ length: LANDING_LIMITS.stats + 1 }, () => ({ value: '1' }))),
+    { sections: [{ id: 'n', kind: 'stats', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
+});
+
+test('an FAQ section is checked strictly, its answers as inline text, and an entry without both parts is dropped', () => {
+  const faq = (entries) => ({ sections: [{ id: 'f', kind: 'faq', title: 'Questions', entries }] });
+  const message = (fn) => {
+    try {
+      fn();
+    } catch (err) {
+      return `${err.status} ${err.message}`;
+    }
+    return null;
+  };
+  const first = { question: 'Are you open to relocating?', answer: 'Yes, within **Europe**. [Ask me](mailto:jo@example.com).' };
+  const draft = validateLanding(faq([first, { question: 'When can you start?' }, { answer: 'An answer to nothing.' }, { question: ' ', answer: 'x' }]), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'f',
+    kind: 'faq',
+    title: 'Questions',
+    entries: [first, { question: 'When can you start?', answer: '' }, { question: '', answer: 'An answer to nothing.' }, { question: ' ', answer: 'x' }],
+  });
+  assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections, [{ kind: 'faq', title: 'Questions', entries: [first] }]);
+  // A section with no entry left to show goes, heading and all.
+  assert.deepEqual(resolveLanding(validateLanding(faq([{ question: 'Why?', answer: '  ' }]), known()), { resumes: new Map() }).sections, []);
+  assert.deepEqual(resolveLanding(validateLanding(faq([]), known()), { resumes: new Map() }).sections, []);
+
+  // An answer's links follow every other link's rules, read as one paragraph
+  // like an item's text; a question is plain text, never a link.
+  assert.equal(
+    message(() => validateLanding(faq([{ question: 'Q', answer: 'See\n\n[this](javascript:alert(1))' }]), known())),
+    '400 sections[0].entries[0].answer: the link "this" must be an http, https, mailto or tel link'
+  );
+  assert.equal(validateLanding(faq([{ question: '[x](javascript:alert(1))', answer: 'A' }]), known()).sections[0].entries[0].question, '[x](javascript:alert(1))');
+  // The answer's cap doesn't count an escaping backslash; the question's counts every character.
+  const atCap = `\\*${'a'.repeat(LANDING_LIMITS.faqAnswer - 1)}`;
+  assert.equal(validateLanding(faq([{ question: 'Q', answer: atCap }]), known()).sections[0].entries[0].answer, atCap);
+  const longest = 'x'.repeat(LANDING_LIMITS.faqQuestion);
+  assert.equal(validateLanding(faq([{ question: longest, answer: 'A' }]), known()).sections[0].entries[0].question, longest);
+
+  const bad = [
+    faq([{ question: 'x'.repeat(LANDING_LIMITS.faqQuestion + 1), answer: 'A' }]),
+    faq([{ question: 'Q', answer: 'x'.repeat(LANDING_LIMITS.faqAnswer + 1) }]),
+    faq([{ question: 'Q', answer: 'A', open: true }]),
+    faq([{ question: 5 }]),
+    faq([{ answer: ['A'] }]),
+    faq(['Q']),
+    faq('Q'),
+    faq(Array.from({ length: LANDING_LIMITS.faqEntries + 1 }, () => ({ question: 'Q', answer: 'A' }))),
+    { sections: [{ id: 'f', kind: 'faq', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
+});
+
 test('an experience section follows the reference rules of a card, with a count from 1 to 10', () => {
   const section = (extra) => ({ sections: [{ id: 'x', kind: 'experience', ...extra }] });
   assert.deepEqual(validateLanding(section({ resumeId: 'a' }), known('a')).sections[0], {
@@ -749,6 +848,128 @@ test("an experience section resolves its resume's first roles, without ids", () 
   for (const leak of ['resumeId', '"main"', 'private', 'Private', 'Hidden']) assert.equal(body.includes(leak), false, leak);
   // A resume with no roles to show takes the section off.
   const none = { resumes: new Map([['main', { href: '/resume', title: '', pdfHref: '', experience: [] }]]) };
+  assert.deepEqual(resolveLanding(landing, none).sections, []);
+});
+
+test('education and skills sections follow the reference rules of a card; education counts from 1 to 10', () => {
+  const section = (kind, extra) => ({ sections: [{ id: 'x', kind, ...extra }] });
+  assert.deepEqual(validateLanding(section('education', { resumeId: 'a' }), known('a')).sections[0], {
+    id: 'x',
+    kind: 'education',
+    title: '',
+    resumeId: 'a',
+    count: 3,
+    showDates: true,
+  });
+  const set = validateLanding(section('education', { resumeId: 'a', count: 10, showDates: false, column: 'side' }), known('a')).sections[0];
+  assert.deepEqual([set.count, set.showDates, set.column], [10, false, 'side']);
+  assert.deepEqual(validateLanding(section('skills', { resumeId: 'a', title: 'Skills' }), known('a')).sections[0], {
+    id: 'x',
+    kind: 'skills',
+    title: 'Skills',
+    resumeId: 'a',
+  });
+  for (const extra of [
+    { resumeId: 'gone' },
+    {},
+    { resumeId: 'a', count: 0 },
+    { resumeId: 'a', count: LANDING_LIMITS.educationCount + 1 },
+    { resumeId: 'a', count: 2.5 },
+    { resumeId: 'a', showDates: 'yes' },
+    { resumeId: 'a', blockIds: ['b1'] },
+  ]) {
+    assert.equal(status(() => validateLanding(section('education', extra), known('a'))), 400, JSON.stringify(extra));
+  }
+  for (const extra of [{ resumeId: 'gone' }, {}, { resumeId: 'a', count: 3 }, { resumeId: 'a', showDates: true }, { resumeId: 'a', categories: ['Languages'] }]) {
+    assert.equal(status(() => validateLanding(section('skills', extra), known('a'))), 400, JSON.stringify(extra));
+  }
+  // One already in the draft may outlive its resume, and counts as a reference.
+  const kept = validateLanding(
+    { sections: [{ id: 'e', kind: 'education', resumeId: 'gone' }, { id: 's', kind: 'skills', resumeId: 'gone2' }] },
+    { knownResumeIds: new Set(['a']), previousResumeIds: new Set(['gone', 'gone2']) }
+  );
+  assert.deepEqual(kept.sections.map((s) => s.resumeId), ['gone', 'gone2']);
+  assert.deepEqual([...referencedResumeIds(kept)], ['gone', 'gone2']);
+});
+
+test('educationEntries and skillGroups read only web-visible blocks, in order, with only what the sections show', () => {
+  const block = (id, type, data, flags = {}) => ({ id, type, parentId: null, visibleWeb: true, visiblePrint: true, data, ...flags });
+  const blocks = [
+    block('h', 'heading', { text: 'Education' }),
+    block('d1', 'education', { degree: ' BSc Nursing ', institution: 'State U', location: 'Ohio', startDate: '2010', endDate: '2014', style: { color: 'x' } }),
+    block('d2', 'education', { degree: 'Print only', institution: 'Hidden U' }, { visibleWeb: false }),
+    block('d3', 'education', { degree: '', institution: '' }),
+    block('d5', 'education', { institution: 'Trade school' }, { parentId: 'h' }),
+    block('d6', 'education', null),
+    block('g1', 'skills_group', { category: 'Languages', items: 'Spanish (fluent), ASL (conversational) ,, ' }),
+    block('g2', 'skills_group', { category: 'Print only', items: 'Secret' }, { visibleWeb: false }),
+    block('g3', 'skills_group', { category: 'Empty', items: ' , ' }),
+    block('g4', 'skills_group', { items: 'Go' }),
+    block('g5', 'skills_group', { category: 'Odd', items: 42 }),
+  ];
+  assert.deepEqual(educationEntries(blocks), [
+    { degree: 'BSc Nursing', institution: 'State U', location: 'Ohio', startDate: '2010', endDate: '2014' },
+    { degree: '', institution: 'Trade school', location: '', startDate: '', endDate: '' },
+  ]);
+  assert.deepEqual(skillGroups(blocks), [
+    { category: 'Languages', items: ['Spanish (fluent)', 'ASL (conversational)'] },
+    { category: '', items: ['Go'] },
+  ]);
+  assert.deepEqual(educationEntries(undefined), []);
+  assert.deepEqual(skillGroups(undefined), []);
+  const many = Array.from({ length: 15 }, (_, i) => block(`m${i}`, 'education', { degree: `Degree ${i}` }));
+  assert.equal(educationEntries(many).length, LANDING_LIMITS.educationCount);
+  assert.deepEqual(splitSkillItems(' a,b ,,c '), ['a', 'b', 'c']);
+  assert.deepEqual(splitSkillItems(undefined), []);
+});
+
+test("education and skills sections resolve from their resume, without ids", () => {
+  const education = [
+    { degree: 'BSc Nursing', institution: 'State U', location: 'Ohio', startDate: '2010', endDate: '2014' },
+    { degree: 'Apprenticeship', institution: 'Guild', location: '', startDate: '2008', endDate: '' },
+  ];
+  const skills = [
+    { category: 'Languages', items: ['Spanish (fluent)', 'ASL'] },
+    { category: '', items: ['Triage'] },
+  ];
+  const context = { resumes: new Map([['main', { href: '/r/nurse', title: 'Nurse', pdfHref: '', experience: [], education, skills }]]) };
+  const landing = {
+    ...emptyLanding(),
+    sections: [
+      { id: 'e', kind: 'education', title: 'Education', resumeId: 'main', count: 1, showDates: true },
+      { id: 'e2', kind: 'education', title: '', resumeId: 'main', count: 10, showDates: false, column: 'side' },
+      { id: 's', kind: 'skills', title: 'Skills', resumeId: 'main' },
+      { id: 'p', kind: 'skills', title: 'Private', resumeId: 'private' },
+      { id: 'q', kind: 'education', title: 'Private', resumeId: 'private', count: 3, showDates: true },
+      { id: 'h', kind: 'skills', title: 'Hidden', resumeId: 'main', hidden: true },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  assert.deepEqual(out.sections, [
+    {
+      kind: 'education',
+      title: 'Education',
+      href: '/r/nurse',
+      entries: [{ degree: 'BSc Nursing', institution: 'State U', location: 'Ohio', dates: '2010 – 2014' }],
+    },
+    {
+      kind: 'education',
+      title: '',
+      column: 'side',
+      href: '/r/nurse',
+      entries: [
+        { degree: 'BSc Nursing', institution: 'State U', location: 'Ohio', dates: '' },
+        { degree: 'Apprenticeship', institution: 'Guild', location: '', dates: '' },
+      ],
+    },
+    { kind: 'skills', title: 'Skills', href: '/r/nurse', groups: skills },
+  ]);
+  // A copy, so a visitor's page never shares the context's arrays.
+  assert.notEqual(out.sections[2].groups[0].items, skills[0].items);
+  const body = JSON.stringify(out);
+  for (const leak of ['resumeId', '"main"', 'private', 'Private', 'Hidden']) assert.equal(body.includes(leak), false, leak);
+  // A resume with nothing to show takes the sections off.
+  const none = { resumes: new Map([['main', { href: '/resume', title: '', pdfHref: '', experience: [], education: [], skills: [] }]]) };
   assert.deepEqual(resolveLanding(landing, none).sections, []);
 });
 

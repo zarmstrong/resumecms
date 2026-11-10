@@ -95,6 +95,34 @@
   margin: 0 auto;
 }
 
+/* Questions and answers keep to the same column, read left to right. */
+.l-template-centered .l-section-faq {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Education keeps to the same column as the timeline it's drawn on, and
+   skills center there like the links (issue #126). */
+.l-template-centered .l-section-education,
+.l-template-centered .l-section-skills {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.l-template-centered .l-section-skills {
+  text-align: center;
+}
+
+.l-template-centered .l-skill-group {
+  align-items: center;
+}
+
+.l-template-centered .l-skill-list {
+  justify-content: center;
+}
+
 /* The grids: rows of cards, centered, so one card alone stays card-sized. */
 .l-template-centered .l-cards,
 .l-template-centered .l-items,
@@ -149,6 +177,12 @@
 .l-template-centered .l-quote-by {
   margin-top: auto;
   padding-top: 12px;
+}
+
+/* Stats centered under their heading. */
+.l-template-centered .l-stat {
+  align-items: center;
+  text-align: center;
 }
 
 /* Credentials (issue #119): cards like the list entries, centered, each
