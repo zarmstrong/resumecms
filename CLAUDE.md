@@ -542,7 +542,10 @@ in a `WeakMap` on the object, never saved; anything that replaces an
 item or entry with an edited copy passes it on with `carryItemKey()`, as
 `LandingForm` and `setLandingSlice()` do). A gallery's "+ Add images"
 takes several files: it adds an empty entry for each to the draft first,
-then uploads each into its own entry. A target that's gone by then (the
+then uploads each into its own entry. Every upload waits for one of two
+slots (`createLimiter()`, `editor/uploadLimit.js`), since the server
+buffers and re-encodes each, and is tracked on the save queue from the
+moment it's picked, so a flush waits for the queued ones too. A target that's gone by then (the
 hero switched away from an upload, the section, item or entry removed, or
 one whose key didn't follow it) drops the reference; content is never
 used to guess.
