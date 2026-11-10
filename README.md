@@ -13,7 +13,9 @@ exact same components.
   reorder or nest; the bullet points inside an experience block drag too (a
   bullet moves among its siblings, carrying its sub-bullets — dragging can't
   turn a bullet into a sub-bullet or back), or move with the Up/Down arrow
-  keys on their drag handle. Edits save as you type. Leaving a page of the
+  keys on their drag handle. The landing page's sections drag the same way,
+  and each one collapses to its header (remembered in that browser). Edits
+  save as you type. Leaving a page of the
   editor (another resume, the landing page or cover letters, Back, Log out,
   or the browser's Back and Forward) first saves what's still waiting, and
   asks before dropping what can't be saved: AI suggestions you haven't

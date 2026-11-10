@@ -1222,7 +1222,88 @@
   background: var(--panel);
 }
 
-.ed-landing-section > .ed-field {
+/* Sections stay stationary while one is dragged (see LandingForm's
+   SectionList); the indicator sits in the gap between two of them. */
+.ed-landing-section { position: relative; }
+.ed-landing-section-dragging { opacity: 0.35; }
+.ed-landing-section > .ed-drop-before { top: -8px; }
+.ed-landing-section > .ed-drop-after { bottom: -9px; }
+
+.ed-landing-sections-tools {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ed-landing-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ed-landing-section-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ed-landing-section-toggle > strong {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.ed-landing-section-caret {
+  width: 1em;
+  color: var(--slate);
+}
+
+.ed-landing-section-summary {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--slate);
+}
+
+.ed-landing-section-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-size: 11px;
+  color: var(--slate);
+}
+
+.ed-landing-section-badge-ai {
+  border-color: var(--signal);
+  color: var(--ink);
+}
+
+.ed-landing-section-badge-warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.ed-landing-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ed-landing-section-body[hidden] {
+  display: none;
+}
+
+.ed-landing-section-body > .ed-field {
   margin: 0;
 }
 

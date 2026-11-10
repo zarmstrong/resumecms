@@ -515,7 +515,10 @@ its draft. Keep both properties if you add fields or section kinds; a new
 kind needs `SECTION_FIELDS`, `checkSection()`, `resolveSection()` (both
 copies), the MCP `landingSection()` union, `LANDING_SCHEMA`, and a case in
 `LandingForm`'s `SectionFields` and `LandingView`'s `SectionBody` (or, for
-one that isn't a titled `<section>` like the divider, its `renderSection`).
+one that isn't a titled `<section>` like the divider, its `renderSection`),
+plus its collapsed header's line in `LandingForm`'s `sectionSummary()` and,
+if it holds images, `needsDescription()` (the client's copy of
+`assertImagesDescribed()`).
 
 A credential (issue #119: a license, certification or membership; its
 `kind` only picks the tag shown with it) is plain text throughout, capped
@@ -570,7 +573,14 @@ itself. Both refetch like `PublicResumePage`, through the shared
 switcher (`ResumeSelect`, value `LANDING_PAGE`) as `/editor?page=landing`,
 where `ResumesEditor` mounts `LandingEditorPage` instead of `EditorPage`;
 it has its own save queue, flushed before a switch, publish, discard and
-logout. Its preview resolves the local draft with
+logout. `LandingForm`'s `SectionList` reorders sections by dragging a
+handle (or Up/Down on it), with the pure part in
+`client/src/editor/sectionDrag.js`: a drop is "before/after section X",
+applied by id to the sections as they are when it lands, so an edit
+mid-drag never moves the wrong one. A section collapses in this browser
+only (localStorage), and its fields stay mounted while collapsed, just
+`hidden`, so an upload in flight or a half-typed AI instruction survives;
+a new suggestion in it (`ai.suggestionsIn()`) opens it again. Its preview resolves the local draft with
 `client/src/landing/resolveLanding.js`, a mirror of the server's
 `resolveLanding()` (keep the two in step), against the `context` from
 `GET /api/landing`, whose `images` list the stored ones at the editor's

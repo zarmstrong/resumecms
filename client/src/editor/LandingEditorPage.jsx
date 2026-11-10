@@ -386,6 +386,9 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
     requestFor: (key) => aiRequestAt.get(key) || null,
     // The newest suggestion for a spot, should two ever land on one.
     placedFor: (key) => aiPlaced.findLast((p) => p.key === key) || null,
+    // The ids of the suggestions in a section (its fields, items and cards),
+    // '' for none; LandingForm opens a collapsed section when they change.
+    suggestionsIn: (sectionId) => aiPlaced.filter((p) => p.located.sectionId === sectionId).map((p) => p.proposal.id).join(' '),
     pendingFrom: (key) => {
       const tracked = aiRequestAt.get(key)?.key;
       return tracked ? aiProposals.filter((p) => p.requestKey === tracked).length : 0;
