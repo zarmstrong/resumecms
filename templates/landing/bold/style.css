@@ -1,0 +1,619 @@
+/* Bold (issue #130): oversized, heavy type, high contrast, and every
+   other section on a band tinted with the accent color that runs the
+   page's full width. No index.jsx, so LandingView arranges it (the hero, then the
+   sections, in an .l-main); every part of it spans the page and keeps its
+   content to a column through its own side padding, so a band can reach
+   both edges. Type is sized by the page's own width (container units and
+   queries), so the editor's narrower preview shows what a phone would,
+   and keeps a floor in em so it still grows with the visitor's text size.
+
+   The band is a tint of the accent over the background, never the accent
+   itself: the person picks the accent, and only a tint keeps the page's
+   own text and heading colors readable on it for any accent, pale or
+   dark. No text is drawn in the accent or on it either: what's
+   accent-colored text elsewhere (a card's "View resume", "Full resume",
+   the availability line, the buttons' labels, a stat's figure, an FAQ's
+   + and −, a credential's kind and "Verify", the gallery's buttons) is
+   in the heading or text color here, and so are the focus rings. The
+   primary button is filled with the heading color rather than the accent
+   (--r-on-accent, picked by brightness, isn't AA on every vivid accent),
+   and the link badges and skill chips are outlined. The accent only
+   draws shapes: the bars, outlines, the timeline's dots, the offset
+   blocks behind the photo, the primary button and a hovered card. Text
+   that's faded elsewhere (meta lines, captions, a stat's label) is at
+   full strength here. Nothing moves: the shared transitions, the card's
+   lift, the gallery's zoom and its view's fade are switched off.
+
+   Words break anywhere they must, so a long name or label (big type on a
+   phone) wraps instead of widening its box past the page. */
+.l-template-bold {
+  container-type: inline-size;
+  overflow-wrap: anywhere;
+}
+
+.l-template-bold .l-main {
+  padding: 0 0 clamp(48px, 8cqi, 96px);
+}
+
+/* The hero, each section and each divider span the page; their content
+   keeps to a 920 px column (20 px from the edges on a phone). */
+.l-template-bold .l-main > * {
+  padding-left: max(20px, calc((100% - 920px) / 2));
+  padding-right: max(20px, calc((100% - 920px) / 2));
+}
+
+/* Every other section, counting only the sections the page shows: a
+   divider is a <div>, so it doesn't count (the sections on either side
+   of it still alternate), nor does a section the editor's preview shows
+   dimmed as hidden, which the page leaves out. The hero isn't banded, so
+   the first section is. */
+.l-template-bold .l-main > section.l-section:nth-child(odd of section.l-section:not(.l-section-hidden)) {
+  background: color-mix(in srgb, var(--r-accent, var(--ink)) 18%, var(--r-bg, var(--panel)));
+}
+
+/* The hero: the photo on the right, square, over a block of the accent,
+   and a heavy accent rule under it all. */
+.l-template-bold .l-hero {
+  display: flex;
+  align-items: center;
+  gap: clamp(28px, 6cqi, 64px);
+  padding-top: clamp(56px, 10cqi, 128px);
+  padding-bottom: clamp(48px, 8cqi, 96px);
+  border-bottom: 8px solid var(--r-accent, var(--ink));
+}
+
+.l-template-bold .l-hero-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.l-template-bold .l-photo {
+  order: 1;
+  width: clamp(140px, 24cqi, 260px);
+  height: clamp(140px, 24cqi, 260px);
+  border-radius: 0;
+  box-shadow: 12px 12px 0 var(--r-accent, var(--ink));
+  margin: 0 12px 12px 0;
+}
+
+.l-template-bold .l-headline {
+  font-size: clamp(2em, 0.75em + 7cqi, 5.5em);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.l-template-bold .l-subheadline {
+  font-size: clamp(1.15em, 0.9em + 1.4cqi, 1.6em);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--r-text, var(--ink));
+  margin-top: 18px;
+}
+
+.l-template-bold .l-availability {
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  margin-bottom: 20px;
+  border-radius: 0;
+  border: 2px solid var(--r-accent, var(--ink));
+  color: var(--r-heading, var(--ink));
+  background: none;
+}
+
+.l-template-bold .l-actions {
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.l-template-bold .l-action {
+  padding: 13px 24px;
+  border: 2px solid var(--r-heading, var(--ink));
+  border-radius: 0;
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: none;
+}
+
+/* The heading color, with the background's as its label (the palette's
+   own pair), over a block of the accent. */
+.l-template-bold .l-action-primary,
+.l-template-bold .l-action-primary:hover,
+.l-template-bold .l-action-primary:focus-visible {
+  background: var(--r-heading, var(--ink));
+  color: var(--r-bg, var(--panel));
+  box-shadow: 5px 5px 0 var(--r-accent, var(--ink));
+}
+
+.l-template-bold .l-action-primary:hover {
+  box-shadow: 8px 8px 0 var(--r-accent, var(--ink));
+}
+
+/* Sections: room around each, so a band reads as a band. */
+.l-template-bold .l-section {
+  padding-top: clamp(48px, 9cqi, 104px);
+  padding-bottom: clamp(48px, 9cqi, 104px);
+}
+
+.l-template-bold .l-section-title {
+  font-size: clamp(1.6em, 0.9em + 3.5cqi, 3em);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  margin-bottom: clamp(22px, 3.5cqi, 40px);
+}
+
+/* A short, thick bar of the accent under each heading. */
+.l-template-bold .l-section-title::after {
+  content: '';
+  display: block;
+  width: 64px;
+  height: 8px;
+  margin-top: 16px;
+  background: var(--r-accent, var(--ink));
+}
+
+.l-template-bold .l-section-text .l-text {
+  max-width: 36em;
+  font-size: clamp(1.1em, 1em + 0.6cqi, 1.3em);
+}
+
+/* Every link is underlined in its own color (the shared look underlines
+   in the accent, which a pale accent on a band would hide). */
+.l-template-bold .l-inline-link,
+.l-template-bold a.l-item-title,
+.l-template-bold .l-card-pdf,
+.l-template-bold a.l-quote-name,
+.l-template-bold a.l-role-company,
+.l-template-bold .l-roles-more,
+.l-template-bold a.l-credential-verify {
+  border-bottom: none;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.18em;
+}
+
+.l-template-bold .l-inline-link:hover,
+.l-template-bold a.l-item-title:hover,
+.l-template-bold .l-card-pdf:hover,
+.l-template-bold a.l-quote-name:hover,
+.l-template-bold a.l-role-company:hover,
+.l-template-bold .l-roles-more:hover,
+.l-template-bold a.l-credential-verify:hover {
+  text-decoration-thickness: 4px;
+}
+
+/* A visible focus ring in the heading color, which reads on the
+   background and on a band alike: on links, an FAQ's questions and the
+   gallery's buttons (the shared ones are in the accent). */
+.l-template-bold a:not(.l-card-link):focus-visible,
+.l-template-bold button:focus-visible,
+.l-template-bold summary:focus-visible {
+  outline: 3px solid var(--r-heading, var(--ink));
+  outline-offset: 3px;
+}
+
+.l-template-bold .l-card-link:focus-visible::after {
+  outline: 3px solid var(--r-heading, var(--ink));
+  outline-offset: 6px;
+}
+
+/* List entries in a grid, a thumbnail across the top of its entry. */
+.l-template-bold .l-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 32px 40px;
+}
+
+.l-template-bold .l-item-title {
+  font-size: 1.25em;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.l-template-bold .l-item-with-image {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.l-template-bold .l-item-image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 0;
+  margin-bottom: 14px;
+}
+
+.l-template-bold .l-item-meta,
+.l-template-bold .l-role-meta {
+  opacity: 1;
+  margin-top: 4px;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.l-template-bold .l-item-text {
+  margin-top: 8px;
+}
+
+/* Links as heavy outlined buttons. */
+.l-template-bold .l-links {
+  gap: 12px;
+}
+
+.l-template-bold .l-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 18px;
+  border: 2px solid var(--r-heading, var(--ink));
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+}
+
+.l-template-bold .l-links a:hover {
+  border-bottom-color: var(--r-heading, var(--ink));
+  background: color-mix(in srgb, var(--r-heading, var(--ink)) 10%, transparent);
+}
+
+/* The badge outlined in the link's own color, not filled with the
+   accent, so its letter reads whatever the accent is. */
+.l-template-bold .r-link-badge {
+  box-sizing: border-box;
+  background: none;
+  color: inherit;
+  border: 1.5px solid currentColor;
+  opacity: 1;
+}
+
+/* Resume cards: solid, square, outlined in the heading color, with a
+   block of the accent behind one that's hovered or focused. */
+.l-template-bold .l-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 24px;
+}
+
+.l-template-bold .l-card {
+  padding: 22px 24px;
+  border: 2px solid var(--r-heading, var(--ink));
+  border-radius: 0;
+  background: var(--r-bg, var(--panel));
+  transition: none;
+}
+
+.l-template-bold .l-card:hover,
+.l-template-bold .l-card:focus-within {
+  border-color: var(--r-heading, var(--ink));
+  transform: none;
+  box-shadow: 8px 8px 0 var(--r-accent, var(--ink));
+}
+
+.l-template-bold .l-card-label {
+  font-size: 1.35em;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.l-template-bold .l-card-cta {
+  padding-top: 10px;
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--r-heading, var(--ink));
+}
+
+/* Quotes large and heavy, behind a thick accent bar. */
+.l-template-bold .l-quotes {
+  gap: 40px;
+}
+
+.l-template-bold .l-quote {
+  padding-left: clamp(18px, 3cqi, 32px);
+  border-left: 8px solid var(--r-accent, var(--ink));
+}
+
+.l-template-bold .l-quote-text {
+  font-size: clamp(1.25em, 1em + 1.4cqi, 1.8em);
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-quote-by {
+  opacity: 1;
+  margin-top: 14px;
+  font-size: 0.82em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* The timeline: a heavy line, square dots. */
+.l-template-bold .l-roles {
+  gap: 26px;
+  padding-left: 28px;
+  margin-bottom: 26px;
+  border-left: 4px solid var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-role::before {
+  left: -40px;
+  top: 0.3em;
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  border: 3px solid var(--r-heading, var(--ink));
+  background: var(--r-accent, var(--ink));
+}
+
+.l-template-bold .l-role-title {
+  font-size: 1.2em;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.l-template-bold .l-roles-more {
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.9em;
+}
+
+/* An image section: square corners. */
+.l-template-bold .l-figure-image {
+  border-radius: 0;
+}
+
+.l-template-bold .l-figure-caption {
+  opacity: 1;
+  margin-top: 12px;
+  font-weight: 600;
+}
+
+/* Skills as square chips outlined in the heading color (the shared ones
+   are tinted with the accent), each group under a heading in capitals. */
+.l-template-bold .l-skills {
+  gap: 22px;
+  margin-bottom: 26px;
+}
+
+.l-template-bold .l-skill-group {
+  gap: 10px;
+}
+
+.l-template-bold .l-skill-category {
+  font-size: 0.85em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.l-template-bold .l-skill-list {
+  gap: 8px;
+}
+
+.l-template-bold .l-skill {
+  padding: 4px 12px;
+  border: 2px solid var(--r-heading, var(--ink));
+  border-radius: 0;
+  background: none;
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+}
+
+/* Stats: the figures big and heavy in the heading color (the shared ones
+   are in the accent), over a thicker accent bar. The shared grid sizes
+   its columns for a 24 px gap between them, so only the rows' gap grows. */
+.l-template-bold .l-stats {
+  row-gap: 32px;
+}
+
+.l-template-bold .l-stat::before {
+  width: 48px;
+  height: 8px;
+  border-radius: 0;
+  margin-bottom: 10px;
+}
+
+.l-template-bold .l-stat-value {
+  font-size: clamp(2.2em, 1.2em + 3cqi, 3.2em);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-stat-label {
+  opacity: 1;
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Questions and answers between heavy rules, the question large and its
+   + and − in the heading color (the shared ones are in the accent). */
+.l-template-bold .l-faq {
+  border-top: 4px solid var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-faq-entry {
+  border-bottom: 2px solid var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-faq-question {
+  padding: 18px 0;
+  font-size: 1.15em;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.l-template-bold .l-faq-question::after {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-bold .l-faq-question:focus-visible {
+  border-radius: 0;
+}
+
+.l-template-bold .l-faq-answer {
+  max-width: 40em;
+  margin-bottom: 20px;
+}
+
+/* Credentials: the name heavy, its kind in capitals inside an accent
+   outline (the shared tag is accent text on an accent tint), and the
+   number, dates and "Verify" at full strength in the text color. */
+.l-template-bold .l-credentials {
+  gap: 24px;
+}
+
+.l-template-bold .l-credential {
+  gap: 4px;
+}
+
+.l-template-bold .l-credential-name {
+  font-size: 1.2em;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.l-template-bold .l-credential-kind {
+  padding: 2px 8px;
+  border: 2px solid var(--r-accent, var(--ink));
+  border-radius: 0;
+  background: none;
+  color: var(--r-heading, var(--ink));
+  font-weight: 800;
+}
+
+.l-template-bold .l-credential-meta {
+  color: var(--r-text, var(--ink));
+  font-size: 0.85em;
+}
+
+.l-template-bold a.l-credential-verify {
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+}
+
+/* A gallery: square corners, and nothing moves (the shared thumbnails
+   grow on hover and the view fades in). Its view's buttons and text are
+   in the heading and text colors, at full strength. */
+.l-template-bold .l-gallery {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 16px;
+}
+
+.l-template-bold .l-gallery-open {
+  border-radius: 0;
+}
+
+.l-template-bold .l-gallery-image {
+  transition: none;
+}
+
+.l-template-bold .l-gallery-open:hover .l-gallery-image {
+  transform: none;
+}
+
+.l-template-bold .l-gallery-caption {
+  opacity: 1;
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.l-template-bold .l-gallery-dialog {
+  border-radius: 0;
+}
+
+.l-template-bold .l-gallery-dialog[open] {
+  animation: none;
+}
+
+.l-template-bold .l-gallery-bar,
+.l-template-bold .l-gallery-view-alt {
+  opacity: 1;
+}
+
+.l-template-bold .l-gallery-view-image {
+  border-radius: 0;
+}
+
+.l-template-bold .l-gallery-view-text {
+  font-weight: 600;
+}
+
+.l-template-bold .l-gallery-button {
+  border: 2px solid var(--r-heading, var(--ink));
+  border-radius: 0;
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+}
+
+.l-template-bold .l-gallery-button:hover,
+.l-template-bold .l-gallery-button:focus-visible {
+  border-color: var(--r-heading, var(--ink));
+  color: var(--r-bg, var(--panel));
+  background: var(--r-heading, var(--ink));
+}
+
+/* A divider: a heavy rule, its label in heavy capitals. */
+.l-template-bold .l-section-divider {
+  padding-top: clamp(28px, 5cqi, 48px);
+  padding-bottom: clamp(28px, 5cqi, 48px);
+}
+
+.l-template-bold .l-divider {
+  color: var(--r-heading, var(--ink));
+  font-size: 0.9em;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.l-template-bold .l-divider::before,
+.l-template-bold .l-divider::after {
+  border-top: 4px solid var(--r-heading, var(--ink));
+}
+
+@container (max-width: 640px) {
+  .l-template-bold .l-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    border-bottom-width: 6px;
+  }
+  .l-template-bold .l-hero-text {
+    align-self: stretch;
+  }
+  .l-template-bold .l-photo {
+    order: 0;
+    width: 128px;
+    height: 128px;
+    box-shadow: 8px 8px 0 var(--r-accent, var(--ink));
+    margin: 0 8px 8px 0;
+  }
+  .l-template-bold .l-actions {
+    margin-top: 26px;
+  }
+  .l-template-bold .l-quote {
+    border-left-width: 6px;
+  }
+  /* Two thumbnails a row on a phone. */
+  .l-template-bold .l-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 128px), 1fr));
+    gap: 12px;
+  }
+}
