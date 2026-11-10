@@ -1,15 +1,17 @@
+import { useState } from 'react';
 import { PhotoUpload } from './PhotoUpload.jsx';
 import { LinksEditor } from './LinksEditor.jsx';
 import { LandingAiPanel } from './LandingAiPanel.jsx';
 import { introSectionId } from './landingAi.js';
 import { SearchSharingFields } from './SearchSharingFields.jsx';
 import { LandingLookFields } from './LandingLookFields.jsx';
-import { LandingImageField, withImageRef } from './LandingImageField.jsx';
+import { IMAGE_TYPES, LandingImageField, imageFileProblem, withImageRef } from './LandingImageField.jsx';
 import { carryItemKey } from './landingImages.js';
 import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
 import { getLandingTemplate } from '../resume/templateRegistry.js';
+import { hasPassed, utcToday } from '../landing/dateText.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
 // SECTION_KINDS), what each is called here, and what a new one starts with
@@ -28,6 +30,27 @@ const SECTION_KINDS = [
   },
   { kind: 'image', label: 'Image', addLabel: 'Image', empty: () => ({ image: null, caption: '' }) },
   { kind: 'divider', label: 'Divider', addLabel: 'Divider (a line between sections)', empty: () => ({}) },
+  { kind: 'stats', label: 'Stats', addLabel: 'Stats (by the numbers)', empty: () => ({ stats: [emptyStat()] }) },
+  { kind: 'faq', label: 'Questions and answers', addLabel: 'Questions and answers (FAQ)', empty: () => ({ entries: [emptyFaqEntry()] }) },
+  {
+    kind: 'education',
+    label: 'Education',
+    addLabel: 'Education (latest entries from a resume)',
+    empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id, count: 3, showDates: true }),
+  },
+  {
+    kind: 'skills',
+    label: 'Skills',
+    addLabel: 'Skills (skill groups from a resume)',
+    empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id }),
+  },
+  {
+    kind: 'credentials',
+    label: 'Credentials',
+    addLabel: 'Credentials (licenses, certifications, memberships)',
+    empty: () => ({ credentials: [emptyCredential()] }),
+  },
+  { kind: 'gallery', label: 'Gallery', addLabel: 'Gallery (several images in a grid)', empty: () => ({ images: [] }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -37,6 +60,18 @@ function emptyItem() {
 
 function emptyQuote() {
   return { text: '', name: '', role: '', url: '' };
+}
+
+function emptyStat() {
+  return { value: '', label: '' };
+}
+
+function emptyFaqEntry() {
+  return { question: '', answer: '' };
+}
+
+function emptyCredential() {
+  return { kind: 'certification', name: '', issuer: '', number: '', issued: '', expires: '', url: '' };
 }
 
 // Only tells sections apart (React keys, and the server keeps it); not
@@ -65,6 +100,18 @@ function hasContent(section) {
       return false;
     case 'image':
       return Boolean(section.image) || Boolean(section.caption.trim());
+    case 'stats':
+      return section.stats.some((stat) => stat.value.trim() || stat.label.trim());
+    case 'faq':
+      return section.entries.some((entry) => entry.question.trim() || entry.answer.trim());
+    case 'education':
+    case 'skills':
+      // Like experience: what they show comes from the resume.
+      return false;
+    case 'credentials':
+      return section.credentials.some((c) => [c.name, c.issuer, c.number, c.issued, c.expires, c.url].some((value) => value.trim()));
+    case 'gallery':
+      return section.images.some((entry) => Boolean(entry.image) || Boolean(entry.caption.trim()));
     default:
       return false;
   }
@@ -424,7 +471,7 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
   );
 }
 
-// The syntax a text section and an item's text take (issue #91).
+// The syntax a text section, an item's text and an FAQ answer take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
 
 function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps }) {
@@ -489,9 +536,295 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
           <span className="ed-field-hint">A section with no image yet is left off the page.</span>
         </>
       );
+    case 'stats':
+      return <StatsFields stats={section.stats} onChange={(stats) => onChange({ stats })} limits={limits} />;
+    case 'faq':
+      return <FaqFields sectionId={section.id} entries={section.entries} onChange={(entries) => onChange({ entries })} limits={limits} ai={ai} />;
+    case 'education':
+      return <EducationFields section={section} onChange={onChange} resumes={resumes} context={context} limits={limits} />;
+    case 'skills':
+      return <SkillsFields section={section} onChange={onChange} resumes={resumes} context={context} />;
+    case 'credentials':
+      return <CredentialsFields credentials={section.credentials} onChange={(credentials) => onChange({ credentials })} limits={limits} />;
+    case 'gallery':
+      return <GalleryFields sectionId={section.id} images={section.images} onChange={(images) => onChange({ images })} limits={limits} imageProps={imageProps} />;
     default:
       return null;
   }
+}
+
+// A few large figures, each with a short label (issue #125). No ✨ here
+// either: an AI mustn't make up numbers.
+function StatsFields({ stats, onChange, limits }) {
+  const setStat = (i, patch) => onChange(stats.map((stat, idx) => (idx === i ? { ...stat, ...patch } : stat)));
+  return (
+    <>
+      {stats.map((stat, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Stat {i + 1}</span>
+            <RowActions
+              index={i}
+              count={stats.length}
+              onMove={(delta) => onChange(moved(stats, i, delta))}
+              onRemove={() => onChange(stats.filter((_, idx) => idx !== i))}
+              what="stat"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={stat.value}
+            maxLength={limits?.statValue}
+            onChange={(e) => setStat(i, { value: e.target.value })}
+            placeholder="The figure, e.g. 2,000+ or 15 years"
+            aria-label="Stat value"
+          />
+          <input
+            className="ed-input"
+            value={stat.label}
+            maxLength={limits?.statLabel}
+            onChange={(e) => setStat(i, { label: e.target.value })}
+            placeholder="What it counts, e.g. patients cared for"
+            aria-label="Stat label"
+          />
+        </div>
+      ))}
+      {(!limits || stats.length < limits.stats) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...stats, emptyStat()])}>
+          + Add stat
+        </button>
+      )}
+      <span className="ed-field-hint">Plain text, so 98%, $4.2M or #1 work too. A stat without a figure isn't shown.</span>
+    </>
+  );
+}
+
+// Questions and answers (issue #123), each answer collapsed under its
+// question on the page. Only the answer has a ✨: the question is what
+// visitors ask.
+function FaqFields({ sectionId, entries, onChange, limits, ai }) {
+  const setEntry = (i, patch) => onChange(entries.map((entry, idx) => (idx === i ? { ...entry, ...patch } : entry)));
+  return (
+    <>
+      {entries.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Question {i + 1}</span>
+            <RowActions
+              index={i}
+              count={entries.length}
+              onMove={(delta) => onChange(moved(entries, i, delta))}
+              onRemove={() => onChange(entries.filter((_, idx) => idx !== i))}
+              what="question"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={entry.question}
+            maxLength={limits?.faqQuestion}
+            onChange={(e) => setEntry(i, { question: e.target.value })}
+            placeholder="The question, e.g. Are you open to relocating?"
+            aria-label="Question"
+          />
+          <textarea
+            className="ed-input"
+            rows={3}
+            value={entry.answer}
+            onChange={(e) => {
+              const answer = inlineEdit(entry.answer, e.target.value, limits?.faqAnswer);
+              if (answer !== entry.answer) setEntry(i, { answer });
+            }}
+            placeholder="The answer"
+            aria-label="Answer"
+          />
+          <span className="ed-field-hint">{INLINE_HINT}</span>
+          <AiField ai={ai} target={{ kind: 'answer', sectionId, index: i }} current={entry.answer} />
+        </div>
+      ))}
+      {(!limits || entries.length < limits.faqEntries) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...entries, emptyFaqEntry()])}>
+          + Add question
+        </button>
+      )}
+      <span className="ed-field-hint">Visitors open an answer by its question. One without both a question and an answer isn't shown.</span>
+    </>
+  );
+}
+
+// Licenses, certifications and memberships (issue #119). No ✨ here:
+// they're facts, not prose.
+function CredentialsFields({ credentials, onChange, limits }) {
+  const setCredential = (i, patch) => onChange(credentials.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const today = utcToday();
+  return (
+    <>
+      {credentials.map((credential, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Credential {i + 1}</span>
+            <RowActions
+              index={i}
+              count={credentials.length}
+              onMove={(delta) => onChange(moved(credentials, i, delta))}
+              onRemove={() => onChange(credentials.filter((_, idx) => idx !== i))}
+              what="credential"
+            />
+          </div>
+          <select
+            className="ed-input"
+            value={credential.kind}
+            onChange={(e) => setCredential(i, { kind: e.target.value })}
+            aria-label="Kind of credential"
+          >
+            <option value="license">License</option>
+            <option value="certification">Certification</option>
+            <option value="membership">Membership</option>
+          </select>
+          <input
+            className="ed-input"
+            value={credential.name}
+            maxLength={limits?.credentialName}
+            onChange={(e) => setCredential(i, { name: e.target.value })}
+            placeholder="Name, e.g. Registered Nurse"
+            aria-label="Credential name"
+          />
+          <input
+            className="ed-input"
+            value={credential.issuer}
+            maxLength={limits?.credentialIssuer}
+            onChange={(e) => setCredential(i, { issuer: e.target.value })}
+            placeholder="Issued by, e.g. Oregon State Board of Nursing"
+            aria-label="Issued by"
+          />
+          <input
+            className="ed-input"
+            value={credential.number}
+            maxLength={limits?.credentialNumber}
+            onChange={(e) => setCredential(i, { number: e.target.value })}
+            placeholder="License or certificate number (optional)"
+            aria-label="Credential number"
+          />
+          <div className="ed-landing-dates">
+            <input
+              className="ed-input"
+              value={credential.issued}
+              maxLength={limits?.credentialDate}
+              onChange={(e) => setCredential(i, { issued: e.target.value })}
+              placeholder={credential.kind === 'membership' ? 'Member since (optional)' : 'Issued (optional), e.g. Mar 2021'}
+              aria-label="Issued"
+            />
+            <input
+              className="ed-input"
+              value={credential.expires}
+              maxLength={limits?.credentialDate}
+              onChange={(e) => setCredential(i, { expires: e.target.value })}
+              placeholder="Expires (optional), e.g. Dec 2027"
+              aria-label="Expires"
+            />
+          </div>
+          {hasPassed(credential.expires, today) && (
+            <span className="ed-field-hint ed-landing-card-status">Expired: not shown on the page. Renew it, or change the date.</span>
+          )}
+          <input
+            className="ed-input"
+            value={credential.url}
+            maxLength={limits?.url}
+            onChange={(e) => setCredential(i, { url: e.target.value })}
+            placeholder="Link to verify it (optional), https://…"
+            aria-label="Verification link"
+          />
+        </div>
+      ))}
+      {(!limits || credentials.length < limits.credentials) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...credentials, emptyCredential()])}>
+          + Add credential
+        </button>
+      )}
+      <span className="ed-field-hint">
+        One without a name isn't shown. Once its expiry date (a year, a month such as Dec 2027 or 12/2027, or a day such as
+        2027-12-31) has passed, it leaves the page by itself; a date written any other way is shown as written. The link is
+        shown as "Verify", for the issuer's public lookup page. Some license numbers are public record and some aren't: leave
+        it out if yours isn't meant to be shared.
+      </span>
+    </>
+  );
+}
+
+// A gallery (issue #120): its images in order, each with a caption. "Add
+// images" takes several files at once: each gets an entry of its own
+// straight away, with an empty description, and its upload lands on that
+// entry (known by its key, landingImages.js) wherever it has moved by then,
+// or nowhere if it was removed. No ✨: captions are plain text, never
+// rewritten by AI.
+function GalleryFields({ sectionId, images, onChange, limits, imageProps }) {
+  const [uploading, setUploading] = useState(0);
+  const [error, setError] = useState('');
+  const max = limits?.galleryImages ?? 24;
+  // An edited entry stays the same entry to an upload in flight.
+  const setEntry = (i, patch) => onChange(images.map((entry, idx) => (idx === i ? carryItemKey(entry, { ...entry, ...patch }) : entry)));
+
+  async function handleFiles(e) {
+    const files = [...(e.target.files || [])];
+    e.target.value = ''; // so picking the same files again still uploads them
+    if (!files.length) return;
+    const problems = files.map((file) => imageFileProblem(file, limits?.images)).filter(Boolean);
+    const fine = files.filter((file) => !imageFileProblem(file, limits?.images));
+    const taken = fine.slice(0, Math.max(0, max - images.length));
+    const notes = [...new Set(problems)];
+    if (problems.length) notes.unshift(problems.length === 1 ? "1 file wasn't added:" : `${problems.length} files weren't added:`);
+    if (taken.length < fine.length) notes.push(`A gallery holds at most ${max} images, so ${fine.length - taken.length} more weren't added.`);
+    setError(notes.join(' '));
+    if (!taken.length) return;
+    // The new entries go into the draft first, so each upload has its own
+    // entry to find (uploadSpot() reads the draft as it is now).
+    const start = images.length;
+    onChange([...images, ...taken.map(() => ({ image: null, caption: '' }))]);
+    setUploading((n) => n + taken.length);
+    const results = await Promise.allSettled(taken.map((file, j) => imageProps({ kind: 'gallery', sectionId, index: start + j }).onUpload(file)));
+    setUploading((n) => n - taken.length);
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length) setError(`${failed.length} of the images couldn't be uploaded: ${failed[0].reason?.message || 'Upload failed'}`);
+  }
+
+  return (
+    <>
+      {images.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Image {i + 1}</span>
+            <RowActions
+              index={i}
+              count={images.length}
+              onMove={(delta) => onChange(moved(images, i, delta))}
+              onRemove={() => onChange(images.filter((_, idx) => idx !== i))}
+              what="image"
+            />
+          </div>
+          <LandingImageField value={entry.image} onChange={(image) => setEntry(i, { image })} {...imageProps({ kind: 'gallery', sectionId, index: i })} />
+          <textarea
+            className="ed-input"
+            rows={2}
+            value={entry.caption}
+            maxLength={limits?.images?.caption}
+            onChange={(e) => setEntry(i, { caption: e.target.value })}
+            placeholder="Caption (optional)"
+            aria-label={`Caption of image ${i + 1}`}
+          />
+        </div>
+      ))}
+      {images.length < max && (
+        <label className={`ed-btn ed-btn-ghost${uploading ? ' ed-btn-inert' : ''}`}>
+          {uploading ? `Uploading ${uploading} image${uploading === 1 ? '' : 's'}…` : '+ Add images'}
+          <input type="file" accept={IMAGE_TYPES.join(',')} multiple onChange={handleFiles} disabled={uploading > 0} hidden />
+        </label>
+      )}
+      {error && <div className="ed-field-error">{error}</div>}
+      <span className="ed-field-hint">
+        Up to {max} images, shown in a grid that opens each one larger. Pick several files at once if you like. Each needs a
+        description before publishing; one with no image yet is left off the page.
+      </span>
+    </>
+  );
 }
 
 // Testimonials (issue #90). No ✨ here: they're someone else's words.
@@ -594,6 +927,84 @@ function ExperienceFields({ section, onChange, resumes, context, limits }) {
       <span className="ed-field-hint">
         The first experience entries the resume shows on the web, as last published: title, company, location and dates, never
         descriptions or bullets. Ends with a link to the full resume.
+      </span>
+    </>
+  );
+}
+
+// Which resume an education or skills section reads from (issue #126), and
+// where it stands for visitors: an experience section's picker.
+function SectionResumeFields({ section, onChange, resumes, context, nothing }) {
+  const known = resumes.some((r) => r.id === section.resumeId);
+  const status = cardStatus(section.resumeId, resumes, context);
+  return (
+    <>
+      <select className="ed-input" value={section.resumeId} onChange={(e) => onChange({ resumeId: e.target.value })} aria-label="Which resume">
+        {!known && <option value={section.resumeId}>Deleted resume</option>}
+        {resumes.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.name}
+          </option>
+        ))}
+      </select>
+      {status && <span className="ed-field-hint ed-landing-card-status">{status}</span>}
+      {!status && nothing && <span className="ed-field-hint ed-landing-card-status">{nothing}</span>}
+    </>
+  );
+}
+
+// A resume's latest education entries (issue #126), read from what it has
+// published each time the page is shown, like ExperienceFields.
+function EducationFields({ section, onChange, resumes, context, limits }) {
+  const entries = context.resumes.find((r) => r.id === section.resumeId)?.education ?? [];
+  const max = limits?.educationCount ?? 10;
+  return (
+    <>
+      <SectionResumeFields
+        section={section}
+        onChange={onChange}
+        resumes={resumes}
+        context={context}
+        nothing={entries.length === 0 ? 'Its published version has no education shown on the web, so nothing is shown.' : null}
+      />
+      <label className="ed-field">
+        <span>Entries to show</span>
+        <select className="ed-input" value={section.count} onChange={(e) => onChange({ count: Number(e.target.value) })}>
+          {Array.from({ length: max }, (_, n) => n + 1).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="ed-field ed-checkbox-field">
+        <input type="checkbox" checked={Boolean(section.showDates)} onChange={(e) => onChange({ showDates: e.target.checked })} />
+        Show dates
+      </label>
+      <span className="ed-field-hint">
+        The first education entries the resume shows on the web, as last published: degree, institution, location and dates. Ends
+        with a link to the full resume.
+      </span>
+    </>
+  );
+}
+
+// Every skill group a resume shows on the web (issue #126), as last
+// published: its category and its items, one chip each.
+function SkillsFields({ section, onChange, resumes, context }) {
+  const groups = context.resumes.find((r) => r.id === section.resumeId)?.skills ?? [];
+  return (
+    <>
+      <SectionResumeFields
+        section={section}
+        onChange={onChange}
+        resumes={resumes}
+        context={context}
+        nothing={groups.length === 0 ? 'Its published version has no skills shown on the web, so nothing is shown.' : null}
+      />
+      <span className="ed-field-hint">
+        Every skill group the resume shows on the web, as last published, in its order: the category and its items, split on commas.
+        Ends with a link to the full resume.
       </span>
     </>
   );

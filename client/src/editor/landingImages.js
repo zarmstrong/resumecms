@@ -7,7 +7,8 @@
 // the reference; the image itself is left for the store's clean-up.
 //
 // Targets: { kind: 'photo' }, { kind: 'seo' }, { kind: 'section', sectionId }
-// and { kind: 'item', sectionId, index }.
+// and { kind: 'item', sectionId, index }, and a gallery's entry (issue #120),
+// { kind: 'gallery', sectionId, index }, known by its key like an item.
 
 // Items have no id, and their content can't tell them apart (two empty
 // ones, or one deleted and a new one added in its place), so the editor
@@ -36,9 +37,18 @@ const itemsOf = (landing, sectionId) => {
   return section?.kind === 'items' ? section.items : null;
 };
 
+const entriesOf = (landing, sectionId) => {
+  const section = landing.sections.find((s) => s.id === sectionId);
+  return section?.kind === 'gallery' ? section.images : null;
+};
+
 // What the upload remembers of its target, from the draft it started in
 // (null when it isn't there).
 export function uploadSpot(landing, target) {
+  if (target.kind === 'gallery') {
+    const entry = entriesOf(landing, target.sectionId)?.[target.index];
+    return entry ? { target, key: itemKey(entry) } : null;
+  }
   if (target.kind !== 'item') return { target };
   const item = itemsOf(landing, target.sectionId)?.[target.index];
   return item ? { target, key: itemKey(item) } : null;
@@ -72,6 +82,16 @@ export function applyUploadedImage(landing, spot, imageId) {
       return {
         ...landing,
         sections: landing.sections.map((s) => (s.id === target.sectionId ? { ...s, items: s.items.map((i) => (i === item ? placed : i)) } : s)),
+      };
+    }
+    case 'gallery': {
+      const entries = entriesOf(landing, target.sectionId);
+      const entry = entries?.find((candidate) => itemKeys.get(candidate) === spot.key);
+      if (!entry) return null;
+      const placed = carryItemKey(entry, { ...entry, image: ref(entry.image) });
+      return {
+        ...landing,
+        sections: landing.sections.map((s) => (s.id === target.sectionId ? { ...s, images: s.images.map((e) => (e === entry ? placed : e)) } : s)),
       };
     }
     default:

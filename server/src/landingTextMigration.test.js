@@ -290,3 +290,26 @@ test('escaping keeps every image reference: an item thumbnail, an image section 
   const echoed = escapeLandingText({ ...landing, sections: [{ ...landing.sections[0], items: [{ ...stored.sections[0].items[0] }] }] }, stored).landing;
   assert.deepEqual(echoed.sections[0].items[0].image, image);
 });
+
+test('a plain write escapes an FAQ answer it changed, keeps one it echoed, and never touches a question', () => {
+  const { store, put } = makeStore();
+  const faq = (entries) => ({ id: 'faq', kind: 'faq', title: '', entries });
+  // Written with the syntax (MCP, a current editor), then echoed by a tab without the marker.
+  const stored = store.setLanding({
+    headline: 'Jo',
+    sections: [faq([{ question: 'Do you *travel*?', answer: 'Yes, **often**. [More](https://jo.example)' }, { question: 'B?', answer: 'b \\*x\\*' }])],
+  });
+  assert.deepEqual(put({ ...stored, headline: 'Jo Doe' }).sections, stored.sections);
+  // Moved, the echoes still match their stored answers.
+  const [first, second] = stored.sections[0].entries;
+  assert.deepEqual(put({ ...stored, sections: [faq([second, first])] }).sections[0].entries, [second, first]);
+  // An edited answer reads as that tab showed it; the question stays plain text, as written.
+  const edited = put({ ...stored, sections: [faq([{ question: 'Do you *travel*?', answer: 'Yes, *sometimes*.' }])] });
+  assert.deepEqual(edited.sections[0].entries[0], { question: 'Do you *travel*?', answer: 'Yes, \\*sometimes\\*.' });
+  assert.deepEqual(parseInline(edited.sections[0].entries[0].answer), [{ t: 'text', text: 'Yes, *sometimes*.' }]);
+  // A marked write is taken as written.
+  assert.equal(put({ ...stored, sections: [faq([{ question: 'Q', answer: '*Now*' }])], textFormat: 'inline' }).sections[0].entries[0].answer, '*Now*');
+  // What isn't text is left for validation.
+  const odd = { sections: [{ kind: 'faq', entries: 'x' }, { kind: 'faq', entries: [null, { answer: 3 }] }] };
+  assert.deepEqual(escapeLandingText(odd).landing, odd);
+});

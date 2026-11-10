@@ -9,6 +9,7 @@ import { useLeaveGuard } from './useLeaveGuard.js';
 import { landingUnsavedWork } from './unsavedWork.js';
 import { LANDING_PAGE, landingShown } from './resumeLinks.js';
 import { applyUploadedImage, uploadSpot } from './landingImages.js';
+import { createLimiter } from './uploadLimit.js';
 import {
   anchorFor,
   highlightIds,
@@ -131,12 +132,19 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   // latest handleChange), at its target wherever that has moved, or nowhere
   // if it's gone. Both happen before the tracked request settles, so a
   // flush (a publish, a switch) waits for the upload and then for the draft
-  // save it led to.
+  // save it led to. At most two are sent at once (a gallery can pick 24
+  // files, each buffered and re-encoded by the server); the rest wait their
+  // turn, already tracked, so a flush waits for them too. One whose turn
+  // comes after the page went away isn't sent.
   const handleChangeRef = useRef(null);
   handleChangeRef.current = handleChange;
+  const uploadSlotsRef = useRef(null);
+  uploadSlotsRef.current ??= createLimiter(2);
   function handleImageUpload(file, target) {
     const spot = uploadSpot(landingRef.current, target);
-    const request = api.uploadLandingImage(file).then((image) => {
+    const upload = () => (mountedRef.current ? api.uploadLandingImage(file) : null);
+    const request = uploadSlotsRef.current(upload).then((image) => {
+      if (!image) return image; // its turn came after the page went away
       // The page went away mid-upload without a flush. The leave guard
       // waits for an upload (it's on the save queue) before every way out
       // it sees, the browser's Back included, so this is one it didn't.
