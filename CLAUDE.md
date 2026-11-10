@@ -315,10 +315,12 @@ opening its `page` or `pdf`), where `sections` is an ordered list of
 `links`, `resumes` (cards `{ resumeId, label, blurb }`), `quotes`
 (`[{ text, name, role, url }]`), `experience` (`resumeId`, `count`,
 `showDates`; issue #90), `image` (`{ image, caption }`, `image` null
-until one is uploaded; issue #92) and `divider` (only its `title`, a label
+until one is uploaded; issue #92), `divider` (only its `title`, a label
 on the rule; always resolved, but only drawn between two things it
 divides: `client/src/landing/dividers.js`, applied by `LandingView`, since
-which sections end up next to each other depends on the template). Any section may be `hidden: true`: kept in the
+which sections end up next to each other depends on the template) and
+`stats` (`[{ value, label }]`, plain text, a stat without a value dropped
+by `resolveLanding()`; issue #125, never an AI rewrite target). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -383,7 +385,7 @@ merged into the default resume's site settings *draft* through its
 
 A text section's `body` and an item's `text` (issue #91, nothing else: a
 quote's `text`, an item's `meta`, an image section's `caption`, an
-image's `alt` and every title or label stay plain text,
+image's `alt`, a stat's `value` and every title or label stay plain text,
 never parsed, escaped or migrated) may
 hold `[label](url)`, `**bold**` and `*italic*`; a `\` before `\ * [ ]`
 escapes it, and an unmatched marker stays literal. The tokenizer,
@@ -479,7 +481,7 @@ first `count` of them plus the resume's `href`. An image reference resolves
 against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
-(no text, no item or quote, every card's resume hidden, no role, no image) is dropped, heading and
+(no text, no item or quote, every card's resume hidden, no role, no image, no stat with a value) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -959,7 +961,8 @@ request returns a list (an `intro` target writes headline, subheadline and
 a text section, three proposals). Targets are an allowlist
 (`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items by
 index. Quotes (someone else's words), experience sections (read from a
-resume) and an item's `meta` are deliberately never targets. The page is
+resume), stats (a model mustn't make up figures; the page context shows
+them read-only) and an item's `meta` are deliberately never targets. The page is
 public, so what the model sees is too: the route builds
 `landingProfile()` from `store.visibleResumeSnapshot()` (a resume's
 *published* snapshot, only while it's public; the card's resume for a

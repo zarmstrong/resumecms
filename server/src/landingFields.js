@@ -36,14 +36,17 @@ import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, empty
 //   image      — image (a reference, or null until one is uploaded), caption
 //   divider    — nothing but its title: a rule across the page, the title
 //                (if any) a label on it
+//   stats      — stats: [{ value, label }], a few large figures ("2,000+",
+//                "$4.2M", "15 years") each over a short label (issue #125);
+//                both plain text, so a value needn't be a number
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown, and `column: 'side'`: drawn in the side column by a
 // template that has one (template.json's `columns`, e.g. split's column
 // under the hero) and in the main flow by every other. `hidden`, `column`
 // and an item's `meta` are only stored when set.
 // A text section's body and an item's text may hold links and emphasis
-// (issue #91, inlineText.js); every other string, a quote's text and an
-// item's meta included, is plain text.
+// (issue #91, inlineText.js); every other string, a quote's text, an
+// item's meta and a stat included, is plain text.
 // `id` only tells sections apart in the editor; it never leaves the server
 // publicly. `seo` is { title, description, noindex } (issue #87): what
 // the page's <title>, description and link previews say instead of the
@@ -91,6 +94,9 @@ export const LANDING_LIMITS = {
   quoteName: 100,
   quoteRole: 120,
   experienceCount: 10,
+  stats: 6,
+  statValue: 16,
+  statLabel: 80,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -117,7 +123,7 @@ export const LINK_TYPES = [
   'custom',
 ];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -135,9 +141,11 @@ const SECTION_FIELDS = {
   experience: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId', 'count', 'showDates'],
   image: ['id', 'kind', 'title', 'hidden', 'column', 'image', 'caption'],
   divider: ['id', 'kind', 'title', 'hidden', 'column'],
+  stats: ['id', 'kind', 'title', 'hidden', 'column', 'stats'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
+const STAT_FIELDS = ['value', 'label'];
 // What an experience section shows when it's added without saying.
 export const EXPERIENCE_DEFAULTS = { count: 3, showDates: true };
 const LINK_FIELDS = ['type', 'label', 'url'];
@@ -386,6 +394,14 @@ function checkQuote(quote, label) {
   return out;
 }
 
+function checkStat(stat, label) {
+  checkKeys(stat, STAT_FIELDS, label);
+  return {
+    value: checkString(stat.value ?? '', LANDING_LIMITS.statValue, `${label}.value`),
+    label: checkString(stat.label ?? '', LANDING_LIMITS.statLabel, `${label}.label`),
+  };
+}
+
 // One section, with the fields of its kind and nothing else. A section
 // without an id (an MCP client adding one) gets a new one.
 function checkSection(section, i, refs, ids) {
@@ -434,6 +450,9 @@ function checkSection(section, i, refs, ids) {
     case 'image':
       out.image = section.image == null ? null : checkImageRef(section.image, `${label}.image`, refs);
       out.caption = checkString(section.caption ?? '', LANDING_IMAGE_LIMITS.caption, `${label}.caption`);
+      break;
+    case 'stats':
+      out.stats = checkList(section.stats, LANDING_LIMITS.stats, `${label}.stats`).map((stat, j) => checkStat(stat, `${label}.stats[${j}]`));
       break;
   }
   return out;
@@ -576,7 +595,7 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // PDF) is there, a link action unless its URL is safe. Each resolved action
 // is { label, href }. A section
 // left with nothing to show (no text, no item, every link half typed, every
-// card's resume hidden, every quote empty) is left out, title and all, and
+// card's resume hidden, every quote empty, no stat with a value) is left out, title and all, and
 // so is a hidden one; sections lose their ids, and keep `column` when set
 // (a divider always goes along: whether it has anything to divide depends
 // on how the template arranges the sections, so the client decides, in
@@ -688,6 +707,11 @@ function resolveSection(section, context) {
     }
     case 'divider':
       return {};
+    case 'stats': {
+      // A stat is its value; a label alone has nothing to show.
+      const stats = section.stats.filter((stat) => stat.value.trim()).map((stat) => ({ value: stat.value, label: stat.label }));
+      return stats.length ? { stats } : null;
+    }
     default:
       return null;
   }

@@ -230,6 +230,28 @@ test('quotes, experience sections and meta lines are never a target', async () =
   assert.equal(called, false);
 });
 
+test('a stats section is never a target, and the page context shows only the stats a visitor sees', async () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      { id: 'nums', kind: 'stats', title: 'By the numbers', stats: [{ value: '15 years', label: 'in commercial kitchens' }, { value: ' ', label: 'Unshown label' }] },
+    ],
+  };
+  for (const target of [
+    { kind: 'stats', sectionId: 'nums' },
+    { kind: 'stat', sectionId: 'nums', index: 0 },
+    { kind: 'item', sectionId: 'nums', index: 0 },
+    { kind: 'text', sectionId: 'nums' },
+    { kind: 'intro', sectionId: 'nums' },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+  const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null);
+  for (const shown of ['By the numbers', '15 years', 'in commercial kitchens']) assert.ok(user.includes(shown), shown);
+  assert.ok(!user.includes('Unshown label'));
+});
+
 test('the page context leaves hidden sections out, and shows quotes, meta lines and roles as a visitor reads them', () => {
   const page = {
     ...landing,

@@ -428,6 +428,69 @@ a.l-role-company {
   overflow-wrap: anywhere;
 }
 
+/* A stats section (issue #125): each figure large, over its label, under a
+   short bar in the accent color. At most three a row (four as two by
+   two), then two and one as the column narrows; split's side column draws
+   them one a row (its style.css). */
+.l-stats {
+  --l-stats-across: 3;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(max(8.5em, calc((100% - (var(--l-stats-across) - 1) * 24px) / var(--l-stats-across))), 1fr)
+  );
+  gap: 22px 24px;
+  padding: 0;
+  margin: 0;
+}
+
+.l-stats:has(> .l-stat:nth-child(4):last-child) {
+  --l-stats-across: 2;
+}
+
+.l-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.l-stat::before {
+  content: '';
+  width: 32px;
+  height: 3px;
+  margin-bottom: 6px;
+  border-radius: 2px;
+  background: var(--r-accent, var(--ink));
+}
+
+.l-stat-value {
+  font-family: var(--r-name-font, inherit);
+  font-size: 2.2em;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--r-accent, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+.l-stat-label {
+  font-size: 0.95em;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
+/* Read by a screen reader, never shown. */
+.l-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The editor's preview: a section hidden from the page. */
 .l-section-hidden > :not(.l-hidden-label) {
   opacity: 0.35;

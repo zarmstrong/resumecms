@@ -441,6 +441,25 @@ export const LANDING_SCHEMA = {
             description: 'A rule across the page between two sections; its title, if any, is a label on the rule',
             properties: { ...LANDING_SECTION_BASE, kind: { const: 'divider' } },
           },
+          {
+            type: 'object',
+            description:
+              "A few large figures, each with a short label under it ('15 years' over 'in commercial kitchens'), at most 6; one without a value isn't shown. Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'stats' },
+              stats: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    value: { type: 'string', description: "Plain text, not a number, at most 16 characters: '2,000+', '98%', '$4.2M', '#1'" },
+                    label: { type: 'string', description: 'Plain text, at most 80 characters' },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     },
