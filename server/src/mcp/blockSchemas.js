@@ -441,7 +441,7 @@ export const LANDING_SCHEMA = {
     },
     template: {
       type: 'string',
-      description: "Landing template id, a folder name under templates/landing/: 'classic' (default), 'centered' (hero centered, cards in a grid) or 'split' (photo and hero in a left column, sticky unless sections are placed there with column: 'side'). An unknown id is drawn as classic",
+      description: "Landing template id, a folder name under templates/landing/: 'classic' (default), 'centered' (hero centered, cards in a grid), 'formal' (a letterhead: name in small caps over a rule, details aligned right) or 'split' (photo and hero in a left column, sticky unless sections are placed there with column: 'side'). An unknown id is drawn as classic",
     },
     style: {
       type: 'object',
