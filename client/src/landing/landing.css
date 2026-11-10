@@ -7,7 +7,14 @@
    page's own) and --l-dark-* (its dark palette, when it has one), and reach
    the parts as the same --r-* properties resume.css uses: the light ones,
    or the dark ones under the visitor's dark setting (.l-dark-auto) or the
-   editor's dark preview (.l-dark-on). */
+   editor's dark preview (.l-dark-on).
+
+   Every part that shows the person's own text sets overflow-wrap:
+   anywhere, so a word too long for its line (a German compound, an email
+   address, a URL) breaks instead of widening the page past a phone's
+   screen (issue #144). Each part sets it itself rather than .l-page, so
+   the page's fixed labels (a credential's kind, "View resume") keep their
+   width in a track sized by its content. */
 .l-page {
   --r-accent: var(--l-accent);
   --r-heading: var(--l-heading);
@@ -61,6 +68,7 @@
   font-weight: 600;
   color: var(--r-heading, var(--ink));
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .l-subheadline {
@@ -68,6 +76,7 @@
   font-size: 1.2em;
   color: var(--r-accent, var(--slate));
   margin: 6px 0 0;
+  overflow-wrap: anywhere;
 }
 
 .l-availability {
@@ -79,6 +88,7 @@
   border-radius: 999px;
   color: var(--r-accent, var(--slate));
   background: color-mix(in srgb, var(--r-accent, var(--ink)) 12%, transparent);
+  overflow-wrap: anywhere;
 }
 
 .l-actions {
@@ -130,6 +140,7 @@
   font-weight: 600;
   color: var(--r-heading, var(--ink));
   margin: 0 0 12px;
+  overflow-wrap: anywhere;
 }
 
 .l-text {
@@ -276,6 +287,7 @@ a.l-item-title:hover {
   font-size: 1.1em;
   color: var(--r-heading, var(--ink));
   text-decoration: none;
+  overflow-wrap: anywhere;
 }
 
 /* The whole card opens the resume, and shows its focus ring. */
@@ -311,6 +323,7 @@ a.l-item-title:hover {
 
 .l-card-blurb {
   font-size: 0.95em;
+  overflow-wrap: anywhere;
 }
 
 .l-card-cta {
@@ -345,6 +358,7 @@ a.l-item-title:hover {
   margin-top: 6px;
   font-size: 0.9em;
   opacity: 0.8;
+  overflow-wrap: anywhere;
 }
 
 .l-quote-name {
@@ -406,6 +420,7 @@ a.l-role-company {
 .l-role-meta {
   font-size: 0.88em;
   opacity: 0.7;
+  overflow-wrap: anywhere;
 }
 
 .l-roles-more {
