@@ -7,6 +7,7 @@ import { dropStrayDividers } from './dividers.js';
 import { renderInline } from './renderInline.js';
 import { readDate } from './dateText.js';
 import { LandingGallery } from './LandingGallery.jsx';
+import { ActionIcon } from './ActionIcon.jsx';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
@@ -54,6 +55,7 @@ export function LandingView({ landing, preview = false, highlightIds = null, sch
           <div className="l-actions">
             {landing.actions.map((action, i) => (
               <a key={i} className={`l-action${i === 0 ? ' l-action-primary' : ''}`} {...hrefProps(action.href)}>
+                {action.icon && <ActionIcon name={action.icon} />}
                 {action.label}
               </a>
             ))}

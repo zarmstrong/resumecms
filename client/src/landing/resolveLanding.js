@@ -74,12 +74,13 @@ export const ACTION_LABELS = { page: 'View my resume', pdf: 'Download my resume 
 // isn't shown: a link that's half typed or unsafe, a resume a visitor
 // can't open, or a PDF it doesn't have.
 function resolveAction(action, targets) {
+  const icon = action.icon ? { icon: action.icon } : {};
   if (action.type === 'link') {
-    return action.url !== '' && isSafeUrl(action.url) ? { label: action.label || action.url, href: action.url } : null;
+    return action.url !== '' && isSafeUrl(action.url) ? { label: action.label || action.url, href: action.url, ...icon } : null;
   }
   const target = targets.get(action.resumeId);
   const href = action.open === 'pdf' ? target?.pdfHref : target?.href;
-  return href ? { label: action.label || ACTION_LABELS[action.open], href } : null;
+  return href ? { label: action.label || ACTION_LABELS[action.open], href, ...icon } : null;
 }
 
 // An image reference ({ imageId, alt }) as a visitor sees it,

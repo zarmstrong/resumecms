@@ -70,11 +70,11 @@ test('hero actions and card PDFs resolve like the server does', () => {
     ...draft,
     availability: 'Open to work',
     actions: [
-      { type: 'link', label: 'Email me', url: 'mailto:jo@example.com' },
+      { type: 'link', label: 'Email me', url: 'mailto:jo@example.com', icon: 'envelope' },
       { type: 'link', label: '', url: 'https://cal.example/jo' },
       { type: 'link', label: 'Bad', url: 'java\tscript:alert(1)' },
       { type: 'link', label: 'Half typed', url: '' },
-      { type: 'resume', label: '', resumeId: 'main', open: 'pdf' },
+      { type: 'resume', label: '', resumeId: 'main', open: 'pdf', icon: 'file-pdf' },
       { type: 'resume', label: 'Sales PDF', resumeId: 'sales', open: 'pdf' },
       { type: 'resume', label: '', resumeId: 'sales', open: 'page' },
       { type: 'resume', label: 'Secret', resumeId: 'private', open: 'page' },
@@ -94,9 +94,9 @@ test('hero actions and card PDFs resolve like the server does', () => {
   const out = resolveLanding(landing, ctx);
   assert.equal(out.availability, 'Open to work');
   assert.deepEqual(out.actions, [
-    { label: 'Email me', href: 'mailto:jo@example.com' },
+    { label: 'Email me', href: 'mailto:jo@example.com', icon: 'envelope' },
     { label: 'https://cal.example/jo', href: 'https://cal.example/jo' },
-    { label: 'Download my resume (PDF)', href: '/api/public/resume.pdf?v=1-2' },
+    { label: 'Download my resume (PDF)', href: '/api/public/resume.pdf?v=1-2', icon: 'file-pdf' },
     { label: 'View my resume', href: '/r/sales' },
   ]);
   assert.deepEqual(out.sections[0].cards, [

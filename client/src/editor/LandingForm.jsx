@@ -7,6 +7,7 @@ import { SearchSharingFields } from './SearchSharingFields.jsx';
 import { LandingLookFields } from './LandingLookFields.jsx';
 import { IMAGE_TYPES, LandingImageField, imageFileProblem, withImageRef } from './LandingImageField.jsx';
 import { carryItemKey } from './landingImages.js';
+import { ActionIconPicker } from './ActionIconPicker.jsx';
 import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
 import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
@@ -393,9 +394,15 @@ function LandingSeoFields({ landing, context, limits, onChange, imageProps }) {
 function ActionsFields({ actions, onChange, resumes, context, limits }) {
   const setAction = (i, next) => onChange(actions.map((a, idx) => (idx === i ? next : a)));
   const choose = (action, value) => {
-    if (value === 'link') return { type: 'link', label: action.label, url: action.type === 'link' ? action.url : '' };
+    const icon = action.icon ? { icon: action.icon } : {};
+    if (value === 'link') return { type: 'link', label: action.label, url: action.type === 'link' ? action.url : '', ...icon };
     const [open, ...rest] = value.split(':');
-    return { type: 'resume', label: action.label, resumeId: rest.join(':'), open };
+    return { type: 'resume', label: action.label, resumeId: rest.join(':'), open, ...icon };
+  };
+  // Like the server, no icon isn't stored.
+  const withIcon = (action, icon) => {
+    const { icon: _old, ...rest } = action;
+    return icon ? { ...rest, icon } : rest;
   };
   return (
     <div className="ed-field">
@@ -459,6 +466,7 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
                 )}
               </>
             )}
+            <ActionIconPicker value={action.icon ?? ''} onChange={(icon) => setAction(i, withIcon(action, icon))} />
           </div>
         );
       })}

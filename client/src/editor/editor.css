@@ -1340,6 +1340,60 @@
   padding: 0 12px 12px;
 }
 
+/* A landing page button's icon picker (ActionIconPicker.jsx). */
+.ed-icon-picker > summary {
+  font-weight: 400;
+}
+
+.ed-icon-picker-icon {
+  width: auto;
+  height: 1em;
+  vertical-align: -0.125em;
+}
+
+.ed-icon-picker-none {
+  align-self: flex-start;
+}
+
+.ed-icon-picker-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ed-icon-picker-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ed-icon-picker-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ed-icon-picker-option:hover,
+.ed-icon-picker-none:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.ed-icon-picker-option[aria-pressed='true'],
+.ed-icon-picker-none[aria-pressed='true'] {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: var(--signal-dim);
+}
+
 /* The landing page preview's label, with its Light/Dark switch while the
    draft has a dark palette (issue #93). */
 .ed-landing-preview-label {

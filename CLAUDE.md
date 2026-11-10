@@ -309,7 +309,7 @@ store by `createResumeStore()`; validation and the public shape are pure, in
 photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel, template, style }` (`seo` is `{ title, description, noindex, image? }`, see
 "Search and link previews"; `mergeLandingPatch()` merges it one level
 deep; `actions` are the hero's buttons, issue #88, a `link` or a `resume`
-opening its `page` or `pdf`), where `sections` is an ordered list of
+opening its `page` or `pdf`, with an optional `icon`), where `sections` is an ordered list of
 `{ id, kind, title, ... }` with only the fields of its kind
 (`SECTION_FIELDS`): `text` (`body`), `items` (`[{ title, text, url, meta, image? }]`),
 `links`, `resumes` (cards `{ resumeId, label, blurb }`), `quotes`
@@ -356,7 +356,14 @@ its names are `LINK_TYPES`, kept in step with the catalog in
 per-field types, grouped in the editor's dropdown by the catalog's
 `group`, and `inferLinkType()` matches a site by exact host or subdomain),
 and `telUrl()` (a fresh draft's phone link) mirrors
-the client's `telHref()`. A new card, resume action or experience,
+the client's `telHref()`. A button's `icon` (stored only when set) is one
+of `ACTION_ICONS`, Font Awesome Free names drawn by
+`client/src/landing/actionIcons.js` as inline SVG from the data-only
+`@fortawesome/free-*-svg-icons` packages, so only the listed icons are
+bundled and no icon font or script loads; its test compares the list with
+the server's and the `mcp/blockSchemas.js` enum, so add an icon to all
+three. The build keeps `/*!` license comments (`vite.config.js`), which
+carry the attribution the icons' CC BY license asks for. A new card, resume action or experience,
 education or skills section must name an existing resume, but one already in the draft may outlive its resume
 (`referencedResumeIds()`), so a deletion doesn't make the draft unsavable. Publishing it is separate from
 publishing any resume, and `landing_enabled` isn't drafted: it takes
@@ -490,7 +497,7 @@ resume's published header title. A card with `showPdf`, and a resume
 action with `open: 'pdf'`, link the PDF (`pdfHref` in the context: the
 host's own `/api/public/resume.pdf` for the default, the slug's
 otherwise, with `pdfVersionOf()`'s `?v=`) only while the file exists; a
-resolved action is `{ label, href }`. An experience section never stores
+resolved action is `{ label, href, icon? }`. An experience section never stores
 roles or block ids: the context carries each visible resume's
 `experience`, `experienceRoles()` of its published blocks (the experience
 entries `publicBlocks.js` shows on the web, in order, with only title,
