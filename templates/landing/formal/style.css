@@ -1,0 +1,529 @@
+/* Formal (issue #130): a letterhead, for law, finance, accounting,
+   academia, government and medicine. The name in small capitals over a
+   thin rule (the photo, square and plain, to its right), then one
+   close-set column with each section under a ruled small-caps heading,
+   and an entry's details (an item's meta, a role's or a school's dates, a
+   credential's number and dates, a resume's links) aligned to the right
+   of it. No tinted panels, rounded corners or
+   motion. The type is the page's own font (a serif unless one was chosen
+   otherwise), never a fixed one. No index.jsx, so LandingView arranges it
+   (the hero, then the sections, in an .l-main). Sized by the page's own
+   width (a container query), so the editor's narrower preview shows what
+   a phone would. */
+.l-template-formal {
+  container-type: inline-size;
+}
+
+.l-template-formal .l-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 64px 32px 88px;
+  line-height: 1.5;
+}
+
+/* Every link and button, drawn with a visible ring when focused (a
+   resume card draws its own around the whole card, in landing.css). */
+.l-template-formal a:not(.l-card-link):focus-visible {
+  outline: 2px solid var(--r-accent, var(--ink));
+  outline-offset: 3px;
+}
+
+.l-template-formal .l-action,
+.l-template-formal .l-card {
+  transition: none;
+}
+
+/* The letterhead. The photo comes first in the markup, so row-reverse
+   puts it on the right. */
+.l-template-formal .l-hero {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 28px;
+  margin-bottom: 44px;
+}
+
+.l-template-formal .l-hero-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.l-template-formal .l-photo {
+  width: 96px;
+  height: 96px;
+  border-radius: 2px;
+}
+
+.l-template-formal .l-availability {
+  display: block;
+  padding: 0;
+  margin: 0 0 6px;
+  border-radius: 0;
+  background: none;
+  font-size: 1em;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+
+.l-template-formal .l-headline {
+  font-size: 2.3em;
+  line-height: 1.2;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--r-heading, var(--ink));
+}
+
+.l-template-formal .l-subheadline {
+  font-size: 1.1em;
+  color: var(--r-text, var(--ink));
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+
+.l-template-formal .l-actions {
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.l-template-formal .l-action {
+  padding: 6px 16px;
+  border-radius: 2px;
+}
+
+/* Sections: a small-caps heading over a hairline. */
+.l-template-formal .l-section {
+  margin: 0 0 32px;
+}
+
+.l-template-formal .l-section:last-child {
+  margin-bottom: 0;
+}
+
+.l-template-formal .l-section-title {
+  font-size: 1.2em;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  padding-bottom: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 22%, transparent);
+  overflow-wrap: anywhere;
+}
+
+.l-template-formal .l-text {
+  margin-bottom: 0.75em;
+}
+
+.l-template-formal .l-text:last-child {
+  margin-bottom: 0;
+}
+
+/* A list entry: its title on the left, its meta (often dates) on the
+   right, its text across both; a thumbnail, when there is one, small and
+   square-cornered in front of them. */
+.l-template-formal .l-items {
+  gap: 12px;
+}
+
+.l-template-formal .l-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(40%);
+  column-gap: 20px;
+  align-items: baseline;
+}
+
+.l-template-formal .l-item > .l-item-title {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.l-template-formal .l-item > .l-item-meta {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  text-align: right;
+}
+
+.l-template-formal .l-item > .l-item-text {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+
+.l-template-formal .l-item-with-image {
+  grid-template-columns: 72px minmax(0, 1fr) fit-content(40%);
+  column-gap: 16px;
+}
+
+.l-template-formal .l-item-with-image > .l-item-image {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: start;
+  width: 72px;
+  height: 54px;
+  margin-top: 4px;
+  border-radius: 0;
+}
+
+.l-template-formal .l-item-with-image > .l-item-title {
+  grid-column: 2;
+}
+
+.l-template-formal .l-item-with-image > .l-item-meta {
+  grid-column: 3;
+}
+
+.l-template-formal .l-item-with-image > .l-item-text {
+  grid-column: 2 / -1;
+}
+
+.l-template-formal .l-item-meta,
+.l-template-formal .l-role-meta {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Links: their badges outlined rather than filled. */
+.l-template-formal .l-links {
+  gap: 8px 22px;
+}
+
+.l-template-formal .r-link-badge {
+  background: none;
+  color: var(--r-accent, var(--ink));
+  box-shadow: inset 0 0 0 1px currentColor;
+  border-radius: 0;
+  opacity: 1;
+}
+
+/* Resume cards: ruled rows, the label (and blurb) on the left, the links
+   on the right. The whole row still opens the resume. */
+.l-template-formal .l-cards {
+  display: flex;
+  flex-direction: column;
+}
+
+.l-template-formal .l-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 20px;
+  row-gap: 2px;
+  align-items: baseline;
+  padding: 10px 0;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 22%, transparent);
+  border-radius: 0;
+}
+
+.l-template-formal .l-card:first-child {
+  padding-top: 2px;
+}
+
+.l-template-formal .l-card:hover,
+.l-template-formal .l-card:focus-within {
+  border-color: color-mix(in srgb, var(--r-text, var(--ink)) 22%, transparent);
+  transform: none;
+}
+
+.l-template-formal .l-card-label {
+  grid-column: 1;
+  font-size: 1em;
+  overflow-wrap: anywhere;
+}
+
+.l-template-formal .l-card:hover .l-card-label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.l-template-formal .l-card-blurb {
+  grid-column: 1;
+  overflow-wrap: anywhere;
+}
+
+.l-template-formal .l-card-cta {
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: 0;
+  padding-top: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Quotes: set in from a hairline, the speaker after a dash on the right. */
+.l-template-formal .l-quotes {
+  gap: 18px;
+}
+
+.l-template-formal .l-quote {
+  padding-left: 16px;
+  border-left: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 30%, transparent);
+}
+
+.l-template-formal .l-quote-text {
+  font-size: 1em;
+}
+
+.l-template-formal .l-quote-by {
+  text-align: right;
+}
+
+.l-template-formal .l-quote-by::before {
+  content: '\2014\00a0';
+  content: '\2014\00a0' / '';
+}
+
+/* Experience: no timeline, a ruled-off list of roles with their dates
+   and place on the right. */
+.l-template-formal .l-roles {
+  padding-left: 0;
+  border-left: none;
+  gap: 10px;
+}
+
+.l-template-formal .l-role {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(40%);
+  column-gap: 20px;
+  align-items: baseline;
+}
+
+.l-template-formal .l-role::before {
+  content: none;
+}
+
+.l-template-formal .l-role-meta {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+}
+
+.l-template-formal .l-figure-image {
+  border-radius: 0;
+}
+
+.l-template-formal .l-figure-caption {
+  font-style: italic;
+}
+
+.l-template-formal .l-divider {
+  font-size: 0.95em;
+  text-transform: none;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.12em;
+}
+
+/* Stats: the figures straight under the heading's rule (no bar of their
+   own, which would read as a second rule), in lining, even-width
+   numerals. */
+.l-template-formal .l-stat::before {
+  content: none;
+}
+
+.l-template-formal .l-stat-value {
+  font-size: 1.9em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Skills: each group's category on the left, its skills on the right as
+   a plain list with a dot between them; a group without a category runs
+   across both. The groups share one grid, so the categories line up. */
+.l-template-formal .l-skills {
+  display: grid;
+  grid-template-columns: fit-content(35%) minmax(0, 1fr);
+  gap: 8px 20px;
+}
+
+.l-template-formal .l-skill-group {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: 4px 20px;
+  align-items: baseline;
+}
+
+.l-template-formal .l-skill-list:first-child {
+  grid-column: 1 / -1;
+}
+
+.l-template-formal .l-skill-list {
+  gap: 0 6px;
+}
+
+.l-template-formal .l-skill {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-size: 1em;
+}
+
+.l-template-formal .l-skill:not(:last-child)::after {
+  content: '\00a0\00b7';
+  content: '\00a0\00b7' / '';
+}
+
+/* Credentials: like a list entry, the name and its kind (in small
+   capitals, untinted) on the left, number, dates and "Verify" on the
+   right, the issuer under them. */
+.l-template-formal .l-credentials {
+  gap: 12px;
+}
+
+.l-template-formal .l-credential {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(45%);
+  grid-template-areas:
+    'label label'
+    'head meta'
+    'issuer issuer';
+  column-gap: 20px;
+  align-items: baseline;
+}
+
+.l-template-formal .l-credential > .l-hidden-label {
+  grid-area: label;
+  justify-self: start;
+}
+
+.l-template-formal .l-credential-head {
+  grid-area: head;
+}
+
+.l-template-formal .l-credential-issuer {
+  grid-area: issuer;
+}
+
+.l-template-formal .l-credential-meta {
+  grid-area: meta;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.l-template-formal .l-credential-kind {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 0.95em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  font-variant-caps: all-small-caps;
+}
+
+/* Questions: the heading's hairline already tops the list. */
+.l-template-formal .l-section-title + .l-faq {
+  border-top: none;
+}
+
+.l-template-formal .l-faq-entry {
+  border-bottom-color: color-mix(in srgb, var(--r-text, var(--ink)) 22%, transparent);
+}
+
+.l-template-formal .l-faq-question {
+  padding: 10px 0;
+}
+
+.l-template-formal .l-faq-answer {
+  margin-bottom: 12px;
+}
+
+/* A gallery: square corners, and nothing moves, on the page or in the
+   enlarged view. */
+.l-template-formal .l-gallery-open,
+.l-template-formal .l-gallery-view-image {
+  border-radius: 0;
+}
+
+.l-template-formal .l-gallery-image {
+  transition: none;
+}
+
+.l-template-formal .l-gallery-open:hover .l-gallery-image {
+  transform: none;
+}
+
+.l-template-formal .l-gallery-caption {
+  font-style: italic;
+}
+
+.l-template-formal .l-gallery-dialog {
+  border-radius: 2px;
+}
+
+.l-template-formal .l-gallery-dialog[open] {
+  animation: none;
+}
+
+.l-template-formal .l-gallery-button {
+  border-radius: 2px;
+}
+
+/* A phone (or the editor's preview): the photo over the name, and each
+   entry's details under its title instead of beside it. */
+@container (max-width: 600px) {
+  .l-template-formal .l-main {
+    padding: 36px 16px 56px;
+  }
+  /* Stretched, so the text's width is the column's and a long word in it
+     wraps rather than widening the page. */
+  .l-template-formal .l-hero {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    margin-bottom: 32px;
+  }
+  .l-template-formal .l-photo {
+    align-self: flex-start;
+    width: 80px;
+    height: 80px;
+  }
+  .l-template-formal .l-headline {
+    font-size: 1.9em;
+  }
+  .l-template-formal .l-section {
+    margin-bottom: 28px;
+  }
+  .l-template-formal .l-item,
+  .l-template-formal .l-role,
+  .l-template-formal .l-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .l-template-formal .l-item > .l-item-meta,
+  .l-template-formal .l-role-meta,
+  .l-template-formal .l-card-cta {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+    text-align: left;
+  }
+  .l-template-formal .l-item-with-image {
+    grid-template-columns: 64px minmax(0, 1fr);
+    column-gap: 14px;
+  }
+  .l-template-formal .l-item-with-image > .l-item-image {
+    width: 64px;
+    height: 48px;
+  }
+  .l-template-formal .l-item-with-image > .l-item-meta,
+  .l-template-formal .l-item-with-image > .l-item-text {
+    grid-column: 2;
+  }
+  .l-template-formal .l-card-cta {
+    white-space: normal;
+  }
+  .l-template-formal .l-skills {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .l-template-formal .l-credential {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'label' 'head' 'issuer' 'meta';
+  }
+  .l-template-formal .l-credential-meta {
+    text-align: left;
+  }
+  .l-template-formal .l-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+  }
+}
