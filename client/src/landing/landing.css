@@ -105,6 +105,15 @@
   background: color-mix(in srgb, var(--r-accent, var(--ink)) 10%, transparent);
 }
 
+/* A button's optional icon (actionIcons.js), sized to the text like Font
+   Awesome's own, so a button without one is drawn as it always was. */
+.l-action-icon {
+  width: auto;
+  height: 1em;
+  vertical-align: -0.125em;
+  margin-inline-end: 0.5em;
+}
+
 .l-action-primary {
   background: var(--r-accent, var(--ink));
   color: var(--r-on-accent, #fff);

@@ -25,8 +25,8 @@ in prose; check the diff against the ones that apply, especially:
   filters kept.
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
-  link types, `NESTABLE_TYPES`, letter dates, the landing page's style vs
-  `siteColors.js`, the landing date reader `dateText.js`, …).
+  link types, button icons, `NESTABLE_TYPES`, letter dates, the landing
+  page's style vs `siteColors.js`, the landing date reader `dateText.js`, …).
 - `landing.css` holds only what every landing template shares; an
   arrangement belongs in a template's `style.css`, scoped under
   `.l-template-<id>`, so a change for one template can't move another
