@@ -36,6 +36,22 @@ export function withHead(html, head) {
   return html.replace(/<\/head>/i, () => `${head}\n  </head>`);
 }
 
+// `html` with index.html's links to the site's icons (routes/favicon.js)
+// carrying a `?v=` each (issue #108): `versions` is { svg, png } from
+// faviconContent.js's createIconVersions(), or null to keep the bare paths.
+// A CDN that caches by extension (Cloudflare does .svg and .png for hours)
+// then sees a new URL whenever a publish changes the icon.
+const ICON_LINKS = { svg: '/favicon.svg', png: '/apple-touch-icon.png' };
+export function withIconVersions(html, versions) {
+  if (!versions) return html;
+  let out = html;
+  for (const [key, href] of Object.entries(ICON_LINKS)) {
+    if (!versions[key]) continue;
+    out = out.replaceAll(`href="${href}"`, () => `href="${href}?v=${encodeURIComponent(versions[key])}"`);
+  }
+  return out;
+}
+
 // Serve the built client (Vite output) for everything the API routes didn't
 // claim, including client-side routes like /editor and /print — the SPA
 // router handles them. Hashed bundles (per Vite's manifest) are immutable;
@@ -49,8 +65,10 @@ export function withHead(html, head) {
 // `headFor(req)` (shellHead.js) gives a public page's own title,
 // description and link-preview tags, or null to keep index.html's; it
 // depends on the host (which resume, which origin in the URLs), so every
-// shell response varies on it.
-export function mountClient(app, clientDist, { headFor = () => null } = {}) {
+// shell response varies on it. So does `iconVersions(req)`, the icon
+// links' versions (see withIconVersions()), which every shell gets, the
+// generic ones included, since every page shows the icon.
+export function mountClient(app, clientDist, { headFor = () => null, iconVersions = () => null } = {}) {
   const hashedAssets = hashedAssetsWatcher(clientDist);
   app.use(
     express.static(clientDist, {
@@ -80,6 +98,7 @@ export function mountClient(app, clientDist, { headFor = () => null } = {}) {
     }
     const meta = headFor(req);
     if (meta?.noindex) res.set('X-Robots-Tag', NOINDEX);
-    res.type('html').send(meta ? withHead(html, meta.head) : html);
+    const page = withIconVersions(html, iconVersions(req));
+    res.type('html').send(meta ? withHead(page, meta.head) : page);
   });
 }

@@ -679,8 +679,8 @@ see "Landing page").
 
 Issue #104. `GET /favicon.svg` and `GET /apple-touch-icon.png`
 (`routes/favicon.js`, linked from `index.html`) are the person's initials
-on the accent color. `contentFor()` there asks the store what `/`'s own
-fetch would, like `shellHead.js`: while `landingForHost()` shows the
+on the accent color. `iconContentFor()` (`faviconContent.js`) asks the
+store what `/`'s own fetch would, like `shellHead.js`: while `landingForHost()` shows the
 landing page, the default resume's *published* name (its headline only
 when that has none) and the page's resolved `site` accent (its own palette
 when `style.source` is custom), plus its `darkColors` accent under
@@ -700,6 +700,22 @@ one), the SVG a CSP too. They're mounted in `index.js` after the `/api`
 routes and before `mountClient()`, whose SPA fallback 404s any path with
 an extension; there's no `client/public`, so the build ships no icon of
 its own (`vite.config.js` proxies both to the server in dev).
+
+A CDN that caches by extension ignores `no-cache` for them (Cloudflare
+kept `.svg` and `.png` for 4 hours, issue #108), so the shell links them
+versioned, as `pdfVersion` does the PDF: `mountClient()`'s
+`iconVersions(req)` (`createIconVersions()` in `faviconContent.js`) gives
+`favicon.js`'s `iconVersions()` of the host's icon content, and
+`withIconVersions()` (`clientStatic.js`) rewrites index.html's two hrefs
+to `/favicon.svg?v=…` and `/apple-touch-icon.png?v=…` on every shell,
+generic ones included (applied before the page's head tags go in). The
+SVG's `v` is its ETag's value; the PNG's is the hash of the light SVG
+it's rasterized from, so the shell never rasterizes. When the store
+throws, the links keep the bare paths (a version of the neutral icon would
+name whatever the route serves once the store is back). The routes never
+read `?v=`: same bytes, headers and ETag. Keep the shell's version and the
+routes on the same `iconContentFor()`, or a link stops following a
+change.
 
 ### Route mount order matters
 
@@ -851,8 +867,8 @@ templates live outside `client/src`. `client/vite.config.js` also sets
 
 `scripts/validate-templates.mjs` (dependency-free, Node builtins only)
 checks folder naming (lowercase kebab-case), required `template.json`
-fields, and — for the `templates/presets/` kind it also supports (not yet
-populated) — that a preset's `header`/`layout` references exist and its
+fields, and — for the `templates/presets/` kind (the resume presets, each
+a header and layout plus optional colors) — that a preset's `header`/`layout` references exist and its
 `colors` are recognized `#rrggbb` keys, and a landing template's scoped
 `style.css`. It takes an optional templates folder as its argument, which
 `client/src/resume/validateTemplates.test.js` uses to run it over
@@ -1255,7 +1271,8 @@ error responses carry it too. Don't drop the `pdfVersion` (the PDF file's
 mtime plus size, from the store's `pdfVersion()`) that
 `getPublishedResume()`, `getPublishStatus()` and `publish()` return:
 `client/src/resume/pdfUrl.js` appends it to the PDF link so each render
-is a fresh URL even for caches that ignore headers. It's keyed on the
+is a fresh URL even for caches that ignore headers (the shell's icon
+links carry a `?v=` for the same reason, see "Favicon"). It's keyed on the
 file, not `publishedAt`, because a publish whose render failed must not
 advertise a new URL for the old file; the store's temp-file-plus-rename
 write means it only moves once a render is complete.

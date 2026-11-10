@@ -237,8 +237,8 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/public/resumes/:slug/resume.pdf` | public, its PDF, on the same terms |
 | `GET /api/public/landing/images/:id` | public, an uploaded image the landing page shows; a 404 unless the landing page is shown and its published version uses it |
 | `GET /api/public/images/:key` | public, a link preview's image (a page's photo, or its PNG share card) by the key in that page's `og:image`; a 404 once no public, published page shows it. Sent with `X-Robots-Tag: noindex`. See [Search results and link previews](#search-results-and-link-previews) |
-| `GET /favicon.svg` | public, the site's icon: the initials of the name `/` shows on this domain (the landing page's, which is the default resume's, or this domain's resume), on its accent color, from what's published; a neutral mark before anything is. Switches to the landing page's dark accent under `prefers-color-scheme: dark` when it has a dark palette. Sent with `Cache-Control: no-cache`, `Vary: Host, X-Forwarded-Host` and an ETag of its content. See [Search results and link previews](#search-results-and-link-previews) |
-| `GET /apple-touch-icon.png` | public, the same icon as a 180×180 PNG in the light colors, for home screens and bookmarks; same headers |
+| `GET /favicon.svg` | public, the site's icon: the initials of the name `/` shows on this domain (the landing page's, which is the default resume's, or this domain's resume), on its accent color, from what's published; a neutral mark before anything is. Switches to the landing page's dark accent under `prefers-color-scheme: dark` when it has a dark palette. Sent with `Cache-Control: no-cache`, `Vary: Host, X-Forwarded-Host` and an ETag of its content. The HTML shell links it as `/favicon.svg?v=<version>`, a hash of what this domain's icon shows, so a published change is a new URL; the route ignores `?v=`. See [Search results and link previews](#search-results-and-link-previews) |
+| `GET /apple-touch-icon.png` | public, the same icon as a 180×180 PNG in the light colors, for home screens and bookmarks; same headers, and linked with a `?v=` the same way |
 | `GET /api/public/letter` | the PDF renderer's own: the cover letter its signed render cookie names; a 404 to anyone else |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
 
@@ -657,7 +657,9 @@ domain, with `Vary: Host, X-Forwarded-Host` too (as is
 `private, no-cache` (never stored by a shared cache), and the hashed bundles under `/assets/` as `immutable` for a year. The
 public page also refetches when it comes back into view, and the PDF link
 carries a `pdfVersion` (the rendered file's timestamp) as a query string so
-each render is a URL no cache has seen before.
+each render is a URL no cache has seen before. The page's links to the two
+icons do the same with a hash of what the icon shows, since Cloudflare
+caches `.svg` and `.png` by extension too.
 
 If you put a CDN in front of the app, let those headers through. Cloudflare
 in particular caches `.pdf`, `.js`, and `.css` by file extension and, with
