@@ -24,7 +24,9 @@ import { inlineLength, mapLinks } from '../inlineText.js';
 // theirs is a position.
 // Deliberately not targets (issue #90): a quote, which is someone else's
 // words; an experience section, which is read from a resume as published;
-// an item's meta line; and an FAQ question.
+// an item's meta line; and an FAQ question. Nor is a stat (issue #125): a
+// model mustn't make up figures, so it only ever reads them, in the page
+// context.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*
@@ -267,6 +269,16 @@ function pageContext(landing, target, resumes) {
           };
         case 'quotes':
           return { ...base, quotes: section.quotes.filter((q) => q.text.trim()).map((q) => ({ text: q.text, name: q.name, role: q.role })) };
+        case 'stats':
+          return { ...base, stats: section.stats.filter((stat) => stat.value.trim()).map((stat) => ({ value: stat.value, label: stat.label })) };
+        case 'faq':
+          return {
+            ...base,
+            entries: section.entries.map((entry, index) => ({
+              question: entry.question,
+              answer: mark({ kind: 'answer', sectionId: section.id, index }, linkLabels(entry.answer, 'answer')),
+            })),
+          };
         case 'experience':
           return {
             ...base,
@@ -275,14 +287,6 @@ function pageContext(landing, target, resumes) {
               company: role.company,
               location: role.location,
               ...(section.showDates ? { dates: dates(role.startDate, role.endDate) } : {}),
-            })),
-          };
-        case 'faq':
-          return {
-            ...base,
-            entries: section.entries.map((entry, index) => ({
-              question: entry.question,
-              answer: mark({ kind: 'answer', sectionId: section.id, index }, linkLabels(entry.answer, 'answer')),
             })),
           };
         default:

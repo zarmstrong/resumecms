@@ -191,7 +191,22 @@ export const HEADER_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          type: { enum: ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'] },
+          type: {
+            // The link types of client/src/resume/linkTypes.js and
+            // landingFields.js's LINK_TYPES (linkTypes.test.js compares them).
+            enum: [
+              'website', 'portfolio', 'email', 'phone', 'booking', 'shop', 'publications', 'newsletter',
+              'linkedin', 'twitter', 'facebook', 'tiktok', 'threads', 'bluesky', 'mastodon', 'substack', 'medium',
+              'github', 'gitlab', 'stackoverflow',
+              'instagram', 'behance', 'dribbble', 'artstation', 'vimeo', 'youtube',
+              'soundcloud', 'bandcamp', 'spotify',
+              'orcid', 'googlescholar', 'researchgate',
+              'imdb',
+              'houzz', 'nextdoor', 'googlebusiness',
+              'custom',
+            ],
+            description: 'Picks the one-letter badge the link is drawn with; custom for any other link. twitter means Twitter / X.',
+          },
           label: { type: 'string', description: 'Display text, e.g. "github.com/you", or the address/number for an email/phone link' },
           url: { type: 'string', description: 'https URL; mailto:you@example.com for an email link, tel:+15555550100 for a phone link' },
         },
@@ -425,6 +440,25 @@ export const LANDING_SCHEMA = {
             type: 'object',
             description: 'A rule across the page between two sections; its title, if any, is a label on the rule',
             properties: { ...LANDING_SECTION_BASE, kind: { const: 'divider' } },
+          },
+          {
+            type: 'object',
+            description:
+              "A few large figures, each with a short label under it ('15 years' over 'in commercial kitchens'), at most 6; one without a value isn't shown. Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'stats' },
+              stats: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    value: { type: 'string', description: "Plain text, not a number, at most 16 characters: '2,000+', '98%', '$4.2M', '#1'" },
+                    label: { type: 'string', description: 'Plain text, at most 80 characters' },
+                  },
+                },
+              },
+            },
           },
           {
             type: 'object',

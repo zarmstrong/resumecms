@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LANDING_LIMITS,
+  LINK_TYPES,
   referencedResumeIds,
   emptyLanding,
   experienceRoles,
@@ -165,6 +166,15 @@ test('email and phone links save, show and keep their type', () => {
     { kind: 'items', title: '', items: [{ title: 'Call', text: '', url: 'tel:+15555550100' }] },
   ]);
   assert.equal(status(() => validateLanding(linksSection([{ type: 'fax', label: 'a', url: 'tel:1' }]), known())), 400);
+});
+
+test('a link of every type saves and shows with its type (issue #129)', () => {
+  for (const type of LINK_TYPES) {
+    const links = [{ type, label: type, url: 'https://example.com/jo' }];
+    const draft = validateLanding(linksSection(links), known());
+    assert.deepEqual(draft.sections[0].links, links, type);
+    assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections[0].links, links, type);
+  }
 });
 
 test('telUrl dials the digits of a number as typed, with its extension', () => {
@@ -644,6 +654,42 @@ test('quotes are checked strictly, and an empty one is dropped', () => {
     quotes('Hi'),
     quotes(Array.from({ length: LANDING_LIMITS.quotes + 1 }, () => ({ text: 'Hi' }))),
     { sections: [{ id: 'q', kind: 'quotes', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
+});
+
+test('stats are checked strictly, and one without a value is dropped', () => {
+  const stats = (list, extra = {}) => ({ sections: [{ id: 'n', kind: 'stats', title: 'By the numbers', stats: list, ...extra }] });
+  const first = { value: '15 years', label: 'in commercial kitchens' };
+  const draft = validateLanding(stats([first, { label: 'No value' }, { value: '#1' }, { value: ' ', label: 'Blank' }], { column: 'side' }), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'n',
+    kind: 'stats',
+    title: 'By the numbers',
+    column: 'side',
+    stats: [first, { value: '', label: 'No value' }, { value: '#1', label: '' }, { value: ' ', label: 'Blank' }],
+  });
+  assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections, [
+    { kind: 'stats', title: 'By the numbers', column: 'side', stats: [first, { value: '#1', label: '' }] },
+  ]);
+  // A section with no stat left to show goes, heading and all, as does an
+  // empty or hidden one.
+  assert.deepEqual(resolveLanding(validateLanding(stats([{ value: ' ', label: 'Only a label' }]), known()), { resumes: new Map() }).sections, []);
+  assert.deepEqual(resolveLanding(validateLanding({ sections: [{ id: 'n', kind: 'stats' }] }, known()), { resumes: new Map() }).sections, []);
+  assert.deepEqual(resolveLanding(validateLanding(stats([first], { hidden: true }), known()), { resumes: new Map() }).sections, []);
+  // At the caps is fine.
+  const full = Array.from({ length: LANDING_LIMITS.stats }, () => ({ value: 'x'.repeat(LANDING_LIMITS.statValue), label: 'y'.repeat(LANDING_LIMITS.statLabel) }));
+  assert.equal(validateLanding(stats(full), known()).sections[0].stats.length, LANDING_LIMITS.stats);
+
+  const bad = [
+    stats([{ value: 'x'.repeat(LANDING_LIMITS.statValue + 1) }]),
+    stats([{ value: '1', label: 'x'.repeat(LANDING_LIMITS.statLabel + 1) }]),
+    stats([{ value: 42 }]),
+    stats([{ value: '1', url: 'https://example.com' }]),
+    stats(['15 years']),
+    stats('15 years'),
+    stats(Array.from({ length: LANDING_LIMITS.stats + 1 }, () => ({ value: '1' }))),
+    { sections: [{ id: 'n', kind: 'stats', items: [] }] },
   ];
   for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
 });

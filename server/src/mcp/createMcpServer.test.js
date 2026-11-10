@@ -502,6 +502,11 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   await call('update_landing_page', { sections: more });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: more }, { merge: true }]);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'experience' }] })).isError, true);
+  // a stats section (issue #125) passes through; a stat's value is text, not a number
+  const stats = [{ kind: 'stats', title: 'By the numbers', column: 'side', stats: [{ value: '2,000+', label: 'patients cared for' }] }];
+  await call('update_landing_page', { sections: stats });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: stats }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'stats', stats: [{ value: 2000 }] }] })).isError, true);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'faq', entries: [{ question: 'Q', answer: 3 }] }] })).isError, true);
   // a resumeId isn't a landing page field (the page belongs to the install)
   await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });

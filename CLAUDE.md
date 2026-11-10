@@ -318,10 +318,12 @@ opening its `page` or `pdf`), where `sections` is an ordered list of
 until one is uploaded; issue #92), `divider` (only its `title`, a label
 on the rule; always resolved, but only drawn between two things it
 divides: `client/src/landing/dividers.js`, applied by `LandingView`, since
-which sections end up next to each other depends on the template) and
-`faq` (`entries: [{ question, answer }]`, issue #123: each a `<details>`
-with the question as its `<summary>`, open in the editor's preview; an
-entry missing either part is dropped). Any section may be `hidden: true`: kept in the
+which sections end up next to each other depends on the template),
+`stats` (`[{ value, label }]`, plain text, a stat without a value dropped
+by `resolveLanding()`; issue #125, never an AI rewrite target) and `faq`
+(`entries: [{ question, answer }]`, issue #123: each a `<details>` with
+the question as its `<summary>`, open in the editor's preview; an entry
+missing either part is dropped). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -341,7 +343,11 @@ a base64 JPEG/PNG/WebP `data:` URL (still accepted; uploads go to the image
 store below). A link's `type` only picks its badge;
 its names are `LINK_TYPES`, kept in step with the catalog in
 `client/src/resume/linkTypes.js` and the header enum in
-`mcp/blockSchemas.js`, and `telUrl()` (a fresh draft's phone link) mirrors
+`mcp/blockSchemas.js`, in the same order (the client's
+`linkTypes.test.js` compares the three; issue #129 added the generic and
+per-field types, grouped in the editor's dropdown by the catalog's
+`group`, and `inferLinkType()` matches a site by exact host or subdomain),
+and `telUrl()` (a fresh draft's phone link) mirrors
 the client's `telHref()`. A new card, resume action or experience section
 must name an existing resume, but one already in the draft may outlive its resume
 (`referencedResumeIds()`), so a deletion doesn't make the draft unsavable. Publishing it is separate from
@@ -383,7 +389,7 @@ merged into the default resume's site settings *draft* through its
 A text section's `body`, an item's `text` and an FAQ entry's `answer`
 (issue #91, nothing else: a quote's `text`, an item's `meta`, an FAQ
 `question`, an image section's `caption`, an
-image's `alt` and every title or label stay plain text,
+image's `alt`, a stat's `value` and every title or label stay plain text,
 never parsed, escaped or migrated) may
 hold `[label](url)`, `**bold**` and `*italic*`; a `\` before `\ * [ ]`
 escapes it, and an unmatched marker stays literal. The tokenizer,
@@ -483,7 +489,8 @@ first `count` of them plus the resume's `href`. An image reference resolves
 against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
-(no text, no item or quote, every card's resume hidden, no role, no image) is dropped, heading and
+(no text, no item or quote, every card's resume hidden, no role, no image, no stat with a value, no FAQ entry with both a
+question and an answer) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -963,8 +970,9 @@ request returns a list (an `intro` target writes headline, subheadline and
 a text section, three proposals). Targets are an allowlist
 (`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items
 and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
-words), experience sections (read from a resume), an item's `meta` and an
-FAQ question are deliberately never targets. The page is
+words), experience sections (read from a resume), stats (a model mustn't
+make up figures; the page context shows them read-only), an item's
+`meta` and an FAQ question are deliberately never targets. The page is
 public, so what the model sees is too: the route builds
 `landingProfile()` from `store.visibleResumeSnapshot()` (a resume's
 *published* snapshot, only while it's public; the card's resume for a

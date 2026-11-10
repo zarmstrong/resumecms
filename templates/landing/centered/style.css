@@ -158,6 +158,12 @@
   padding-top: 12px;
 }
 
+/* Stats centered under their heading. */
+.l-template-centered .l-stat {
+  align-items: center;
+  text-align: center;
+}
+
 @container (max-width: 600px) {
   .l-template-centered .l-main {
     padding: 48px 18px 64px;
