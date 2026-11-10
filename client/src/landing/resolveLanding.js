@@ -142,6 +142,17 @@ function resolveSection(section, targets, images) {
     }
     case 'divider':
       return {};
+    case 'stats': {
+      // A stat is its value; a label alone has nothing to show.
+      const stats = section.stats.filter((stat) => stat.value.trim()).map((stat) => ({ value: stat.value, label: stat.label }));
+      return stats.length ? { stats } : null;
+    }
+    case 'faq': {
+      const entries = section.entries
+        .filter((entry) => entry.question.trim() && entry.answer.trim())
+        .map((entry) => ({ question: entry.question, answer: entry.answer }));
+      return entries.length ? { entries } : null;
+    }
     case 'education': {
       const target = targets.get(section.resumeId);
       const entries = (target?.education ?? []).slice(0, section.count).map((entry) => ({

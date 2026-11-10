@@ -135,6 +135,39 @@ test('the preview writes in every proposal that is not stale, and outlines where
   assert.deepEqual([...highlightIds(placed)].sort(), ['hero', 'proj']);
 });
 
+test('an FAQ answer proposal is keyed by its place, and follows its question when entries move', () => {
+  const entry = (question, answer) => ({ question, answer });
+  const withFaq = (entries) => ({ ...landing, sections: [...landing.sections, { id: 'faq', kind: 'faq', title: '', entries }] });
+  const page = withFaq([entry('Relocate?', 'Yes.'), entry('Start?', 'In May.'), entry('', 'Untitled.')]);
+  const target = { kind: 'answer', sectionId: 'faq', index: 0 };
+  assert.equal(targetKey(target), 'answer:faq:0');
+  assert.notEqual(targetKey(target), targetKey({ kind: 'item', sectionId: 'faq', index: 0 }));
+  assert.equal(landingSlice(page, target), 'Yes.');
+  assert.equal(landingSlice(page, { ...target, index: 3 }), null);
+  assert.equal(landingSlice(page, { kind: 'item', sectionId: 'faq', index: 0 }), null);
+
+  // Accepting writes only that answer.
+  const written = setLandingSlice(page, { ...target, index: 1 }, 'From June.');
+  assert.deepEqual(written.sections[4].entries, [entry('Relocate?', 'Yes.'), entry('Start?', 'From June.'), entry('', 'Untitled.')]);
+  assert.equal(written.sections[2], page.sections[2]);
+
+  const proposal = { id: 'a', target, before: 'Yes.', after: 'Yes, within Europe.', anchor: anchorFor(page, target) };
+  assert.deepEqual(proposal.anchor, { title: 'Relocate?', count: 3 });
+  // Moved: followed. Moved and edited: found by its question, stale. Removed: gone.
+  const moved = withFaq([entry('Start?', 'In May.'), entry('Relocate?', 'Yes.'), entry('', 'Untitled.')]);
+  assert.deepEqual(locateTarget(moved, proposal), { ...target, index: 1 });
+  const [placed] = placeProposals(withFaq([entry('Start?', 'In May.'), entry('Relocate?', 'Sure.')]), [proposal]);
+  assert.deepEqual([placed.located.index, placed.stale, placed.key], [1, true, 'answer:faq:1']);
+  assert.equal(locateTarget(withFaq([entry('Start?', 'In May.')]), proposal), null);
+  // A request follows its entry the same way.
+  assert.deepEqual(locateRequest(moved, requestSpot(page, target)), { ...target, index: 1 });
+
+  // The preview writes it in and outlines its section.
+  const shownPlaced = placeProposals(moved, [proposal]);
+  assert.equal(previewLanding(moved, shownPlaced).sections[4].entries[1].answer, 'Yes, within Europe.');
+  assert.deepEqual([...highlightIds(shownPlaced)], ['faq']);
+});
+
 test('rewriteCopy leaves the photo out and everything else in', () => {
   const copy = rewriteCopy(landing);
   assert.equal(copy.photoUrl, '');

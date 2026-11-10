@@ -28,6 +28,8 @@ const SECTION_KINDS = [
   },
   { kind: 'image', label: 'Image', addLabel: 'Image', empty: () => ({ image: null, caption: '' }) },
   { kind: 'divider', label: 'Divider', addLabel: 'Divider (a line between sections)', empty: () => ({}) },
+  { kind: 'stats', label: 'Stats', addLabel: 'Stats (by the numbers)', empty: () => ({ stats: [emptyStat()] }) },
+  { kind: 'faq', label: 'Questions and answers', addLabel: 'Questions and answers (FAQ)', empty: () => ({ entries: [emptyFaqEntry()] }) },
   {
     kind: 'education',
     label: 'Education',
@@ -49,6 +51,14 @@ function emptyItem() {
 
 function emptyQuote() {
   return { text: '', name: '', role: '', url: '' };
+}
+
+function emptyStat() {
+  return { value: '', label: '' };
+}
+
+function emptyFaqEntry() {
+  return { question: '', answer: '' };
 }
 
 // Only tells sections apart (React keys, and the server keeps it); not
@@ -77,6 +87,10 @@ function hasContent(section) {
       return false;
     case 'image':
       return Boolean(section.image) || Boolean(section.caption.trim());
+    case 'stats':
+      return section.stats.some((stat) => stat.value.trim() || stat.label.trim());
+    case 'faq':
+      return section.entries.some((entry) => entry.question.trim() || entry.answer.trim());
     case 'education':
     case 'skills':
       // Like experience: what they show comes from the resume.
@@ -440,7 +454,7 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
   );
 }
 
-// The syntax a text section and an item's text take (issue #91).
+// The syntax a text section, an item's text and an FAQ answer take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
 
 function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps }) {
@@ -505,6 +519,10 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
           <span className="ed-field-hint">A section with no image yet is left off the page.</span>
         </>
       );
+    case 'stats':
+      return <StatsFields stats={section.stats} onChange={(stats) => onChange({ stats })} limits={limits} />;
+    case 'faq':
+      return <FaqFields sectionId={section.id} entries={section.entries} onChange={(entries) => onChange({ entries })} limits={limits} ai={ai} />;
     case 'education':
       return <EducationFields section={section} onChange={onChange} resumes={resumes} context={context} limits={limits} />;
     case 'skills':
@@ -512,6 +530,104 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
     default:
       return null;
   }
+}
+
+// A few large figures, each with a short label (issue #125). No ✨ here
+// either: an AI mustn't make up numbers.
+function StatsFields({ stats, onChange, limits }) {
+  const setStat = (i, patch) => onChange(stats.map((stat, idx) => (idx === i ? { ...stat, ...patch } : stat)));
+  return (
+    <>
+      {stats.map((stat, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Stat {i + 1}</span>
+            <RowActions
+              index={i}
+              count={stats.length}
+              onMove={(delta) => onChange(moved(stats, i, delta))}
+              onRemove={() => onChange(stats.filter((_, idx) => idx !== i))}
+              what="stat"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={stat.value}
+            maxLength={limits?.statValue}
+            onChange={(e) => setStat(i, { value: e.target.value })}
+            placeholder="The figure, e.g. 2,000+ or 15 years"
+            aria-label="Stat value"
+          />
+          <input
+            className="ed-input"
+            value={stat.label}
+            maxLength={limits?.statLabel}
+            onChange={(e) => setStat(i, { label: e.target.value })}
+            placeholder="What it counts, e.g. patients cared for"
+            aria-label="Stat label"
+          />
+        </div>
+      ))}
+      {(!limits || stats.length < limits.stats) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...stats, emptyStat()])}>
+          + Add stat
+        </button>
+      )}
+      <span className="ed-field-hint">Plain text, so 98%, $4.2M or #1 work too. A stat without a figure isn't shown.</span>
+    </>
+  );
+}
+
+// Questions and answers (issue #123), each answer collapsed under its
+// question on the page. Only the answer has a ✨: the question is what
+// visitors ask.
+function FaqFields({ sectionId, entries, onChange, limits, ai }) {
+  const setEntry = (i, patch) => onChange(entries.map((entry, idx) => (idx === i ? { ...entry, ...patch } : entry)));
+  return (
+    <>
+      {entries.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Question {i + 1}</span>
+            <RowActions
+              index={i}
+              count={entries.length}
+              onMove={(delta) => onChange(moved(entries, i, delta))}
+              onRemove={() => onChange(entries.filter((_, idx) => idx !== i))}
+              what="question"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={entry.question}
+            maxLength={limits?.faqQuestion}
+            onChange={(e) => setEntry(i, { question: e.target.value })}
+            placeholder="The question, e.g. Are you open to relocating?"
+            aria-label="Question"
+          />
+          <textarea
+            className="ed-input"
+            rows={3}
+            value={entry.answer}
+            onChange={(e) => {
+              const answer = inlineEdit(entry.answer, e.target.value, limits?.faqAnswer);
+              if (answer !== entry.answer) setEntry(i, { answer });
+            }}
+            placeholder="The answer"
+            aria-label="Answer"
+          />
+          <span className="ed-field-hint">{INLINE_HINT}</span>
+          <AiField ai={ai} target={{ kind: 'answer', sectionId, index: i }} current={entry.answer} />
+        </div>
+      ))}
+      {(!limits || entries.length < limits.faqEntries) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...entries, emptyFaqEntry()])}>
+          + Add question
+        </button>
+      )}
+      <span className="ed-field-hint">Visitors open an answer by its question. One without both a question and an answer isn't shown.</span>
+    </>
+  );
 }
 
 // Testimonials (issue #90). No ✨ here: they're someone else's words.

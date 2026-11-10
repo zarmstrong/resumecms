@@ -78,6 +78,19 @@ test('sameAs keeps only http(s) links, never mailto, tel or junk', () => {
   assert.deepEqual(page.person.sameAs, ['https://github.com/jo', 'http://jo.example']);
 });
 
+test("sameAs keeps a link's URL whatever its type (issue #129)", () => {
+  const links = [
+    { type: 'instagram', label: 'ig', url: 'https://instagram.com/jo' },
+    { type: 'orcid', label: 'orcid', url: 'https://orcid.org/0000-0002-1825-0097' },
+    { type: 'imdb', label: 'imdb', url: 'https://imdb.com/name/nm0000001' },
+    { type: 'booking', label: 'Book', url: 'https://cal.com/jo' },
+  ];
+  const urls = links.map((link) => link.url);
+  assert.deepEqual(resumePage(published({ header: { links } })).person.sameAs, urls);
+  const landing = { headline: 'Jo', sections: [{ kind: 'links', title: '', links }], seo: {}, site: null };
+  assert.deepEqual(landingPage(landing, { name: 'Jo Doe' }).person.sameAs, urls);
+});
+
 test('the landing page: seo first, then headline, subheadline and the first text section', () => {
   const landing = {
     headline: 'Hi, I am Jo',

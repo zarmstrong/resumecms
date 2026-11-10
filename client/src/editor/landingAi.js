@@ -9,7 +9,9 @@ import { carryItemKey } from './landingImages.js';
 //
 // Sections and cards are addressed by id, so they can move freely. Items are
 // a position, so a proposal for one carries an `anchor` (the item's title and
-// text when it was made) and locateTarget() follows the item if it moves.
+// text when it was made) and locateTarget() follows the item if it moves. An
+// FAQ answer (issue #123) is a position too, followed the same way by its
+// question.
 
 // A spot's key: what a request is tracked by, and what a panel finds its
 // proposals by.
@@ -25,6 +27,8 @@ export function targetKey(target) {
       return `item:${target.sectionId}:${target.index}`;
     case 'card':
       return `card:${target.sectionId}:${target.resumeId}`;
+    case 'answer':
+      return `answer:${target.sectionId}:${target.index}`;
     default:
       return '';
   }
@@ -46,6 +50,18 @@ function sectionOf(landing, target, kind) {
   return section?.kind === kind ? section : null;
 }
 
+// The targets that are a position in a list, rather than an id.
+const POSITIONED = ['item', 'answer'];
+
+// The list a positioned target's index is in, each entry as { title, text }
+// (an FAQ entry's question and answer), so locateTarget() follows both alike.
+function positionedList(landing, target) {
+  if (target.kind === 'answer') {
+    return sectionOf(landing, target, 'faq')?.entries.map((entry) => ({ title: entry.question, text: entry.answer })) ?? null;
+  }
+  return sectionOf(landing, target, 'items')?.items ?? null;
+}
+
 // The text at `target` in `landing`, or null when it isn't there. Mirrors
 // landingSlice() in server/src/ai/landingRewrite.js.
 export function landingSlice(landing, target) {
@@ -59,6 +75,8 @@ export function landingSlice(landing, target) {
       return sectionOf(landing, target, 'items')?.items[target.index]?.text ?? null;
     case 'card':
       return sectionOf(landing, target, 'resumes')?.cards.find((c) => c.resumeId === target.resumeId)?.blurb ?? null;
+    case 'answer':
+      return sectionOf(landing, target, 'faq')?.entries[target.index]?.answer ?? null;
     default:
       return null;
   }
@@ -76,6 +94,8 @@ export function setLandingSlice(landing, target, value) {
         return { ...section, items: section.items.map((item, i) => (i === target.index ? carryItemKey(item, { ...item, text: value }) : item)) };
       case 'card':
         return { ...section, cards: section.cards.map((card) => (card.resumeId === target.resumeId ? { ...card, blurb: value } : card)) };
+      case 'answer':
+        return { ...section, entries: section.entries.map((entry, i) => (i === target.index ? { ...entry, answer: value } : entry)) };
       default:
         return section;
     }
@@ -83,10 +103,10 @@ export function setLandingSlice(landing, target, value) {
   return { ...landing, sections };
 }
 
-// What the proposal for `target` needs to find its item again.
+// What the proposal for `target` needs to find its item (or FAQ entry) again.
 export function anchorFor(landing, target) {
-  if (target.kind !== 'item') return null;
-  const items = sectionOf(landing, target, 'items')?.items;
+  if (!POSITIONED.includes(target.kind)) return null;
+  const items = positionedList(landing, target);
   const item = items?.[target.index];
   return item ? { title: item.title, count: items.length } : null;
 }
@@ -98,11 +118,12 @@ export function anchorFor(landing, target) {
 // to the one item with its title. An item with no title has only its text to
 // go by, so an edited one is taken to be in place only while the list is as
 // long as it was: otherwise its neighbour, slid into its place after it was
-// removed, would look like it.
+// removed, would look like it. An FAQ answer is followed the same way, its
+// question standing for the title.
 export function locateTarget(landing, proposal) {
   const { target } = proposal;
-  if (target.kind !== 'item') return landingSlice(landing, target) === null ? null : target;
-  const items = sectionOf(landing, target, 'items')?.items;
+  if (!POSITIONED.includes(target.kind)) return landingSlice(landing, target) === null ? null : target;
+  const items = positionedList(landing, target);
   if (!items) return null;
   const title = proposal.anchor?.title ?? '';
   const at = (index) => ({ ...target, index });
@@ -127,10 +148,10 @@ export function requestSpot(landing, target) {
 }
 
 // Where a request's spot (requestSpot()'s) is now, or null when it's gone:
-// an item's follows its item; any other spot is an id, or the hero, and an
-// intro's is its section.
+// an item's follows its item, an answer's its FAQ entry; any other spot is
+// an id, or the hero, and an intro's is its section.
 export function locateRequest(landing, spot) {
-  return spot.target.kind === 'item' ? locateTarget(landing, spot) : spot.target;
+  return POSITIONED.includes(spot.target.kind) ? locateTarget(landing, spot) : spot.target;
 }
 
 // Whether the spot has been edited since the proposal was made, so that
@@ -200,6 +221,14 @@ export function presetsFor(kind, current) {
       return empty
         ? [{ label: 'Write a blurb', instruction: 'Write a short blurb saying what this resume covers.' }]
         : [{ label: 'Shorter', instruction: 'Make this shorter.' }];
+    case 'answer':
+      return empty
+        ? [{ label: 'Write an answer', instruction: 'Write a short answer to this question from my resume.' }]
+        : [
+            { label: 'Shorter', instruction: 'Make this shorter.' },
+            { label: 'Clearer', instruction: 'Make this answer clearer and more direct.' },
+            { label: 'Fix grammar', instruction: 'Fix grammar and spelling only.' },
+          ];
     default:
       return [];
   }
@@ -212,4 +241,5 @@ export const TARGET_LABELS = {
   item: 'this item',
   card: 'this card',
   intro: 'the headline and intro',
+  answer: 'this answer',
 };

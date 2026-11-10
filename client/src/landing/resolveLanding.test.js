@@ -158,6 +158,71 @@ test('hidden sections, columns, quotes, meta lines, experience and dividers reso
   assert.equal(preview.sections.find((s) => s.id === 'now').body, 'Reading');
 });
 
+test('stats resolve exactly like the server: one without a value is dropped, then a section with none', () => {
+  const landing = {
+    ...draft,
+    sections: [
+      {
+        id: 'n',
+        kind: 'stats',
+        title: 'By the numbers',
+        column: 'side',
+        stats: [
+          { value: '15 years', label: 'in commercial kitchens' },
+          { value: ' ', label: 'Only a label' },
+          { value: '$4.2M', label: '' },
+        ],
+      },
+      { id: 'n2', kind: 'stats', title: 'Empty', stats: [{ value: '', label: 'Nothing' }] },
+      { id: 'n3', kind: 'stats', title: 'Hidden', stats: [{ value: '#1', label: 'in sales' }], hidden: true },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  assert.deepEqual(out.sections, server.resolveLanding(landing, { ...context, resumes: new Map() }).sections);
+  assert.deepEqual(out.sections, [
+    {
+      kind: 'stats',
+      title: 'By the numbers',
+      column: 'side',
+      stats: [
+        { value: '15 years', label: 'in commercial kitchens' },
+        { value: '$4.2M', label: '' },
+      ],
+    },
+  ]);
+  const preview = resolveLanding(landing, context, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => s.id), ['n', 'n3']);
+});
+
+test('FAQ sections resolve exactly like the server, dropping an entry without both parts', () => {
+  const landing = {
+    ...draft,
+    sections: [
+      {
+        id: 'f',
+        kind: 'faq',
+        title: 'Questions',
+        column: 'side',
+        entries: [
+          { question: 'Do you relocate?', answer: 'Yes, **within Europe**.' },
+          { question: 'When?', answer: ' ' },
+          { question: '', answer: 'Orphan answer' },
+        ],
+      },
+      { id: 'f2', kind: 'faq', title: 'Empty', entries: [{ question: 'Q', answer: '' }] },
+      { id: 'f3', kind: 'faq', title: 'Later', hidden: true, entries: [{ question: 'Q', answer: 'A' }] },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map() });
+  assert.deepEqual(out.sections, fromServer.sections);
+  assert.deepEqual(out.sections, [
+    { kind: 'faq', title: 'Questions', column: 'side', entries: [{ question: 'Do you relocate?', answer: 'Yes, **within Europe**.' }] },
+  ]);
+  const preview = resolveLanding(landing, context, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => s.id), ['f', 'f3']);
+});
+
 test('education and skills sections resolve exactly like the server', () => {
   const education = [
     { degree: 'BSc Nursing', institution: 'State U', location: 'Ohio', startDate: '2010', endDate: '2014' },
