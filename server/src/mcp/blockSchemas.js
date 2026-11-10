@@ -296,6 +296,17 @@ const LANDING_SECTION_BASE = {
   },
 };
 
+// A landing page button's icon, one of landingFields.js's ACTION_ICONS.
+const ACTION_ICON = {
+  enum: [
+    'envelope', 'paper-plane', 'phone', 'comments', 'calendar-days', 'calendar-check', 'video', 'mug-hot', 'handshake',
+    'file-pdf', 'file-lines', 'download', 'briefcase', 'graduation-cap', 'book', 'pen',
+    'globe', 'link', 'code', 'laptop-code', 'rocket', 'star', 'user', 'location-dot', 'circle-check',
+    'linkedin', 'github', 'gitlab', 'x-twitter', 'bluesky', 'mastodon', 'stack-overflow', 'medium', 'youtube', 'instagram', 'dribbble', 'behance', 'discord',
+  ],
+  description: 'A Font Awesome Free icon drawn before the label; optional (absent for none)',
+};
+
 export const LANDING_SCHEMA = {
   description:
     'The optional home page at / (a singleton for the whole install, not part of any resume). Checked strictly on write: unknown keys, wrong types, over-long values and links other than http/https/mailto/tel are a 400.',
@@ -319,6 +330,7 @@ export const LANDING_SCHEMA = {
               type: { const: 'link' },
               label: { type: 'string', description: "e.g. 'Email me'; '' shows the URL" },
               url: { type: 'string', description: 'An http, https, mailto or tel link (mailto:you@example.com?subject=Hello prefills a subject)' },
+              icon: ACTION_ICON,
             },
           },
           {
@@ -328,6 +340,7 @@ export const LANDING_SCHEMA = {
               label: { type: 'string', description: "'' says 'View my resume' or 'Download my resume (PDF)'" },
               resumeId: { type: 'string' },
               open: { enum: ['page', 'pdf'], description: "Its page (default) or its PDF" },
+              icon: ACTION_ICON,
             },
           },
         ],

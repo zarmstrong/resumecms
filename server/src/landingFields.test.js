@@ -431,9 +431,19 @@ test('actions and availability are checked strictly; a new resume action must na
     { actions: [{ type: 'resume', resumeId: 'a', url: 'https://x.example' }] },
     { actions: [{ type: 'resume' }] },
     { actions: [{ type: 'resume', resumeId: 'gone' }] },
+    { actions: [{ type: 'link', url: 'https://x.example', icon: 'fa-envelope' }] },
+    { actions: [{ type: 'link', url: 'https://x.example', icon: 7 }] },
+    { actions: [{ type: 'resume', resumeId: 'a', icon: '<svg>' }] },
     { sections: [cardsSection([{ resumeId: 'a', showPdf: 'yes' }])] },
   ];
   for (const input of bad) assert.equal(status(() => validateLanding(input, known('a'))), 400, JSON.stringify(input));
+
+  // An icon is one of the list, stored only when set.
+  assert.deepEqual(actions([{ type: 'link', url: 'https://x.example', icon: 'calendar-days' }, { type: 'resume', resumeId: 'a', icon: 'linkedin' }, { type: 'link', url: 'https://y.example', icon: '' }]), [
+    { type: 'link', label: '', url: 'https://x.example', icon: 'calendar-days' },
+    { type: 'resume', label: '', resumeId: 'a', open: 'page', icon: 'linkedin' },
+    { type: 'link', label: '', url: 'https://y.example' },
+  ]);
 
   // One already in the draft may outlive its resume, as a card may, and
   // counts as a reference for the next save.
@@ -453,11 +463,11 @@ test('actions and card PDFs resolve against what a visitor may open right now', 
     ...emptyLanding(),
     availability: 'Open to work',
     actions: [
-      { type: 'link', label: 'Email me', url: 'mailto:jo@example.com' },
+      { type: 'link', label: 'Email me', url: 'mailto:jo@example.com', icon: 'envelope' },
       { type: 'link', label: '', url: 'https://cal.example/jo' },
       { type: 'link', label: 'Half typed', url: '' },
       { type: 'link', label: 'Bad', url: 'java\tscript:alert(1)' },
-      { type: 'resume', label: '', resumeId: 'main', open: 'pdf' },
+      { type: 'resume', label: '', resumeId: 'main', open: 'pdf', icon: 'file-pdf' },
       { type: 'resume', label: 'Sales', resumeId: 'sales', open: 'page' },
       { type: 'resume', label: 'Sales PDF', resumeId: 'sales', open: 'pdf' },
       { type: 'resume', label: 'Secret', resumeId: 'private', open: 'page' },
@@ -487,9 +497,9 @@ test('actions and card PDFs resolve against what a visitor may open right now', 
   const out = resolveLanding(landing, context);
   assert.equal(out.availability, 'Open to work');
   assert.deepEqual(out.actions, [
-    { label: 'Email me', href: 'mailto:jo@example.com' },
+    { label: 'Email me', href: 'mailto:jo@example.com', icon: 'envelope' },
     { label: 'https://cal.example/jo', href: 'https://cal.example/jo' },
-    { label: 'Download my resume (PDF)', href: '/api/public/resume.pdf?v=1-2' },
+    { label: 'Download my resume (PDF)', href: '/api/public/resume.pdf?v=1-2', icon: 'file-pdf' },
     { label: 'Sales', href: '/r/sales' },
   ]);
   assert.deepEqual(out.sections[0].cards, [

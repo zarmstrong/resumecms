@@ -45,5 +45,8 @@ export default defineConfig({
     // serve as immutable (server/src/cacheHeaders.js); without it nothing
     // is, so keep this on.
     manifest: true,
+    // Keeps `/*! … */` license comments: Font Awesome's (the button icons,
+    // src/landing/actionIcons.js) is the attribution its license asks for.
+    rolldownOptions: { output: { comments: { legal: true } } },
   },
 });

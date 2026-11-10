@@ -15,9 +15,10 @@ import { hasPassed, utcToday } from './dateText.js';
 // `availability` is a short line shown above the headline ("Open to senior
 // backend roles · Remote"), '' for none. `actions` (issue #88) are the
 // hero's buttons, at most three, the first drawn as the primary one:
-//   { type: 'link', label, url }
-//   { type: 'resume', label, resumeId, open: 'page' | 'pdf' }
-// A resume action follows a card's rules (see resolveLanding()).
+//   { type: 'link', label, url, icon? }
+//   { type: 'resume', label, resumeId, open: 'page' | 'pdf', icon? }
+// A resume action follows a card's rules (see resolveLanding()). `icon`,
+// stored only when set, is one of ACTION_ICONS, drawn before the label.
 // `photo` says where the photo comes from: 'resume' (the default resume's
 // published header photo), 'custom' (photoUrl), 'upload' (photoImage, an
 // uploaded image's reference, issue #92) or 'none'. `sections` is
@@ -155,6 +156,14 @@ export const SECTION_COLUMNS = ['main', 'side'];
 
 export const ACTION_TYPES = ['link', 'resume'];
 export const ACTION_OPENS = ['page', 'pdf'];
+// The icons a button may show before its label: the names of the Font
+// Awesome Free icons in client/src/landing/actionIcons.js, which draws them.
+export const ACTION_ICONS = [
+  'envelope', 'paper-plane', 'phone', 'comments', 'calendar-days', 'calendar-check', 'video', 'mug-hot', 'handshake',
+  'file-pdf', 'file-lines', 'download', 'briefcase', 'graduation-cap', 'book', 'pen',
+  'globe', 'link', 'code', 'laptop-code', 'rocket', 'star', 'user', 'location-dot', 'circle-check',
+  'linkedin', 'github', 'gitlab', 'x-twitter', 'bluesky', 'mastodon', 'stack-overflow', 'medium', 'youtube', 'instagram', 'dribbble', 'behance', 'discord',
+];
 
 const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'photoImage', 'sections', 'seo', 'homeLink', 'homeLinkLabel', 'template', 'style'];
 const SEO_FIELDS = ['title', 'description', 'noindex', 'image'];
@@ -189,8 +198,8 @@ export const EDUCATION_DEFAULTS = { count: 3, showDates: true };
 const LINK_FIELDS = ['type', 'label', 'url'];
 const CARD_FIELDS = ['resumeId', 'label', 'blurb', 'showPdf'];
 const ACTION_FIELDS = {
-  link: ['type', 'label', 'url'],
-  resume: ['type', 'label', 'resumeId', 'open'],
+  link: ['type', 'label', 'url', 'icon'],
+  resume: ['type', 'label', 'resumeId', 'open', 'icon'],
 };
 const SECTION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -395,6 +404,11 @@ function checkAction(action, label, refs) {
     out.resumeId = checkResumeRef(action.resumeId, `${label}.resumeId`, refs);
     out.open = action.open ?? 'page';
     if (!ACTION_OPENS.includes(out.open)) throw httpError(400, `${label}.open must be one of ${ACTION_OPENS.join(', ')}`);
+  }
+  const icon = action.icon ?? '';
+  if (icon !== '') {
+    if (!ACTION_ICONS.includes(icon)) throw httpError(400, `${label}.icon must be one of ${ACTION_ICONS.join(', ')}`);
+    out.icon = icon;
   }
   return out;
 }
@@ -754,12 +768,13 @@ export function resolveLanding(landing, context) {
 const ACTION_LABELS = { page: 'View my resume', pdf: 'Download my resume (PDF)' };
 
 function resolveAction(action, context) {
+  const icon = action.icon ? { icon: action.icon } : {};
   if (action.type === 'link') {
-    return action.url !== '' && isSafeUrl(action.url) ? { label: action.label || action.url, href: action.url } : null;
+    return action.url !== '' && isSafeUrl(action.url) ? { label: action.label || action.url, href: action.url, ...icon } : null;
   }
   const target = context.resumes.get(action.resumeId);
   const href = action.open === 'pdf' ? target?.pdfHref : target?.href;
-  return href ? { label: action.label || ACTION_LABELS[action.open], href } : null;
+  return href ? { label: action.label || ACTION_LABELS[action.open], href, ...icon } : null;
 }
 
 function resolveSection(section, context) {

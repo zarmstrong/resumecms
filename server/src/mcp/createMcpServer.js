@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { BLOCK_TYPES } from '../resumeStore.js';
 import { httpError } from '../httpError.js';
-import { ACTION_OPENS, CREDENTIAL_KINDS, LANDING_LIMITS, LINK_TYPES, PHOTO_SOURCES, SECTION_COLUMNS } from '../landingFields.js';
+import { ACTION_ICONS, ACTION_OPENS, CREDENTIAL_KINDS, LANDING_LIMITS, LINK_TYPES, PHOTO_SOURCES, SECTION_COLUMNS } from '../landingFields.js';
 import { FONT_IDS, LANDING_STYLE_SOURCES } from '../landingStyle.js';
 import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
@@ -481,18 +481,25 @@ const landingCard = () =>
     blurb: z.string().optional().describe('A line or two about this resume.'),
     showPdf: z.boolean().optional().describe('Also link to its PDF, while it has one.'),
   });
+const actionIcon = () =>
+  z
+    .enum(['', ...ACTION_ICONS])
+    .optional()
+    .describe("A Font Awesome icon drawn before the button text, e.g. 'envelope', 'calendar-days', 'file-pdf' or 'linkedin'; omitted or '' for none.");
 const landingAction = () =>
   z.discriminatedUnion('type', [
     z.object({
       type: z.literal('link'),
       label: z.string().optional().describe('Button text, e.g. "Email me". Empty shows the URL.'),
       url: z.string().describe('An http, https, mailto or tel URL; mailto:you@example.com?subject=Hello prefills a subject.'),
+      icon: actionIcon(),
     }),
     z.object({
       type: z.literal('resume'),
       label: z.string().optional().describe('Button text. Empty says "View my resume" or "Download my resume (PDF)".'),
       resumeId: z.string().describe('A resume id from list_resumes.'),
       open: z.enum(ACTION_OPENS).optional().describe("'page' (default) opens the resume, 'pdf' its PDF. Shown only while the resume is public and published, and for 'pdf' has a rendered PDF."),
+      icon: actionIcon(),
     }),
   ]);
 const landingImage = () =>
