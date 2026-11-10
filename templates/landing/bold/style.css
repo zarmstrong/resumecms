@@ -10,14 +10,21 @@
    The band is a tint of the accent over the background, never the accent
    itself: the person picks the accent, and only a tint keeps the page's
    own text and heading colors readable on it for any accent, pale or
-   dark. Anything that's accent-colored text elsewhere (a card's "View
-   resume", "Full resume", the availability line, the buttons' labels) is
-   drawn in the heading or text color here, and the accent only fills
-   shapes (the bars, the primary button, the timeline's dots), so a pale
-   accent can't make text unreadable either. Nothing moves: the shared
-   transitions and the card's lift are switched off. */
+   dark. No text is drawn in the accent or on it either: what's
+   accent-colored text elsewhere (a card's "View resume", "Full resume",
+   the availability line, the buttons' labels) is in the heading or text
+   color here, the primary button is filled with the heading color rather
+   than the accent (--r-on-accent, picked by brightness, isn't AA on
+   every vivid accent), and the link badges are outlined. The accent only
+   draws shapes: the bars, the timeline's dots, the offset blocks behind
+   the photo, the primary button and a hovered card. Nothing moves: the
+   shared transitions and the card's lift are switched off.
+
+   Words break anywhere they must, so a long name or label (big type on a
+   phone) wraps instead of widening its box past the page. */
 .l-template-bold {
   container-type: inline-size;
+  overflow-wrap: anywhere;
 }
 
 .l-template-bold .l-main {
@@ -70,7 +77,6 @@
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.02em;
-  overflow-wrap: break-word;
 }
 
 .l-template-bold .l-subheadline {
@@ -110,9 +116,18 @@
   transition: none;
 }
 
-.l-template-bold .l-action-primary {
-  border-color: var(--r-accent, var(--ink));
-  color: var(--r-on-accent, #fff);
+/* The heading color, with the background's as its label (the palette's
+   own pair), over a block of the accent. */
+.l-template-bold .l-action-primary,
+.l-template-bold .l-action-primary:hover,
+.l-template-bold .l-action-primary:focus-visible {
+  background: var(--r-heading, var(--ink));
+  color: var(--r-bg, var(--panel));
+  box-shadow: 5px 5px 0 var(--r-accent, var(--ink));
+}
+
+.l-template-bold .l-action-primary:hover {
+  box-shadow: 8px 8px 0 var(--r-accent, var(--ink));
 }
 
 /* Sections: room around each, so a band reads as a band. */
@@ -127,7 +142,6 @@
   line-height: 1.05;
   letter-spacing: -0.01em;
   text-transform: uppercase;
-  overflow-wrap: break-word;
   margin-bottom: clamp(22px, 3.5cqi, 40px);
 }
 
@@ -242,8 +256,14 @@
   background: color-mix(in srgb, var(--r-heading, var(--ink)) 10%, transparent);
 }
 
+/* The badge outlined in the link's own color, not filled with the
+   accent, so its letter reads whatever the accent is. */
 .l-template-bold .r-link-badge {
-  color: var(--r-on-accent, #fff);
+  box-sizing: border-box;
+  background: none;
+  color: inherit;
+  border: 1.5px solid currentColor;
+  opacity: 1;
 }
 
 /* Resume cards: solid, square, outlined in the heading color, with a
@@ -376,6 +396,9 @@
     flex-direction: column;
     align-items: flex-start;
     border-bottom-width: 6px;
+  }
+  .l-template-bold .l-hero-text {
+    align-self: stretch;
   }
   .l-template-bold .l-photo {
     order: 0;

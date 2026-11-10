@@ -748,8 +748,11 @@ page root, so the editor's narrower preview matches a phone. `bold`
 `:nth-child(odd of section.l-section:not(.l-section-hidden))`: dividers
 are `<div>`s and the preview's hidden sections are skipped, so the
 preview bands what the page will. Its band is a `color-mix()` tint of the
-accent over the background, never the accent itself, and it draws no
-text in the accent, so any accent the person picks keeps its text
+accent over the background, never the accent itself, and no text is
+drawn in the accent or on it: the primary button is the heading color
+with the background's as its label, and the link badges are outlined,
+because `--r-on-accent` (`contrastTextFor()`, a brightness cutoff) isn't
+AA on every vivid accent. So any accent the person picks keeps its text
 readable. A template must render every section kind
 (`LandingView`'s `renderSection` and `SectionBody` draw them, a divider
 as a `role="separator"` rather than a `<section>`; the template only
