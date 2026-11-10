@@ -12,8 +12,14 @@
    No index.jsx, so LandingView arranges it (the hero, then the sections,
    in an .l-main). Sized by the page's own width (a container query), so
    the editor's narrower preview shows what a phone would. No motion. */
+/* Any word too long for its line breaks rather than running off a phone's
+   screen, the kicker's and attributions' spaced capitals and an email
+   address (which never breaks at "." or "@") included. Nothing here is
+   sized by its text's narrowest width, so letting it shrink changes no
+   layout. */
 .l-template-editorial {
   container-type: inline-size;
+  overflow-wrap: anywhere;
 }
 
 .l-template-editorial .l-main {
