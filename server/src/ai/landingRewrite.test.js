@@ -200,13 +200,15 @@ test('rewriteLanding needs an instruction except for an intro, and a valid targe
   assert.equal(proposals.length, 3);
 });
 
-test('quotes, experience sections and meta lines are never a target', async () => {
+test('quotes, experience, education and skills sections and meta lines are never a target', async () => {
   const page = {
     ...landing,
     sections: [
       ...landing.sections,
       { id: 'quotes', kind: 'quotes', title: 'Kind words', quotes: [{ text: 'Great to work with.', name: 'Ann', role: 'Manager', url: '' }] },
       { id: 'work', kind: 'experience', title: 'Recent work', resumeId: 'r1', count: 2, showDates: true },
+      { id: 'school', kind: 'education', title: 'Education', resumeId: 'r1', count: 2, showDates: true },
+      { id: 'skills', kind: 'skills', title: 'Skills', resumeId: 'r1' },
     ],
   };
   for (const target of [
@@ -216,6 +218,13 @@ test('quotes, experience sections and meta lines are never a target', async () =
     { kind: 'text', sectionId: 'quotes' },
     { kind: 'experience', sectionId: 'work' },
     { kind: 'text', sectionId: 'work' },
+    { kind: 'education', sectionId: 'school' },
+    { kind: 'text', sectionId: 'school' },
+    { kind: 'item', sectionId: 'school', index: 0 },
+    { kind: 'answer', sectionId: 'school', index: 0 },
+    { kind: 'skills', sectionId: 'skills' },
+    { kind: 'text', sectionId: 'skills' },
+    { kind: 'item', sectionId: 'skills', index: 0 },
     { kind: 'meta', sectionId: 'proj', index: 0 },
   ]) {
     assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
@@ -252,7 +261,7 @@ test('a stats section is never a target, and the page context shows only the sta
   assert.ok(!user.includes('Unshown label'));
 });
 
-test('the page context leaves hidden sections out, and shows quotes, meta lines and roles as a visitor reads them', () => {
+test('the page context leaves hidden sections out, and shows quotes, meta lines, roles, education and skills as a visitor reads them', () => {
   const page = {
     ...landing,
     sections: [
@@ -261,17 +270,26 @@ test('the page context leaves hidden sections out, and shows quotes, meta lines 
       { id: 'proj', kind: 'items', title: 'Projects', items: [{ title: 'Widget', text: 'A widget.', url: '', meta: '2024 · Rust' }] },
       { id: 'quotes', kind: 'quotes', title: '', quotes: [{ text: 'Great to work with.', name: 'Ann', role: 'Manager', url: 'https://ann.example' }] },
       { id: 'work', kind: 'experience', title: 'Recent work', resumeId: 'r1', count: 1, showDates: true },
+      { id: 'school', kind: 'education', title: 'Education', resumeId: 'r1', count: 1, showDates: false },
+      { id: 'skills', kind: 'skills', title: 'Skills', resumeId: 'r1' },
     ],
   };
   const experience = [
     { jobTitle: 'SRE', company: 'Acme', companyUrl: 'https://acme.example', location: 'Remote', startDate: '2022', endDate: 'Present' },
     { jobTitle: 'Dev', company: 'Beta', companyUrl: '', location: '', startDate: '2019', endDate: '2022' },
   ];
-  const resumes = new Map([['r1', { href: '/r/eng', title: 'Engineer', experience }]]);
+  const education = [
+    { degree: 'BSc Nursing', institution: 'State U', location: 'Ohio', startDate: '2010', endDate: '2014' },
+    { degree: 'Diploma', institution: 'Second School', location: '', startDate: '', endDate: '' },
+  ];
+  const skills = [{ category: 'Languages', items: ['Spanish (fluent)', 'ASL'] }];
+  const resumes = new Map([['r1', { href: '/r/eng', title: 'Engineer', experience, education, skills }]]);
   const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null, resumes);
   assert.ok(!user.includes('secret book'));
-  for (const shown of ['2024 · Rust', 'Great to work with.', 'Ann', 'SRE', 'Acme', '2022 – Present']) assert.ok(user.includes(shown), shown);
-  for (const left of ['Beta', 'https://', '/r/eng', '"r1"']) assert.ok(!user.includes(left), left);
+  for (const shown of ['2024 · Rust', 'Great to work with.', 'Ann', 'SRE', 'Acme', '2022 – Present', 'BSc Nursing', 'State U', 'Spanish (fluent)', 'Languages']) {
+    assert.ok(user.includes(shown), shown);
+  }
+  for (const left of ['Beta', 'https://', '/r/eng', '"r1"', 'Second School', '2010 – 2014']) assert.ok(!user.includes(left), left);
   // A hidden section the target is in stays, so its spot is marked.
   const inHidden = buildLandingPrompt(page, { kind: 'text', sectionId: 'now' }, 'Shorter', null, resumes).user;
   const context = inHidden.slice(inHidden.indexOf('The rest of the page'), inHidden.indexOf('Section to rewrite'));

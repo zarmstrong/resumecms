@@ -320,10 +320,11 @@ on the rule; always resolved, but only drawn between two things it
 divides: `client/src/landing/dividers.js`, applied by `LandingView`, since
 which sections end up next to each other depends on the template),
 `stats` (`[{ value, label }]`, plain text, a stat without a value dropped
-by `resolveLanding()`; issue #125, never an AI rewrite target) and `faq`
+by `resolveLanding()`; issue #125, never an AI rewrite target), `faq`
 (`entries: [{ question, answer }]`, issue #123: each a `<details>` with
 the question as its `<summary>`, open in the editor's preview; an entry
-missing either part is dropped). Any section may be `hidden: true`: kept in the
+missing either part is dropped), `education` (`resumeId`, `count`,
+`showDates`; issue #126) and `skills` (`resumeId`; issue #126). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -348,8 +349,8 @@ its names are `LINK_TYPES`, kept in step with the catalog in
 per-field types, grouped in the editor's dropdown by the catalog's
 `group`, and `inferLinkType()` matches a site by exact host or subdomain),
 and `telUrl()` (a fresh draft's phone link) mirrors
-the client's `telHref()`. A new card, resume action or experience section
-must name an existing resume, but one already in the draft may outlive its resume
+the client's `telHref()`. A new card, resume action or experience,
+education or skills section must name an existing resume, but one already in the draft may outlive its resume
 (`referencedResumeIds()`), so a deletion doesn't make the draft unsavable. Publishing it is separate from
 publishing any resume, and `landing_enabled` isn't drafted: it takes
 effect at once, and does nothing until a snapshot exists.
@@ -485,11 +486,19 @@ roles or block ids: the context carries each visible resume's
 `experience`, `experienceRoles()` of its published blocks (the experience
 entries `publicBlocks.js` shows on the web, in order, with only title,
 company, its URL, location and dates), and the section resolves to its
-first `count` of them plus the resume's `href`. An image reference resolves
+first `count` of them plus the resume's `href`. Education and skills
+sections (issue #126) work the same way: the context's `education` is
+`educationEntries()` (degree, institution, location and dates), resolved
+to the first `count` as `{ entries, href }`; its `skills` is
+`skillGroups()` (every web-shown `skills_group`'s `category` and its
+`items` split by `splitSkillItems()`, a mirror of the resume's chip split,
+`splitItems()` in `client/src/resume/skillItems.js`, which
+`resolveLanding.test.js` compares), resolved whole as `{ groups, href }`.
+`LandingView` draws education on the experience timeline's classes. An image reference resolves
 against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
-(no text, no item or quote, every card's resume hidden, no role, no image, no stat with a value, no FAQ entry with both a
+(no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
 question and an answer) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
@@ -970,15 +979,17 @@ request returns a list (an `intro` target writes headline, subheadline and
 a text section, three proposals). Targets are an allowlist
 (`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items
 and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
-words), experience sections (read from a resume), stats (a model mustn't
-make up figures; the page context shows them read-only), an item's
-`meta` and an FAQ question are deliberately never targets. The page is
+words), experience, education and skills sections (read from a
+resume), stats (a model mustn't make up figures; the page context shows
+them read-only), an item's `meta` and an FAQ question are deliberately
+never targets. The page is
 public, so what the model sees is too: the route builds
 `landingProfile()` from `store.visibleResumeSnapshot()` (a resume's
 *published* snapshot, only while it's public; the card's resume for a
 blurb, the default otherwise), and the page context leaves out URLs, ids,
 the photo and hidden sections (but the one the target is in), and shows an
-experience section's roles from `getLandingContext()`. Keep both if you
+experience section's roles (and an education section's entries and a
+skills section's groups) from `getLandingContext()`. Keep both if you
 add a target or a field to the profile.
 The editor copy it works on is checked by `store.checkLandingDraft()`. In
 the editor, `LandingEditorPage` holds the requests and proposals,

@@ -1,6 +1,7 @@
 import { normalizeBullet } from './bulletUtils.js';
 import { safeHref, linkProps } from './safeUrl.js';
 import { headingFontSize } from './blockStyle.js';
+import { splitItems } from './skillItems.js';
 
 // Joins whichever of the two date fields is actually filled in — no
 // dangling " – " when only a start or only an end date is set.
@@ -41,12 +42,7 @@ export function ExecutiveSummaryBlock({ data }) {
   );
 }
 
-export function splitItems(items) {
-  return (items || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+export { splitItems };
 
 function splitLines(items) {
   return (items || '')

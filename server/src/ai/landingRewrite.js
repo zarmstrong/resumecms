@@ -23,8 +23,9 @@ import { inlineLength, mapLinks } from '../inlineText.js';
 // proposal onto something else; items and FAQ entries have no ids, so
 // theirs is a position.
 // Deliberately not targets (issue #90): a quote, which is someone else's
-// words; an experience section, which is read from a resume as published;
-// an item's meta line; and an FAQ question. Nor is a stat (issue #125): a
+// words; an experience section, which is read from a resume as published,
+// and so are an education or skills section (issue #126); an item's meta
+// line; and an FAQ question. Nor is a stat (issue #125): a
 // model mustn't make up figures, so it only ever reads them, in the page
 // context.
 //
@@ -234,7 +235,8 @@ const PLACEHOLDER = '[the part being rewritten]';
 // The rest of the page, as the model sees it: what a visitor reads, with
 // the target's spot marked. No URLs, ids or photo. A hidden section isn't
 // read, unless the target is in it. `resumes` is the landing context's
-// (landingStore.js), for what an experience section shows.
+// (landingStore.js), for what an experience, education or skills section
+// shows.
 function pageContext(landing, target, resumes) {
   const spots = new Set((target.kind === 'intro' ? introParts(target.sectionId) : [target]).map(spotKey));
   const mark = (spot, value) => (spots.has(spotKey(spot)) ? PLACEHOLDER : value);
@@ -289,6 +291,18 @@ function pageContext(landing, target, resumes) {
               ...(section.showDates ? { dates: dates(role.startDate, role.endDate) } : {}),
             })),
           };
+        case 'education':
+          return {
+            ...base,
+            entries: (resumes.get(section.resumeId)?.education ?? []).slice(0, section.count).map((entry) => ({
+              degree: entry.degree,
+              institution: entry.institution,
+              location: entry.location,
+              ...(section.showDates ? { dates: dates(entry.startDate, entry.endDate) } : {}),
+            })),
+          };
+        case 'skills':
+          return { ...base, groups: (resumes.get(section.resumeId)?.skills ?? []).map((group) => ({ category: group.category, items: group.items })) };
         default:
           return base;
       }
