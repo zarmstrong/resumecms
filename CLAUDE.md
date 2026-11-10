@@ -338,7 +338,11 @@ a base64 JPEG/PNG/WebP `data:` URL (still accepted; uploads go to the image
 store below). A link's `type` only picks its badge;
 its names are `LINK_TYPES`, kept in step with the catalog in
 `client/src/resume/linkTypes.js` and the header enum in
-`mcp/blockSchemas.js`, and `telUrl()` (a fresh draft's phone link) mirrors
+`mcp/blockSchemas.js`, in the same order (the client's
+`linkTypes.test.js` compares the three; issue #129 added the generic and
+per-field types, grouped in the editor's dropdown by the catalog's
+`group`, and `inferLinkType()` matches a site by exact host or subdomain),
+and `telUrl()` (a fresh draft's phone link) mirrors
 the client's `telHref()`. A new card, resume action or experience section
 must name an existing resume, but one already in the draft may outlive its resume
 (`referencedResumeIds()`), so a deletion doesn't make the draft unsavable. Publishing it is separate from

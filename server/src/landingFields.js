@@ -103,8 +103,19 @@ export const LANDING_LIMITS = {
 export const PHOTO_SOURCES = ['resume', 'custom', 'upload', 'none'];
 
 // The header's link types (client/src/resume/linkTypes.js), which only pick
-// the badge a link is drawn with.
-export const LINK_TYPES = ['linkedin', 'github', 'gitlab', 'website', 'twitter', 'stackoverflow', 'medium', 'youtube', 'email', 'phone', 'custom'];
+// the badge a link is drawn with, in the same order (issue #129; the
+// client's linkTypes.test.js compares them).
+export const LINK_TYPES = [
+  'website', 'portfolio', 'email', 'phone', 'booking', 'shop', 'publications', 'newsletter',
+  'linkedin', 'twitter', 'facebook', 'tiktok', 'threads', 'bluesky', 'mastodon', 'substack', 'medium',
+  'github', 'gitlab', 'stackoverflow',
+  'instagram', 'behance', 'dribbble', 'artstation', 'vimeo', 'youtube',
+  'soundcloud', 'bandcamp', 'spotify',
+  'orcid', 'googlescholar', 'researchgate',
+  'imdb',
+  'houzz', 'nextdoor', 'googlebusiness',
+  'custom',
+];
 
 export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider'];
 // Where a section goes in a template with two columns; 'main' isn't stored.

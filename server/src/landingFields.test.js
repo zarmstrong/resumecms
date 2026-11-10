@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LANDING_LIMITS,
+  LINK_TYPES,
   referencedResumeIds,
   emptyLanding,
   experienceRoles,
@@ -165,6 +166,15 @@ test('email and phone links save, show and keep their type', () => {
     { kind: 'items', title: '', items: [{ title: 'Call', text: '', url: 'tel:+15555550100' }] },
   ]);
   assert.equal(status(() => validateLanding(linksSection([{ type: 'fax', label: 'a', url: 'tel:1' }]), known())), 400);
+});
+
+test('a link of every type saves and shows with its type (issue #129)', () => {
+  for (const type of LINK_TYPES) {
+    const links = [{ type, label: type, url: 'https://example.com/jo' }];
+    const draft = validateLanding(linksSection(links), known());
+    assert.deepEqual(draft.sections[0].links, links, type);
+    assert.deepEqual(resolveLanding(draft, { resumes: new Map() }).sections[0].links, links, type);
+  }
 });
 
 test('telUrl dials the digits of a number as typed, with its extension', () => {
