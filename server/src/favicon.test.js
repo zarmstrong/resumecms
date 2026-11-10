@@ -73,6 +73,11 @@ test('the initials are drawn in whichever of white and near-black reads on the a
   assert.equal(inkFor('#000000'), '#ffffff');
   assert.equal(inkFor('#ffffff'), '#14181c');
   assert.equal(inkFor('#ffd700'), '#14181c');
+  // By contrast ratio against the near-black ink itself, not black's
+  // 0.179 luminance cutoff: #777777 (0.184) still reads better in white.
+  assert.equal(inkFor('#ff6600'), '#14181c');
+  assert.equal(inkFor('#777777'), '#ffffff');
+  assert.equal(inkFor('#808080'), '#14181c');
   assert.match(faviconSvg(iconContent({ name: 'Jo', accent: '#ffd700' })), /<text[^>]*fill="#14181c"/);
 });
 

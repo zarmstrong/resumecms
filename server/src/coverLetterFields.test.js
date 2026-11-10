@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
   COVER_LETTER_DATA_VALIDATOR,
+  LETTER_RENDER_VERSION,
   MAX_TITLE_LENGTH,
   assertCoverLetterData,
   copyTitle,
@@ -54,4 +56,12 @@ test('the PDF key changes with anything the PDF shows, and with the day only whe
 
   const dated = { ...base, data: { date: 'March 3, 2026', paragraphs: ['Hi'] } };
   assert.equal(letterPdfKey({ ...dated, today: 'November 7, 2026' }), letterPdfKey(dated));
+});
+
+test('a PDF cached before the on-color text change (issue #142) is rendered again', () => {
+  const base = { data: { date: '', paragraphs: ['Hi'] }, header: { name: 'Ada' }, site: { colors: { accent: '#ff6600' } }, today: 'November 6, 2026' };
+  const { data, header, site, today } = base;
+  const unversioned = createHash('sha256').update(JSON.stringify({ data, header, site, today })).digest('hex');
+  assert.notEqual(letterPdfKey(base), unversioned);
+  assert.ok(LETTER_RENDER_VERSION >= 2);
 });

@@ -270,7 +270,9 @@ the same `withPdfLock` queue, timeout and wait (a 503 past it, see "PDF
 generation"), written atomically to
 `<pdfDir>/letters/<letter id>.pdf`, and reused while `letterPdfKey()` of
 what it shows (data, header, site, and today's date if the letter has
-none) matches `pdf_key`. The renderer loads `/print/letter`, whose fetch of
+none) and `LETTER_RENDER_VERSION` matches `pdf_key`; bump that when how
+the client draws stored content changes (a template, a color rule), or
+cached letters keep the old look. The renderer loads `/print/letter`, whose fetch of
 `/api/public/letter` is served the letter named by a second signed cookie
 (`RENDER_LETTER_COOKIE`, `renderTarget(cookie, 'letter')`); without one
 that endpoint 404s. The server sends the date to show (`letterToday()`,
@@ -825,8 +827,9 @@ preview bands what the page will. Its band is a `color-mix()` tint of the
 accent over the background, never the accent itself, and no text is
 drawn in the accent or on it: the primary button is the heading color
 with the background's as its label, and the link badges are outlined,
-because `--r-on-accent` (`contrastTextFor()`, a brightness cutoff) isn't
-AA on every vivid accent. So any accent the person picks keeps its text
+because `--r-on-accent` (`contrastTextFor()`, see "Text on a color" below)
+is only the better of white and near-black, and on a mid-tone accent
+neither reaches AA. So any accent the person picks keeps its text
 readable. A template must render every section kind
 (`LandingView`'s `renderSection` and `SectionBody` draw them, a divider
 as a `role="separator"` rather than a `<section>`; the template only
@@ -880,6 +883,28 @@ editor preview sees, and `ResumeView.renderBlock` returns `null` for it.
 Bullet-level visibility (`experience` blocks) is independent of block-level
 visibility, and bullets can nest one level deep — both the visibility
 filter and the print/PDF path need to recurse into `children`.
+
+Text on a color (issue #142): `contrastTextFor()` (`siteColors.js`) picks
+near-black (`#14181c`) or white, whichever has the higher WCAG contrast
+ratio against the fill, white for an invalid one. It's behind
+`--r-banner-text`, `--r-skills-text`, `--r-dates-text`, the sidebar's text
+and the landing page's `--l-on-accent`/`--l-dark-on-accent`. The
+favicon's `inkFor()` (`server/src/favicon.js`) makes the same choice, and
+`siteColors.test.js` compares the two, so change them together. Text
+over more than one color uses `contrastTextAcross()` (the better of the
+two on the fill it reads worst on): the `gradient` header's
+`--r-gradient-text`, from the accent and the gradient's dark end
+(`mixWithBlack()` with `GRADIENT_SHADE`, mirroring resume.css's 55%).
+The landing page's primary button keeps its label on hover by mixing the
+accent away from it (`accentHoverMix()` in `landing/landingStyle.js`,
+`--l-accent-hover-mix` and `--l-dark-accent-hover-mix`: white under a
+near-black label, black under a white one). Between white and near-black, neither reaches 4.5:1 on some mid-tone
+fills (the worst case is about 4.2:1), so a design that must be AA on any
+accent draws no text on it (as the `bold` landing template does). A
+change to how stored content is drawn reaches a resume's PDF only at its
+next publish; a cover letter's at its next download once
+`LETTER_RENDER_VERSION` is bumped; the share card draws no text on a
+color.
 
 ### AI rewrites
 

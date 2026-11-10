@@ -49,6 +49,13 @@ export function darkPalette(style) {
   return isPlainObject(style?.darkColors) ? paletteOf(style.darkColors, DEFAULT_DARK_COLORS) : null;
 }
 
+// What the primary button's hover mixes into the accent: away from its
+// label (white under near-black, black under white), so hovering only
+// ever raises the label's contrast (issue #142).
+export function accentHoverMix(onAccent) {
+  return onAccent === '#ffffff' ? '#000000' : '#ffffff';
+}
+
 // The resolved page's look as LandingView's root style: `--l-*` for its
 // colors, `--l-dark-*` for its dark palette when it has one, and the
 // fonts as resume.css takes them. `colors` are the light ones, normalized.
@@ -60,6 +67,7 @@ export function landingPageStyle(site, darkColors) {
     '--l-text': colors.text,
     '--l-bg': colors.background,
     '--l-on-accent': contrastTextFor(colors.accent),
+    '--l-accent-hover-mix': accentHoverMix(contrastTextFor(colors.accent)),
     '--font-resume': fontCssFor(normalizeResumeFont(site)),
     '--r-font-size': FONT_SIZE_CSS[normalizeFontSize(site)],
   };
@@ -71,6 +79,7 @@ export function landingPageStyle(site, darkColors) {
     style['--l-dark-text'] = darkColors.text;
     style['--l-dark-bg'] = darkColors.background;
     style['--l-dark-on-accent'] = contrastTextFor(darkColors.accent);
+    style['--l-dark-accent-hover-mix'] = accentHoverMix(contrastTextFor(darkColors.accent));
   }
   return { colors, style };
 }

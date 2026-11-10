@@ -23,7 +23,8 @@ import {
 //
 // Its PDF is rendered on demand (coverLetterPdf) on the store's single PDF
 // queue, and kept, with letterPdfKey() of what it was rendered from in
-// `pdf_key`, until the letter or its resume's header or look changes.
+// `pdf_key`, until the letter or its resume's header or look changes, or
+// LETTER_RENDER_VERSION is bumped for a change in how letters are drawn.
 //
 // `getSetting` is the resume's own (header, site). `withPdfLock`,
 // `renderLetterPdf(letterId)` (already bounded by the render timeout),
