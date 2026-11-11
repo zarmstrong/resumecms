@@ -102,6 +102,13 @@
   margin-right: auto;
 }
 
+/* Publications (issue #127) too: a citation list reads left to right. */
+.l-template-centered .l-section-publications {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* Education keeps to the same column as the timeline it's drawn on, and
    skills center there like the links (issue #126). */
 .l-template-centered .l-section-education,

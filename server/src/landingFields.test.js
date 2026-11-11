@@ -1551,3 +1551,124 @@ test("a media section's poster needs a description to publish, while the section
   assert.equal(fieldOf(page({ url: YT_URL, hidden: true, poster: { imageId: IMG, alt: '' } })), null);
   assert.equal(fieldOf(page({ url: YT_URL, poster: { imageId: IMG2, alt: '' } })), null);
 });
+
+test('publications are checked strictly, field by field, and stored whole', () => {
+  const publications = (entries, extra = {}) => ({ sections: [{ id: 'p', kind: 'publications', title: 'Writing', ...extra, entries }] });
+  const paper = {
+    kind: 'paper',
+    title: 'Array programming with NumPy',
+    outlet: 'Nature',
+    date: 'Sep 2020',
+    url: '',
+    doi: '10.1038/s41586-020-2649-2',
+    note: 'with C. Harris et al.',
+  };
+  const draft = validateLanding(publications([paper, { title: 'On kitchens' }]), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'p',
+    kind: 'publications',
+    title: 'Writing',
+    order: 'manual',
+    group: false,
+    entries: [paper, { kind: 'article', title: 'On kitchens', outlet: '', date: '', url: '', doi: '', note: '' }],
+  });
+  for (const kind of ['article', 'paper', 'book', 'chapter', 'talk', 'podcast', 'press']) {
+    assert.equal(validateLanding(publications([{ kind, title: 'X' }]), known()).sections[0].entries[0].kind, kind);
+  }
+  const options = validateLanding(publications([], { order: 'newest', group: true, column: 'side' }), known()).sections[0];
+  assert.deepEqual([options.order, options.group, options.column], ['newest', true, 'side']);
+  // At every cap is fine, and so is a DOI half typed (the editor saves as someone types).
+  const atCaps = {
+    title: 't'.repeat(LANDING_LIMITS.publicationTitle),
+    outlet: 'o'.repeat(LANDING_LIMITS.publicationOutlet),
+    date: 'd'.repeat(LANDING_LIMITS.publicationDate),
+    note: 'n'.repeat(LANDING_LIMITS.publicationNote),
+    url: 'mailto:press@example.org',
+    doi: `10.1234/${'x'.repeat(LANDING_LIMITS.doi - 8)}`,
+  };
+  assert.equal(status(() => validateLanding(publications(Array.from({ length: LANDING_LIMITS.publications }, () => atCaps)), known())), null);
+  // A DOI saves as any text, as a half-typed URL does (it's linked only
+  // once it's one), so a typo or a paused paste never blocks a save.
+  for (const doi of ['', '1', '10.', 'd', 'doi', '10.1234/abcd', 'https://www.doi.org/10.1234/abcd', '10.123/abcd', '10.1234/ab cd (2020)', 'javascript:alert(1)']) {
+    assert.equal(status(() => validateLanding(publications([{ title: 'X', doi }]), known())), null, doi);
+  }
+
+  const bad = [
+    publications([{ title: 't'.repeat(LANDING_LIMITS.publicationTitle + 1) }]),
+    publications([{ title: 'X', outlet: 'o'.repeat(LANDING_LIMITS.publicationOutlet + 1) }]),
+    publications([{ title: 'X', date: 'd'.repeat(LANDING_LIMITS.publicationDate + 1) }]),
+    publications([{ title: 'X', note: 'n'.repeat(LANDING_LIMITS.publicationNote + 1) }]),
+    publications([{ title: 'X', url: 'x'.repeat(LANDING_LIMITS.url + 1) }]),
+    publications([{ title: 'X', doi: `10.1234/${'x'.repeat(LANDING_LIMITS.doi)}` }]),
+    publications([{ title: 'X', url: 'java\tscript:alert(1)' }]),
+    publications([{ title: 'X', url: 'data:text/html,hi' }]),
+    publications([{ kind: 'award', title: 'X' }]),
+    publications([{ kind: 'Paper', title: 'X' }]),
+    publications([{ title: 'X', authors: 'Me' }]),
+    publications([{ title: 5 }]),
+    publications([{ title: 'X', date: 2024 }]),
+    publications(['A paper']),
+    publications('A paper'),
+    publications(Array.from({ length: LANDING_LIMITS.publications + 1 }, () => ({ title: 'X' }))),
+    publications([], { order: 'oldest' }),
+    publications([], { group: 'yes' }),
+    { sections: [{ id: 'p', kind: 'publications', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 160));
+});
+
+test('a publications section resolves sorted, grouped and linked, its untitled entries left out', () => {
+  const entry = (kind, title, date, extra = {}) => ({ kind, title, outlet: 'Outlet', date, url: '', doi: '', note: '', ...extra });
+  const entries = [
+    entry('talk', 'Keynote', '2019', { url: 'https://conf.example/2019', doi: '10.1234/ignored' }),
+    entry('paper', 'Old paper', 'Mar 2021', { doi: '10.1234/old#1' }),
+    entry('article', 'Forthcoming piece', 'Forthcoming'),
+    entry('paper', 'New paper', '2024-02-01', { doi: '10.1234/' }),
+    entry('press', 'Profile', '05/2023', { doi: '10.5555/profile' }),
+    entry('book', 'Half-typed link', '2022', { url: 'https://' }),
+    entry('article', '  ', '2030'),
+  ];
+  const landing = (extra) => validateLanding({ sections: [{ id: 'p', kind: 'publications', title: 'Work', entries, ...extra }] }, known());
+  const shown = (extra) => resolveLanding(landing(extra), { resumes: new Map() }).sections[0];
+
+  const manual = shown({});
+  assert.deepEqual(Object.keys(manual), ['kind', 'title', 'entries']);
+  assert.deepEqual(manual.entries.map((e) => e.title), ['Keynote', 'Old paper', 'Forthcoming piece', 'New paper', 'Profile', 'Half-typed link']);
+  // Its own safe URL first, else its DOI's link, else nothing.
+  assert.deepEqual(manual.entries.map((e) => e.url), [
+    'https://conf.example/2019',
+    'https://doi.org/10.1234/old%231',
+    '',
+    '',
+    'https://doi.org/10.5555/profile',
+    '',
+  ]);
+  assert.deepEqual(manual.entries[0], { kind: 'talk', title: 'Keynote', outlet: 'Outlet', date: '2019', url: 'https://conf.example/2019', note: '' });
+
+  // Newest first: the unreadable date keeps its place.
+  assert.deepEqual(shown({ order: 'newest' }).entries.map((e) => e.title), [
+    'New paper',
+    'Profile',
+    'Forthcoming piece',
+    'Half-typed link',
+    'Old paper',
+    'Keynote',
+  ]);
+
+  // Grouped: a subheading per kind that has any, in a fixed order.
+  const groups = (extra) => shown(extra).groups.map((g) => [g.kind, g.entries.map((e) => e.title)]);
+  assert.equal('entries' in shown({ group: true }), false);
+  assert.deepEqual(groups({ group: true }), [
+    ['article', ['Forthcoming piece']],
+    ['paper', ['Old paper', 'New paper']],
+    ['book', ['Half-typed link']],
+    ['talk', ['Keynote']],
+    ['press', ['Profile']],
+  ]);
+  assert.deepEqual(groups({ group: true, order: 'newest' })[1], ['paper', ['New paper', 'Old paper']]);
+
+  // Nothing with a title, or hidden: gone, heading and all.
+  const none = validateLanding({ sections: [{ id: 'p', kind: 'publications', title: 'Work', entries: [entry('paper', '', '2020')] }] }, known());
+  assert.deepEqual(resolveLanding(none, { resumes: new Map() }).sections, []);
+  assert.deepEqual(resolveLanding(landing({ hidden: true }), { resumes: new Map() }).sections, []);
+});

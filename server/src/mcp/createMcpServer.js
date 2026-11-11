@@ -6,6 +6,7 @@ import { httpError } from '../httpError.js';
 import { ACTION_ICONS, ACTION_OPENS, CREDENTIAL_KINDS, LANDING_LIMITS, LINK_TYPES, PHOTO_SOURCES, SECTION_COLUMNS } from '../landingFields.js';
 import { FONT_IDS, LANDING_STYLE_SOURCES } from '../landingStyle.js';
 import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
+import { PUBLICATION_KINDS, PUBLICATION_ORDERS } from '../publications.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
 import { moveBlockOrder } from './moveBlock.js';
 
@@ -46,7 +47,7 @@ Draft vs published: every write tool changes the DRAFT only, of one resume. Noth
 
 Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
 
-Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, services (what you offer, each with a short description, an optional price line and an optional button), and a video or audio clip (media: one YouTube, Vimeo, SoundCloud or Spotify link, loaded only when a visitor presses play); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, a media section's poster, or seo.image for link previews.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, services (what you offer, each with a short description, an optional price line and an optional button), a video or audio clip (media: one YouTube, Vimeo, SoundCloud or Spotify link, loaded only when a visitor presses play), and publications (papers, articles, books, talks, podcasts and press, sorted newest first or grouped by kind if asked); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, a media section's poster, or seo.image for link previews.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -578,6 +579,19 @@ const sectionBase = {
   hidden: z.boolean().optional().describe('true keeps the section in the draft without showing it.'),
   column: z.enum(SECTION_COLUMNS).optional().describe("'side' draws it in the side column of a template that has one (split: under the hero); others draw it in order with the rest. Default 'main'."),
 };
+const landingPublication = () =>
+  z.object({
+    kind: z.enum(PUBLICATION_KINDS).optional().describe("What it is (default 'article'); picks the label on its line and, with group, its subheading."),
+    title: z.string().optional().describe(`At most ${LANDING_LIMITS.publicationTitle} characters. One without a title isn't shown.`),
+    outlet: z.string().optional().describe('Where it appeared: a journal, publisher, conference, show or paper.'),
+    date: z
+      .string()
+      .optional()
+      .describe('Shown as written. Read as YYYY, YYYY-MM, MM/YYYY, "Mar 2024", "March 2024" or YYYY-MM-DD, it sorts with order: \'newest\'; anything else ("Forthcoming") keeps its place.'),
+    url: z.string().optional().describe('An optional http, https, mailto or tel link for the title.'),
+    doi: z.string().optional().describe('An optional DOI, just 10.<registrant>/<suffix> (no https://doi.org/ or doi: in front); the title links to https://doi.org/<doi> when url is empty.'),
+    note: z.string().optional().describe('Plain text under it: co-authors, "invited", "keynote".'),
+  });
 const landingSection = () =>
   z.discriminatedUnion('kind', [
     z.object({ ...sectionBase, kind: z.literal('text'), body: z.string().optional().describe('Text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is; a blank line starts a new paragraph.') }),
@@ -653,6 +667,15 @@ const landingSection = () =>
       kind: z.literal('services'),
       services: z.array(landingService()).optional().describe(`What you offer, at most ${LANDING_LIMITS.services}, in order.`),
     }),
+    z
+      .object({
+        ...sectionBase,
+        kind: z.literal('publications'),
+        order: z.enum(PUBLICATION_ORDERS).optional().describe("'manual' (default): as listed; 'newest': entries with a readable date newest first, the others in their places."),
+        group: z.boolean().optional().describe('Show each kind under a subheading of its own, in a fixed order (default false).'),
+        entries: z.array(landingPublication()).optional().describe(`At most ${LANDING_LIMITS.publications}.`),
+      })
+      .describe('Published work and appearances, each a linked title over "Outlet · Date · Kind" and a note. Plain text; never rewritten by AI.'),
   ]);
 
 const landingColor = (what) => z.string().nullable().optional().describe(`${what}: #rrggbb, or '' (or null) for the default.`);

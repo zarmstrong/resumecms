@@ -533,6 +533,20 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: services }, { merge: true }]);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'services', services: [{ title: 'T', price: 60 }] }] })).isError, true);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'services', services: [{ title: 'T', action: { type: 'resume', url: 'x' } }] }] })).isError, true);
+  // publications (issue #127): kinds and orders are the server's
+  const publications = [
+    {
+      kind: 'publications',
+      title: 'Writing',
+      order: 'newest',
+      group: true,
+      entries: [{ kind: 'paper', title: 'Array programming', outlet: 'Nature', date: 'Sep 2020', url: '', doi: '10.1038/s41586-020-2649-2', note: 'with others' }, { title: 'On kitchens' }],
+    },
+  ];
+  await call('update_landing_page', { sections: publications });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: publications }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'publications', entries: [{ kind: 'award', title: 'X' }] }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'publications', order: 'oldest' }] })).isError, true);
   // a resumeId isn't a landing page field (the page belongs to the install)
   await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi' }, { merge: true }]);

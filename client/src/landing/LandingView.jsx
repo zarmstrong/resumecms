@@ -376,6 +376,21 @@ function SectionBody({ section, preview }) {
           ))}
         </ul>
       );
+    case 'publications':
+      // Grouped (issue #127), each kind under a subheading of its own, and
+      // then the kind isn't repeated on each entry's line.
+      return section.groups ? (
+        <div className="l-publication-groups">
+          {section.groups.map((group) => (
+            <div key={group.kind} className="l-publication-group">
+              <h3 className="l-publication-group-title">{PUBLICATION_GROUP_LABELS[group.kind] || PUBLICATION_GROUP_LABELS.article}</h3>
+              <PublicationList entries={group.entries} showKind={false} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <PublicationList entries={section.entries} showKind />
+      );
     default:
       return null;
   }
@@ -405,6 +420,44 @@ function CredentialDetails({ credential }) {
         </a>
       )}
     </span>
+  );
+}
+
+// What an entry is, on its line, and a group's subheading.
+const PUBLICATION_LABELS = { article: 'Article', paper: 'Paper', book: 'Book', chapter: 'Chapter', talk: 'Talk', podcast: 'Podcast', press: 'Press' };
+const PUBLICATION_GROUP_LABELS = {
+  article: 'Articles',
+  paper: 'Papers',
+  book: 'Books',
+  chapter: 'Chapters',
+  talk: 'Talks',
+  podcast: 'Podcasts',
+  press: 'Press',
+};
+
+// Publications as a citation reads: the title (linked to its URL or its
+// DOI, which resolveLanding() has already chosen), a muted "Outlet · Date ·
+// Kind" line, then the note, all plain text.
+function PublicationList({ entries, showKind }) {
+  return (
+    <ul className="l-publications">
+      {entries.map((entry, i) => {
+        const meta = [entry.outlet, entry.date, showKind && (PUBLICATION_LABELS[entry.kind] || PUBLICATION_LABELS.article)].filter(Boolean);
+        return (
+          <li key={i} className="l-publication">
+            {entry.url ? (
+              <a className="l-publication-title" {...linkProps(entry.url)}>
+                {entry.title}
+              </a>
+            ) : (
+              <span className="l-publication-title">{entry.title}</span>
+            )}
+            {meta.length > 0 && <span className="l-publication-meta">{meta.join(' · ')}</span>}
+            {entry.note && <p className="l-publication-note">{entry.note}</p>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

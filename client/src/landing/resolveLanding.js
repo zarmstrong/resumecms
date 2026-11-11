@@ -22,11 +22,13 @@
 // section of nothing but expired ones then comes back `hidden` and
 // `expired`, since the page won't show it. A media section (issue #121)
 // resolves to its link as mediaUrl.js's parseMediaUrl() reads it, never the
-// link itself, as the server's does.
+// link itself, as the server's does. A publications section (issue #127)
+// is ordered and grouped by publications.js, the server's copy.
 
 import { darkPalette, landingSite } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';
 import { parseMediaUrl } from './mediaUrl.js';
+import { arrangePublications, doiUrl } from './publications.js';
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 
@@ -210,9 +212,18 @@ function resolveSection(section, targets, images, { today, withHidden }) {
         });
       return services.length ? { services } : null;
     }
+    case 'publications': {
+      const entries = section.entries.filter((entry) => entry.title.trim()).map((entry) => resolvePublication(entry));
+      return entries.length ? arrangePublications(entries, section) : null;
+    }
     default:
       return null;
   }
+}
+
+function resolvePublication(entry) {
+  const { kind, title, outlet, date, note } = entry;
+  return { kind, title, outlet, date, url: entry.url !== '' && isSafeUrl(entry.url) ? entry.url : doiUrl(entry.doi), note };
 }
 
 function resolveCredential(credential) {

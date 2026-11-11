@@ -6,6 +6,7 @@ import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImag
 import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, emptyStyle, landingSite, mergeStylePatch } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';
 import { parseMediaUrl } from './mediaUrl.js';
+import { PUBLICATION_KINDS, PUBLICATION_ORDERS, arrangePublications, doiUrl } from './publications.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -67,6 +68,11 @@ import { parseMediaUrl } from './mediaUrl.js';
 //                $60/hour", "Sliding scale"), never a number, and `action`
 //                an optional button with a hero link action's shape
 //                ({ type: 'link', label, url, icon? }), stored only when set
+//   publications — order ('manual' | 'newest'), group (a subheading per
+//                kind) and entries: [{ kind, title, outlet, date, url, doi,
+//                note }] (issue #127), published work and appearances;
+//                `date` is free-form (dateText.js reads it for 'newest'),
+//                `doi` a DOI (publications.js), linked when `url` is empty
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown, and `column: 'side'`: drawn in the side column by a
 // template that has one (template.json's `columns`, e.g. split's column
@@ -143,6 +149,12 @@ export const LANDING_LIMITS = {
   serviceTitle: 120,
   serviceText: 1000,
   servicePrice: 80,
+  publications: 40,
+  publicationTitle: 300,
+  publicationOutlet: 160,
+  publicationDate: 40,
+  publicationNote: 300,
+  doi: 200,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -169,7 +181,7 @@ export const LINK_TYPES = [
   'custom',
 ];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'media', 'services'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'media', 'services', 'publications'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -203,6 +215,7 @@ const SECTION_FIELDS = {
   gallery: ['id', 'kind', 'title', 'hidden', 'column', 'images'],
   media: ['id', 'kind', 'title', 'hidden', 'column', 'url', 'caption', 'poster', 'transcript'],
   services: ['id', 'kind', 'title', 'hidden', 'column', 'services'],
+  publications: ['id', 'kind', 'title', 'hidden', 'column', 'order', 'group', 'entries'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
@@ -211,6 +224,7 @@ const FAQ_FIELDS = ['question', 'answer'];
 const CREDENTIAL_FIELDS = ['kind', 'name', 'issuer', 'number', 'issued', 'expires', 'url'];
 const GALLERY_ENTRY_FIELDS = ['image', 'caption'];
 const SERVICE_FIELDS = ['title', 'text', 'price', 'action'];
+const PUBLICATION_FIELDS = ['kind', 'title', 'outlet', 'date', 'url', 'doi', 'note'];
 // What a credential is; only picks the label it's shown with.
 export const CREDENTIAL_KINDS = ['license', 'certification', 'membership'];
 // What an experience section shows when it's added without saying.
@@ -533,6 +547,26 @@ function checkService(service, label, refs) {
   return out;
 }
 
+// A publication: plain text throughout, its `url` held to the item URL
+// rules. Its `doi` saves as any text, as a half-typed URL does, and is
+// only linked once it's a DOI (doiUrl()).
+function checkPublication(entry, label) {
+  checkKeys(entry, PUBLICATION_FIELDS, label);
+  const kind = entry.kind ?? 'article';
+  if (!PUBLICATION_KINDS.includes(kind)) throw httpError(400, `${label}.kind must be one of ${PUBLICATION_KINDS.join(', ')}`);
+  const out = {
+    kind,
+    title: checkString(entry.title ?? '', LANDING_LIMITS.publicationTitle, `${label}.title`),
+    outlet: checkString(entry.outlet ?? '', LANDING_LIMITS.publicationOutlet, `${label}.outlet`),
+    date: checkString(entry.date ?? '', LANDING_LIMITS.publicationDate, `${label}.date`),
+    url: checkString(entry.url ?? '', LANDING_LIMITS.url, `${label}.url`),
+    doi: checkString(entry.doi ?? '', LANDING_LIMITS.doi, `${label}.doi`),
+    note: checkString(entry.note ?? '', LANDING_LIMITS.publicationNote, `${label}.note`),
+  };
+  if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
+  return out;
+}
+
 // One section, with the fields of its kind and nothing else. A section
 // without an id (an MCP client adding one) gets a new one.
 function checkSection(section, i, refs, ids) {
@@ -626,6 +660,14 @@ function checkSection(section, i, refs, ids) {
     case 'services':
       out.services = checkList(section.services, LANDING_LIMITS.services, `${label}.services`).map((service, j) =>
         checkService(service, `${label}.services[${j}]`, refs)
+      );
+      break;
+    case 'publications':
+      out.order = section.order ?? 'manual';
+      if (!PUBLICATION_ORDERS.includes(out.order)) throw httpError(400, `${label}.order must be one of ${PUBLICATION_ORDERS.join(', ')}`);
+      out.group = checkBoolean(section.group ?? false, `${label}.group`);
+      out.entries = checkList(section.entries, LANDING_LIMITS.publications, `${label}.entries`).map((entry, j) =>
+        checkPublication(entry, `${label}.entries[${j}]`)
       );
       break;
   }
@@ -774,7 +816,7 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // left with nothing to show (no text, no item, every link half typed, every
 // card's resume hidden, every quote empty, no stat with a value, no FAQ
 // entry with both a question and an answer, no service with a title or a
-// text) is left out, title and all, and
+// text, no publication with a title) is left out, title and all, and
 // so is a hidden one; sections lose their ids, and keep `column` when set
 // (a divider always goes along: whether it has anything to divide depends
 // on how the template arranges the sections, so the client decides, in
@@ -785,7 +827,10 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // skill group of its resume. A credential without a name is left out, and
 // so is one whose `expires` has passed (hasPassed()), at the time of the
 // request, so a lapsed one leaves the page without a republish; one whose
-// date can't be read stays, the date shown as written.
+// date can't be read stays, the date shown as written. A publication without
+// a title is left out; the rest resolve to { entries } or, with `group`,
+// { groups: [{ kind, entries }] } (arrangePublications()), each entry's
+// `url` its own when that's safe, else its DOI's link (doiUrl()), else ''.
 // `seo` goes along whole (everything in it ends up in the page's head and
 // its X-Robots-Tag anyway), its image resolved like the others. An image
 // reference resolves to { src, alt, width, height }, or is left out (a
@@ -956,9 +1001,18 @@ function resolveSection(section, context) {
         });
       return services.length ? { services } : null;
     }
+    case 'publications': {
+      const entries = section.entries.filter((entry) => entry.title.trim()).map((entry) => resolvePublication(entry));
+      return entries.length ? arrangePublications(entries, section) : null;
+    }
     default:
       return null;
   }
+}
+
+function resolvePublication(entry) {
+  const { kind, title, outlet, date, note } = entry;
+  return { kind, title, outlet, date, url: entry.url !== '' && isSafeUrl(entry.url) ? entry.url : doiUrl(entry.doi), note };
 }
 
 function resolveCredential(credential) {

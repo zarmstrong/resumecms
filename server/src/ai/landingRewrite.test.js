@@ -310,6 +310,38 @@ test('a media section is never a target, and the page context gives it only its 
   for (const left of ['youtu', 'dQw4w9WgXcQ', 'Spring showcase', 'Spoken words']) assert.ok(!user.includes(left), left);
 });
 
+test('a publication is never a target, and the page context shows the titled ones without their links or DOIs', () => {
+  const entry = (title, extra = {}) => ({ kind: 'paper', title, outlet: '', date: '', url: '', doi: '', note: '', ...extra });
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      {
+        id: 'pubs',
+        kind: 'publications',
+        title: 'Writing',
+        order: 'manual',
+        group: false,
+        entries: [
+          entry('Array programming', { outlet: 'Nature', date: 'Sep 2020', url: 'https://nature.example/a', doi: '10.1038/s41586-020-2649-2' }),
+          entry(' ', { outlet: 'Untitled outlet' }),
+        ],
+      },
+    ],
+  };
+  for (const target of [
+    { kind: 'publication', sectionId: 'pubs', index: 0 },
+    { kind: 'publications', sectionId: 'pubs' },
+    { kind: 'item', sectionId: 'pubs', index: 0 },
+    { kind: 'text', sectionId: 'pubs' },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+  const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null, new Map());
+  for (const shown of ['Writing', 'Array programming', 'Nature', 'Sep 2020']) assert.ok(user.includes(shown), shown);
+  for (const left of ['nature.example', '10.1038', 'Untitled outlet']) assert.ok(!user.includes(left), left);
+});
+
 test('the page context leaves hidden sections out, and shows quotes, meta lines, roles, education and skills as a visitor reads them', () => {
   const page = {
     ...landing,
