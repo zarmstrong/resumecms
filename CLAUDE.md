@@ -308,7 +308,7 @@ install, not to a resume, so it lives in the global `settings` table:
 `server/src/landingStore.js` holds the operations and is composed into the
 store by `createResumeStore()`; validation and the public shape are pure, in
 `landingFields.js`. It isn't blocks: `{ headline, subheadline, availability, actions,
-photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel, template, style }` (`seo` is `{ title, description, noindex, image? }`, see
+photo, photoUrl, photoImage?, coverImage?, sections, seo, homeLink, homeLinkLabel, template, style }` (`seo` is `{ title, description, noindex, image? }`, see
 "Search and link previews"; `mergeLandingPatch()` merges it one level
 deep; `actions` are the hero's buttons, issue #88, a `link` or a `resume`
 opening its `page` or `pdf`, with an optional `icon`), where `sections` is an ordered list of
@@ -490,8 +490,18 @@ refers to an image as `{ imageId, alt }` (`checkImageRef()`; `alt` a
 required string, '' allowed in a draft while it's typed, but
 `publishLanding()` refuses with a 400 naming the field while a reference
 the page would show has a blank one: `assertImagesDescribed()`) in `photoImage` (with
-`photo: 'upload'`), an item's `image`, an `image` section, each
-`gallery` entry, a `media` section's `poster` and `seo.image`; the optional ones are stored only when set. Like a card, a
+`photo: 'upload'`), `coverImage` (issue #130), an item's `image`, an `image` section, each
+`gallery` entry, a `media` section's `poster` and `seo.image`; the optional ones are stored only when set.
+`coverImage` is the wide picture a landing template whose `template.json`
+says `cover: true` draws behind the hero (see "Pluggable header/layout
+templates"); its `alt` may stay blank even to publish, since the headline
+is real text over it (`assertImagesDescribed()` never asks about it, nor
+does the client's `needsDescription()`, and its editor field doesn't flag
+it). The server never reads `template.json`, so `resolveLanding()` (both
+copies) resolves it to `coverImage: { src, alt, width, height }`
+whatever the template, it's public while published (`shownImageIds()`),
+and the editor keeps its field in view while one is set under a template
+that ignores it, so it can be removed. The landing AI rewrite never sees it. Like a card, a
 new reference must name a stored image and one already in the draft may
 outlive it (`referencedImageIds()`). After a publish and on boot,
 `pruneLandingImages()` deletes images neither the stored draft nor the
@@ -990,7 +1000,20 @@ the fallback, must exist), and its `index.jsx` is optional. Its
 `template.json` may say `columns: true` (only with an `index.jsx`) when
 the component draws a section with `column: 'side'` in a side column, as
 `split` does under the hero (and stops the column being sticky while it
-holds any). `LandingView` then leaves the stray-divider rule to it,
+holds any). It may say `cover: true` (also only with an `index.jsx`)
+when the component draws the page's resolved `landing.coverImage`, as
+`cover` does (issue #130); the editor offers the cover image field only
+for such a template (`getLandingTemplate(id)?.cover`, the registry
+passing every `template.json` flag through). `cover` draws the image
+full width with the hero over it in two colors of its own, never the
+accent: white on a fixed near-black fill under a black scrim at least
+58% opaque (so the band is no lighter than `#6b6b6b` even over an
+all-white image: 5.3:1, whatever the palette), or, without an image,
+the palette's background color on a band of its heading color. A
+hovered hero button is underlined rather than tinted, since a tint would
+bring the band nearer the text. Its hero rules are scoped under
+`.l-cover-band` because `.l-action` is also a service's button and the
+contact section's "Save contact". `LandingView` then leaves the stray-divider rule to it,
 handing it `dropStrayDividers(sections, { atStart })` to apply to each
 column (a template without columns gets its list already tidied); the editor shows each section's "side column" box only for
 such a template, and every other template ignores `column`. `LandingView`
@@ -1005,8 +1028,8 @@ template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
 pixel-identical to it (its one change, from the accessibility bar below,
 is a fix: a visitor who asks for reduced motion no longer gets the
-card's lift; for everyone else it's identical). `bold`, `centered`, `editorial` (issue #130, pure
-CSS), `formal` and `split` size themselves with container queries (and
+card's lift; for everyone else it's identical). `bold`, `centered`, `cover`, `editorial` (issue #130, pure
+CSS), `directory`, `formal` and `split` size themselves with container queries (and
 `bold` its type with container units) on the page root, so the editor's
 narrower preview matches a phone. `bold`
 (issue #130) bands every other *shown* section with
@@ -1023,6 +1046,49 @@ readable. A template must render every section kind
 (`LandingView`'s `renderSection` and `SectionBody` draw them, a divider
 as a `role="separator"` rather than a `<section>`; the template only
 arranges).
+
+The Look group picks a landing template from thumbnails (issue #130,
+`client/src/editor/LandingTemplatePicker.jsx`, pure parts in
+`templateThumbnails.js`): a native radio group over `LANDING_TEMPLATES`,
+each option the real `LandingView` of the preview's draft (AI
+suggestions included) and context, resolved as published (no
+`withHidden`, so nothing dimmed), drawn 1280 × 800 and scaled into its
+frame, in the preview's light/dark choice. The frame is `inert` and
+`aria-hidden`, so its links, gallery buttons and media facades can't be
+reached (no player or dialog ever opens), and it lives outside the
+radio's `<label>`. Thumbnails are drawn only while the group is open and
+each only near the screen, from a `useDeferredValue` copy keyed by
+`pageKey()` so an edit that changes nothing they draw doesn't redraw
+them. No per-template code: a new template folder gets a thumbnail, so a
+template's root must stay inside the box it's given (no `position:
+fixed`, no effects on `document`).
+
+`directory` (issue #130) is for a long page: the hero across the top,
+then a sticky table of contents beside the sections, marking the one in
+view (`aria-current`), folded into a "Jump to" bar on a narrow page. A
+section's `id` never leaves the server, so its anchors are made on the
+client from the resolved sections by `withAnchors()`
+(`client/src/landing/sectionAnchors.js`, pure, tested): a slug of each
+titled section's title (never a divider's, a hidden or a stray one's),
+deduplicated, after a `section-` prefix no other id on the page uses (the
+preview's add a `useId()` prefix). A template hands a section an anchor
+as `{ ...section, anchor }`, and `renderSection` puts it on the
+`<section>` as its `id` (with `tabIndex={-1}`, so a jump moves focus);
+no other template sets one, so they render exactly as before.
+`useSectionSpy.js` finds what scrolls the page (`scrollParent()`: the
+window, the editor's preview pane, or the nearest box that clips it with
+`overflow: hidden|clip`), drives the highlight with
+IntersectionObservers on that, and scrolls a jump inside it (smoothly
+only under `prefers-reduced-motion: no-preference`), so the preview
+scrolls only itself; on the public page a jump replaces the URL's hash,
+in the preview it never touches the editor's URL. A jump's entry stays
+current through its own scroll (`createJumpPin()`) and is released by
+the visitor's next one. Inside an `[inert]` ancestor (the editor's
+template thumbnails, drawn with `preview` false) the template is only a
+picture: its ids prefixed like the preview's, and no observers,
+listeners, hash jump or URL change. A modified or middle click on an
+entry is left to the browser (`isPlainClick()`), and an anchored
+section is named by its heading (`aria-labelledby`, `anchorTitleId()`).
 
 Every landing template, and the shared `landing.css` under it, meets the
 accessibility bar in `templates/landing/README.md` (issue #130), which
@@ -1047,7 +1113,8 @@ the built client + JSON APIs — so there is no matching runtime scan.
 
 A contributed component imports shared rendering helpers via the `@resume`
 Vite alias (e.g. `@resume/safeUrl.js`) rather than a relative path, since
-templates live outside `client/src`. `client/vite.config.js` also sets
+templates live outside `client/src`; a landing template reaches
+`client/src/landing/` the same way through `@landing`. `client/vite.config.js` also sets
 `server.fs.allow: ['..']` so the dev server can resolve `templates/` at all
 (a Vite dev-server restriction that `vite build` doesn't have).
 

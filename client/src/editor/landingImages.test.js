@@ -33,6 +33,15 @@ test('the share image goes into the current seo, whatever else changed', () => {
   assert.equal(out.headline, 'Changed');
 });
 
+test('the cover image (issue #130) goes into the current draft, whatever else changed', () => {
+  const spot = uploadSpot(draft, { kind: 'cover' });
+  const later = { ...draft, headline: 'Changed', template: 'classic' };
+  const out = applyUploadedImage(later, spot, ID);
+  assert.deepEqual(out.coverImage, { imageId: ID, alt: '' });
+  assert.equal(out.headline, 'Changed');
+  assert.equal(out.template, 'classic');
+});
+
 test('an image section is found by id, and an upload for a removed one is dropped', () => {
   const spot = uploadSpot(draft, { kind: 'section', sectionId: 'pic' });
   // Moved below the list and its caption edited: still found, edits kept.
@@ -123,6 +132,7 @@ test('a replaced image keeps its alt text only when it is the same image again',
   const landing = {
     ...draft,
     photoImage: described,
+    coverImage: described,
     sections: [
       { id: 'pic', kind: 'image', title: '', image: described, caption: '' },
       { id: 'list', kind: 'items', title: '', items: [{ ...item('One'), image: described }] },
@@ -132,6 +142,7 @@ test('a replaced image keeps its alt text only when it is the same image again',
   const spots = [
     [uploadSpot(landing, { kind: 'photo' }), (l) => l.photoImage],
     [uploadSpot(landing, { kind: 'seo' }), (l) => l.seo.image],
+    [uploadSpot(landing, { kind: 'cover' }), (l) => l.coverImage],
     [uploadSpot(landing, { kind: 'section', sectionId: 'pic' }), (l) => l.sections[0].image],
     [uploadSpot(landing, { kind: 'item', sectionId: 'list', index: 0 }), (l) => l.sections[1].items[0].image],
   ];

@@ -27,7 +27,10 @@
 // is ordered and grouped by publications.js, the server's copy. A contact
 // section (issue #124) shows an email and a phone only once they make a
 // link (mailtoHref() and telHref()), an address with a "Directions" map
-// search, and the "Save contact" vCard's link while `vcard` is on.
+// search, and the "Save contact" vCard's link while `vcard` is on. A
+// cover image (issue #130) resolves to `coverImage` like the server's,
+// whatever the template: only one whose template.json says `cover: true`
+// draws it.
 
 import { darkPalette, landingSite } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';
@@ -54,6 +57,7 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
     landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context?.photoUrl || '' : (upload?.src ?? '');
   const { image: shareImage, ...seo } = landing.seo ?? {};
   const seoImage = resolveImage(shareImage, images);
+  const cover = resolveImage(landing.coverImage, images);
   return {
     headline: landing.headline,
     subheadline: landing.subheadline,
@@ -64,6 +68,7 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
     }),
     photoUrl,
     ...(upload ? { photoAlt: upload.alt } : {}),
+    ...(cover ? { coverImage: cover } : {}),
     sections: landing.sections.flatMap((section) => {
       const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images, { today: context?.today ?? utcToday(), withHidden, files });
       if (!shown) return [];

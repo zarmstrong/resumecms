@@ -393,7 +393,10 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   const shown = landingShown(status);
   const aiPlaced = placeProposals(landing, aiProposals);
   const aiPreviewed = aiPlaced.filter((p) => !p.stale);
-  const preview = resolveLanding(previewLanding(landing, aiPlaced), loaded.context, { withIds: true, withHidden: true });
+  // The draft with the AI suggestions it shows; the template thumbnails
+  // (LandingTemplatePicker) draw the same.
+  const previewDraft = previewLanding(landing, aiPlaced);
+  const preview = resolveLanding(previewDraft, loaded.context, { withIds: true, withHidden: true });
   // Each request by where its spot is now (the newest, should two meet),
   // with the key it's tracked by.
   const aiRequestAt = new Map();
@@ -481,7 +484,11 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
                 ai={ai}
                 onUploadImage={handleImageUpload}
                 onUploadFile={handleFileUpload}
-                look={{ onApply: handleApplyStyle, applyState }}
+                look={{
+                  onApply: handleApplyStyle,
+                  applyState,
+                  preview: { draft: previewDraft, context: loaded.context, scheme: previewScheme },
+                }}
               />
             </div>
           </section>

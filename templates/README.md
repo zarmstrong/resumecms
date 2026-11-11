@@ -163,8 +163,15 @@ alias to `client/src/resume/` — no fragile relative paths.
 
 `templates/landing/<id>/` (issue #93) arranges the landing page: its hero
 (photo, availability line, headline, subheadline, buttons) and its
-sections. The landing editor's **Look** group lists them; an unknown or
-missing id is drawn as `classic`, which must always exist. Every one meets
+sections. The landing editor's **Look** group lists them, each with a
+live thumbnail of the draft drawn in it (issue #130), so a new template
+shows up there with no picture to provide; an unknown or missing id is
+drawn as `classic`, which must always exist. The thumbnail is the real
+page at 1280 × 800 scaled down, so a template that sizes itself with
+container queries on the page root gets its wide arrangement there; one
+that uses viewport `@media` queries (as `classic` does, at 560 px) follows
+the editor's window instead, and shows its phone layout in an editor that
+narrow. Every one meets
 the accessibility bar in [`landing/README.md`](landing/README.md), which
 also has the full contract.
 
@@ -199,8 +206,15 @@ also has the full contract.
     //   atStart true when something sits above it, so it draws only the
     //   dividers it has something to divide; without `columns`, the list
     //   comes already tidied)
+    //   A section given an `anchor` ({ ...section, anchor }) is drawn
+    //   with that as its id, so the template can link to it
     // colors / darkColors: the normalized palettes (darkColors null if none)
-    // preview: true in the editor
+    // preview: true in the editor's preview. The editor may also draw the
+    //   page with preview false as a small thumbnail, inside an `inert`
+    //   box that clips it: a template that does anything beyond drawing
+    //   (listens to scrolling, reads location.hash, sets ids) checks for
+    //   an [inert] ancestor and stays a picture there, with no effect on
+    //   the document
     return (
       <main className="l-main">
         {renderHero()}
@@ -209,7 +223,17 @@ also has the full contract.
     );
   }
   ```
-  Without one, that's exactly what's rendered.
+  Without one, that's exactly what's rendered. Landing helpers are
+  imported through the `@landing` alias (to `client/src/landing/`), as
+  resume templates use `@resume`. `directory` is the example of linking
+  to sections: a section's `id` never leaves the server, so
+  `@landing/sectionAnchors.js`'s `withAnchors()` makes anchors from the
+  titles (deduplicated, prefixed so they can't meet another id on the
+  page; pass a prefix of your own in the preview), and
+  `@landing/useSectionSpy.js` tracks which section is in view and
+  scrolls to one inside whatever holds the page, the editor's preview
+  pane included, without touching the editor's URL, and does nothing
+  inside an `[inert]` ancestor.
 
 ## Validating
 

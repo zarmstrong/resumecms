@@ -349,6 +349,11 @@ export const LANDING_SCHEMA = {
     photo: { enum: ['resume', 'custom', 'upload', 'none'], description: "'resume' = the default resume's published header photo" },
     photoUrl: { type: 'string', description: "base64 data: URL (JPEG, PNG or WebP), used when photo is 'custom'" },
     photoImage: { ...LANDING_IMAGE_REF, description: "Used when photo is 'upload'; optional (absent for none)" },
+    coverImage: {
+      ...LANDING_IMAGE_REF,
+      description:
+        "Optional (absent for none): a wide image drawn full width behind the headline by a template whose template.json says cover: true ('cover'); ignored by every other template, though still published with the page. Its alt may be '' even when published, since the headline is real text over it",
+    },
     sections: {
       type: 'array',
       description: 'Shown in order under the headline; one with nothing to show is left out, and a divider is only drawn between two shown sections (or the hero and a section) in the same column. Each has the fields of its kind only',
@@ -708,7 +713,7 @@ export const LANDING_SCHEMA = {
     },
     template: {
       type: 'string',
-      description: "Landing template id, a folder name under templates/landing/: 'classic' (default), 'bold' (oversized type, every other section on a band tinted with the accent), 'centered' (hero centered, cards in a grid), 'editorial' (magazine look: large display headline, drop cap on the first text section, multi-paragraph text sections in two columns on wide screens, pull quotes), 'formal' (a letterhead: name in small caps over a rule, details aligned right) or 'split' (photo and hero in a left column, sticky unless sections are placed there with column: 'side'). An unknown id is drawn as classic",
+      description: "Landing template id, a folder name under templates/landing/: 'classic' (default), 'bold' (oversized type, every other section on a band tinted with the accent), 'centered' (hero centered, cards in a grid), 'cover' (coverImage full width behind the headline over a dark scrim, or a band of the heading color without one, then the sections in one column), 'directory' (for long pages: a sticky table of contents from the section titles beside the sections, a Jump to menu on a phone), 'editorial' (magazine look: large display headline, drop cap on the first text section, multi-paragraph text sections in two columns on wide screens, pull quotes), 'formal' (a letterhead: name in small caps over a rule, details aligned right) or 'split' (photo and hero in a left column, sticky unless sections are placed there with column: 'side'). An unknown id is drawn as classic",
     },
     style: {
       type: 'object',

@@ -41,7 +41,22 @@ in prose; check the diff against the ones that apply, especially:
 - `landing.css` holds only what every landing template shares; an
   arrangement belongs in a template's `style.css`, scoped under
   `.l-template-<id>`, so a change for one template can't move another
-  (issue #93).
+  (issue #93). A landing template's root stays inside the box it's given
+  (no `position: fixed`, no effects on `document`), since the Look
+  group's picker draws every template as an `inert` thumbnail. A landing
+  `coverImage` (issue #130) is drawn only by a template whose
+  `template.json` says `cover: true`; its `alt` may be blank (the name is
+  real text over it), so `assertImagesDescribed()` skips it, but every
+  other image reference still needs one.
+- A landing section's anchor (`directory`'s contents, issue #130) comes
+  from `withAnchors()` on the client, a slug of its title after a prefix,
+  never its `id` (which never leaves the server); only a template that
+  sets `anchor` gives a `<section>` an id. A jump in the editor's preview
+  scrolls only the preview and never changes the editor's URL; smooth
+  scrolling only under `prefers-reduced-motion: no-preference`. Inside an
+  `[inert]` ancestor (the editor's template thumbnails) a landing template
+  has no effect on the document: no listeners, no hash reads or writes,
+  no unprefixed ids.
 - A new or changed landing template (or `landing.css`) meets the bar in
   `templates/landing/README.md` (issue #130): AA text contrast (4.5:1,
   3:1 for large text and for focus rings and control outlines) against the
