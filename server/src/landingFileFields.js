@@ -21,6 +21,15 @@ export const LANDING_FILE_LIMITS = {
   // What reading one may decompress, all its object and cross-reference
   // streams together (pdfUpload.js): a few MB of deflate can say gigabytes.
   decodedBytes: 64 * 1024 * 1024,
+  // What those streams may declare, all their entries together (a
+  // cross-reference stream's objects, an object stream's /N): pdf-lib loops
+  // over what's declared, not over what's there.
+  streamEntries: 1000 * 1000,
+  // Reading one runs in a worker thread of its own (pdfUpload.js), killed
+  // past this long or this much heap: the decoding budget bounds bytes, not
+  // pdf-lib's work.
+  parseMs: 15 * 1000,
+  parseHeapMb: 256,
   // A few documents, and the ones a draft has replaced but the snapshot
   // still shows. They live in SQLite with the images, and every backup
   // copies the database, so this is kept small.

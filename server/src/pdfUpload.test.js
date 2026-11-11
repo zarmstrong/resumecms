@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createDeflate } from 'node:zlib';
+import { readFileSync } from 'node:fs';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
+import { createDeflate, deflateSync } from 'node:zlib';
 import { PDFDocument, PDFName, PDFObjectStreamParser, PDFRawStream, PDFRef, PDFString, PDFXRefStreamParser, StandardFonts } from 'pdf-lib';
 import { stripPdf } from './pdfUpload.js';
 import { LANDING_FILE_LIMITS } from './landingFileFields.js';
@@ -20,7 +23,7 @@ const status = async (promise) => {
 
 // What's written as it is (pdf-lib hex-encodes the Info dictionary's
 // strings, so those are read back through pdf-lib instead).
-const SECRETS = ['XmpAuthor', 'PieceSecret', 'OldRevisionText'];
+const SECRETS = ['XmpAuthor', 'PieceSecret', 'OldRevisionText', 'D:2019', 'D:2022', 'D:2023'];
 const INFO = ['getTitle', 'getAuthor', 'getSubject', 'getKeywords', 'getCreator', 'getProducer', 'getCreationDate', 'getModificationDate'];
 
 // A real PDF, made by pdf-lib, carrying every kind of metadata the strip is
@@ -42,7 +45,12 @@ async function pdfWithMetadata() {
   const xmp = (who) => doc.context.register(doc.context.stream(`<x:xmpmeta><dc:creator>${who}</dc:creator></x:xmpmeta>`, { Type: 'Metadata', Subtype: 'XML' }));
   doc.catalog.set(PDFName.of('Metadata'), xmp('XmpAuthor'));
   page.node.set(PDFName.of('Metadata'), xmp('XmpAuthor'));
-  page.node.set(PDFName.of('PieceInfo'), doc.context.obj({ App: { Private: 'PieceSecret' } }));
+  page.node.set(PDFName.of('PieceInfo'), doc.context.obj({ App: { Private: 'PieceSecret', LastModified: PDFString.of('D:20190101') } }));
+  // The date an app stamps beside its /PieceInfo, on the page and on a form
+  // XObject the page draws.
+  page.node.set(PDFName.of('LastModified'), PDFString.of('D:20220304050607Z'));
+  const form = doc.context.register(doc.context.stream('', { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 10, 10], LastModified: PDFString.of('D:20230405060708Z') }));
+  page.node.set(PDFName.of('Resources'), doc.context.obj({ ...Object.fromEntries(page.node.Resources().entries().map(([k, v]) => [k.decodeText(), v])), XObject: { Fm1: form } }));
   const saved = Buffer.from(await doc.save({ useObjectStreams: false }));
   return Buffer.concat([saved, Buffer.from('\n99 0 obj\n(OldRevisionText)\nendobj\n')]);
 }
@@ -60,7 +68,7 @@ test('a real PDF loses its Info dictionary, its XMP, private app data and unreac
   assert.equal(id, createHash('sha256').update(bytes).digest('hex'));
   const text = bytes.toString('latin1');
   for (const secret of SECRETS) assert.equal(text.includes(secret), false, `${secret} is gone`);
-  for (const key of ['/Info', '/Metadata', '/PieceInfo', '/Author', '/Creator', '/Producer', '/CreationDate', '/ModDate']) {
+  for (const key of ['/Info', '/Metadata', '/PieceInfo', '/LastModified', '/Author', '/Creator', '/Producer', '/CreationDate', '/ModDate']) {
     assert.equal(text.includes(key), false, `${key} is gone`);
   }
   // A single revision.
@@ -69,6 +77,7 @@ test('a real PDF loses its Info dictionary, its XMP, private app data and unreac
   const reread = await PDFDocument.load(bytes, { updateMetadata: false });
   assert.equal(reread.getPageCount(), 1);
   assert.deepEqual(reread.getPage(0).getSize(), { width: 200, height: 200 });
+  assert.ok(reread.getPage(0).node.Resources().lookup(PDFName.of('XObject')).lookup(PDFName.of('Fm1')), 'the form XObject is kept');
   for (const field of INFO) assert.equal(reread[field](), undefined, field);
 
   // The same upload is the same file, so the same id.
@@ -240,4 +249,117 @@ test('object streams in other filters decode, within a bound told before decodin
   } finally {
     console.warn = warn;
   }
+});
+
+// Parsing is isolated (pdfUpload.js): pdf-lib's work and what it keeps
+// aren't bounded by the file's size, so it never runs on the server's
+// thread.
+
+test('the server thread never loads pdf-lib: an upload is read in a worker', () => {
+  const source = readFileSync(new URL('./pdfUpload.js', import.meta.url), 'utf8');
+  assert.equal(/from 'pdf-lib'|import\('pdf-lib'\)|pdfStrip\.js'/.test(source), false);
+  assert.match(source, /new Worker\(/);
+});
+
+// A valid one-page PDF with `object` appended, the way an incremental save
+// adds to a file.
+async function withAppended(object) {
+  const doc = await PDFDocument.create();
+  doc.addPage([100, 100]);
+  return Buffer.concat([Buffer.from(await doc.save({ useObjectStreams: false })), Buffer.from(object, 'latin1')]);
+}
+
+// pdf-lib reads every entry a cross-reference stream's /Index declares,
+// data or no data, keeping a PDFRef for each for good: 977 bytes kept the
+// server's thread for seconds and held hundreds of MB.
+test('a cross-reference stream declaring more entries than it holds is refused at once', async () => {
+  for (const count of [5_000_000, 50_000_000]) {
+    const input = await withAppended(`\n999 0 obj\n<< /Type /XRef /Size 1 /Index [1000 ${count}] /W [0 0 0] /Root 1 0 R /Length 0 >>\nstream\n\nendstream\nendobj\n`);
+    assert.ok(input.length < 2000);
+    const started = performance.now();
+    await assert.rejects(stripPdf(input), (err) => err.status === 400 && /could not be read as a PDF/.test(err.message));
+    assert.ok(performance.now() - started < 2000, `refused in ${Math.round(performance.now() - started)} ms`);
+  }
+  // Widths that need more bytes than are there, and no /Index: /Size counts.
+  const short = await withAppended('\n999 0 obj\n<< /Type /XRef /Size 1000 /W [1 2 1] /Root 1 0 R /Length 4 >>\nstream\n\x01\x00\x00\x00\nendstream\nendobj\n');
+  assert.equal(await status(stripPdf(short)), 400);
+});
+
+// An object stream's header of `count` pairs, `pair(i)` each, deflated.
+function objectStream(count, pair = () => '1000 0 ') {
+  const parts = [];
+  for (let i = 0; i < count; i += 1) parts.push(pair(i));
+  const header = parts.join('');
+  const body = deflateSync(Buffer.from(`${header}null`));
+  return Buffer.concat([
+    Buffer.from(`\n999 0 obj\n<< /Type /ObjStm /N ${count} /First ${header.length} /Filter /FlateDecode /Length ${body.length} >>\nstream\n`),
+    body,
+    Buffer.from('\nendstream\nendobj\n'),
+  ]).toString('latin1');
+}
+
+test('streams declaring more objects than the cap, or than they hold, are refused at once', async () => {
+  // 1.1 million pairs in a few KB: within the decoding budget, over the
+  // entries cap.
+  const many = await withAppended(objectStream(LANDING_FILE_LIMITS.streamEntries + 100_000));
+  assert.ok(many.length < 100 * 1024);
+  const started = performance.now();
+  await assert.rejects(stripPdf(many), (err) => err.status === 413 && /too complex/.test(err.message));
+  assert.ok(performance.now() - started < 3000, `refused in ${Math.round(performance.now() - started)} ms`);
+  // The cap counts every stream's entries together.
+  const two = await withAppended(objectStream(600) + objectStream(600));
+  assert.equal(await status(stripPdf(two, { maxEntries: 1000 })), 413);
+  assert.ok((await stripPdf(two, { maxEntries: 1300 })).bytes.length > 0);
+  // /N pairs can't fit before /First.
+  const crammed = await withAppended('\n999 0 obj\n<< /Type /ObjStm /N 100000 /First 4 /Length 8 >>\nstream\n1 0 null\nendstream\nendobj\n');
+  assert.equal(await status(stripPdf(crammed)), 400);
+});
+
+const gc = (() => {
+  setFlagsFromString('--expose-gc');
+  return runInNewContext('gc');
+})();
+
+test('a slow PDF is stopped at the time limit and refused, while the server keeps running and keeps nothing', async () => {
+  // 900,000 objects, under the cap: pdf-lib takes about ten seconds.
+  const slow = await withAppended(objectStream(900_000));
+  gc();
+  const heapBefore = process.memoryUsage().heapUsed;
+  let ticks = 0;
+  const interval = setInterval(() => { ticks += 1; }, 10);
+  const started = performance.now();
+  try {
+    await assert.rejects(stripPdf(slow, { timeoutMs: 400 }), (err) => err.status === 413 && /too complex/.test(err.message));
+  } finally {
+    clearInterval(interval);
+  }
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed < 2000, `stopped after ${Math.round(elapsed)} ms`);
+  assert.ok(ticks >= 15, `the event loop ticked ${ticks} times meanwhile`);
+  gc();
+  const grown = process.memoryUsage().heapUsed - heapBefore;
+  assert.ok(grown < 16 * 1024 * 1024, `the server's heap grew by ${Math.round(grown / 1024 / 1024)} MB`);
+});
+
+test('a PDF that needs more than the heap limit to read is refused, not the server', async () => {
+  const big = await withAppended(objectStream(300_000, (i) => `${1000 + i} 0 `));
+  await assert.rejects(stripPdf(big, { heapMb: 16 }), (err) => err.status === 413 && /too complex/.test(err.message));
+  // And a normal one still reads after it.
+  const { bytes } = await stripPdf(await pdfWithObjectStreams());
+  assert.equal((await PDFDocument.load(bytes)).getPageCount(), 120);
+});
+
+// pdf-lib (like pdf.js, Chrome and mupdf) never checks a zlib stream's
+// Adler-32 trailer, so neither does the bounded decoder.
+test('a flate stream with a wrong Adler-32 checksum still decodes', async () => {
+  const input = await pdfWithObjectStreams();
+  const streams = [...input.toString('latin1').matchAll(/\/Type \/ObjStm[^>]*?\/Length (\d+)[^>]*>>\nstream\n/g)];
+  assert.ok(streams.length >= 3);
+  const flipped = Buffer.from(input);
+  for (const match of streams) flipped[match.index + match[0].length + Number(match[1]) - 1] ^= 0xff;
+  assert.notDeepEqual(flipped, input);
+  assert.equal((await PDFDocument.load(flipped)).getPageCount(), 120, 'pdf-lib itself reads it');
+  const { bytes } = await stripPdf(flipped);
+  assert.equal((await PDFDocument.load(bytes)).getPageCount(), 120);
+  assert.deepEqual(bytes, (await stripPdf(input)).bytes, 'the same file as from the intact one');
 });

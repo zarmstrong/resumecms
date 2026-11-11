@@ -47,7 +47,10 @@ in prose; check the diff against the ones that apply, especially:
   stored only as cleaned bytes (re-encoded by `imageUpload.js`, or
   metadata-stripped by `pdfUpload.js`, size capped before parsing, its
   annotation authors and attachments removed, its stream decoding held to
-  `LANDING_FILE_LIMITS.decodedBytes`), served
+  `LANDING_FILE_LIMITS.decodedBytes` and its streams' declared entries
+  to `streamEntries`; a PDF is never parsed on the main thread: only
+  `pdfStrip.js`/`pdfStripWorker.js` load pdf-lib, run in a Worker per
+  upload with `parseHeapMb` and `parseMs`, a 413 past either), served
   publicly only while `shownImageIds()`/`shownFiles()` of the shown,
   resolved snapshot includes it, and pruned with its store
   (`referencedImageIds()`/`referencedFileIds()` of draft and snapshot).

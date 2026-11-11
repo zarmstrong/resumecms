@@ -1280,9 +1280,10 @@ function DocumentsFields({ sectionId, documents, onChange, limits, fileProps }) 
       {error && <div className="ed-field-error">{error}</div>}
       <span className="ed-field-hint">
         Up to {max} PDFs, each opened in the visitor's browser and shown with its size. On upload, a PDF's metadata (its author,
-        title, the app that made it, its dates, earlier saved versions), its comments' author names and dates, and any files
-        attached to it are removed. What's on its pages, the comments' text and form field values are kept as they are, so
-        check it holds nothing you don't mean to share. One with no file yet is left off the page.
+        title, the app that made it, its creation, modification and last-modified dates, earlier saved versions), its
+        comments' author names and dates, and any files attached to it are removed. What's on its pages, the comments' text
+        and form field values (a signature's name and date too) are kept as they are, so check it holds nothing you don't
+        mean to share. One with no file yet is left off the page.
       </span>
     </>
   );

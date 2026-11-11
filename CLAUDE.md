@@ -499,28 +499,48 @@ pure parts in `landingFileFields.js`. `POST /api/landing/files?name=`
 takes the raw file (`express.raw()` on that route only, after the login
 check, in `routes/landingFiles.js`, a factory over the store so its test
 runs on `:memory:`); there's no MCP upload (`/mcp`'s body cap), but MCP
-can reference a stored file. `pdfUpload.js`, the only module that loads
-`pdf-lib` (pinned), refuses anything over `LANDING_FILE_LIMITS.uploadBytes`
-before parsing and anything not starting `%PDF-` (never the
-`Content-Type`), then *always* saves it again: the trailer's Info
-dictionary dropped, `/Metadata` (XMP), `/PieceInfo`, `/AF` (associated
-files) and `/EF` (a file specification's embedded file) taken off every
+can reference a stored file. `pdfUpload.js` refuses anything over
+`LANDING_FILE_LIMITS.uploadBytes` before parsing and anything not
+starting `%PDF-` (never the `Content-Type`), then *always* has it saved
+again by `pdfStrip.js`, which with `pdfStripWorker.js` are the only
+modules that load `pdf-lib` (pinned): the trailer's Info dictionary
+dropped, `/Metadata` (XMP), `/PieceInfo`, `/LastModified` (a page's or
+form XObject's, written beside `/PieceInfo`), `/AF` (associated files)
+and `/EF` (a file specification's embedded file) taken off every
 dictionary, the catalog's `/Names /EmbeddedFiles` and `/Collection`
 removed, a page's `FileAttachment` annotations (and their popups)
 removed and every other annotation's `/M` and `/CreationDate` and,
 except on a form widget (whose `/T` is the field's name), its `/T`
 author cleared, and only what the catalog still reaches written out, as
 one revision, so no earlier incremental save survives; the pages, the
-annotations' text and form field values are copied, never re-rendered.
-A PDF pdf-lib can't load, or an encrypted one, is a 400 saying so.
-Loading decodes every object and cross-reference stream at once, with no
-limit in pdf-lib, so `pdfUpload.js` wraps both parsers' exported
-`forStream()` and hands them the stream already decoded by its own
-`boundedDecode()` (zlib with `maxOutputLength` for Flate, a worst-case
-bound checked before any other filter runs), all of an upload's streams
-together held to `LANDING_FILE_LIMITS.decodedBytes` (64 MB) through an
-`AsyncLocalStorage`; past it, a 413. Its test fails if pdf-lib stops
-going through those, so keep it when bumping the pinned version. The id is the sha256 of the stripped bytes, and
+annotations' text and form field values (a signature's included, with
+its own name and date) are copied, never re-rendered. A PDF pdf-lib
+can't load, or an encrypted one, is a 400 saying so.
+
+Never parse an upload on the main thread. pdf-lib's work isn't bounded
+by the file's size (a 1 KB cross-reference stream can declare millions
+of entries, which it loops over without yielding, keeping a `PDFRef`
+for each in a module-level pool it never empties), so `stripPdf()` runs
+each upload in a `node:worker_threads` Worker of its own, one at a time,
+the bytes transferred in and out, with `resourceLimits` of
+`LANDING_FILE_LIMITS.parseHeapMb` (256 MB old generation) and
+`terminate()`d after `parseMs` (15 s); either is a 413 "too complex to
+read", and the worker's heap goes with it. Inside it, loading decodes
+every object and cross-reference stream at once, with no limit in
+pdf-lib, so `pdfStrip.js` wraps both parsers' exported `forStream()` and
+hands them the stream already decoded by its own `boundedDecode()`
+(Flate inflated raw with `maxOutputLength`, its zlib header checked as
+pdf-lib does and its Adler-32 never verified, since pdf-lib, pdf.js and
+Chrome don't; a worst-case bound checked before any other filter runs),
+all of an upload's streams together held to `decodedBytes` (64 MB; past
+it, a 413), and then checks what the stream declares against what it
+holds: an xref stream's `/Index` (or `/Size`) counts times its `/W`
+widths within its bytes, an object stream's `/N` pairs within its
+`/First` (a 400 otherwise), and all their entries together within
+`streamEntries` (1,000,000; a 413). The worker script resolves by
+`import.meta.url`, so it's found from source and in the Docker image,
+which copies `server/` whole. Its test fails if pdf-lib stops going
+through `forStream()`, so keep it when bumping the pinned version. The id is the sha256 of the stripped bytes, and
 the caps (10 MB a file, 20 files and 30 MB in all, kept small because
 every backup copies the database) are `LANDING_FILE_LIMITS`. A reference
 is `{ fileId, name }` (`checkFileRef()`), `name` always a
