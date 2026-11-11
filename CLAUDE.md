@@ -1070,7 +1070,7 @@ The landing page has its own rewrite (issue #73):
 is one string, so a proposal is `{ target, before, after }`, and one
 request returns a list (an `intro` target writes headline, subheadline and
 a text section, three proposals). Targets are an allowlist
-(`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items
+(`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items,
 FAQ answers (`answer`, issue #123) and services' text (`service`, issue
 #122) by index. Quotes (someone else's
 words), experience, education and skills sections (read from a
