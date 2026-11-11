@@ -1023,7 +1023,8 @@ readable; `gallery` (issue #130) follows the same rule. Its `index.jsx`
 (`--l-run-ratio`), so `style.css` can lay the run out as rows of one
 height without cropping (a shape past 4:1 or 1:4 is clamped and
 letterboxed, and a title goes under its picture so a row's pictures line
-up); its gallery section and thumbnailed items are
+up; a section the preview shows as hidden is drawn after its run, never
+in or between one, so the preview groups what the page will); its gallery section and thumbnailed items are
 CSS column masonries, the thumbnails at their stored shape
 (`aspect-ratio: revert-layer` undoes the shared 4:3 crop). A template must render every section kind
 (`LandingView`'s `renderSection` and `SectionBody` draw them, a divider
