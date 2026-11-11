@@ -60,8 +60,11 @@ patch, and a `!` after the type (or a `BREAKING CHANGE:` footer) a major
 one. `docs`, `refactor`, `test`, `build`, `ci`, `chore` and `style`
 make no release on their own. Merging the release PR tags the release
 and publishes the Docker image (`.github/workflows/release.yml`). The
-commits inside a PR can say whatever you like, except a line starting
-`BREAKING CHANGE:`, which lands in the squash commit's body and can make
-a major release. Run the same locally
+commit messages inside a PR are free-form, but they land in the squash
+commit's body, where release-please still reads a few things: a
+`BREAKING CHANGE:` line or `BREAKING-CHANGE:` anywhere makes a major
+release, a `Release-As: x.y.z` line forces that version, and
+`type: text` lines in the last paragraph become extra changelog
+entries. Leave those out unless you mean them. Run the same locally
 first: `npm test` in `server/` and `client/`, and the two commands above
 for templates.
