@@ -32,8 +32,13 @@ on:
 permissions:
   contents: read
 
+# A group keeps only one pending run and cancels an older pending one, so
+# pushes and manual runs queue separately: a manual run must never cancel a
+# push waiting to cut a release, nor a push drop a requested re-publish.
+# (A push replacing a pending push is harmless: the next run still finds the
+# merged release PR.)
 concurrency:
-  group: release
+  group: release-${{ github.event_name }}
   cancel-in-progress: false
 
 env:

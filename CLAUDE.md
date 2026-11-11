@@ -70,7 +70,10 @@ re-runs `pr-title`; every job still runs then, since a run with its tests
 skipped could cancel one in progress and leave a green check.
 
 Releases (`.github/workflows/release.yml`) come from release-please,
-reading the squash-merged PR titles, so a PR title must be a
+reading the squash-merged PR titles (the repo's squash title is set to
+the PR title and the ruleset allows only squash, both GitHub settings
+outside the repo; a `BREAKING CHANGE:` line in a PR's commit messages
+reaches the squash body and makes a major release), so a PR title must be a
 Conventional Commit (`feat:`, `fix(scope):`, `feat!:`; `pr-title`
 checks it, and Dependabot's are prefixed `fix(deps)`/`ci`). It keeps a
 release PR open (`release-please-config.json`, `simple` release type,

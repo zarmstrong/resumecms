@@ -49,8 +49,9 @@ A PR can only merge into `main` once CI's `ci-passed` check is green. CI
 runs the server tests, the client tests and build, the template
 validator, and a Docker build, each only when the PR touches its part.
 
-PRs are squash-merged, and the PR title becomes the commit message, so
-the title must be a [Conventional Commit](https://www.conventionalcommits.org/),
+PRs are squash-merged (the only merge method `main` allows), and the PR
+title becomes the commit's title, with the PR's commit messages as its
+body, so the title must be a [Conventional Commit](https://www.conventionalcommits.org/),
 e.g. `feat: add a cover landing template (#130)` or `fix(pdf): retry a
 timed-out render`. CI's `pr-title` check enforces it. Releases are built
 from these titles: release-please keeps a release PR open with the next
@@ -59,6 +60,8 @@ patch, and a `!` after the type (or a `BREAKING CHANGE:` footer) a major
 one. `docs`, `refactor`, `test`, `build`, `ci`, `chore` and `style`
 make no release on their own. Merging the release PR tags the release
 and publishes the Docker image (`.github/workflows/release.yml`). The
-commits inside a PR can say whatever you like. Run the same locally
+commits inside a PR can say whatever you like, except a line starting
+`BREAKING CHANGE:`, which lands in the squash commit's body and makes a
+major release. Run the same locally
 first: `npm test` in `server/` and `client/`, and the two commands above
 for templates.

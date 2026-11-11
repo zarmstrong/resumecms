@@ -135,7 +135,8 @@ jobs:
       - name: Validate templates/ metadata
         run: node scripts/validate-templates.mjs
 
-  # Squash merges use the PR title as the commit message, and release-please
+  # main only allows squash merges, whose title is the PR title (repo
+  # settings, not this file), and release-please
   # builds versions and the changelog from those (see release.yml), so the
   # title has to be a Conventional Commit. The title goes through env, never
   # into the script itself.
