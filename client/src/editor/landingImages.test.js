@@ -44,6 +44,22 @@ test('an image section is found by id, and an upload for a removed one is droppe
   assert.equal(applyUploadedImage({ ...draft, sections: [draft.sections[1]] }, spot, ID), null);
 });
 
+test("a media section's poster is found by id, keeps its other fields, and is dropped with its section (issue #121)", () => {
+  const media = { id: 'reel', kind: 'media', title: 'Reel', url: '', caption: '', transcript: '' };
+  const start = { ...draft, sections: [...draft.sections, media] };
+  const spot = uploadSpot(start, { kind: 'poster', sectionId: 'reel' });
+  // Its link typed and moved to the top meanwhile: still found.
+  const typed = { ...media, url: 'https://youtu.be/dQw4w9WgXcQ' };
+  const out = applyUploadedImage({ ...draft, sections: [typed, ...draft.sections] }, spot, ID);
+  assert.deepEqual(out.sections[0], { ...typed, poster: { imageId: ID, alt: '' } });
+  // The same image again keeps its description.
+  const described = { ...typed, poster: { imageId: ID, alt: 'On stage' } };
+  assert.deepEqual(applyUploadedImage({ ...draft, sections: [described] }, spot, ID).sections[0].poster, { imageId: ID, alt: 'On stage' });
+  // Removed, or an image section with that id: nothing is applied.
+  assert.equal(applyUploadedImage(draft, spot, ID), null);
+  assert.equal(applyUploadedImage({ ...draft, sections: [{ ...draft.sections[0], id: 'reel' }] }, spot, ID), null);
+});
+
 test("an item's thumbnail follows its item when it moves or is edited, and is dropped when it's removed", () => {
   const spot = uploadSpot(draft, { kind: 'item', sectionId: 'list', index: 1 });
   const items = (landing) => landing.sections[1].items;

@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NEUTRAL_COLORS, colorOf, etagOf, faviconSvg, iconContent, initialsOf, inkFor, siteAccent } from './favicon.js';
+import {
+  NEUTRAL_COLORS,
+  colorOf,
+  etagOf,
+  faviconSvg,
+  iconContent,
+  iconVersions,
+  initialsOf,
+  inkFor,
+  siteAccent,
+  versionOf,
+} from './favicon.js';
 import { DEFAULT_LANDING_COLORS } from './landingStyle.js';
 
 // The icon's content and markup (issue #104); routes/favicon.test.js
@@ -109,4 +120,23 @@ test('the ETag is strong and follows the bytes', () => {
   assert.equal(etagOf(a), etagOf(faviconSvg(iconContent({ name: 'jo d', accent: '#2F6F4E' }))));
   assert.notEqual(etagOf(a), etagOf(renamed));
   assert.notEqual(etagOf(a), etagOf(recolored));
+});
+
+test("the links' versions (issue #108): the SVG's ETag, and the hash of the PNG's own SVG", () => {
+  const content = iconContent({ name: 'Jo Doe', accent: '#2f6f4e', darkColors: { accent: '#7cc4a0' } });
+  const { svg, png } = iconVersions(content);
+  assert.equal(`"${svg}"`, etagOf(faviconSvg(content)));
+  assert.equal(png, versionOf(faviconSvg(content, { forRaster: true })));
+  assert.match(png, /^[0-9a-f]{32}$/);
+  assert.notEqual(svg, png);
+  // A dark accent is only in the SVG, so only its version follows it.
+  const otherDark = iconVersions(iconContent({ name: 'Jo Doe', accent: '#2f6f4e', darkColors: { accent: '#ffcc00' } }));
+  assert.notEqual(otherDark.svg, svg);
+  assert.equal(otherDark.png, png);
+  // A rename or a recolor moves both.
+  for (const changed of [iconContent({ name: 'Al Doe', accent: '#2f6f4e' }), iconContent({ name: 'Jo Doe', accent: '#2f6f4f' })]) {
+    const v = iconVersions(changed);
+    assert.notEqual(v.svg, svg);
+    assert.notEqual(v.png, png);
+  }
 });

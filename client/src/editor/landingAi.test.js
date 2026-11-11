@@ -168,6 +168,41 @@ test('an FAQ answer proposal is keyed by its place, and follows its question whe
   assert.deepEqual([...highlightIds(shownPlaced)], ['faq']);
 });
 
+test("a service's proposal is keyed by its place, writes only its text, and follows its title when services move", () => {
+  const book = { type: 'link', label: 'Book', url: 'https://cal.example' };
+  const service = (title, text) => ({ title, text, price: '$60', action: book });
+  const withServices = (services) => ({ ...landing, sections: [...landing.sections, { id: 'sv', kind: 'services', title: '', services }] });
+  const page = withServices([service('Tutoring', 'Weekly.'), service('Consult', 'Once.'), service('', 'Untitled.')]);
+  const target = { kind: 'service', sectionId: 'sv', index: 0 };
+  assert.equal(targetKey(target), 'service:sv:0');
+  assert.notEqual(targetKey(target), targetKey({ kind: 'item', sectionId: 'sv', index: 0 }));
+  assert.equal(landingSlice(page, target), 'Weekly.');
+  assert.equal(landingSlice(page, { ...target, index: 3 }), null);
+  assert.equal(landingSlice(page, { kind: 'item', sectionId: 'sv', index: 0 }), null);
+  assert.equal(landingSlice(page, { ...target, sectionId: 'proj' }), null);
+
+  // Accepting writes only that service's text: its title, price and button stay.
+  const written = setLandingSlice(page, { ...target, index: 1 }, 'One hour.');
+  assert.deepEqual(written.sections[4].services, [service('Tutoring', 'Weekly.'), service('Consult', 'One hour.'), service('', 'Untitled.')]);
+  assert.equal(written.sections[2], page.sections[2]);
+
+  const proposal = { id: 's', target, before: 'Weekly.', after: 'Every week.', anchor: anchorFor(page, target) };
+  assert.deepEqual(proposal.anchor, { title: 'Tutoring', count: 3 });
+  // Moved: followed. Moved and edited: found by its title, stale. Removed: gone.
+  const moved = withServices([service('Consult', 'Once.'), service('Tutoring', 'Weekly.'), service('', 'Untitled.')]);
+  assert.deepEqual(locateTarget(moved, proposal), { ...target, index: 1 });
+  const [placed] = placeProposals(withServices([service('Consult', 'Once.'), service('Tutoring', 'Monthly.')]), [proposal]);
+  assert.deepEqual([placed.located.index, placed.stale, placed.key], [1, true, 'service:sv:1']);
+  assert.equal(locateTarget(withServices([service('Consult', 'Once.')]), proposal), null);
+  // A request follows its service the same way.
+  assert.deepEqual(locateRequest(moved, requestSpot(page, target)), { ...target, index: 1 });
+
+  // The preview writes it in and outlines its section.
+  const shownPlaced = placeProposals(moved, [proposal]);
+  assert.equal(previewLanding(moved, shownPlaced).sections[4].services[1].text, 'Every week.');
+  assert.deepEqual([...highlightIds(shownPlaced)], ['sv']);
+});
+
 test('rewriteCopy leaves the photo out and everything else in', () => {
   const copy = rewriteCopy(landing);
   assert.equal(copy.photoUrl, '');

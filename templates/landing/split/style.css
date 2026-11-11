@@ -64,6 +64,13 @@
   gap: 8px;
 }
 
+/* A media section there (issue #121): the play button and its label a
+   size down, so a long title still fits a narrow facade. */
+.l-template-split .l-split-side .l-media-play {
+  padding: 8px 14px;
+  font-size: 0.9em;
+}
+
 .l-template-split .l-hero {
   display: flex;
   flex-direction: column;
@@ -119,6 +126,15 @@
 /* The heading's hairline already tops a list of questions. */
 .l-template-split .l-section-title + .l-faq {
   border-top: none;
+}
+
+/* A publications group's subheading (issue #127) in the heading color
+   and the text's case, so it doesn't read as another section's title. */
+.l-template-split .l-publication-group-title {
+  font-size: 0.95em;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--r-heading, var(--ink));
 }
 
 .l-template-split .l-cards {

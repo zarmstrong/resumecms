@@ -20,9 +20,12 @@ import { hasPassed, utcToday } from '../dateText.js';
 //                                           text section's body together
 //   { kind: 'answer', sectionId, index }    an FAQ entry's answer (issue
 //                                           #123; never its question)
+//   { kind: 'service', sectionId, index }   a service's text (issue #122;
+//                                           never its title, price or
+//                                           button)
 // Sections and cards are addressed by id, so moving them doesn't move a
-// proposal onto something else; items and FAQ entries have no ids, so
-// theirs is a position.
+// proposal onto something else; items, FAQ entries and services have no
+// ids, so theirs is a position.
 // Deliberately not targets (issue #90): a quote, which is someone else's
 // words; an experience section, which is read from a resume as published,
 // and so are an education or skills section (issue #126); an item's meta
@@ -30,10 +33,17 @@ import { hasPassed, utcToday } from '../dateText.js';
 // model mustn't make up figures, so it only ever reads them, in the page
 // context.
 // Nor is a credential (issue #119): its name, issuer, number and dates
-// are facts, not prose.
+// are facts, not prose. Nor is a publication (issue #127): its title,
+// outlet and date are facts too, and its note (co-authors, "invited") the
+// record of them.
 // Nor are an image section's or a gallery's captions (issue #120): plain
 // text about a picture the model can't see, so the page context gives
 // either only its kind and title.
+// Nor is a media section (issue #121): its caption and transcript are
+// about a recording the model can't hear, so it gets only its kind and
+// title too, never the link.
+// Nor are a service's title, price and button (issue #122): what's offered
+// and on what terms are the person's to say, so the model only reads them.
 // Nor is a contact section (issue #124): an email, a phone number, an
 // address and hours are facts, and the page context gives only its kind
 // and title, so none of them reaches the model.
@@ -44,8 +54,8 @@ import { hasPassed, utcToday } from '../dateText.js';
 // that's public and published. A resume's internal name and its tailoring
 // brief are never part of it.
 //
-// A text section's body, an item's text and an FAQ answer may hold links
-// (issue #91), and the model must never be able to put a URL on the page.
+// A text section's body, an item's text, an FAQ answer and a service's
+// text may hold links (issue #91), and the model must never be able to put a URL on the page.
 // It never sees one: in the text it rewrites, each link's URL becomes a
 // placeholder (`#L1`, `#L2`, … linkPlaceholders()), and in the rest of the
 // page a link is just its label. Its answer gets the URLs back
@@ -53,7 +63,7 @@ import { hasPassed, utcToday } from '../dateText.js';
 // makes the whole answer an error. It may reword a label, move a link or
 // drop it.
 
-export const LANDING_TARGET_KINDS = ['headline', 'subheadline', 'text', 'item', 'card', 'intro', 'answer'];
+export const LANDING_TARGET_KINDS = ['headline', 'subheadline', 'text', 'item', 'card', 'intro', 'answer', 'service'];
 
 export class InvalidLandingTargetError extends Error {}
 
@@ -68,13 +78,14 @@ const FIELD_LIMITS = {
   item: LANDING_LIMITS.itemText,
   card: LANDING_LIMITS.blurb,
   answer: LANDING_LIMITS.faqAnswer,
+  service: LANDING_LIMITS.serviceText,
 };
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // The single-field targets whose text may hold links and emphasis, and how
 // the page finds its links (a text section's one paragraph at a time).
-const INLINE_KINDS = ['text', 'item', 'answer'];
+const INLINE_KINDS = ['text', 'item', 'answer', 'service'];
 const linkScope = (kind) => ({ paragraphs: kind === 'text' });
 
 function findSection(landing, sectionId, kind) {
@@ -120,6 +131,13 @@ export function normalizeLandingTarget(landing, target) {
       }
       return { kind: 'answer', sectionId: target.sectionId, index: target.index };
     }
+    case 'service': {
+      const section = findSection(landing, target.sectionId, 'services');
+      if (!Number.isInteger(target.index) || target.index < 0 || target.index >= section.services.length) {
+        throw new InvalidLandingTargetError('That service is no longer in its section');
+      }
+      return { kind: 'service', sectionId: target.sectionId, index: target.index };
+    }
     default:
       throw new InvalidLandingTargetError('Unknown target');
   }
@@ -147,6 +165,8 @@ export function landingSlice(landing, target) {
       return section?.kind === 'resumes' ? (section.cards.find((c) => c.resumeId === target.resumeId)?.blurb ?? null) : null;
     case 'answer':
       return section?.kind === 'faq' ? (section.entries[target.index]?.answer ?? null) : null;
+    case 'service':
+      return section?.kind === 'services' ? (section.services[target.index]?.text ?? null) : null;
     default:
       return null;
   }
@@ -290,6 +310,17 @@ function pageContext(landing, target, resumes) {
               answer: mark({ kind: 'answer', sectionId: section.id, index }, linkLabels(entry.answer, 'answer')),
             })),
           };
+        case 'services':
+          // A button's label, never its link.
+          return {
+            ...base,
+            services: section.services.map((service, index) => ({
+              title: service.title,
+              text: mark({ kind: 'service', sectionId: section.id, index }, linkLabels(service.text, 'service')),
+              ...(service.price ? { price: service.price } : {}),
+              ...(service.action?.label ? { button: service.action.label } : {}),
+            })),
+          };
         case 'experience':
           return {
             ...base,
@@ -320,6 +351,15 @@ function pageContext(landing, target, resumes) {
             credentials: section.credentials
               .filter((c) => c.name.trim() && !hasPassed(c.expires, utcToday()))
               .map((c) => ({ kind: c.kind, name: c.name, issuer: c.issuer })),
+          };
+        case 'publications':
+          // The ones a visitor sees, as listed, without the links or DOIs,
+          // which give the model nothing to write from.
+          return {
+            ...base,
+            publications: section.entries
+              .filter((entry) => entry.title.trim())
+              .map((entry) => ({ kind: entry.kind, title: entry.title, outlet: entry.outlet, date: entry.date })),
           };
         default:
           return base;
@@ -370,6 +410,10 @@ function fieldRule(target, limit, item) {
       return `"text" is a line or two about one entry in a list on the page${item?.title ? ` (its title, which you don't change, is "${item.title}")` : ''}. At most ${limit} characters.`;
     case 'card':
       return `"text" is the short blurb on a card that links to one of the person's resumes. Say what that resume is for or who it suits. At most ${limit} characters.`;
+    case 'service': {
+      const facts = [item?.title && `its name is "${item.title}"`, item?.price && `its price is "${item.price}"`].filter(Boolean);
+      return `"text" is a short description of one service the person offers, shown under its name on the page${facts.length ? ` (${facts.join(' and ')}, which you don't change)` : ''}. Say what a client gets from it; never state or change a price, a duration or a guarantee that isn't in the input. At most ${limit} characters.`;
+    }
     case 'answer':
       return `"text" is the answer to a question visitors ask, shown under it on the page${item?.question ? ` (the question, which you don't change, is "${item.question}")` : ''}. Answer it directly, in a few sentences at most. At most ${limit} characters.`;
     default:
@@ -402,7 +446,8 @@ export function buildLandingPrompt(landing, target, instruction, profile, resume
   if (target.kind === 'intro') rules.push(INTRO_RULE);
   else {
     const section = landing.sections.find((s) => s.id === target.sectionId);
-    const item = target.kind === 'item' ? section?.items[target.index] : target.kind === 'answer' ? section?.entries[target.index] : null;
+    const lists = { item: section?.items, answer: section?.entries, service: section?.services };
+    const item = lists[target.kind]?.[target.index] ?? null;
     rules.push(fieldRule(target, FIELD_LIMITS[target.kind], item));
   }
   if (profile) {
@@ -449,7 +494,7 @@ function checkLength(value, limit, label, length = value.length) {
   return value;
 }
 
-const LABELS = { headline: 'headline', subheadline: 'subheadline', text: 'text section', item: 'item', card: 'card', answer: 'answer' };
+const LABELS = { headline: 'headline', subheadline: 'subheadline', text: 'text section', item: 'item', card: 'card', answer: 'answer', service: 'service' };
 
 // The proposals the model's `rewrite` makes against `landing`, one per field
 // it changed, with their links' URLs back. A field it left alone (give or

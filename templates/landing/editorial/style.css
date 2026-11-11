@@ -369,6 +369,91 @@
   border-radius: 2px;
 }
 
+/* Services (issue #122), one under another between hairlines like the
+   list entries, the price in small capitals beside the name. */
+.l-template-editorial .l-services {
+  gap: 0;
+}
+
+.l-template-editorial .l-service {
+  padding: 18px 0;
+  border-top: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 16%, transparent);
+}
+
+.l-template-editorial .l-service:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.l-template-editorial .l-service:last-child {
+  padding-bottom: 0;
+}
+
+.l-template-editorial .l-service-title {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.2em;
+  line-height: 1.3;
+}
+
+.l-template-editorial .l-service-price {
+  font-size: 0.76em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.l-template-editorial .l-service-text {
+  margin-top: 2px;
+}
+
+/* Publications (issue #127), one under another between hairlines like the
+   list entries, each title in the headline font; a group's subheading in
+   small spaced capitals like the kicker. */
+.l-template-editorial .l-publications {
+  gap: 0;
+}
+
+.l-template-editorial .l-publication {
+  padding: 14px 0;
+  border-top: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 16%, transparent);
+}
+
+.l-template-editorial .l-publication:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.l-template-editorial .l-publication:last-child {
+  padding-bottom: 0;
+}
+
+.l-template-editorial .l-publication-title {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.15em;
+  line-height: 1.3;
+}
+
+.l-template-editorial .l-publication-meta {
+  margin-top: 2px;
+  font-size: 0.76em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.l-template-editorial .l-publication-note {
+  max-width: 40em;
+  font-style: italic;
+}
+
+.l-template-editorial .l-publication-groups {
+  gap: 32px;
+}
+
+.l-template-editorial .l-publication-group-title {
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 16%, transparent);
+}
+
 /* A contact section (issue #124): each label in the headline font's
    italics, like a byline, and the address kept to the text's measure. */
 .l-template-editorial .l-contact-label {
@@ -416,6 +501,24 @@
 .l-template-editorial a:not(.l-card-link):focus-visible {
   outline: 2px solid var(--r-accent, var(--ink));
   outline-offset: 3px;
+}
+
+/* A media section (issue #121): square corners like the images, the
+   caption in italics, and the play button a quiet outlined label rather
+   than a pill. */
+.l-template-editorial .l-media-facade,
+.l-template-editorial .l-media-frame {
+  border-radius: 2px;
+}
+
+.l-template-editorial .l-media-play {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.l-template-editorial .l-media-caption {
+  font-style: italic;
+  opacity: 0.8;
 }
 
 /* Two columns of running text, with a hairline between them, for a text

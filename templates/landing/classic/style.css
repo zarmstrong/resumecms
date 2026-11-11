@@ -48,3 +48,6 @@
     font-size: 2em;
   }
 }
+
+/* A media section (issue #121) needs nothing of its own here: the clip
+   takes the column's width in landing.css's shared look. */

@@ -1,4 +1,5 @@
 import { httpError } from './httpError.js';
+import { parseMediaUrl } from './mediaUrl.js';
 
 // The landing page's images (issue #92), the pure half: the caps, how an
 // upload's type is told, and how the page refers to an image. The bytes
@@ -11,7 +12,8 @@ import { httpError } from './httpError.js';
 // may outlive its resume, and then shows nothing. Where they're used: the
 // hero (`photo: 'upload'` with `photoImage`), an item's `image` (a
 // thumbnail), an `image` section, a `gallery` section's entries (issue
-// #120), and `seo.image` (the link-preview image).
+// #120), a `media` section's `poster` (issue #121), and `seo.image` (the
+// link-preview image).
 
 export const LANDING_IMAGE_LIMITS = {
   // What the editor may send. Everything is re-encoded, so this only bounds
@@ -96,6 +98,7 @@ export function referencedImageIds(landing) {
     ...(Array.isArray(landing?.sections) ? landing.sections : []).flatMap((section) =>
       section?.kind === 'gallery' && Array.isArray(section.images) ? section.images.map((entry) => entry?.image) : []
     ),
+    ...(Array.isArray(landing?.sections) ? landing.sections : []).flatMap((section) => (section?.kind === 'media' ? [section.poster] : [])),
   ];
   return new Set(refs.filter((ref) => isPlainObject(ref) && isImageId(ref.imageId)).map((ref) => ref.imageId));
 }
@@ -105,7 +108,8 @@ export function referencedImageIds(landing) {
 // draft because the editor saves while it's typed. "Shown" as
 // resolveLanding() decides: nothing in a hidden section, the hero's only
 // with photo: 'upload', an item's only on an item with a title or text,
-// every gallery entry's, and only a reference whose image is among `storedIds` (one whose image
+// every gallery entry's, a media section's poster only while its link
+// reads as one (parseMediaUrl()), and only a reference whose image is among `storedIds` (one whose image
 // is gone shows nothing).
 export function assertImagesDescribed(landing, storedIds) {
   const missing = [];
@@ -128,6 +132,7 @@ export function assertImagesDescribed(landing, storedIds) {
         check(entry?.image, `sections[${i}].images[${j}].image.alt`, `image ${j + 1} of the gallery in section ${i + 1}`);
       });
     }
+    if (section?.kind === 'media' && parseMediaUrl(section.url)) check(section.poster, `sections[${i}].poster.alt`, `the poster in section ${i + 1}`);
   });
   check(landing?.seo?.image, 'seo.image.alt', 'the share image');
   if (missing.length) {
@@ -162,6 +167,7 @@ export function shownImageIds(resolved) {
       section.kind === 'image' ? [section.image?.src] : section.kind === 'items' ? section.items.map((item) => item.image?.src) : []
     ),
     ...(resolved?.sections ?? []).flatMap((section) => (section.kind === 'gallery' ? section.images.map((entry) => entry.image?.src) : [])),
+    ...(resolved?.sections ?? []).flatMap((section) => (section.kind === 'media' ? [section.poster?.src] : [])),
   ];
   return new Set(srcs.map(imageIdOfPath).filter(Boolean));
 }

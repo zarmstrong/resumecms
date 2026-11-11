@@ -563,6 +563,83 @@ export const LANDING_SCHEMA = {
           {
             type: 'object',
             description:
+              "One video or audio clip behind a click-to-load facade (the title, a play button and the poster); nothing loads from the provider until a visitor presses play. Left out while it has no link. Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'media' },
+              url: {
+                type: 'string',
+                description:
+                  "An https link to a YouTube or Vimeo video (start times t=90, t=1m30s or #t= kept), a SoundCloud track or playlist, or a Spotify track, album, playlist, episode or show; any other link is a 400. Only its parsed form ever reaches a visitor, embedded from youtube-nocookie.com, Vimeo with dnt=1, w.soundcloud.com or open.spotify.com/embed",
+              },
+              caption: { type: 'string', description: 'Plain text under it, at most 300 characters' },
+              poster: { ...LANDING_IMAGE_REF, description: "Optional image shown before it's played; absent shows a plain panel" },
+              transcript: { type: 'string', description: "Optional plain text, at most 20000 characters, under a 'Transcript' disclosure; a blank line starts a new paragraph" },
+            },
+          },
+          {
+            type: 'object',
+            description:
+              "What you offer, at most 12, each with a short description, an optional price line and an optional button; one without a title or a text isn't shown. Only a service's text is ever rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'services' },
+              services: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string', description: "Plain text, at most 120 characters, e.g. 'Private tutoring'" },
+                    text: { type: 'string', description: 'At most 1000 characters; text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is' },
+                    price: { type: 'string', description: "Free text, not a number, at most 80 characters: 'From $60/hour', 'Free 15-minute consultation', 'Sliding scale'" },
+                    action: {
+                      type: 'object',
+                      description: 'Optional button (absent for none), a link like a hero button',
+                      properties: {
+                        type: { const: 'link' },
+                        label: { type: 'string', description: "e.g. 'Book a session'; '' shows the URL" },
+                        url: { type: 'string', description: 'An http, https, mailto or tel link (mailto:you@example.com?subject=Booking prefills a subject)' },
+                        icon: ACTION_ICON,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            type: 'object',
+            description:
+              'Published work and appearances, at most 40; each a title (linked to its url, or its DOI when url is empty) over a muted "Outlet · Date · Kind" line, then its note. One without a title isn\'t shown. Plain text; never rewritten by AI',
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'publications' },
+              order: {
+                enum: ['manual', 'newest'],
+                description:
+                  "'manual' (default): as listed; 'newest': entries whose date reads as YYYY, YYYY-MM, MM/YYYY, 'Mar 2024', 'March 2024' or YYYY-MM-DD newest first, any other keeping its place",
+              },
+              group: { type: 'boolean', description: 'Each kind under a subheading of its own, in the order of kind\'s values (default false)' },
+              entries: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    kind: { enum: ['article', 'paper', 'book', 'chapter', 'talk', 'podcast', 'press'], description: "What it is (default 'article')" },
+                    title: { type: 'string', description: 'At most 300 characters' },
+                    outlet: { type: 'string', description: 'Where it appeared: a journal, publisher, conference, show or paper (at most 160 characters)' },
+                    date: { type: 'string', description: 'Free-form, shown as written (at most 40 characters)' },
+                    url: { type: 'string', description: 'Optional http, https, mailto or tel link for the title' },
+                    doi: { type: 'string', description: "Optional DOI, 10.<registrant>/<suffix> with nothing in front, e.g. '10.1038/s41586-020-2649-2'; linked as https://doi.org/<doi> when url is empty" },
+                    note: { type: 'string', description: "Plain text under it, e.g. 'with A. Author', 'keynote' (at most 300 characters)" },
+                  },
+                },
+              },
+            },
+          },
+          {
+            type: 'object',
+            description:
               "How to reach the person: email, phone, service area, address and hours, with an optional \"Save contact\" button that downloads a vCard of what the section shows (plus the page's name, title and URL). At most one per page. All plain text; left out when it shows none of email, phone, area, address or hours. Never rewritten by AI",
             properties: {
               ...LANDING_SECTION_BASE,
