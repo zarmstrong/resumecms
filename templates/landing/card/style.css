@@ -54,18 +54,17 @@
 }
 
 /* A visible ring in the heading color on everything that takes focus (the
-   shared ones are in the accent, which may be pale). A resume card and a
-   document draw theirs around the whole tile, on the ::after the shared
-   look already moves it to. */
-.l-template-card a:not(.l-card-link):not(.l-document-link):focus-visible,
+   shared ones are in the accent, which may be pale). A resume card draws
+   its ring around the whole card, on the ::after the shared look already
+   moves it to; a document's is around its link, like any other. */
+.l-template-card a:not(.l-card-link):focus-visible,
 .l-template-card button:focus-visible,
 .l-template-card summary:focus-visible {
   outline: 3px solid var(--r-heading, var(--ink));
   outline-offset: 3px;
 }
 
-.l-template-card .l-card-link:focus-visible::after,
-.l-template-card .l-document-link:focus-visible::after {
+.l-template-card .l-card-link:focus-visible::after {
   outline: 3px solid var(--r-heading, var(--ink));
   outline-offset: 3px;
 }
