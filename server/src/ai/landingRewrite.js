@@ -34,6 +34,9 @@ import { hasPassed, utcToday } from '../dateText.js';
 // Nor are an image section's or a gallery's captions (issue #120): plain
 // text about a picture the model can't see, so the page context gives
 // either only its kind and title.
+// Nor is a contact section (issue #124): an email, a phone number, an
+// address and hours are facts, and the page context gives only its kind
+// and title, so none of them reaches the model.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*

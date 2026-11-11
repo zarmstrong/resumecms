@@ -29,6 +29,12 @@
   gap: 16px;
 }
 
+/* A contact section (issue #124): the shared look, with a little more
+   room between its lines than a list's. */
+.l-template-classic .l-contact-lines {
+  row-gap: 12px;
+}
+
 @media (max-width: 560px) {
   .l-template-classic .l-main {
     padding: 40px 16px 64px;

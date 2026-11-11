@@ -43,6 +43,11 @@ in prose; check the diff against the ones that apply, especially:
   `columns: true`.
 - New public routes set a `cacheHeaders.js` constant before any early
   return; host-resolved ones send `HOST_HEADERS`.
+- The landing page's vCard (`vcard.js`, `GET /api/public/landing/contact.vcf`)
+  is built only from the *resolved published* contact section, so it holds
+  nothing the page doesn't show and never reads the draft; a draft has at
+  most one contact section; the Person JSON-LD gets no email, phone or area,
+  and the card no photo.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a

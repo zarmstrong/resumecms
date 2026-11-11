@@ -344,9 +344,91 @@ function SectionBody({ section, preview }) {
       );
     case 'gallery':
       return <LandingGallery images={section.images} label={section.title} />;
+    case 'contact':
+      return <ContactDetails contact={section} preview={preview} />;
     default:
       return null;
   }
+}
+
+// A contact section (issue #124): each thing it shows on a labelled line,
+// the email and phone as mailto:/tel: links, the address as written with
+// a "Directions" map search (a link, never an embedded map), and the
+// "Save contact" vCard button. The editor's preview draws that button
+// without a link: the card is built from the published page, not the
+// draft on screen.
+function ContactDetails({ contact, preview }) {
+  return (
+    <div className="l-contact">
+      <dl className="l-contact-lines">
+        {contact.emailHref && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Email</dt>
+            <dd className="l-contact-value">
+              <a className="l-contact-link" href={contact.emailHref}>
+                {contact.email}
+              </a>
+            </dd>
+          </div>
+        )}
+        {contact.phoneHref && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Phone</dt>
+            <dd className="l-contact-value">
+              <a className="l-contact-link" href={contact.phoneHref}>
+                {contact.phone}
+              </a>
+            </dd>
+          </div>
+        )}
+        {contact.area && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Area</dt>
+            <dd className="l-contact-value">{contact.area}</dd>
+          </div>
+        )}
+        {contact.address && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Address</dt>
+            <dd className="l-contact-value">
+              <span className="l-contact-address">{contact.address}</span>
+              {contact.directionsHref && (
+                <a className="l-contact-link l-contact-directions" {...linkProps(contact.directionsHref)}>
+                  Directions
+                </a>
+              )}
+            </dd>
+          </div>
+        )}
+        {contact.hours.length > 0 && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Hours</dt>
+            <dd className="l-contact-value">
+              <ul className="l-contact-hours">
+                {contact.hours.map((entry, i) => (
+                  <li key={i}>
+                    {entry.days && <span className="l-contact-days">{entry.days}</span>}
+                    {entry.days && entry.time && ' '}
+                    {entry.time && <span className="l-contact-time">{entry.time}</span>}
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
+      </dl>
+      {contact.vcardHref &&
+        (preview ? (
+          <span className="l-action l-contact-save" title="Downloads the published page's contact card">
+            Save contact
+          </span>
+        ) : (
+          <a className="l-action l-contact-save" href={contact.vcardHref} download>
+            Save contact
+          </a>
+        ))}
+    </div>
+  );
 }
 
 // The small label next to a credential's name.

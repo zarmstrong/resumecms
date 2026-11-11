@@ -173,7 +173,8 @@
 .l-template-bold a.l-quote-name,
 .l-template-bold a.l-role-company,
 .l-template-bold .l-roles-more,
-.l-template-bold a.l-credential-verify {
+.l-template-bold a.l-credential-verify,
+.l-template-bold a.l-contact-link {
   border-bottom: none;
   text-decoration: underline;
   text-decoration-thickness: 2px;
@@ -186,7 +187,8 @@
 .l-template-bold a.l-quote-name:hover,
 .l-template-bold a.l-role-company:hover,
 .l-template-bold .l-roles-more:hover,
-.l-template-bold a.l-credential-verify:hover {
+.l-template-bold a.l-credential-verify:hover,
+.l-template-bold a.l-contact-link:hover {
   text-decoration-thickness: 4px;
 }
 
@@ -509,6 +511,32 @@
 .l-template-bold a.l-credential-verify {
   color: var(--r-heading, var(--ink));
   font-weight: 700;
+}
+
+/* A contact section (issue #124): its labels heavy and at full strength,
+   its links in the heading color (the shared ones are in the accent), and
+   "Save contact" outlined like the other buttons. */
+.l-template-bold .l-contact {
+  gap: 28px;
+}
+
+.l-template-bold .l-contact-lines {
+  gap: 14px 28px;
+  font-size: 1.1em;
+}
+
+.l-template-bold .l-contact-label {
+  font-weight: 800;
+  color: var(--r-text, var(--ink));
+}
+
+.l-template-bold a.l-contact-link {
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+}
+
+.l-template-bold .l-contact-days {
+  font-weight: 800;
 }
 
 /* A gallery: square corners, and nothing moves (the shared thumbnails

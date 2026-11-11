@@ -333,7 +333,9 @@ issue #119, see below) and
 `LANDING_LIMITS.galleryImages` (24), an entry's `image` null until its
 upload lands; issue #120: a grid whose thumbnails open a modal
 `<dialog>` in `client/src/landing/LandingGallery.jsx`, keys in
-`gallery.js`, reordered with the same ↑ ↓ ✕ as items). Any section may be `hidden: true`: kept in the
+`gallery.js`, reordered with the same ↑ ↓ ✕ as items) and `contact` (`email`, `phone`,
+`area`, `address`, `hours: [{ days, time }]`, `vcard`; issue #124, see
+below). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -517,7 +519,9 @@ against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
 (no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
-question and an answer, no named credential left unexpired, no gallery entry whose image is stored) is dropped, heading and
+question and an answer, no named credential left unexpired, no gallery entry whose image is stored, a
+contact section with no email or phone that makes a link and no area,
+address or hours) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -545,6 +549,32 @@ files match; publications (#127) are meant to reuse it. The client
 resolver, `withHidden`, keeps an expired entry as `expired: true` for the
 preview to dim and label "Expired", and a section of nothing else as
 `hidden` and `expired` ("Not shown: every entry has expired").
+
+A contact section (issue #124) is at most one per draft (a 400 for a
+second, hidden or not), so the vCard has one source. All of it is plain
+text; the email and phone are single lines, saved half typed but shown
+only once they make a link: `mailtoUrl()` (no `?`, `%`, `,` and the
+like, so the link can only write to that address; mirrored by
+`mailtoHref()` in `client/src/resume/safeUrl.js`, whose test compares
+them) and `telUrl()`/`telHref()`. The address is shown as written with a
+"Directions" link, `directionsUrl()` (a map search, both resolver
+copies; never an embedded map, which would make a third-party request
+for every visitor), and the editor warns that it's public. The resolved
+section always carries every field (`''` for one not shown) and
+`vcardHref` (`CONTACT_CARD_PATH`) only while `vcard` is on. `GET
+/api/public/landing/contact.vcf` (`routes/landingContact.js`, a factory
+over the store, mounted in `routes/public.js`) serves it: only while
+`landingForHost()` shows the page and its resolved snapshot has a
+contact section with a `vcardHref`, else a 404, with `REVALIDATE`,
+`HOST_HEADERS`, `nosniff` and `NOINDEX` on both. The card itself is pure,
+`server/src/vcard.js`: vCard 3.0 built from that resolved section only
+(so nothing the page doesn't show, and never the draft) plus the name
+and title `landingPage()` gives the Person and the page's URL, no photo,
+text escaped (`\`, `,`, `;`, newlines) and lines folded at 75 octets.
+The Person JSON-LD deliberately doesn't get the email, phone or area. A
+contact section is never an AI rewrite target, and the rewrite's page
+context gives it only its kind and title. The editor's preview draws
+"Save contact" without a link, since the card is the published page's.
 
 `GET /api/public/home` is what `/` loads: `{ kind: 'landing' }` from
 `landingForHost()` when it's enabled, published and the host isn't in
@@ -1066,8 +1096,8 @@ a text section, three proposals). Targets are an allowlist
 and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
 words), experience, education and skills sections (read from a
 resume), stats (a model mustn't make up figures; the page context shows
-them read-only), an item's `meta`, an FAQ question, credentials
-(facts, not prose) and image and gallery captions (plain text; the page
+them read-only), an item's `meta`, an FAQ question, credentials and
+the contact section (facts, not prose) and image and gallery captions (plain text; the page
 context gives those sections only their kind and title) are
 deliberately never targets. The page is
 public, so what the model sees is too: the route builds
@@ -1236,7 +1266,7 @@ Chromium's children.
 Every public response carries an explicit `Cache-Control` from
 `server/src/cacheHeaders.js`: `no-cache` for `/api/public/resume`,
 `/api/public/resumes/:slug`, `/api/public/images/:key`,
-`/api/public/landing/images/:id`, the favicons (see "Favicon") and the HTML shell
+`/api/public/landing/images/:id`, `/api/public/landing/contact.vcf`, the favicons (see "Favicon") and the HTML shell
 (which also sends `HOST_HEADERS` as `Vary`, since its tags name the
 host's resume and origin; see "Search and link previews"), `private, no-cache` for
 every PDF route, `immutable` for the hashed

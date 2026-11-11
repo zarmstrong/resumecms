@@ -6,6 +6,7 @@ import { httpError } from '../httpError.js';
 import { handle } from './sendError.js';
 import { HOST_HEADERS } from '../hostnames.js';
 import { publicResumeHandlers } from './publicResume.js';
+import { landingContactHandler } from './landingContact.js';
 
 const router = Router();
 
@@ -79,6 +80,9 @@ router.get('/landing/images/:id', handle((req, res) => {
   res.set('X-Content-Type-Options', 'nosniff');
   res.type(image.mime).send(image.bytes);
 }));
+
+// The landing page's "Save contact" vCard (issue #124): see landingContact.js.
+router.get('/landing/contact.vcf', landingContactHandler(store));
 
 router.get('/resumes/:slug', slugResume);
 

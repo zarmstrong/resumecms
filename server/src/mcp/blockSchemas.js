@@ -560,6 +560,34 @@ export const LANDING_SCHEMA = {
               },
             },
           },
+          {
+            type: 'object',
+            description:
+              "How to reach the person: email, phone, service area, address and hours, with an optional \"Save contact\" button that downloads a vCard of what the section shows (plus the page's name, title and URL). At most one per page. All plain text; left out when it shows none of email, phone, area, address or hours. Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'contact' },
+              email: { type: 'string', description: "An email address, linked with mailto: (at most 254 characters); not shown until it's a whole address" },
+              phone: { type: 'string', description: 'A phone number as it should read, linked with tel: (at most 40 characters); not shown without digits to dial' },
+              area: { type: 'string', description: "The area served, e.g. 'Serving Travis and Williamson counties' (at most 200 characters)" },
+              address: {
+                type: 'string',
+                description: "A postal address, one line per line (at most 300 characters), shown with a 'Directions' link to a map search. It's public: a service area is often the better choice than a home address",
+              },
+              hours: {
+                type: 'array',
+                description: 'At most 10 lines; one with neither part is left out',
+                items: {
+                  type: 'object',
+                  properties: {
+                    days: { type: 'string', description: "e.g. 'Tue–Sat' (at most 60 characters)" },
+                    time: { type: 'string', description: "e.g. '9–6' or 'Evenings by appointment' (at most 60 characters)" },
+                  },
+                },
+              },
+              vcard: { type: 'boolean', description: 'Show the "Save contact" (vCard) button (default true)' },
+            },
+          },
         ],
       },
     },

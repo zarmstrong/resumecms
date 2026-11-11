@@ -580,6 +580,14 @@ test('upload_landing_image decodes base64 (or a data: URL) under its own cap, an
   await call('update_landing_page', { sections: gallery });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: gallery }, { merge: true }]);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'gallery', images: [{ image: { imageId: 'a'.repeat(64) } }] }] })).isError, true);
+  // A contact section (issue #124) passes through; its hours are pairs and its button a boolean.
+  const contact = [
+    { kind: 'contact', title: 'Contact', email: 'jo@example.com', phone: '+1 512 555 0100', area: 'Austin', address: '1 Main St\nAustin', hours: [{ days: 'Mon', time: '9–5' }, { time: 'By appointment' }], vcard: false },
+  ];
+  await call('update_landing_page', { sections: contact });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: contact }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'contact', hours: ['Mon 9–5'] }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'contact', vcard: 'yes' }] })).isError, true);
 });
 
 test('cover letter tools: create, merge or replace on update, delete, scoped by resumeId', async (t) => {

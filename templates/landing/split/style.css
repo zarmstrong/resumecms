@@ -48,6 +48,16 @@
   }
 }
 
+/* A contact section there: each label over its line (issue #124). */
+.l-template-split .l-split-side .l-contact-lines {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 2px;
+}
+
+.l-template-split .l-split-side .l-contact-line + .l-contact-line .l-contact-label {
+  margin-top: 12px;
+}
+
 /* Smaller gallery thumbnails there, three to a row. */
 .l-template-split .l-split-side .l-gallery {
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));

@@ -225,6 +225,17 @@
   margin-top: 4px;
 }
 
+/* A contact section (issue #124): its lines a block centered under the
+   heading, the labels still beside them, and the button under it. */
+.l-template-centered .l-contact {
+  align-items: center;
+}
+
+.l-template-centered .l-contact-lines {
+  margin: 0 auto;
+  text-align: left;
+}
+
 @container (max-width: 600px) {
   .l-template-centered .l-credential {
     max-width: none;
