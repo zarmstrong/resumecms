@@ -46,7 +46,7 @@ Draft vs published: every write tool changes the DRAFT only, of one resume. Noth
 
 Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
 
-Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), and galleries of images; any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, or seo.image for link previews.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, and services (what you offer, each with a short description, an optional price line and an optional button); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, or seo.image for link previews.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -553,6 +553,25 @@ const landingCredential = () =>
       .describe('When it expires. Read as YYYY, YYYY-MM, MM/YYYY, "Mar 2027", "March 2027" or YYYY-MM-DD, it leaves the page once that has passed (UTC); anything else is shown as written.'),
     url: z.string().optional().describe("An optional http, https, mailto or tel link, the issuer's page to verify it on, shown as \"Verify\"."),
   });
+const landingService = () =>
+  z.object({
+    title: z.string().optional().describe(`What's offered, plain text (at most ${LANDING_LIMITS.serviceTitle} characters), e.g. "Private tutoring".`),
+    text: z
+      .string()
+      .optional()
+      .describe(`A short description (at most ${LANDING_LIMITS.serviceText} characters); may hold [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is. A service without a title or a text isn't shown.`),
+    price: z.string().optional().describe(`Free text, never a number (at most ${LANDING_LIMITS.servicePrice} characters), e.g. "From $60/hour", "Free 15-minute consultation", "Sliding scale".`),
+    action: z
+      .object({
+        type: z.literal('link').optional().describe("Always 'link'."),
+        label: z.string().optional().describe('Button text, e.g. "Book a session". Empty shows the URL.'),
+        url: z.string().describe('An http, https, mailto or tel URL; mailto:you@example.com?subject=Booking prefills a subject.'),
+        icon: actionIcon(),
+      })
+      .nullable()
+      .optional()
+      .describe('An optional button for this service; null removes it. Shown only while its URL is a full http, https, mailto or tel link.'),
+  });
 const sectionBase = {
   id: z.string().optional().describe("Keep an existing section's id from get_landing_page; omit it for a new section."),
   title: z.string().optional().describe('Heading shown above the section; empty shows none.'),
@@ -609,6 +628,11 @@ const landingSection = () =>
           .describe(`At most ${LANDING_LIMITS.galleryImages}, in order. An entry without an image is left out, and a gallery with none is left off the public page.`),
       })
       .describe('Images in a grid, each opening larger when clicked. Never rewritten by AI.'),
+    z.object({
+      ...sectionBase,
+      kind: z.literal('services'),
+      services: z.array(landingService()).optional().describe(`What you offer, at most ${LANDING_LIMITS.services}, in order.`),
+    }),
   ]);
 
 const landingColor = (what) => z.string().nullable().optional().describe(`${what}: #rrggbb, or '' (or null) for the default.`);
