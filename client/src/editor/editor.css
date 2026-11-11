@@ -1421,6 +1421,107 @@
   padding: 0 12px 12px;
 }
 
+/* The landing page's template picker (LandingTemplatePicker.jsx, issue
+   #130): a card per template, its thumbnail a real LandingView drawn at a
+   desktop width (THUMBNAIL_WIDTH × THUMBNAIL_HEIGHT in templateThumbnails.js,
+   hence the aspect ratio) and scaled into the frame from its top left. */
+.ed-landing-templates {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.ed-landing-templates > legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.ed-landing-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.ed-landing-template {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.ed-landing-template:hover {
+  border-color: var(--signal);
+}
+
+/* Chosen: a heavier border and tint as well as the checked radio and
+   "Selected", so it never rests on color alone. */
+.ed-landing-template.is-selected {
+  border-color: var(--signal);
+  box-shadow: inset 0 0 0 1px var(--signal);
+  background: var(--signal-dim);
+}
+
+.ed-landing-template:has(input:focus-visible) {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.ed-landing-template-frame {
+  position: relative;
+  aspect-ratio: 1280 / 800;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  /* Redundant with its `inert`. */
+  pointer-events: none;
+}
+
+.ed-landing-template-page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  transform-origin: 0 0;
+}
+
+.ed-landing-template-page > .l-page {
+  min-height: 100%;
+}
+
+.ed-landing-template-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ed-landing-template-name input {
+  margin: 0;
+  accent-color: var(--signal);
+}
+
+.ed-landing-template-current {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--signal);
+}
+
+.ed-landing-template-desc {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--slate);
+}
+
 /* A landing page button's icon picker (ActionIconPicker.jsx). */
 .ed-icon-picker > summary {
   font-weight: 400;

@@ -163,8 +163,15 @@ alias to `client/src/resume/` — no fragile relative paths.
 
 `templates/landing/<id>/` (issue #93) arranges the landing page: its hero
 (photo, availability line, headline, subheadline, buttons) and its
-sections. The landing editor's **Look** group lists them; an unknown or
-missing id is drawn as `classic`, which must always exist.
+sections. The landing editor's **Look** group lists them, each with a
+live thumbnail of the draft drawn in it (issue #130), so a new template
+shows up there with no picture to provide; an unknown or missing id is
+drawn as `classic`, which must always exist. The thumbnail is the real
+page at 1280 × 800 scaled down, so a template that sizes itself with
+container queries on the page root gets its wide arrangement there; one
+that uses viewport `@media` queries (as `classic` does, at 560 px) follows
+the editor's window instead, and shows its phone layout in an editor that
+narrow.
 
 - `template.json` — `{ label, description, author }`, all required strings,
   plus an optional `columns: true` for a template whose `index.jsx` draws

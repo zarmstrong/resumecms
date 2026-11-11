@@ -1022,6 +1022,22 @@ readable. A template must render every section kind
 as a `role="separator"` rather than a `<section>`; the template only
 arranges).
 
+The Look group picks a landing template from thumbnails (issue #130,
+`client/src/editor/LandingTemplatePicker.jsx`, pure parts in
+`templateThumbnails.js`): a native radio group over `LANDING_TEMPLATES`,
+each option the real `LandingView` of the preview's draft (AI
+suggestions included) and context, resolved as published (no
+`withHidden`, so nothing dimmed), drawn 1280 × 800 and scaled into its
+frame, in the preview's light/dark choice. The frame is `inert` and
+`aria-hidden`, so its links, gallery buttons and media facades can't be
+reached (no player or dialog ever opens), and it lives outside the
+radio's `<label>`. Thumbnails are drawn only while the group is open and
+each only near the screen, from a `useDeferredValue` copy keyed by
+`pageKey()` so an edit that changes nothing they draw doesn't redraw
+them. No per-template code: a new template folder gets a thumbnail, so a
+template's root must stay inside the box it's given (no `position:
+fixed`, no effects on `document`).
+
 `directory` (issue #130) is for a long page: the hero across the top,
 then a sticky table of contents beside the sections, marking the one in
 view (`aria-current`), folded into a "Jump to" bar on a narrow page. A
