@@ -308,11 +308,20 @@
 }
 
 .l-template-gallery .l-run-item > .l-section {
+  display: flex;
+  flex-direction: column;
   margin: 0;
 }
 
+/* In a run the picture comes first and its title goes under it with the
+   caption, so the pictures in a row start at one edge whether or not
+   each has a title (the heading still comes first for a screen reader). */
+.l-template-gallery .l-run-item .l-figure {
+  order: -1;
+}
+
 .l-template-gallery .l-run-item .l-section-title {
-  margin-bottom: 12px;
+  margin: 10px 0 0;
   font-size: 0.82em;
 }
 
@@ -320,9 +329,14 @@
   margin-top: 6px;
 }
 
+/* Drawn at the shape its width was worked out from: its own, or the
+   clamped one for a panorama or a sliver past 4:1 or 1:4 (index.jsx),
+   which is then letterboxed inside it rather than cropped. */
 .l-template-gallery .l-run-item .l-figure-image {
   width: 100%;
   max-height: none;
+  aspect-ratio: var(--l-run-ratio, auto);
+  object-fit: contain;
 }
 
 /* A gallery section (issue #120): a masonry of columns, as many as fit
@@ -758,7 +772,8 @@
     font-size: 1.75em;
   }
   .l-template-gallery .l-gallery,
-  .l-template-gallery .l-gallery:has(> .l-gallery-item:nth-child(3):last-child) {
+  .l-template-gallery .l-gallery:has(> .l-gallery-item:nth-child(3):last-child),
+  .l-template-gallery .l-gallery:has(> .l-gallery-item:nth-child(2):last-child) {
     columns: 2;
   }
   .l-template-gallery .l-gallery:has(> .l-gallery-item:only-child) {
