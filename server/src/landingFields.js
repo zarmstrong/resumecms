@@ -15,6 +15,7 @@ import { PUBLICATION_KINDS, PUBLICATION_ORDERS, arrangePublications, doiUrl } fr
 //
 // The draft is a fixed set of fields, all always present once stored:
 //   { headline, subheadline, availability, actions, photo, photoUrl, sections, seo, homeLink, homeLinkLabel, template, style }
+// plus the optional `photoImage` and `coverImage` (below).
 // `availability` is a short line shown above the headline ("Open to senior
 // backend roles · Remote"), '' for none. `actions` (issue #88) are the
 // hero's buttons, at most three, the first drawn as the primary one:
@@ -24,7 +25,11 @@ import { PUBLICATION_KINDS, PUBLICATION_ORDERS, arrangePublications, doiUrl } fr
 // stored only when set, is one of ACTION_ICONS, drawn before the label.
 // `photo` says where the photo comes from: 'resume' (the default resume's
 // published header photo), 'custom' (photoUrl), 'upload' (photoImage, an
-// uploaded image's reference, issue #92) or 'none'. `sections` is
+// uploaded image's reference, issue #92) or 'none'. `coverImage` (issue
+// #130) is a wide image a template whose template.json says `cover: true`
+// draws behind the hero, the headline over it; every other template
+// ignores it. Its alt may stay blank (the name is real text over it, so
+// it's often only decoration). `sections` is
 // shown in order under the headline, each `{ id, kind, title, ... }` with
 // the fields of its kind (SECTION_FIELDS):
 //   text       — body: text, a blank line between paragraphs
@@ -100,7 +105,7 @@ import { PUBLICATION_KINDS, PUBLICATION_ORDERS, arrangePublications, doiUrl } fr
 // are asked to leave it out, plus an optional `image`, the share image
 // link previews show instead of a drawn card. Image references
 // ({ imageId, alt }, landingImageFields.js) are stored only where one is
-// set: `photoImage`, an item's `image`, a media section's `poster` and `seo.image` are optional keys,
+// set: `photoImage`, `coverImage`, an item's `image`, a media section's `poster` and `seo.image` are optional keys,
 // not nulls. `homeLink` (issue #89) is whether a resume
 // page shows a "← Home" link back here while this page holds `/` (see
 // landingStore.js's homeLinkForHost()), and `homeLinkLabel` what it says
@@ -218,7 +223,7 @@ export const ACTION_ICONS = [
   'linkedin', 'github', 'gitlab', 'x-twitter', 'bluesky', 'mastodon', 'stack-overflow', 'medium', 'youtube', 'instagram', 'dribbble', 'behance', 'discord',
 ];
 
-const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'photoImage', 'sections', 'seo', 'homeLink', 'homeLinkLabel', 'template', 'style'];
+const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'photoImage', 'coverImage', 'sections', 'seo', 'homeLink', 'homeLinkLabel', 'template', 'style'];
 const SEO_FIELDS = ['title', 'description', 'noindex', 'image'];
 const SECTION_FIELDS = {
   text: ['id', 'kind', 'title', 'hidden', 'column', 'body'],
@@ -781,6 +786,7 @@ export function validateLanding(
 
   const refs = { knownResumeIds, previousResumeIds, knownImageIds, previousImageIds, knownFileIds, previousFileIds };
   if (input.photoImage != null) out.photoImage = checkImageRef(input.photoImage, 'photoImage', refs);
+  if (input.coverImage != null) out.coverImage = checkImageRef(input.coverImage, 'coverImage', refs);
   out.actions = checkList(input.actions, LANDING_LIMITS.actions, 'actions').map((action, i) => checkAction(action, `actions[${i}]`, refs));
   const ids = new Set();
   out.sections = checkList(input.sections, LANDING_LIMITS.sections, 'sections').map((section, i) => checkSection(section, i, refs, ids));
@@ -961,7 +967,11 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // public path and size in bytes, never its id beyond that path), or is
 // left out when its file is gone or not uploaded yet, and a documents
 // section with none left is too. An uploaded hero photo is `photoUrl`
-// (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
+// (its src), with its alt as `photoAlt`. A cover image resolves like any
+// other reference to `coverImage`, left out when there's none or its
+// image is gone; the server doesn't read templates, so it goes along
+// whatever the template, and only one that declares `cover: true` draws
+// it. Its look (landingStyle.js) is
 // `template` (an id the client may not know, and then draws as classic),
 // `site` (context.site, or the page's own colors and fonts in the site
 // settings' shape) and `darkColors` (its dark palette, or null).
@@ -971,6 +981,7 @@ export function resolveLanding(landing, context) {
     landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context.photoUrl || '' : (upload?.src ?? '');
   const { image: shareImage, ...seo } = landing.seo ?? {};
   const seoImage = resolveImage(shareImage, context.images);
+  const cover = resolveImage(landing.coverImage, context.images);
   return {
     headline: landing.headline,
     subheadline: landing.subheadline,
@@ -981,6 +992,7 @@ export function resolveLanding(landing, context) {
     }),
     photoUrl,
     ...(upload ? { photoAlt: upload.alt } : {}),
+    ...(cover ? { coverImage: cover } : {}),
     sections: landing.sections.flatMap((section) => {
       const shown = section.hidden ? null : resolveSection(section, context);
       return shown ? [{ kind: section.kind, title: section.title, ...(section.column ? { column: section.column } : {}), ...shown }] : [];

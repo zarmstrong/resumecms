@@ -43,7 +43,11 @@ in prose; check the diff against the ones that apply, especially:
   `.l-template-<id>`, so a change for one template can't move another
   (issue #93). A landing template's root stays inside the box it's given
   (no `position: fixed`, no effects on `document`), since the Look
-  group's picker draws every template as an `inert` thumbnail.
+  group's picker draws every template as an `inert` thumbnail. A landing
+  `coverImage` (issue #130) is drawn only by a template whose
+  `template.json` says `cover: true`; its `alt` may be blank (the name is
+  real text over it), so `assertImagesDescribed()` skips it, but every
+  other image reference still needs one.
 - A landing section's anchor (`directory`'s contents, issue #130) comes
   from `withAnchors()` on the client, a slug of its title after a prefix,
   never its `id` (which never leaves the server); only a template that

@@ -237,7 +237,8 @@ function lowerFirst(text) {
 // Whether publishing would refuse over this section: an image it shows with
 // no description, as server/src/landingImageFields.js's
 // assertImagesDescribed() decides. Its header says so, since the field may
-// be collapsed out of sight.
+// be collapsed out of sight. The cover image (issue #130) is never asked
+// about, there or here.
 function needsDescription(section, images) {
   const blank = (ref) => Boolean(ref) && images.some((image) => image.id === ref.imageId) && !ref.alt?.trim();
   if (section.hidden) return false;
@@ -327,8 +328,10 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
   const fileProps = (target) => ({ files: context.files || [], limits: limits?.files, onUpload: (file) => onUploadFile(file, target) });
   const sections = landing.sections;
   const introId = introSectionId(landing);
-  // Whether the page's template has a side column to put a section in.
+  // Whether the page's template has a side column to put a section in,
+  // and whether it draws a cover image (template.json's `cover`, issue #130).
   const hasColumns = Boolean(getLandingTemplate(landing.template)?.columns);
+  const hasCover = Boolean(getLandingTemplate(landing.template)?.cover);
   const setSections = (next) => set({ sections: next });
   const addSection = (kind) => {
     const config = SECTION_KINDS.find((k) => k.kind === kind);
@@ -396,6 +399,23 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
           value={landing.photoImage ?? null}
           onChange={(ref) => onChange(withImageRef(landing, 'photoImage', ref))}
           {...imageProps({ kind: 'photo' })}
+        />
+      )}
+      {/* Offered by a template that draws it, and kept in view while one is
+          set under any other, which ignores it but still publishes it, so
+          it can be removed. */}
+      {(hasCover || landing.coverImage) && (
+        <LandingImageField
+          label="Cover image"
+          hint={
+            hasCover
+              ? "A wide picture across the top of the page, behind the headline, darkened so the text over it stays readable. Without one, the headline sits on a band of the heading color. Its description may stay empty when it's only scenery. Larger images are scaled down to 1600 px, and their location data is removed."
+              : "This template doesn't draw a cover image, but it's still published with the page. Remove it, or pick a template that shows one (Cover)."
+          }
+          value={landing.coverImage ?? null}
+          onChange={(ref) => onChange(withImageRef(landing, 'coverImage', ref))}
+          altOptional
+          {...imageProps({ kind: 'cover' })}
         />
       )}
 

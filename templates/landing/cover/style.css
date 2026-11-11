@@ -1,0 +1,337 @@
+/* Cover (issue #130): the cover image across the page's full width with
+   the hero over it, then the sections in one 720 px column in the shared
+   look. index.jsx gives the structure:
+   .l-cover > .l-cover-band(.l-cover-photo | .l-cover-plain) >
+   .l-cover-image and .l-cover-hero > .l-hero, then .l-main > the sections.
+   Sized by the page's own width (container units and queries), so the
+   editor's narrower preview shows what a phone would.
+
+   Everything in the band is drawn in two colors of its own, --l-cover-ink
+   on --l-cover-fill, never in the accent:
+   - Over a cover image, white on near-black, whatever the palette (light
+     or dark). The scrim over the image is black at 58% at its lightest,
+     so even over an all-white picture the band is no lighter than
+     #6b6b6b, where white text is 5.3:1 (AA); over an all-black one it's
+     21:1. The fill is under the image too, so the text reads while it
+     loads.
+   - Without one, the palette's own pair turned around: the background
+     color on the heading color. That pair is AA with the default light
+     and dark palettes, but the band also draws small text (availability,
+     subheadline, button labels), so a custom heading color has to reach
+     4.5:1 against the background, not just the 3:1 large headings need.
+   The primary button is filled with the ink and labelled in the fill, the
+   others outlined in the ink, and a hovered button is underlined rather
+   than tinted, since a tint would bring the band nearer the text. The
+   accent only draws shapes: the rule under the band and the bars over the
+   section titles.
+
+   Nothing moves unless the visitor's system allows it: the cover settling
+   into place, the hero fading in and the shared transitions (the buttons'
+   and cards', the gallery's zoom and fade) are all only under
+   prefers-reduced-motion: no-preference. */
+.l-template-cover {
+  container-type: inline-size;
+}
+
+.l-template-cover .l-cover-band {
+  --l-cover-ink: var(--r-bg, var(--panel));
+  --l-cover-fill: var(--r-heading, var(--ink));
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  box-sizing: border-box;
+  min-height: clamp(260px, 38cqi, 440px);
+  /* The hero's text lines up with the sections' column below. */
+  padding: clamp(48px, 9cqi, 104px) max(24px, calc((100% - 720px) / 2 + 24px)) clamp(36px, 6cqi, 64px);
+  color: var(--l-cover-ink);
+  background: var(--l-cover-fill);
+  border-bottom: 6px solid var(--r-accent, var(--ink));
+}
+
+.l-template-cover .l-cover-photo {
+  --l-cover-ink: #fff;
+  --l-cover-fill: #14181c;
+  min-height: clamp(340px, 56cqi, 640px);
+}
+
+.l-template-cover .l-cover-image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The scrim: darker toward the bottom, where the text sits, and never
+   lighter than 58% anywhere, since a long headline may reach the top. */
+.l-template-cover .l-cover-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.58), rgb(0 0 0 / 0.66) 45%, rgb(0 0 0 / 0.78));
+}
+
+.l-template-cover .l-cover-hero {
+  width: 100%;
+  min-width: 0;
+}
+
+.l-template-cover .l-cover-band .l-hero {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(20px, 4cqi, 36px);
+}
+
+.l-template-cover .l-cover-band .l-hero-text {
+  flex: 1;
+  min-width: 0;
+  max-width: 44em;
+  overflow-wrap: anywhere;
+}
+
+.l-template-cover .l-cover-band .l-photo {
+  width: clamp(96px, 14cqi, 136px);
+  height: clamp(96px, 14cqi, 136px);
+  border: 3px solid var(--l-cover-ink);
+  box-sizing: border-box;
+}
+
+.l-template-cover .l-cover-photo .l-photo {
+  box-shadow: 0 4px 18px rgb(0 0 0 / 0.35);
+}
+
+.l-template-cover .l-cover-band .l-availability {
+  margin-bottom: 16px;
+  padding: 3px 12px;
+  border: 1.5px solid var(--l-cover-ink);
+  color: var(--l-cover-ink);
+  background: none;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.l-template-cover .l-cover-band .l-headline {
+  font-size: clamp(2.1em, 1em + 5cqi, 4.25em);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--l-cover-ink);
+}
+
+.l-template-cover .l-cover-photo .l-headline,
+.l-template-cover .l-cover-photo .l-subheadline {
+  text-shadow: 0 1px 14px rgb(0 0 0 / 0.45);
+}
+
+.l-template-cover .l-cover-band .l-subheadline {
+  margin-top: 12px;
+  font-size: clamp(1.1em, 0.95em + 1cqi, 1.45em);
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--l-cover-ink);
+}
+
+.l-template-cover .l-cover-band .l-actions {
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.l-template-cover .l-cover-band .l-action {
+  padding: 11px 22px;
+  border: 2px solid var(--l-cover-ink);
+  border-radius: 6px;
+  color: var(--l-cover-ink);
+  background: none;
+  font-weight: 600;
+  transition: none;
+}
+
+.l-template-cover .l-cover-band .l-action-primary {
+  background: var(--l-cover-ink);
+  color: var(--l-cover-fill);
+}
+
+.l-template-cover .l-cover-band .l-action:hover,
+.l-template-cover .l-cover-band .l-action:focus-visible {
+  background: none;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+.l-template-cover .l-cover-band .l-action-primary:hover,
+.l-template-cover .l-cover-band .l-action-primary:focus-visible {
+  background: var(--l-cover-ink);
+}
+
+/* Focus rings in the band's ink, which reads on the scrim and on the
+   plain band alike (the shared ones are in the accent). */
+.l-template-cover .l-cover-band a:focus-visible {
+  outline: 3px solid var(--l-cover-ink);
+  outline-offset: 3px;
+}
+
+/* The sections: one column, like classic's, in the shared look. */
+.l-template-cover .l-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: clamp(40px, 7cqi, 72px) 24px 96px;
+}
+
+.l-template-cover .l-section {
+  margin: 0 0 44px;
+}
+
+.l-template-cover .l-section:last-child {
+  margin-bottom: 0;
+}
+
+/* A short bar of the accent over each title, echoing the rule under the
+   band. */
+.l-template-cover .l-section-title {
+  font-size: 1.45em;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+
+.l-template-cover .l-section-title::before {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin-bottom: 12px;
+  border-radius: 2px;
+  background: var(--r-accent, var(--ink));
+}
+
+.l-template-cover .l-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+}
+
+/* A contact section (issue #124): a little more room between its lines
+   than a list's, as in classic. */
+.l-template-cover .l-contact-lines {
+  row-gap: 12px;
+}
+
+/* Focus rings in the heading color in the sections too, so they show
+   whatever the accent is: on links, an FAQ's questions, a transcript's
+   toggle and the gallery's and media section's buttons. */
+.l-template-cover .l-main a:not(.l-card-link):focus-visible,
+.l-template-cover .l-main button:focus-visible,
+.l-template-cover .l-main summary:focus-visible {
+  outline: 3px solid var(--r-heading, var(--ink));
+  outline-offset: 3px;
+}
+
+.l-template-cover .l-main .l-card-link:focus-visible::after {
+  outline: 3px solid var(--r-heading, var(--ink));
+  outline-offset: 3px;
+}
+
+/* The shared transitions, off unless motion is allowed (below). */
+.l-template-cover .l-card,
+.l-template-cover .l-gallery-image {
+  transition: none;
+}
+
+.l-template-cover .l-card:hover,
+.l-template-cover .l-card:focus-within,
+.l-template-cover .l-gallery-open:hover .l-gallery-image {
+  transform: none;
+}
+
+.l-template-cover .l-gallery-dialog[open] {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .l-template-cover .l-cover-image {
+    animation: l-cover-settle 1.4s ease-out both;
+  }
+  .l-template-cover .l-cover-hero {
+    animation: l-cover-rise 600ms ease-out both;
+  }
+  .l-template-cover .l-cover-band .l-action {
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .l-template-cover .l-card {
+    transition: border-color 120ms ease, transform 120ms ease;
+  }
+  .l-template-cover .l-card:hover,
+  .l-template-cover .l-card:focus-within {
+    transform: translateY(-1px);
+  }
+  .l-template-cover .l-gallery-image {
+    transition: transform 160ms ease;
+  }
+  .l-template-cover .l-gallery-open:hover .l-gallery-image {
+    transform: scale(1.03);
+  }
+  .l-template-cover .l-gallery-dialog[open] {
+    animation: l-gallery-in 160ms ease-out;
+  }
+}
+
+@keyframes l-cover-settle {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes l-cover-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A phone: the photo over the headline, less room around everything, and
+   the buttons as wide as the band. */
+@container (max-width: 640px) {
+  .l-template-cover .l-cover-band {
+    min-height: 0;
+    padding: 40px 16px 32px;
+    border-bottom-width: 5px;
+  }
+  .l-template-cover .l-cover-photo {
+    min-height: clamp(360px, 110cqi, 520px);
+  }
+  .l-template-cover .l-cover-band .l-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .l-template-cover .l-cover-band .l-hero-text {
+    align-self: stretch;
+  }
+  .l-template-cover .l-cover-band .l-actions {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 22px;
+  }
+  .l-template-cover .l-cover-band .l-action {
+    text-align: center;
+  }
+  .l-template-cover .l-main {
+    padding: 36px 16px 64px;
+  }
+  .l-template-cover .l-section {
+    margin-bottom: 36px;
+  }
+}
