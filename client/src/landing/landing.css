@@ -712,6 +712,70 @@ a.l-credential-verify:focus-visible {
   margin-bottom: 2px;
 }
 
+/* Publications (issue #127): each a title, linked like a list entry's, a
+   muted "Outlet · Date · Kind" line, and the note; grouped, each kind
+   under a small subheading. */
+.l-publications {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0;
+  margin: 0;
+}
+
+.l-publication {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.l-publication-title {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+a.l-publication-title {
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);
+}
+
+a.l-publication-title:hover,
+a.l-publication-title:focus-visible {
+  border-bottom-color: var(--r-accent, var(--ink));
+}
+
+.l-publication-meta {
+  font-size: 0.88em;
+  color: color-mix(in srgb, var(--r-text, var(--ink)) 72%, transparent);
+  overflow-wrap: anywhere;
+}
+
+.l-publication-note {
+  margin: 2px 0 0;
+  font-size: 0.95em;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.l-publication-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.l-publication-group-title {
+  margin: 0 0 10px;
+  font-size: 0.82em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--r-heading, var(--ink)) 80%, transparent);
+}
+
 /* The editor's preview: a section hidden from the page. */
 .l-section-hidden > :not(.l-hidden-label) {
   opacity: 0.35;

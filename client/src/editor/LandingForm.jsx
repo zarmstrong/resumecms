@@ -15,6 +15,7 @@ import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
 import { getLandingTemplate } from '../resume/templateRegistry.js';
 import { hasPassed, utcToday } from '../landing/dateText.js';
+import { cleanDoi, isDoi } from '../landing/publications.js';
 import { applySectionDrop, liveCollapsedIds, moveSectionBy, projectSectionDrop } from './sectionDrag.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
@@ -55,6 +56,12 @@ const SECTION_KINDS = [
     empty: () => ({ credentials: [emptyCredential()] }),
   },
   { kind: 'gallery', label: 'Gallery', addLabel: 'Gallery (several images in a grid)', empty: () => ({ images: [] }) },
+  {
+    kind: 'publications',
+    label: 'Publications',
+    addLabel: 'Publications (papers, articles, books, talks, press)',
+    empty: () => ({ order: 'manual', group: false, entries: [emptyPublication()] }),
+  },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -86,6 +93,10 @@ function emptyFaqEntry() {
 
 function emptyCredential() {
   return { kind: 'certification', name: '', issuer: '', number: '', issued: '', expires: '', url: '' };
+}
+
+function emptyPublication() {
+  return { kind: 'article', title: '', outlet: '', date: '', url: '', doi: '', note: '' };
 }
 
 // Only tells sections apart (React keys, and the server keeps it); not
@@ -126,6 +137,8 @@ function hasContent(section) {
       return section.credentials.some((c) => [c.name, c.issuer, c.number, c.issued, c.expires, c.url].some((value) => value.trim()));
     case 'gallery':
       return section.images.some((entry) => Boolean(entry.image) || Boolean(entry.caption.trim()));
+    case 'publications':
+      return section.entries.some((e) => [e.title, e.outlet, e.date, e.url, e.doi, e.note].some((value) => value.trim()));
     default:
       return false;
   }
@@ -164,6 +177,8 @@ function sectionSummary(section, resumes) {
       return count(section.credentials.length, 'credential');
     case 'gallery':
       return count(section.images.length, 'image') || 'No images yet';
+    case 'publications':
+      return section.entries.length === 1 ? '1 entry' : section.entries.length ? `${section.entries.length} entries` : '';
     default:
       return '';
   }
@@ -908,6 +923,8 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
       return <CredentialsFields credentials={section.credentials} onChange={(credentials) => onChange({ credentials })} limits={limits} />;
     case 'gallery':
       return <GalleryFields sectionId={section.id} images={section.images} onChange={(images) => onChange({ images })} limits={limits} imageProps={imageProps} />;
+    case 'publications':
+      return <PublicationsFields section={section} onChange={onChange} limits={limits} />;
     default:
       return null;
   }
@@ -1105,6 +1122,115 @@ function CredentialsFields({ credentials, onChange, limits }) {
         2027-12-31) has passed, it leaves the page by itself; a date written any other way is shown as written. The link is
         shown as "Verify", for the issuer's public lookup page. Some license numbers are public record and some aren't: leave
         it out if yours isn't meant to be shared.
+      </span>
+    </>
+  );
+}
+
+// Published work and appearances (issue #127). No ✨ here: titles and
+// outlets are facts, not prose.
+function PublicationsFields({ section, onChange, limits }) {
+  const { entries } = section;
+  const setEntries = (next) => onChange({ entries: next });
+  const setEntry = (i, patch) => setEntries(entries.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
+  return (
+    <>
+      <label className="ed-field">
+        <span>Order</span>
+        <select className="ed-input" value={section.order} onChange={(e) => onChange({ order: e.target.value })}>
+          <option value="manual">As listed here</option>
+          <option value="newest">Newest first</option>
+        </select>
+      </label>
+      <label className="ed-field ed-checkbox-field">
+        <input type="checkbox" checked={Boolean(section.group)} onChange={(e) => onChange({ group: e.target.checked })} />
+        Group by kind (Articles, Papers, Books, …)
+      </label>
+      {entries.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Entry {i + 1}</span>
+            <RowActions
+              index={i}
+              count={entries.length}
+              onMove={(delta) => setEntries(moved(entries, i, delta))}
+              onRemove={() => setEntries(entries.filter((_, idx) => idx !== i))}
+              what="entry"
+            />
+          </div>
+          <select className="ed-input" value={entry.kind} onChange={(e) => setEntry(i, { kind: e.target.value })} aria-label="Kind of entry">
+            <option value="article">Article</option>
+            <option value="paper">Paper</option>
+            <option value="book">Book</option>
+            <option value="chapter">Chapter</option>
+            <option value="talk">Talk</option>
+            <option value="podcast">Podcast</option>
+            <option value="press">Press</option>
+          </select>
+          <input
+            className="ed-input"
+            value={entry.title}
+            maxLength={limits?.publicationTitle}
+            onChange={(e) => setEntry(i, { title: e.target.value })}
+            placeholder="Title"
+            aria-label="Title"
+          />
+          <div className="ed-landing-dates">
+            <input
+              className="ed-input"
+              value={entry.outlet}
+              maxLength={limits?.publicationOutlet}
+              onChange={(e) => setEntry(i, { outlet: e.target.value })}
+              placeholder="Where, e.g. a journal, publisher or event"
+              aria-label="Outlet"
+            />
+            <input
+              className="ed-input"
+              value={entry.date}
+              maxLength={limits?.publicationDate}
+              onChange={(e) => setEntry(i, { date: e.target.value })}
+              placeholder="Date, e.g. Mar 2024"
+              aria-label="Date"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={entry.url}
+            maxLength={limits?.url}
+            onChange={(e) => setEntry(i, { url: e.target.value })}
+            placeholder="Link (optional), https://…"
+            aria-label="Link"
+          />
+          <input
+            className="ed-input"
+            value={entry.doi}
+            maxLength={limits?.doi}
+            onChange={(e) => setEntry(i, { doi: cleanDoi(e.target.value) })}
+            placeholder="DOI (optional), e.g. 10.1234/abcd"
+            aria-label="DOI"
+          />
+          {entry.doi.trim() && !isDoi(entry.doi) && (
+            <span className="ed-field-hint ed-landing-card-status">Not a DOI yet: one looks like 10.1234/abcd.</span>
+          )}
+          <input
+            className="ed-input"
+            value={entry.note}
+            maxLength={limits?.publicationNote}
+            onChange={(e) => setEntry(i, { note: e.target.value })}
+            placeholder="Note (optional), e.g. with A. Author; invited; keynote"
+            aria-label="Note"
+          />
+        </div>
+      ))}
+      {(!limits || entries.length < limits.publications) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setEntries([...entries, emptyPublication()])}>
+          + Add entry
+        </button>
+      )}
+      <span className="ed-field-hint">
+        One without a title isn't shown. Its title links to the link, or to the DOI when there's no link. Newest first sorts the
+        entries whose date is a year, a month (such as Mar 2024 or 03/2024) or a day (2024-03-31); one dated any other way
+        ("Forthcoming") keeps its place.
       </span>
     </>
   );

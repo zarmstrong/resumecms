@@ -403,3 +403,42 @@ test('a gallery resolves exactly like the server: stored images in order, the re
     ['hid', true],
   ]);
 });
+
+test('publications resolve exactly like the server, sorted, grouped and linked', () => {
+  const entry = (kind, title, date, extra = {}) => ({ kind, title, outlet: 'Outlet', date, url: '', doi: '', note: '', ...extra });
+  const entries = [
+    entry('talk', 'Keynote', '2019', { url: 'https://conf.example/2019', doi: '10.1234/ignored' }),
+    entry('paper', 'Old paper', 'Mar 2021', { doi: '10.1234/old#1' }),
+    entry('article', 'Forthcoming piece', 'Forthcoming', { url: 'java\tscript:alert(1)' }),
+    entry('paper', 'New paper', '2024-02-01', { doi: '10.1234/' }),
+    entry('press', 'Profile', '05/2023', { doi: '10.5555/profile', note: 'Interviewed' }),
+    entry('article', ' ', '2030'),
+  ];
+  for (const order of ['manual', 'newest']) {
+    for (const group of [false, true]) {
+      const landing = {
+        ...draft,
+        sections: [
+          { id: 'p', kind: 'publications', title: 'Work', column: 'side', order, group, entries },
+          { id: 'none', kind: 'publications', title: 'None', order, group, entries: [entry('book', '', '2020')] },
+          { id: 'hid', kind: 'publications', title: 'Hidden', hidden: true, order, group, entries },
+        ],
+      };
+      const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map() });
+      const out = resolveLanding(landing, context).sections;
+      assert.deepEqual(out, fromServer.sections, `${order} ${group}`);
+      assert.deepEqual(out.map((s) => s.title), ['Work']);
+    }
+  }
+  const newest = resolveLanding({ ...draft, sections: [{ id: 'p', kind: 'publications', title: '', order: 'newest', group: false, entries }] }, context);
+  assert.deepEqual(
+    newest.sections[0].entries.map((e) => [e.title, e.url]),
+    [
+      ['New paper', ''],
+      ['Profile', 'https://doi.org/10.5555/profile'],
+      ['Forthcoming piece', ''],
+      ['Old paper', 'https://doi.org/10.1234/old%231'],
+      ['Keynote', 'https://conf.example/2019'],
+    ]
+  );
+});

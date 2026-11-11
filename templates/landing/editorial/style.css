@@ -369,6 +369,55 @@
   border-radius: 2px;
 }
 
+/* Publications (issue #127), one under another between hairlines like the
+   list entries, each title in the headline font; a group's subheading in
+   small spaced capitals like the kicker. */
+.l-template-editorial .l-publications {
+  gap: 0;
+}
+
+.l-template-editorial .l-publication {
+  padding: 14px 0;
+  border-top: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 16%, transparent);
+}
+
+.l-template-editorial .l-publication:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.l-template-editorial .l-publication:last-child {
+  padding-bottom: 0;
+}
+
+.l-template-editorial .l-publication-title {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.15em;
+  line-height: 1.3;
+}
+
+.l-template-editorial .l-publication-meta {
+  margin-top: 2px;
+  font-size: 0.76em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.l-template-editorial .l-publication-note {
+  max-width: 40em;
+  font-style: italic;
+}
+
+.l-template-editorial .l-publication-groups {
+  gap: 32px;
+}
+
+.l-template-editorial .l-publication-group-title {
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 16%, transparent);
+}
+
 /* A gallery (issue #120): square corners like the other images, captions
    in italics like an image section's, and no zoom on hover or fade-in of
    the enlarged view. */

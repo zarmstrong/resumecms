@@ -30,7 +30,9 @@ import { hasPassed, utcToday } from '../dateText.js';
 // model mustn't make up figures, so it only ever reads them, in the page
 // context.
 // Nor is a credential (issue #119): its name, issuer, number and dates
-// are facts, not prose.
+// are facts, not prose. Nor is a publication (issue #127): its title,
+// outlet and date are facts too, and its note (co-authors, "invited") the
+// record of them.
 // Nor are an image section's or a gallery's captions (issue #120): plain
 // text about a picture the model can't see, so the page context gives
 // either only its kind and title.
@@ -317,6 +319,15 @@ function pageContext(landing, target, resumes) {
             credentials: section.credentials
               .filter((c) => c.name.trim() && !hasPassed(c.expires, utcToday()))
               .map((c) => ({ kind: c.kind, name: c.name, issuer: c.issuer })),
+          };
+        case 'publications':
+          // The ones a visitor sees, as listed, without the links or DOIs,
+          // which give the model nothing to write from.
+          return {
+            ...base,
+            publications: section.entries
+              .filter((entry) => entry.title.trim())
+              .map((entry) => ({ kind: entry.kind, title: entry.title, outlet: entry.outlet, date: entry.date })),
           };
         default:
           return base;

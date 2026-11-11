@@ -328,12 +328,15 @@ the question as its `<summary>`, open in the editor's preview; an entry
 missing either part is dropped), `education` (`resumeId`, `count`,
 `showDates`; issue #126), `skills` (`resumeId`; issue #126),
 `credentials` (`[{ kind, name, issuer, number, issued, expires, url }]`;
-issue #119, see below) and
+issue #119, see below),
 `gallery` (`images: [{ image, caption }]`, at most
 `LANDING_LIMITS.galleryImages` (24), an entry's `image` null until its
 upload lands; issue #120: a grid whose thumbnails open a modal
 `<dialog>` in `client/src/landing/LandingGallery.jsx`, keys in
-`gallery.js`, reordered with the same ↑ ↓ ✕ as items). Any section may be `hidden: true`: kept in the
+`gallery.js`, reordered with the same ↑ ↓ ✕ as items) and
+`publications` (`order: 'manual' | 'newest'`, `group`, `entries: [{ kind,
+title, outlet, date, url, doi, note }]`, at most
+`LANDING_LIMITS.publications` (40); issue #127, see below). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -517,7 +520,7 @@ against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
 (no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
-question and an answer, no named credential left unexpired, no gallery entry whose image is stored) is dropped, heading and
+question and an answer, no named credential left unexpired, no gallery entry whose image is stored, no publication with a title) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -541,10 +544,31 @@ agree), per request, so a lapsed one leaves the page without a republish.
 `client/src/landing/dateText.js` is a copy of it (only its header comment
 differs), kept in step by `server/src/dateText.cases.js`, which the
 client's `dateText.test.js` runs through both and which also checks the two
-files match; publications (#127) are meant to reuse it. The client
+files match; publications reuse it (below). The client
 resolver, `withHidden`, keeps an expired entry as `expired: true` for the
 preview to dim and label "Expired", and a section of nothing else as
 `hidden` and `expired` ("Not shown: every entry has expired").
+
+A publication (issue #127: an `article`, `paper`, `book`, `chapter`,
+`talk`, `podcast` or `press` entry, `PUBLICATION_KINDS`) is plain text
+throughout, capped by `LANDING_LIMITS`; awards stay credentials. Its `url`
+is held to the item URL rules, and its `doi` to a DOI's pattern
+(`10.<4–9 digits>/<suffix>`, no `https://doi.org/` or `doi:` in front, or
+the start of one while it's typed: `isDraftDoi()`); the title links to its
+own safe `url`, else `https://doi.org/<doi>` (`doiUrl()`), else nothing,
+and a resolved entry carries only that `url`, never the `doi`. The rules
+both resolvers apply are in `server/src/publications.js` and its copy
+`client/src/landing/publications.js` (only the header comment differs),
+kept in step by `server/src/publications.cases.js`, which the client's
+`publications.test.js` runs through both and which also checks the two
+files match. `order: 'newest'` (`newestFirst()`) sorts the entries whose
+`date` `readDate()` reads newest first into the slots they held, an
+unreadable one (`Forthcoming`) keeping its place, a year alone after that
+year's months and equal dates in order; `group: true` resolves to `{
+groups: [{ kind, entries }] }` in `PUBLICATION_KINDS`' order instead of
+`{ entries }`, each drawn under a subheading by `LandingView`. An entry
+without a title is dropped. Each is a title, a muted "Outlet · Date ·
+Kind" line (no kind under a group's subheading) and its `note`.
 
 `GET /api/public/home` is what `/` loads: `{ kind: 'landing' }` from
 `landingForHost()` when it's enabled, published and the host isn't in
@@ -1067,7 +1091,7 @@ and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
 words), experience, education and skills sections (read from a
 resume), stats (a model mustn't make up figures; the page context shows
 them read-only), an item's `meta`, an FAQ question, credentials
-(facts, not prose) and image and gallery captions (plain text; the page
+and publications (facts, not prose) and image and gallery captions (plain text; the page
 context gives those sections only their kind and title) are
 deliberately never targets. The page is
 public, so what the model sees is too: the route builds
@@ -1077,7 +1101,8 @@ blurb, the default otherwise), and the page context leaves out URLs, ids,
 the photo and hidden sections (but the one the target is in), and shows an
 experience section's roles (and an education section's entries and a
 skills section's groups) from `getLandingContext()`, and only the
-unexpired credentials, without their numbers. Keep both if you
+unexpired credentials, without their numbers, and the titled
+publications' kind, title, outlet and date only. Keep both if you
 add a target or a field to the profile.
 The editor copy it works on is checked by `store.checkLandingDraft()`. In
 the editor, `LandingEditorPage` holds the requests and proposals,

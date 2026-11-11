@@ -111,6 +111,15 @@
   border-top: none;
 }
 
+/* A publications group's subheading (issue #127) in the heading color
+   and the text's case, so it doesn't read as another section's title. */
+.l-template-split .l-publication-group-title {
+  font-size: 0.95em;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--r-heading, var(--ink));
+}
+
 .l-template-split .l-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

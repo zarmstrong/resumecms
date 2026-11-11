@@ -560,6 +560,36 @@ export const LANDING_SCHEMA = {
               },
             },
           },
+          {
+            type: 'object',
+            description:
+              'Published work and appearances, at most 40; each a title (linked to its url, or its DOI when url is empty) over a muted "Outlet · Date · Kind" line, then its note. One without a title isn\'t shown. Plain text; never rewritten by AI',
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'publications' },
+              order: {
+                enum: ['manual', 'newest'],
+                description:
+                  "'manual' (default): as listed; 'newest': entries whose date reads as YYYY, YYYY-MM, MM/YYYY, 'Mar 2024', 'March 2024' or YYYY-MM-DD newest first, any other keeping its place",
+              },
+              group: { type: 'boolean', description: 'Each kind under a subheading of its own, in the order of kind\'s values (default false)' },
+              entries: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    kind: { enum: ['article', 'paper', 'book', 'chapter', 'talk', 'podcast', 'press'], description: "What it is (default 'article')" },
+                    title: { type: 'string', description: 'At most 300 characters' },
+                    outlet: { type: 'string', description: 'Where it appeared: a journal, publisher, conference, show or paper (at most 160 characters)' },
+                    date: { type: 'string', description: 'Free-form, shown as written (at most 40 characters)' },
+                    url: { type: 'string', description: 'Optional http, https, mailto or tel link for the title' },
+                    doi: { type: 'string', description: "Optional DOI, 10.<registrant>/<suffix> with nothing in front, e.g. '10.1038/s41586-020-2649-2'; linked as https://doi.org/<doi> when url is empty" },
+                    note: { type: 'string', description: "Plain text under it, e.g. 'with A. Author', 'keynote' (at most 300 characters)" },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     },

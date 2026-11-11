@@ -173,7 +173,8 @@
 .l-template-bold a.l-quote-name,
 .l-template-bold a.l-role-company,
 .l-template-bold .l-roles-more,
-.l-template-bold a.l-credential-verify {
+.l-template-bold a.l-credential-verify,
+.l-template-bold a.l-publication-title {
   border-bottom: none;
   text-decoration: underline;
   text-decoration-thickness: 2px;
@@ -186,7 +187,8 @@
 .l-template-bold a.l-quote-name:hover,
 .l-template-bold a.l-role-company:hover,
 .l-template-bold .l-roles-more:hover,
-.l-template-bold a.l-credential-verify:hover {
+.l-template-bold a.l-credential-verify:hover,
+.l-template-bold a.l-publication-title:hover {
   text-decoration-thickness: 4px;
 }
 
@@ -509,6 +511,45 @@
 .l-template-bold a.l-credential-verify {
   color: var(--r-heading, var(--ink));
   font-weight: 700;
+}
+
+/* Publications (issue #127): the title heavy, the outlet, date and kind
+   in capitals at full strength in the text color (the shared line is
+   faded), and a group's subheading heavy in the heading color over a rule
+   of it, never in the accent. */
+.l-template-bold .l-publications {
+  gap: 24px;
+}
+
+.l-template-bold .l-publication {
+  gap: 4px;
+}
+
+.l-template-bold .l-publication-title {
+  font-size: 1.2em;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.l-template-bold .l-publication-meta {
+  color: var(--r-text, var(--ink));
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.l-template-bold .l-publication-groups {
+  gap: 40px;
+}
+
+.l-template-bold .l-publication-group-title {
+  padding-bottom: 8px;
+  margin-bottom: 18px;
+  border-bottom: 4px solid var(--r-heading, var(--ink));
+  font-size: 1em;
+  font-weight: 800;
+  color: var(--r-heading, var(--ink));
 }
 
 /* A gallery: square corners, and nothing moves (the shared thumbnails

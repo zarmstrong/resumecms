@@ -26,7 +26,8 @@ in prose; check the diff against the ones that apply, especially:
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing
-  page's style vs `siteColors.js`, the landing date reader `dateText.js`,
+  page's style vs `siteColors.js`, the landing date reader `dateText.js`, the
+  publications rules `publications.js`,
   `contrastTextFor()` vs the favicon's `inkFor()`, `GRADIENT_SHADE` vs
   resume.css's 55% gradient mix, …).
 - `landing.css` holds only what every landing template shares; an
