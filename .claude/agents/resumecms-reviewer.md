@@ -28,7 +28,8 @@ in prose; check the diff against the ones that apply, especially:
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing
   page's style vs `siteColors.js`, the landing date reader `dateText.js`,
   the media link parser `mediaUrl.js`, the publications rules
-  `publications.js`,
+  `publications.js`, `mailtoUrl()` vs `mailtoHref()`, the two
+  `directionsUrl()` copies,
   `contrastTextFor()` vs the favicon's `inkFor()`, `GRADIENT_SHADE` vs
   resume.css's 55% gradient mix, …).
 - A landing media section (issue #121) embeds only what `parseMediaUrl()`

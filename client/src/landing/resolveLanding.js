@@ -25,8 +25,8 @@
 // link itself, as the server's does. A publications section (issue #127)
 // is ordered and grouped by publications.js, the server's copy. A contact
 // section (issue #124) shows an email and a phone only once they make a
-// link (mailtoHref() and telHref()), an address with a "Directions" map search, and the "Save
-// contact" vCard's link while `vcard` is on.
+// link (mailtoHref() and telHref()), an address with a "Directions" map
+// search, and the "Save contact" vCard's link while `vcard` is on.
 
 import { darkPalette, landingSite } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';

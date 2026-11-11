@@ -337,7 +337,7 @@ upload lands; issue #120: a grid whose thumbnails open a modal
 `media` (`{ url, caption, poster?, transcript }`, issue #121, see below),
 `publications` (`order: 'manual' | 'newest'`, `group`, `entries: [{ kind,
 title, outlet, date, url, doi, note }]`, at most
-`LANDING_LIMITS.publications` (40); issue #127, see below) and `services`
+`LANDING_LIMITS.publications` (40); issue #127, see below), `services`
 (`services: [{ title, text, price, action? }]`, at most
 `LANDING_LIMITS.services` (12; issue #122): `price` free text, never a
 number, and `action` an optional button with a hero link action's shape
