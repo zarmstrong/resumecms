@@ -63,6 +63,87 @@ test('landing templates need template.json and a scoped style.css; index.jsx is 
   }
 });
 
+// The accessibility bar's two linted rules (issue #130,
+// templates/landing/README.md): no outline removed without a replacement in
+// the same rule, and no motion outside prefers-reduced-motion:
+// no-preference.
+const withCss = (body) => ({ classic, other: { 'template.json': META, 'style.css': `${css('other')}\n${body}` } });
+
+test('a landing style.css may not remove an outline without a replacement in the same rule', () => {
+  const passing = [
+    '.l-template-other a:focus-visible { outline: 2px solid var(--r-accent); outline-offset: 2px; }',
+    '.l-template-other a:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--r-heading); }',
+    '.l-template-other a:focus:not(:focus-visible) { outline: none; }',
+    '.l-template-other a:not(:focus-visible), .l-template-other button:not( :focus-visible ) { outline: 0; }',
+    '.l-template-other a:focus-visible { outline: 2px solid transparent; box-shadow: none; }',
+    // Turned back on later in the same rule.
+    '.l-template-other a:focus-visible { outline: none; outline: 2px solid red; }',
+    // A comment or a string mentioning it isn't a declaration.
+    '/* outline: none */ .l-template-other a::after { content: "outline: none; }"; }',
+  ];
+  for (const body of passing) {
+    const run = validate(withCss(body));
+    assert.equal(run.ok, true, `${body}\n${run.out}`);
+  }
+
+  const failing = [
+    ['.l-template-other a:focus-visible { outline: none; }', /other\/style\.css:2: "\.l-template-other a:focus-visible" removes the outline without a replacement/],
+    ['.l-template-other summary { outline: 0 }', /"\.l-template-other summary" removes the outline/],
+    ['.l-template-other a:focus { outline: 0 none !important; }', /removes the outline/],
+    ['.l-template-other a:focus { outline-style: none; }', /removes the outline/],
+    ['.l-template-other a:focus { outline-width: 0px; }', /removes the outline/],
+    ['.l-template-other a:focus { outline: none; box-shadow: none; }', /removes the outline/],
+    ['.l-template-other a:focus { outline: none; border-color: red; }', /removes the outline/],
+    // Only some of the selectors are pointer-only.
+    ['.l-template-other a:not(:focus-visible), .l-template-other button:focus { outline: none; }', /removes the outline/],
+    ['@container (max-width: 600px) {\n  .l-template-other a:focus { outline: none; }\n}', /other\/style\.css:3: .*removes the outline/],
+  ];
+  for (const [body, message] of failing) {
+    const run = validate(withCss(body));
+    assert.equal(run.ok, false, body);
+    assert.match(run.out, message, body);
+  }
+});
+
+test('a landing style.css moves things only under prefers-reduced-motion: no-preference', () => {
+  const passing = [
+    '.l-template-other .l-action { transition: background 120ms ease, color 120ms ease, border-color 120ms; }',
+    '.l-template-other .l-card { transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1) 40ms; }',
+    '.l-template-other .l-card { transition-property: border-top-color, background-color; }',
+    '.l-template-other .l-card { transition: none; animation: none; }',
+    '.l-template-other .l-card { transition: unset; }',
+    '@media (prefers-reduced-motion: no-preference) { .l-template-other .l-card { transition: transform 120ms; animation: spin 1s infinite; } }',
+    '@media (min-width: 600px) and (prefers-reduced-motion:no-preference) { .l-template-other .l-card { transition: all 1s; } }',
+    // Nested in another at-rule inside the gate.
+    '@media (prefers-reduced-motion: no-preference) { @container (width > 600px) { .l-template-other .l-card { transition: transform 1s; } } }',
+    // Keyframes describe an animation; they don't start one.
+    '@keyframes l-other-in { from { transform: scale(0.9); } }',
+  ];
+  for (const body of passing) {
+    const run = validate(withCss(body));
+    assert.equal(run.ok, true, `${body}\n${run.out}`);
+  }
+
+  const failing = [
+    ['.l-template-other .l-card { transition: transform 120ms ease; }', /other\/style\.css:2: "transition: transform 120ms ease" in "\.l-template-other \.l-card" transitions transform/],
+    ['.l-template-other .l-card { transition: border-color 120ms, transform 120ms; }', /transitions transform,/],
+    ['.l-template-other .l-card { transition: 120ms; }', /transitions all/],
+    ['.l-template-other .l-card { transition: all 120ms; }', /transitions all/],
+    ['.l-template-other .l-card { transition: box-shadow 120ms; }', /transitions box-shadow/],
+    ['.l-template-other .l-card { transition-property: top, color; }', /transitions top/],
+    ['.l-template-other .l-card { animation: l-other-in 160ms ease-out; }', /"animation: l-other-in 160ms ease-out" .* must be inside @media \(prefers-reduced-motion: no-preference\)/],
+    ['.l-template-other .l-card { animation-name: l-other-in; }', /"animation-name: l-other-in"/],
+    // The opposite query, or no-preference negated, isn't the gate.
+    ['@media (prefers-reduced-motion: reduce) { .l-template-other .l-card { transition: transform 1s; } }', /transitions transform/],
+    ['@media not (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
+  ];
+  for (const [body, message] of failing) {
+    const run = validate(withCss(body));
+    assert.equal(run.ok, false, body);
+    assert.match(run.out, message, body);
+  }
+});
+
 test("the repo's own templates pass", () => {
   const run = spawnSync(process.execPath, [SCRIPT], { encoding: 'utf8' });
   assert.equal(run.status, 0, run.stdout + run.stderr);

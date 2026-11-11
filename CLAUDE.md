@@ -1022,6 +1022,19 @@ readable. A template must render every section kind
 as a `role="separator"` rather than a `<section>`; the template only
 arranges).
 
+Every landing template, and the shared `landing.css` under it, meets the
+accessibility bar in `templates/landing/README.md` (issue #130), which
+also spells out the contract above for contributors: AA text contrast
+against the template's own tints (stacked ones and faded text included)
+with the default palette and `DEFAULT_DARK_COLORS`, a visible focus ring,
+nothing broken at 320 px wide or at 200% zoom, motion only under
+`@media (prefers-reduced-motion: no-preference)` (colors and opacity may
+transition anywhere; `landing.css`'s card lift and gallery zoom and fade
+are inside one), one `<h1>` (the headline) and section titles as `<h2>`,
+and no text on the accent but `--r-on-accent` (see "Text on a color"). A
+new template, or a change to one, is checked against it (the reviewer's
+checklist lists the same bar; change the two together).
+
 `client/src/resume/templateRegistry.js` builds the registry at **build
 time** via `import.meta.glob` (eager, one glob per kind — the glob path
 must be a static literal, so headers, layouts and landing templates can't
@@ -1041,7 +1054,11 @@ checks folder naming (lowercase kebab-case), required `template.json`
 fields, and — for the `templates/presets/` kind (the resume presets, each
 a header and layout plus optional colors) — that a preset's `header`/`layout` references exist and its
 `colors` are recognized `#rrggbb` keys, and a landing template's scoped
-`style.css`. It takes an optional templates folder as its argument, which
+`style.css`, in which it also flags the two parts of the accessibility
+bar a linter can see (an outline removed without a `box-shadow` ring or a
+`:not(:focus-visible)` limit in the same rule, and an animation or a
+transition of anything but colors and opacity outside `prefers-reduced-motion:
+no-preference`; the exact rules are in `templates/landing/README.md`). It takes an optional templates folder as its argument, which
 `client/src/resume/validateTemplates.test.js` uses to run it over
 fixtures. Run it after adding or editing any
 template; CI runs it plus a client build on PRs touching `templates/**`.

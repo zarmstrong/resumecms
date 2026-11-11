@@ -288,13 +288,26 @@ a.l-item-title:hover {
   padding: 18px 20px;
   border: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 18%, transparent);
   border-radius: 8px;
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color 120ms ease;
 }
 
 .l-card:hover,
 .l-card:focus-within {
   border-color: var(--r-accent, var(--ink));
-  transform: translateY(-1px);
+}
+
+/* The lift only for a visitor who hasn't asked for less motion (the bar in
+   templates/landing/README.md: a color may change gradually, nothing may
+   move). */
+@media (prefers-reduced-motion: no-preference) {
+  .l-card {
+    transition: border-color 120ms ease, transform 120ms ease;
+  }
+
+  .l-card:hover,
+  .l-card:focus-within {
+    transform: translateY(-1px);
+  }
 }
 
 .l-card-label {
@@ -1027,11 +1040,18 @@ a.l-document-link:focus-visible {
   height: auto;
   aspect-ratio: 4 / 3;
   object-fit: cover;
-  transition: transform 160ms ease;
 }
 
-.l-gallery-open:hover .l-gallery-image {
-  transform: scale(1.03);
+/* A thumbnail grows a little on hover, and the enlarged view (below)
+   fades in, only for a visitor who hasn't asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .l-gallery-image {
+    transition: transform 160ms ease;
+  }
+
+  .l-gallery-open:hover .l-gallery-image {
+    transform: scale(1.03);
+  }
 }
 
 .l-gallery-caption {
@@ -1064,11 +1084,17 @@ a.l-document-link:focus-visible {
 .l-gallery-dialog[open] {
   display: flex;
   flex-direction: column;
-  animation: l-gallery-in 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .l-gallery-dialog[open] {
+    animation: l-gallery-in 160ms ease-out;
+  }
 }
 
 /* It's focused itself when it opens (and named by the section's title); its
-   buttons keep their own rings. */
+   buttons keep their own rings. It's not a control, so it's the one place
+   the page draws no ring (templates/landing/README.md). */
 .l-gallery-dialog:focus-visible {
   outline: none;
 }
@@ -1184,18 +1210,6 @@ a.l-document-link:focus-visible {
   flex: none;
   justify-content: center;
   gap: 12px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .l-gallery-image {
-    transition: none;
-  }
-  .l-gallery-open:hover .l-gallery-image {
-    transform: none;
-  }
-  .l-gallery-dialog[open] {
-    animation: none;
-  }
 }
 
 /* A media section (issue #121): one clip behind a facade drawn from this

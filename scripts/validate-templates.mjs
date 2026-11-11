@@ -73,6 +73,168 @@ for (const id of layoutIds) {
   }
 }
 
+// ---- landing style.css: the part of the accessibility bar a linter can
+// see (templates/landing/README.md has the whole bar and these rules).
+//
+// Its rules are read by a small CSS reader: comments dropped, strings and
+// parentheses kept whole (a `;` in a data: URL or a `{` in `content` isn't
+// structure), and each rule's declarations listed with the at-rules
+// around it. It's enough for the stylesheets we write, not a full parser.
+function cssRules(source) {
+  // Comments blanked rather than removed, so line numbers stay true.
+  const text = source.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
+  const lineOf = (at) => text.slice(0, at).split('\n').length;
+  const rules = [];
+  let pos = 0;
+  function block(atRules, selector) {
+    const rule = { atRules, selector, declarations: [] };
+    let chunk = '';
+    let chunkStart = pos;
+    let depth = 0;
+    const flush = () => {
+      const match = /^(-?[a-z][a-z-]*)\s*:([\s\S]*)$/i.exec(chunk.trim());
+      if (match) {
+        const value = match[2].replace(/!\s*important\s*$/i, '').trim();
+        rule.declarations.push({ property: match[1].toLowerCase(), value, line: lineOf(chunkStart) });
+      }
+      chunk = '';
+    };
+    while (pos < text.length) {
+      const ch = text[pos];
+      if (!chunk.trim()) chunkStart = pos;
+      if (ch === '"' || ch === "'") {
+        let end = pos + 1;
+        while (end < text.length && text[end] !== ch) end += text[end] === '\\' ? 2 : 1;
+        chunk += text.slice(pos, end + 1);
+        pos = end + 1;
+        continue;
+      }
+      pos += 1;
+      if (ch === '(') depth += 1;
+      else if (ch === ')') depth = Math.max(0, depth - 1);
+      else if (depth === 0 && ch === ';') {
+        flush();
+        continue;
+      } else if (depth === 0 && ch === '{') {
+        const prelude = chunk.trim().replace(/\s+/g, ' ');
+        chunk = '';
+        if (prelude.startsWith('@')) block([...atRules, prelude], selector);
+        else block(atRules, selector && prelude.includes('&') ? prelude.replaceAll('&', selector) : prelude);
+        continue;
+      } else if (depth === 0 && ch === '}') {
+        flush();
+        rules.push(rule);
+        return;
+      }
+      chunk += ch;
+    }
+    flush();
+    rules.push(rule);
+  }
+  block([], null);
+  return rules.filter((rule) => rule.selector && !rule.atRules.some((at) => /^@(-webkit-)?keyframes\b/i.test(at)));
+}
+
+// Top-level commas only: `cubic-bezier(0, 0, 1, 1)` is one value.
+function splitList(value) {
+  const parts = [];
+  let depth = 0;
+  let part = '';
+  for (const ch of value) {
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) {
+      parts.push(part.trim());
+      part = '';
+    } else part += ch;
+  }
+  parts.push(part.trim());
+  return parts.filter(Boolean);
+}
+
+// What a `transition` shorthand animates: in each comma-separated item, the
+// one word that isn't a duration, a delay, an easing or a behavior; an item
+// without one transitions `all`. `none` transitions nothing.
+const TRANSITION_WORDS = new Set([
+  'ease', 'linear', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end', 'normal', 'allow-discrete',
+]);
+function transitionedProperties(property, value) {
+  if (property === 'transition-property') return splitList(value).map((name) => name.toLowerCase());
+  return splitList(value).map((item) => {
+    const words = item.replace(/[a-z-]+\([^)]*\)/gi, ' ').split(/\s+/).filter(Boolean);
+    const name = words.find((word) => !/^-?[\d.]+m?s$/i.test(word) && !TRANSITION_WORDS.has(word.toLowerCase()));
+    return name ? name.toLowerCase() : 'all';
+  });
+}
+
+// What may change gradually without the visitor having asked for motion:
+// a color or a fade, which move nothing on the screen. Anything else
+// (transform, a position, a size, a margin, a shadow's offset, `all`)
+// belongs under prefers-reduced-motion: no-preference.
+const STILL_PROPERTIES = new Set([
+  'none', 'color', 'background', 'background-color', 'border-color', 'outline-color',
+  'text-decoration-color', 'caret-color', 'fill', 'stroke', 'opacity',
+  ...['top', 'right', 'bottom', 'left', 'block', 'inline', 'block-start', 'block-end', 'inline-start', 'inline-end']
+    .map((side) => `border-${side}-color`),
+]);
+const CSS_WIDE = new Set(['initial', 'inherit', 'unset', 'revert', 'revert-layer']);
+
+const motionAllowed = (rule) =>
+  rule.atRules.some(
+    (at) => /^@media\b/i.test(at) && /prefers-reduced-motion\s*:\s*no-preference/i.test(at) && !/\bnot\b/i.test(at)
+  );
+
+// An outline that's switched off: `outline: none`, `outline: 0`, `outline: 0
+// none`, `outline-style: none`, `outline-width: 0`. A transparent outline
+// isn't (it still shows in forced-colors mode, which is why it's used).
+const ZERO = /^0(\.0+)?([a-z]+|%)?$/i;
+function outlineState(property, value) {
+  const words = value.toLowerCase().split(/\s+/);
+  if (property === 'outline') return words.includes('none') || words.some((word) => ZERO.test(word)) ? 'off' : 'on';
+  if (property === 'outline-style') return words.includes('none') ? 'off' : 'on';
+  if (property === 'outline-width') return ZERO.test(words[0]) ? 'off' : 'on';
+  return null;
+}
+
+// Pointer focus only: every selector in the list leaves :focus-visible
+// alone, so the keyboard's ring is untouched.
+const pointerOnly = (selector) => splitList(selector).every((one) => /:not\(\s*:focus-visible\s*\)/i.test(one));
+
+function checkLandingCss(source, label) {
+  for (const rule of cssRules(source)) {
+    let outline = null;
+    let outlineLine = 0;
+    let replaced = false;
+    for (const { property, value, line } of rule.declarations) {
+      const state = outlineState(property, value);
+      if (state) {
+        outline = state;
+        outlineLine = line;
+      }
+      if (property === 'box-shadow' && !/^none$/i.test(value)) replaced = true;
+      if (motionAllowed(rule) || CSS_WIDE.has(value.toLowerCase())) continue;
+      if ((property === 'animation' || property === 'animation-name') && !/^none$/i.test(value)) {
+        errors.push(
+          `${label}:${line}: "${property}: ${value}" in "${rule.selector}" must be inside @media (prefers-reduced-motion: no-preference)`
+        );
+      }
+      if (property === 'transition' || property === 'transition-property') {
+        const moving = transitionedProperties(property, value).filter((name) => !STILL_PROPERTIES.has(name));
+        if (moving.length) {
+          errors.push(
+            `${label}:${line}: "${property}: ${value}" in "${rule.selector}" transitions ${moving.join(', ')}, which must be inside @media (prefers-reduced-motion: no-preference) (only colors and opacity may transition outside it)`
+          );
+        }
+      }
+    }
+    if (outline === 'off' && !replaced && !pointerOnly(rule.selector)) {
+      errors.push(
+        `${label}:${outlineLine}: "${rule.selector}" removes the outline without a replacement focus style in the same rule (a box-shadow ring, or limit it to :not(:focus-visible))`
+      );
+    }
+  }
+}
+
 // ---- landing: template.json + style.css required, index.jsx optional --
 // (issue #93). Every one ships a style.css scoped under .l-template-<id>;
 // one that changes the page's structure adds an index.jsx, and one whose
@@ -94,8 +256,12 @@ for (const id of landingIds) {
   }
   const css = path.join(dir, 'style.css');
   if (!existsSync(css)) errors.push(`${label}: missing style.css`);
-  else if (!readFileSync(css, 'utf8').includes(`.l-template-${id}`)) {
-    errors.push(`${label}: style.css must scope its rules under .l-template-${id}`);
+  else {
+    const source = readFileSync(css, 'utf8');
+    if (!source.includes(`.l-template-${id}`)) {
+      errors.push(`${label}: style.css must scope its rules under .l-template-${id}`);
+    }
+    checkLandingCss(source, `${label}/style.css`);
   }
 }
 if (!landingIds.includes('classic')) errors.push('templates/landing: missing "classic", the fallback for an unknown template');

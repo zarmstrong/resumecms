@@ -164,7 +164,9 @@ alias to `client/src/resume/` — no fragile relative paths.
 `templates/landing/<id>/` (issue #93) arranges the landing page: its hero
 (photo, availability line, headline, subheadline, buttons) and its
 sections. The landing editor's **Look** group lists them; an unknown or
-missing id is drawn as `classic`, which must always exist.
+missing id is drawn as `classic`, which must always exist. Every one meets
+the accessibility bar in [`landing/README.md`](landing/README.md), which
+also has the full contract.
 
 - `template.json` — `{ label, description, author }`, all required strings,
   plus an optional `columns: true` for a template whose `index.jsx` draws
@@ -217,7 +219,10 @@ node scripts/validate-templates.mjs
 
 Checks folder/id naming, required fields, that every preset's
 `header`/`layout` reference something that actually exists, and that every
-landing template has a `style.css` scoped under its own class. CI runs this
+landing template has a `style.css` scoped under its own class, with no
+outline removed without a replacement and no motion outside
+`prefers-reduced-motion: no-preference` (see
+[`landing/README.md`](landing/README.md#what-the-validator-checks)). CI runs this
 plus a full `npm run build` on any PR touching `templates/**` — a broken
 component fails the build, not just the metadata check.
 
