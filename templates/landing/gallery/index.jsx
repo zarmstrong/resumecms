@@ -17,7 +17,7 @@ export default function GalleryLanding({ landing, renderHero, renderSection }) {
     if (run.length === 1) parts.push(renderSection(run[0].section, run[0].index));
     if (run.length > 1) {
       parts.push(
-        <div key={`run-${run[0].section.id ?? run[0].index}`} className="l-run">
+        <div key={`run:${run[0].section.id ?? run[0].index}`} className="l-run">
           {run.map(({ section, index }) => (
             <div key={section.id ?? index} className="l-run-item" style={{ '--l-run-ratio': ratioOf(section.image) }}>
               {renderSection(section, index)}

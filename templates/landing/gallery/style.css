@@ -34,8 +34,9 @@
    their own color and focus rings are in the heading color.
 
    Nothing moves unless the visitor's device says motion is fine
-   (prefers-reduced-motion: no-preference): then the thumbnails grow a
-   little on hover and the gallery's view fades in. Sized by the page's
+   (prefers-reduced-motion: no-preference): then the gallery's view
+   fades in. Thumbnails never grow on hover, since their box would cut
+   their edges. Sized by the page's
    own width (container queries), so the editor's narrower preview shows
    what a phone would. Words break anywhere they must (issue #144). */
 .l-template-gallery {
@@ -478,6 +479,11 @@
   background: var(--l-g-tint);
 }
 
+/* A poster at its own shape, letterboxed on the tint, never cut to 16:9. */
+.l-template-gallery .l-media-poster {
+  object-fit: contain;
+}
+
 .l-template-gallery .l-media-play,
 .l-template-gallery .l-media-play:hover {
   background: var(--r-heading, var(--ink));
@@ -733,12 +739,6 @@
 
 /* Motion, only for a visitor whose device says it's fine. */
 @media (prefers-reduced-motion: no-preference) {
-  .l-template-gallery .l-gallery-image {
-    transition: transform 220ms ease;
-  }
-  .l-template-gallery .l-gallery-open:hover .l-gallery-image {
-    transform: scale(1.02);
-  }
   .l-template-gallery .l-gallery-dialog[open] {
     animation: l-gallery-in 160ms ease-out;
   }
