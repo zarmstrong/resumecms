@@ -10,6 +10,7 @@ import { LandingGallery } from './LandingGallery.jsx';
 import { LandingMedia } from './LandingMedia.jsx';
 import { formatFileSize } from './documents.js';
 import { ActionIcon } from './ActionIcon.jsx';
+import { anchorTitleId } from './sectionAnchors.js';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
@@ -28,7 +29,8 @@ import './landing.css';
 // separator rather than a <section>, its title a label on the rule, and
 // is only drawn between two things it divides (dividers.js): LandingView
 // sees to that for a template without columns, and hands one with columns
-// `dropStrayDividers(sections, { atStart })` to apply to each column.
+// `dropStrayDividers(sections, { atStart })` to apply to each column. A
+// template may give a section an `anchor`, which becomes its element's id.
 // Everything is rendered as text,
 // apart from the links and emphasis a text section, an item's text, an
 // FAQ answer or a service's text may hold (issue #91, renderInline.js),
@@ -83,13 +85,25 @@ export function LandingView({ landing, preview = false, highlightIds = null, sch
         </div>
       );
     }
+    // An `anchor` is only set by a template that links to its sections
+    // (directory's contents, sectionAnchors.js); focusable so a jump there
+    // moves the keyboard too, and named by its heading for whoever lands
+    // on it. Without one, neither the section nor its heading has an id.
+    const titleId = section.anchor && section.title ? anchorTitleId(section.anchor) : undefined;
     return (
       <section
         key={section.id ?? i}
+        id={section.anchor}
+        tabIndex={section.anchor ? -1 : undefined}
+        aria-labelledby={titleId}
         className={`l-section l-section-${section.kind}${hidden}${highlightIds?.has(section.id) ? ' l-ai-preview' : ''}`}
       >
         {section.hidden && <span className="l-hidden-label">{section.expired ? 'Not shown: every entry has expired' : 'Hidden'}</span>}
-        {section.title && <h2 className="l-section-title">{section.title}</h2>}
+        {section.title && (
+          <h2 id={titleId} className="l-section-title">
+            {section.title}
+          </h2>
+        )}
         <SectionBody section={section} preview={preview} />
       </section>
     );

@@ -10,6 +10,8 @@ export default defineConfig({
       // can't use a stable "./…" relative path) import shared rendering
       // helpers as `@resume/safeUrl.js` etc. regardless of nesting depth.
       '@resume': fileURLToPath(new URL('./src/resume', import.meta.url)),
+      // The same for a landing page template's helpers (issue #130).
+      '@landing': fileURLToPath(new URL('./src/landing', import.meta.url)),
       // Rolldown (vite 8+) resolves a file's imports — including the
       // auto-injected `react/jsx-runtime` import from JSX syntax — relative
       // to that file's own location rather than the vite project root, so
