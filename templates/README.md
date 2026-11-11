@@ -183,7 +183,9 @@ missing id is drawn as `classic`, which must always exist.
   `container-type: inline-size` on `.l-template-<id>`), so the editor's
   narrower preview looks like a phone does.
 - `index.jsx` — **optional**, for a template that changes the page's
-  structure (like `split`, which puts the hero in a side column).
+  structure (like `split`, which puts the hero in a side column, or
+  `gallery`, which wraps each run of image sections in one block of
+  pictures).
   Default-exports:
   ```jsx
   export default function MyLanding({ landing, renderHero, renderSection, dropStrayDividers, colors, darkColors, preview }) {

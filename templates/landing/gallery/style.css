@@ -1,0 +1,767 @@
+/* Gallery (issue #130): pictures first, for photographers, designers,
+   architects, artisans, florists, tattoo artists and chefs. A compact
+   hero (a small photo, the headline and the buttons on one bar over a
+   hairline), then the sections down one centered axis at three widths:
+   the visual ones wide (an image section, a run of them, a gallery
+   section, list entries with thumbnails), the grids (cards, services,
+   stats, a video) a little narrower, and everything else, text above
+   all, at a reading width between them.
+
+   No picture is ever cropped. An image section keeps its own shape, no
+   taller than the window (letterboxed inside its box past that, never
+   cut); a run of image sections one after another is laid out by
+   index.jsx as rows of pictures that share one height, each as wide as
+   its shape asks (flex-grow and flex-basis both its width over its
+   height, --l-run-ratio); a gallery section's thumbnails and list
+   entries with thumbnails are a masonry of columns, each picture at its
+   own shape (the shared look crops both). Every picture keeps the size
+   it was stored with while it loads, so nothing jumps.
+
+   No text is drawn in the accent or on it, since --r-on-accent (the
+   better of white and near-black) isn't AA on every mid-tone accent:
+   what's accent-colored text elsewhere (the subheadline, the
+   availability line, a card's "View resume", "Full resume", a stat's
+   figure, an FAQ's + and −, a credential's kind and "Verify", a
+   service's price, a contact link, a document's "PDF" tag, the gallery's
+   buttons, a media section's play button) is in the heading or text
+   color, the primary button and the play button are filled with the
+   heading color with the background's as their label (the palette's own
+   pair), and the link badges are outlined. The accent only draws shapes:
+   the bar under a section's title, the availability dot, the timeline's
+   dots, a stat's bar, outlines. Text that's faded elsewhere (meta lines,
+   captions, labels) is at full strength, so whatever passes on the
+   background passes here, dark palette included. Links are underlined in
+   their own color and focus rings are in the heading color.
+
+   Nothing moves unless the visitor's device says motion is fine
+   (prefers-reduced-motion: no-preference): then the thumbnails grow a
+   little on hover and the gallery's view fades in. Sized by the page's
+   own width (container queries), so the editor's narrower preview shows
+   what a phone would. Words break anywhere they must (issue #144). */
+.l-template-gallery {
+  --l-g-wide: 1240px;
+  --l-g-mid: 980px;
+  --l-g-read: 38em;
+  --l-g-line: color-mix(in srgb, var(--r-text, var(--ink)) 18%, transparent);
+  --l-g-tint: color-mix(in srgb, var(--r-text, var(--ink)) 6%, var(--r-bg, var(--panel)));
+  container-type: inline-size;
+  overflow-wrap: anywhere;
+}
+
+.l-template-gallery .l-main {
+  padding: clamp(20px, 4cqi, 44px) clamp(16px, 4cqi, 40px) clamp(56px, 8cqi, 104px);
+}
+
+/* One centered axis: everything at the reading width, unless it's one of
+   the wider kinds below. */
+.l-template-gallery .l-main > * {
+  max-width: var(--l-g-read);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.l-template-gallery .l-main > * + * {
+  margin-top: clamp(44px, 7cqi, 80px);
+}
+
+.l-template-gallery .l-main > .l-hero,
+.l-template-gallery .l-main > .l-run,
+.l-template-gallery .l-main > .l-section-image,
+.l-template-gallery .l-main > .l-section-gallery,
+.l-template-gallery .l-main > .l-section-items:has(.l-item-with-image) {
+  max-width: var(--l-g-wide);
+}
+
+.l-template-gallery .l-main > .l-section-resumes,
+.l-template-gallery .l-main > .l-section-services,
+.l-template-gallery .l-main > .l-section-stats,
+.l-template-gallery .l-main > .l-section-media,
+.l-template-gallery .l-main > .l-section-divider {
+  max-width: var(--l-g-mid);
+}
+
+/* The hero: a bar, the photo small at its start, the buttons at its end,
+   over a hairline. */
+.l-template-gallery .l-hero {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 2.5cqi, 24px);
+  padding-bottom: clamp(18px, 3cqi, 28px);
+  border-bottom: 1px solid var(--l-g-line);
+}
+
+.l-template-gallery .l-main > .l-hero + * {
+  margin-top: clamp(32px, 5cqi, 56px);
+}
+
+.l-template-gallery .l-photo {
+  width: 64px;
+  height: 64px;
+}
+
+.l-template-gallery .l-hero-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 32px;
+  align-items: center;
+}
+
+.l-template-gallery .l-hero-text > * {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.l-template-gallery .l-hero-text > .l-actions {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  justify-self: end;
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+.l-template-gallery .l-headline {
+  font-size: 2.2em;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.l-template-gallery .l-subheadline {
+  margin-top: 4px;
+  font-size: 1.05em;
+  color: var(--r-text, var(--ink));
+}
+
+/* Availability in the text color, after a dot of the accent. */
+.l-template-gallery .l-availability {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  margin: 0 0 6px;
+  border-radius: 0;
+  background: none;
+  color: var(--r-text, var(--ink));
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.l-template-gallery .l-availability::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--r-accent, var(--ink));
+}
+
+/* Buttons: pills outlined in the heading color; the first one filled with
+   it, the background's color for its label. */
+.l-template-gallery .l-action {
+  padding: 8px 18px;
+  border: 1px solid var(--r-heading, var(--ink));
+  border-radius: 999px;
+  color: var(--r-heading, var(--ink));
+  background: none;
+  transition: none;
+}
+
+.l-template-gallery .l-action:hover,
+.l-template-gallery .l-action:focus-visible {
+  background: color-mix(in srgb, var(--r-heading, var(--ink)) 8%, transparent);
+}
+
+.l-template-gallery .l-action-primary,
+.l-template-gallery .l-action-primary:hover,
+.l-template-gallery .l-action-primary:focus-visible {
+  background: var(--r-heading, var(--ink));
+  color: var(--r-bg, var(--panel));
+}
+
+.l-template-gallery .l-action-primary:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+/* A visible ring in the heading color on every link, button and FAQ
+   question (a resume card draws its own around the whole card). */
+.l-template-gallery a:not(.l-card-link):focus-visible,
+.l-template-gallery button:focus-visible,
+.l-template-gallery summary:focus-visible {
+  outline: 2px solid var(--r-heading, var(--ink));
+  outline-offset: 3px;
+}
+
+.l-template-gallery .l-card-link:focus-visible::after {
+  outline: 2px solid var(--r-heading, var(--ink));
+  outline-offset: 3px;
+}
+
+/* Section titles: small capitals, centered on the axis, over a short bar
+   of the accent. */
+.l-template-gallery .l-section-title {
+  margin-bottom: clamp(20px, 3cqi, 30px);
+  font-size: 0.95em;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.l-template-gallery .l-section-title::after {
+  content: '';
+  display: block;
+  width: 28px;
+  height: 2px;
+  margin: 10px auto 0;
+  background: var(--r-accent, var(--ink));
+}
+
+.l-template-gallery .l-section-text .l-text {
+  font-size: 1.06em;
+  line-height: 1.7;
+}
+
+/* Every link underlined in its own color (the shared look underlines in
+   the accent, which a pale one would hide). */
+.l-template-gallery .l-inline-link,
+.l-template-gallery a.l-item-title,
+.l-template-gallery .l-card-pdf,
+.l-template-gallery a.l-quote-name,
+.l-template-gallery a.l-role-company,
+.l-template-gallery .l-roles-more,
+.l-template-gallery a.l-credential-verify,
+.l-template-gallery a.l-publication-title,
+.l-template-gallery a.l-contact-link,
+.l-template-gallery a.l-document-link {
+  border-bottom: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.l-template-gallery .l-inline-link:hover,
+.l-template-gallery a.l-item-title:hover,
+.l-template-gallery .l-card-pdf:hover,
+.l-template-gallery a.l-quote-name:hover,
+.l-template-gallery a.l-role-company:hover,
+.l-template-gallery .l-roles-more:hover,
+.l-template-gallery a.l-credential-verify:hover,
+.l-template-gallery a.l-publication-title:hover,
+.l-template-gallery a.l-contact-link:hover,
+.l-template-gallery a.l-document-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ---- Pictures ---- */
+
+/* An image section on its own: as large as the wide column, but never
+   blown up past the size it was stored at, nor taller than the window
+   (then letterboxed inside its box, never cut). */
+.l-template-gallery .l-figure {
+  text-align: center;
+}
+
+.l-template-gallery .l-figure-image {
+  max-height: 88vh;
+  margin: 0 auto;
+  border-radius: 2px;
+  object-fit: contain;
+}
+
+.l-template-gallery .l-figure-caption,
+.l-template-gallery .l-gallery-caption,
+.l-template-gallery .l-media-caption {
+  opacity: 1;
+  margin-top: 10px;
+  font-size: 0.9em;
+  font-style: italic;
+  color: var(--r-text, var(--ink));
+}
+
+/* A run of image sections (index.jsx): rows of pictures of one height,
+   each as wide as its shape asks for. The last row's grow to fill it too,
+   so they're larger, never cropped, but only up to --l-run-max tall (all
+   of a row stop at the same height, so they still match), and then the
+   row is centered. */
+.l-template-gallery .l-run {
+  --l-run-height: clamp(170px, 28cqi, 360px);
+  --l-run-max: clamp(2.2 * var(--l-run-height), 70vh, 90vh);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(10px, 1.6cqi, 18px);
+}
+
+/* Grown in proportion to its shape; scaled up, since growth factors that
+   add up to less than 1 would leave a lone picture short of its row. */
+.l-template-gallery .l-run-item {
+  flex: calc(var(--l-run-ratio, 1) * 100) 1 calc(var(--l-run-ratio, 1) * var(--l-run-height));
+  min-width: 0;
+  max-width: calc(var(--l-run-ratio, 1) * var(--l-run-max));
+}
+
+.l-template-gallery .l-run-item > .l-section {
+  margin: 0;
+}
+
+.l-template-gallery .l-run-item .l-section-title {
+  margin-bottom: 12px;
+  font-size: 0.82em;
+}
+
+.l-template-gallery .l-run-item .l-section-title::after {
+  margin-top: 6px;
+}
+
+.l-template-gallery .l-run-item .l-figure-image {
+  width: 100%;
+  max-height: none;
+}
+
+/* A gallery section (issue #120): a masonry of columns, as many as fit
+   (four at most), each thumbnail at its own shape. Its order runs down
+   each column, which is also how the view's arrows step through it. The
+   shared rule crops every thumbnail to 4:3; revert-layer gives back the
+   shape its width and height attributes say, so the space is kept while
+   it loads (a browser without it gets the image's own shape on load). */
+.l-template-gallery .l-gallery {
+  display: block;
+  columns: 4 220px;
+  column-gap: clamp(10px, 1.6cqi, 18px);
+}
+
+.l-template-gallery .l-gallery:has(> .l-gallery-item:nth-child(3):last-child) {
+  columns: 3 200px;
+}
+
+.l-template-gallery .l-gallery:has(> .l-gallery-item:nth-child(2):last-child) {
+  columns: 2 200px;
+}
+
+.l-template-gallery .l-gallery:has(> .l-gallery-item:only-child) {
+  columns: 1;
+}
+
+.l-template-gallery .l-gallery-item {
+  break-inside: avoid;
+  margin-bottom: clamp(10px, 1.6cqi, 18px);
+}
+
+.l-template-gallery .l-gallery-open {
+  border-radius: 2px;
+  background: var(--l-g-tint);
+}
+
+.l-template-gallery .l-gallery-image {
+  aspect-ratio: auto;
+  aspect-ratio: revert-layer;
+  height: auto;
+  max-height: 80vh;
+  object-fit: contain;
+  transition: none;
+}
+
+.l-template-gallery .l-gallery-open:hover .l-gallery-image {
+  transform: none;
+}
+
+.l-template-gallery .l-gallery-caption {
+  margin-top: 6px;
+  font-size: 0.85em;
+}
+
+/* Its enlarged view: the same quiet look, its text at full strength and
+   its buttons in the heading color. */
+.l-template-gallery .l-gallery-dialog {
+  border-radius: 4px;
+}
+
+.l-template-gallery .l-gallery-dialog[open] {
+  animation: none;
+}
+
+.l-template-gallery .l-gallery-bar,
+.l-template-gallery .l-gallery-view-alt {
+  opacity: 1;
+}
+
+.l-template-gallery .l-gallery-view-image {
+  border-radius: 2px;
+}
+
+.l-template-gallery .l-gallery-button {
+  border-color: var(--l-g-line);
+  border-radius: 999px;
+}
+
+.l-template-gallery .l-gallery-button:hover,
+.l-template-gallery .l-gallery-button:focus-visible {
+  border-color: var(--r-heading, var(--ink));
+  color: var(--r-heading, var(--ink));
+}
+
+/* List entries with thumbnails: a masonry like the gallery's, the
+   picture across the top of its entry at its own shape. Without any,
+   a plain list at the reading width. */
+.l-template-gallery .l-items {
+  gap: 22px;
+}
+
+.l-template-gallery .l-items:has(.l-item-with-image) {
+  display: block;
+  columns: 3 260px;
+  column-gap: clamp(18px, 3cqi, 36px);
+}
+
+.l-template-gallery .l-items:has(.l-item-with-image) > .l-item {
+  display: block;
+  break-inside: avoid;
+  margin-bottom: clamp(24px, 4cqi, 40px);
+}
+
+.l-template-gallery .l-item-image {
+  width: 100%;
+  height: auto;
+  max-height: 80vh;
+  margin-bottom: 12px;
+  border-radius: 2px;
+  object-fit: contain;
+}
+
+.l-template-gallery .l-item-title {
+  font-size: 1.08em;
+}
+
+.l-template-gallery .l-item-meta,
+.l-template-gallery .l-role-meta {
+  opacity: 1;
+  margin-top: 2px;
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.l-template-gallery .l-item-text {
+  margin-top: 6px;
+}
+
+/* A video or clip (issue #121): square-ish corners, and the play button
+   filled with the heading color (the background's for its label), so no
+   text is on the accent. */
+.l-template-gallery .l-media-facade,
+.l-template-gallery .l-media-frame {
+  border-radius: 2px;
+}
+
+.l-template-gallery .l-media-facade {
+  background: var(--l-g-tint);
+}
+
+.l-template-gallery .l-media-play,
+.l-template-gallery .l-media-play:hover {
+  background: var(--r-heading, var(--ink));
+  color: var(--r-bg, var(--panel));
+}
+
+.l-template-gallery .l-media-play:hover .l-media-play-label {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+/* Over a poster the ring is drawn twice, in both of the palette's
+   colors, so it shows on any picture. */
+.l-template-gallery .l-media-play:focus-visible {
+  outline: 2px solid var(--r-heading, var(--ink));
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--r-bg, var(--panel));
+}
+
+.l-template-gallery .l-media-note {
+  border-radius: 2px;
+}
+
+/* ---- Everything else ---- */
+
+/* Links: centered pills outlined in a hairline, their badge outlined in
+   the link's own color rather than filled with the accent. */
+.l-template-gallery .l-links {
+  justify-content: center;
+  gap: 10px;
+}
+
+.l-template-gallery .l-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: 1px solid var(--l-g-line);
+  border-radius: 999px;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-gallery .l-links a:hover {
+  border-color: var(--r-heading, var(--ink));
+}
+
+.l-template-gallery .r-link-badge {
+  box-sizing: border-box;
+  background: none;
+  color: inherit;
+  border: 1px solid currentColor;
+  opacity: 1;
+}
+
+/* Resume cards and services in a grid centered on the axis, so one or
+   two of them don't sit off to one side. */
+.l-template-gallery .l-cards,
+.l-template-gallery .l-services {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 300px));
+  justify-content: center;
+  gap: 18px;
+}
+
+.l-template-gallery .l-card {
+  border-color: var(--l-g-line);
+  border-radius: 4px;
+  transition: none;
+}
+
+.l-template-gallery .l-card:hover,
+.l-template-gallery .l-card:focus-within {
+  border-color: var(--r-heading, var(--ink));
+  transform: none;
+}
+
+.l-template-gallery .l-card-cta {
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-gallery .l-service {
+  padding: 18px 20px;
+  border: 1px solid var(--l-g-line);
+  border-radius: 4px;
+}
+
+.l-template-gallery .l-service-head {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.l-template-gallery .l-service-title {
+  font-size: 1.08em;
+}
+
+.l-template-gallery .l-service-price {
+  color: var(--r-heading, var(--ink));
+  font-size: 0.82em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.l-template-gallery .l-service-text {
+  margin-bottom: 8px;
+}
+
+/* At the foot of its card, so a row's buttons line up. */
+.l-template-gallery .l-service-action {
+  margin-top: auto;
+}
+
+/* Quotes centered on the axis, the words in the headline's font, a short
+   bar of the accent between one and the next. */
+.l-template-gallery .l-quotes {
+  gap: 36px;
+}
+
+.l-template-gallery .l-quote {
+  padding: 0;
+  border: none;
+  text-align: center;
+}
+
+.l-template-gallery .l-quote + .l-quote::before {
+  content: '';
+  display: block;
+  width: 28px;
+  height: 2px;
+  margin: 0 auto 36px;
+  background: var(--r-accent, var(--ink));
+}
+
+.l-template-gallery .l-quote-text {
+  font-family: var(--r-name-font, inherit);
+  font-size: 1.25em;
+  line-height: 1.5;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-gallery .l-quote-by {
+  opacity: 1;
+  margin-top: 10px;
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+}
+
+/* The timeline (experience and education): the shared one, with its
+   details at full strength. */
+.l-template-gallery .l-roles {
+  gap: 18px;
+  border-left-color: var(--l-g-line);
+}
+
+.l-template-gallery .l-roles-more {
+  color: var(--r-heading, var(--ink));
+  font-weight: 600;
+}
+
+/* Skills as chips outlined in a hairline (the shared ones are tinted
+   with the accent). */
+.l-template-gallery .l-skill {
+  border-color: var(--l-g-line);
+  background: none;
+}
+
+/* Stats centered, the figure in the heading color over a bar of the
+   accent. */
+.l-template-gallery .l-stat {
+  align-items: center;
+  text-align: center;
+}
+
+.l-template-gallery .l-stat-value {
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-gallery .l-stat-label {
+  opacity: 1;
+}
+
+/* Questions and answers: the + and − in the heading color. */
+.l-template-gallery .l-faq,
+.l-template-gallery .l-faq-entry {
+  border-color: var(--l-g-line);
+}
+
+.l-template-gallery .l-faq-question {
+  padding: 14px 0;
+}
+
+.l-template-gallery .l-faq-question::after {
+  color: var(--r-heading, var(--ink));
+}
+
+/* Credentials: the kind in the text color on a faint tint of it, the
+   details and "Verify" at full strength. */
+.l-template-gallery .l-credential-kind {
+  color: var(--r-text, var(--ink));
+  background: var(--l-g-tint);
+  border: 1px solid var(--l-g-line);
+}
+
+.l-template-gallery .l-credential-meta,
+.l-template-gallery .l-publication-meta,
+.l-template-gallery .l-document-meta,
+.l-template-gallery .l-contact-label {
+  color: var(--r-text, var(--ink));
+}
+
+.l-template-gallery a.l-credential-verify,
+.l-template-gallery a.l-contact-link {
+  color: var(--r-heading, var(--ink));
+}
+
+/* Publications: a group's subheading in the heading color over a
+   hairline. */
+.l-template-gallery .l-publications {
+  gap: 18px;
+}
+
+.l-template-gallery .l-publication-group-title {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--l-g-line);
+  color: var(--r-heading, var(--ink));
+}
+
+/* Contact: a little more room between its lines. */
+.l-template-gallery .l-contact-lines {
+  row-gap: 12px;
+}
+
+/* Documents: the "PDF" tag in the text color inside an outline of the
+   accent. */
+.l-template-gallery .l-documents {
+  gap: 20px;
+}
+
+.l-template-gallery .l-document-type {
+  border: 1px solid var(--r-accent, var(--ink));
+  background: none;
+  color: var(--r-text, var(--ink));
+}
+
+/* A divider: a hairline, its label at full strength. */
+.l-template-gallery .l-divider {
+  color: var(--r-text, var(--ink));
+}
+
+.l-template-gallery .l-divider::before,
+.l-template-gallery .l-divider::after {
+  border-top-color: var(--l-g-line);
+}
+
+/* Motion, only for a visitor whose device says it's fine. */
+@media (prefers-reduced-motion: no-preference) {
+  .l-template-gallery .l-gallery-image {
+    transition: transform 220ms ease;
+  }
+  .l-template-gallery .l-gallery-open:hover .l-gallery-image {
+    transform: scale(1.02);
+  }
+  .l-template-gallery .l-gallery-dialog[open] {
+    animation: l-gallery-in 160ms ease-out;
+  }
+}
+
+/* A narrower page: the buttons go under the headline. */
+@container (max-width: 720px) {
+  .l-template-gallery .l-hero-text {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .l-template-gallery .l-hero-text > .l-actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+    justify-content: flex-start;
+    margin-top: 14px;
+  }
+}
+
+/* A phone: the photo smaller and at the top of the bar, the headline
+   smaller, two thumbnails a row, and list entries one a row. */
+@container (max-width: 520px) {
+  .l-template-gallery .l-hero {
+    align-items: flex-start;
+  }
+  .l-template-gallery .l-photo {
+    width: 52px;
+    height: 52px;
+  }
+  .l-template-gallery .l-headline {
+    font-size: 1.75em;
+  }
+  .l-template-gallery .l-gallery,
+  .l-template-gallery .l-gallery:has(> .l-gallery-item:nth-child(3):last-child) {
+    columns: 2;
+  }
+  .l-template-gallery .l-gallery:has(> .l-gallery-item:only-child) {
+    columns: 1;
+  }
+}

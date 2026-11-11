@@ -1004,7 +1004,7 @@ go in turn into an `.l-main`. `landing.css` holds only what every
 template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
 pixel-identical to it. `bold`, `centered`, `editorial` (issue #130, pure
-CSS), `formal` and `split` size themselves with container queries (and
+CSS), `formal`, `gallery` and `split` size themselves with container queries (and
 `bold` its type with container units) on the page root, so the editor's
 narrower preview matches a phone. `bold`
 (issue #130) bands every other *shown* section with
@@ -1017,7 +1017,13 @@ with the background's as its label, and the link badges are outlined,
 because `--r-on-accent` (`contrastTextFor()`, see "Text on a color" below)
 is only the better of white and near-black, and on a mid-tone accent
 neither reaches AA. So any accent the person picks keeps its text
-readable. A template must render every section kind
+readable; `gallery` (issue #130) follows the same rule. Its `index.jsx`
+(no `columns`) only wraps a run of consecutive image sections in an
+`.l-run` and puts each one's width over height on its wrapper
+(`--l-run-ratio`), so `style.css` can lay the run out as rows of one
+height without cropping; its gallery section and thumbnailed items are
+CSS column masonries, the thumbnails at their stored shape
+(`aspect-ratio: revert-layer` undoes the shared 4:3 crop). A template must render every section kind
 (`LandingView`'s `renderSection` and `SectionBody` draw them, a divider
 as a `role="separator"` rather than a `<section>`; the template only
 arranges).
