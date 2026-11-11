@@ -41,7 +41,10 @@ in prose; check the diff against the ones that apply, especially:
 - `landing.css` holds only what every landing template shares; an
   arrangement belongs in a template's `style.css`, scoped under
   `.l-template-<id>`, so a change for one template can't move another
-  (issue #93).
+  (issue #93). A landing `coverImage` (issue #130) is drawn only by a
+  template whose `template.json` says `cover: true`; its `alt` may be
+  blank (the name is real text over it), so `assertImagesDescribed()`
+  skips it, but every other image reference still needs one.
 - A new landing section kind or section-wide field is in `SECTION_FIELDS`,
   `checkSection()`, both `resolveSection()`/`resolveLanding()` copies, the
   MCP union and `LANDING_SCHEMA`, `LandingForm` (its `SectionFields`, its
