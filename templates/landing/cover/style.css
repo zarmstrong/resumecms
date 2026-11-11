@@ -15,7 +15,10 @@
      21:1. The fill is under the image too, so the text reads while it
      loads.
    - Without one, the palette's own pair turned around: the background
-     color on the heading color, as readable as the page's headings.
+     color on the heading color. That pair is AA with the default light
+     and dark palettes, but the band also draws small text (availability,
+     subheadline, button labels), so a custom heading color has to reach
+     4.5:1 against the background, not just the 3:1 large headings need.
    The primary button is filled with the ink and labelled in the fill, the
    others outlined in the ink, and a hovered button is underlined rather
    than tinted, since a tint would bring the band nearer the text. The
