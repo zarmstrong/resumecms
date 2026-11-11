@@ -80,6 +80,11 @@ test('a landing style.css may not remove an outline without a replacement in the
     '.l-template-other a:focus-visible { outline: none; outline: 2px solid red; }',
     '.l-template-other a:focus-visible { outline: 0 solid; outline-width: 2px; }',
     '.l-template-other a:focus-visible { outline-width: 3px; }',
+    // A color's zeros aren't a width; a var() can't be read, so it's on.
+    '.l-template-other a:focus-visible { outline: 2px solid hsl(0 0% 20%); }',
+    '.l-template-other a:focus-visible { outline: 2px solid rgb(0 0 0 / .6); }',
+    '.l-template-other a:focus-visible { outline: var(--l-ring); }',
+    '.l-template-other a:focus-visible { outline: var(--w) solid red; outline-width: var(--w); }',
     // A comment or a string mentioning it isn't a declaration.
     '/* outline: none */ .l-template-other a::after { content: "outline: none; }"; }',
   ];
@@ -130,6 +135,13 @@ test('a landing style.css moves things only under prefers-reduced-motion: no-pre
     '.l-template-other .l-card { animation: none 0s; -webkit-animation: none; animation-name: none, none; }',
     '.l-template-other .l-card { transition-property: color; transition-duration: 200ms; }',
     '.l-template-other .l-card { transition-duration: 0s; }',
+    '.l-template-other dialog { transition: opacity .2s, display .2s allow-discrete, overlay .2s allow-discrete; }',
+    // A zero duration moves nothing (and the shorthand's default is 0s).
+    '.l-template-other .l-card { transition: transform 0s; }',
+    '.l-template-other .l-card { transition: transform; }',
+    '.l-template-other .l-card { transition-property: transform; transition-duration: 0s; }',
+    '.l-template-other .l-card { transition: color 1s, transform 0s; }',
+    '.l-template-other input { transition: accent-color 1s, column-rule-color 1s; }',
     '.l-template-other { scroll-behavior: auto; }',
     '@media (prefers-reduced-motion: no-preference) { .l-template-other { scroll-behavior: smooth; } }',
     '@media (prefers-reduced-motion: no-preference) and (min-width: 1px), (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }',
@@ -153,6 +165,11 @@ test('a landing style.css moves things only under prefers-reduced-motion: no-pre
     ['@media not (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
     // A query list is an OR: every query in it needs the condition.
     ['@media screen, (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
+    ['@media (prefers-reduced-motion: no-preference) or (min-width: 1px) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
+    ['@media (min-width: 1px) OR (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
+    // Pairs by index: the second property gets the second duration.
+    ['.l-template-other .l-card { transition-property: color, transform; transition-duration: 1s, 2s; }', /transitions transform,/],
+    ['.l-template-other .l-card { transition: transform 0s; transition-duration: 1s; }', /"transition: transform 0s; transition-duration: 1s" .* transitions transform/],
     // A duration alone transitions all.
     ['.l-template-other .l-card { transition-duration: 300ms; }', /"transition-duration: 300ms" .* transitions all/],
     ['.l-template-other .l-card { transition-duration: 0s, 1s; }', /transitions all/],

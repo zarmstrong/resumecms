@@ -50,7 +50,7 @@ in prose; check the diff against the ones that apply, especially:
   link, button and `<summary>`; nothing breaks at 320 px wide or at 200%
   zoom (640 × 400 and 960 × 540 windows; a sticky part fits its window);
   motion (transforms, position or size changes, animations, smooth scrolling) only under
-  `@media (prefers-reduced-motion: no-preference)`, colors, opacity and visibility
+  `@media (prefers-reduced-motion: no-preference)`, colors, opacity, visibility and display
   may transition anywhere; one `<h1>` (the headline) and section titles
   as `<h2>`, an `index.jsx` adding no heading; no text on an accent fill
   unless it's `--r-on-accent` (hover through `--r-accent-hover-mix`), and

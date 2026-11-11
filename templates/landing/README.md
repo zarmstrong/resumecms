@@ -157,13 +157,19 @@ checked by hand (and by the reviewer, whose checklist lists the same bar).
    template sets it on its root, as `editorial` and `bold` do), and a grid
    track is `minmax(min(100%, 240px), 1fr)` rather than a bare minimum
    wider than a phone's column. Anything `position: sticky` must fit the
-   window it sticks in, or it hides its own end (`split` stops its hero
-   sticking in a window under 640 px tall).
+   window it sticks in, or it hides its own end: `split`'s stuck hero
+   is never taller than the window (past that it scrolls on its own, with
+   room inside for its buttons' focus rings), and stops sticking in a
+   window under 640 px tall.
 5. **Motion only under `prefers-reduced-motion: no-preference`.** Anything
    that moves (a transform, a change of position or size, an animation,
    `scroll-behavior: smooth`) goes inside `@media (prefers-reduced-motion: no-preference) { … }`, so
    a visitor who asked for less motion never gets it, in any browser. A
    color or a fade may change gradually anywhere, since nothing moves.
+   `transition: background` counts as a color although the shorthand
+   also covers the background's position and size, so a template mustn't
+   change `background-position` or `background-size` on a state it
+   transitions that way (the shared `.l-action` transitions `background` for its hover).
    Switching the shared motion off (`transition: none`, `animation: none`,
    `transform: none` on hover) is always allowed.
 6. **One `<h1>`, the headline, and section titles as `<h2>`.**
@@ -194,16 +200,26 @@ checked by hand (and by the reviewer, whose checklist lists the same bar).
   none 0s` names none); `scroll-behavior: smooth`; any `transition` or
   `transition-property` that transitions something other than a color
   (`color`, `background`, `background-color`, `border-color` and its sides,
-  `outline-color`, `text-decoration-color`, `caret-color`, `fill`,
-  `stroke`), `opacity` or `visibility`; and a non-zero
-  `transition-duration` in a rule that names no property. A transition
-  with no property named transitions `all`, so those last two are flagged.
-  `box-shadow` is flagged too, since a shadow's offset can move. The
-  `-webkit-`, `-moz-`, `-o-` and `-ms-` forms count as the same
-  properties. A `@media` list is an OR, so it's the gate only if every
-  query in it has the `no-preference` condition. `none` and the CSS-wide
+  `outline-color`, `column-rule-color`, `text-decoration-color`,
+  `caret-color`, `accent-color`, `fill`, `stroke`), `opacity`,
+  `visibility`, `display` or `overlay` for a non-zero duration. The
+  rule's transitions are read as CSS pairs them, the n-th property with
+  the n-th duration, so `transition: transform 0s` (or a shorthand with
+  no time, whose duration is 0s) moves nothing. What a longhand leaves
+  unset may come from another rule, so an unknown duration counts as
+  non-zero, and a non-zero `transition-duration` in a rule that names no
+  property transitions `all` and is flagged. `box-shadow` is flagged
+  too, since a shadow's offset can move. The `-webkit-`, `-moz-`, `-o-`
+  and `-ms-` forms count as the same properties. A `@media` list's commas
+  and a top-level `or` are both an OR, so it's the gate only if every
+  alternative has the `no-preference` condition. `none` and the CSS-wide
   keywords (`initial`, `unset`, …) always pass. `@keyframes` blocks aren't
   read.
+
+It's a best-effort lint over a small hand-written CSS reader, not a
+full parser, so review still covers what it misses: a value set through
+a custom property (`outline: var(--ring)` is taken as drawn), nesting
+under a selector list, and strings that contain comment markers.
 
 The validator lints only each template's own `style.css`. The shared
 [`landing.css`](../../client/src/landing/landing.css) isn't linted, so its

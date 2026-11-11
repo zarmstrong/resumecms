@@ -42,6 +42,25 @@
   }
 }
 
+/* And where it sticks, it never outgrows the window: a hero taller than
+   that (a long headline, several buttons) scrolls on its own, so its
+   buttons are always in reach. The 6 px of padding, given back by the
+   margins (and the top), keep it where it was and leave room inside the
+   scroller for the buttons' focus rings. */
+@container (width > 820px) {
+  @media (height >= 640px) {
+    .l-template-split .l-split-sticky {
+      top: 66px;
+      max-width: 372px;
+      max-height: calc(100vh - 66px);
+      max-height: calc(100dvh - 66px);
+      padding: 6px;
+      margin: -6px -6px -6px auto;
+      overflow-y: auto;
+    }
+  }
+}
+
 .l-template-split .l-split-side-sections {
   margin-top: 44px;
 }

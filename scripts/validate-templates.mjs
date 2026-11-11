@@ -152,50 +152,85 @@ function splitList(value) {
   return parts.filter(Boolean);
 }
 
-// What a `transition` shorthand animates: in each comma-separated item, the
-// one word that isn't a duration, a delay, an easing or a behavior; an item
-// without one transitions `all`. `none` transitions nothing.
+// A value with its functions (`cubic-bezier(…)`, `rgb(0 0 0 / .6)`,
+// `calc(…)`) taken out, innermost first, so the zeros and commas inside
+// them aren't read as the value's own words.
+const withoutFunctions = (value) => {
+  let text = value;
+  while (/\([^()]*\)/.test(text)) text = text.replace(/[a-z-]*\([^()]*\)/gi, ' ');
+  return text;
+};
+const wordsOf = (value) => withoutFunctions(value).split(/\s+/).filter(Boolean);
+
+const TIME = /^-?[\d.]+m?s$/i;
+const nonZeroTime = (time) => TIME.test(time) && parseFloat(time) !== 0;
+
+// What a `transition` shorthand animates, and for how long: in each
+// comma-separated item, the one word that isn't a time, an easing or a
+// behavior (an item without one transitions `all`) and the first time
+// (none means 0s, the shorthand's default). `none` transitions nothing.
 const TRANSITION_WORDS = new Set([
   'ease', 'linear', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end', 'normal', 'allow-discrete',
 ]);
-function transitionedProperties(property, value) {
-  if (property === 'transition-property') return splitList(value).map((name) => name.toLowerCase());
+function transitionItems(value) {
   return splitList(value).map((item) => {
-    const words = item.replace(/[a-z-]+\([^)]*\)/gi, ' ').split(/\s+/).filter(Boolean);
+    const words = wordsOf(item);
     const name = words.find((word) => !TIME.test(word) && !TRANSITION_WORDS.has(word.toLowerCase()));
-    return name ? name.toLowerCase() : 'all';
+    return { name: name ? name.toLowerCase() : 'all', duration: words.find((word) => TIME.test(word)) || '0s' };
   });
 }
 
 // What may change gradually without the visitor having asked for motion:
-// a color, a fade or a switch of visibility, which move nothing on the
-// screen. Anything else (transform, a position, a size, a margin, a
-// shadow's offset, `all`) belongs under prefers-reduced-motion:
-// no-preference.
+// a color, a fade, or a switch of visibility or display, which move
+// nothing on the screen. Anything else (transform, a position, a size, a
+// margin, a shadow's offset, `all`) belongs under prefers-reduced-motion:
+// no-preference. `background` stays allowed although the shorthand
+// includes its position and size, so a template mustn't change those on a
+// state it transitions (templates/landing/README.md).
 const STILL_PROPERTIES = new Set([
-  'none', 'color', 'background', 'background-color', 'border-color', 'outline-color',
-  'text-decoration-color', 'caret-color', 'fill', 'stroke', 'opacity', 'visibility',
+  'none', 'color', 'background', 'background-color', 'border-color', 'outline-color', 'column-rule-color',
+  'text-decoration-color', 'caret-color', 'accent-color', 'fill', 'stroke', 'opacity', 'visibility',
+  'display', 'overlay',
   ...['top', 'right', 'bottom', 'left', 'block', 'inline', 'block-start', 'block-end', 'inline-start', 'inline-end']
     .map((side) => `border-${side}-color`),
 ]);
 const CSS_WIDE = new Set(['initial', 'inherit', 'unset', 'revert', 'revert-layer']);
 
-// Inside the gate only if every query in the @media list has it: a list is
-// an OR, so `screen, (prefers-reduced-motion: no-preference)` matches a
-// visitor who asked for less motion too.
+// The alternatives of a media query list: its commas, and Media Queries
+// 4's `or` outside any parentheses, are both an OR.
+function mediaAlternatives(prelude) {
+  return splitList(prelude.replace(/^@media\s*/i, '')).flatMap((query) => {
+    let depth = 0;
+    const outside = [...query].map((ch) => {
+      if (ch === '(') depth += 1;
+      else if (ch === ')') depth -= 1;
+      return depth > 0 || ch === ')' ? ' ' : ch;
+    }).join('');
+    const parts = [];
+    let from = 0;
+    for (const match of outside.matchAll(/\bor\b/gi)) {
+      parts.push(query.slice(from, match.index));
+      from = match.index + match[0].length;
+    }
+    parts.push(query.slice(from));
+    return parts;
+  });
+}
+
+// Inside the gate only if every alternative of the @media list has it:
+// `screen, (prefers-reduced-motion: no-preference)` or `… or (min-width:
+// 1px)` matches a visitor who asked for less motion too.
 const motionAllowed = (rule) =>
   rule.atRules.some(
     (at) =>
       /^@media\b/i.test(at) &&
-      splitList(at.replace(/^@media\s*/i, '')).every(
+      mediaAlternatives(at).every(
         (query) => /prefers-reduced-motion\s*:\s*no-preference/i.test(query) && !/\bnot\b/i.test(query)
       )
   );
 
 // `-webkit-transition` is a transition (and so on for -moz-, -o-, -ms-).
-const unprefixed = (property) => property.replace(/^-(webkit|moz|o|ms)-/, '');
-
-const TIME = /^-?[\d.]+m?s$/i;
+const prefixOf = (property) => /^-(webkit|moz|o|ms)-/.exec(property)?.[0] ?? '';
 
 // The animations an `animation` shorthand starts: in each comma-separated
 // item, the words that aren't a time, an easing, an iteration count, a
@@ -210,10 +245,7 @@ function animationNames(property, value) {
     property === 'animation-name'
       ? splitList(value)
       : splitList(value).flatMap((item) =>
-          item
-            .replace(/[a-z-]+\([^)]*\)/gi, ' ')
-            .split(/\s+/)
-            .filter((word) => word && !TIME.test(word) && !/^[\d.]+$/.test(word) && !ANIMATION_WORDS.has(word.toLowerCase()))
+          wordsOf(item).filter((word) => !TIME.test(word) && !/^[\d.]+$/.test(word) && !ANIMATION_WORDS.has(word.toLowerCase()))
         );
   return names.map((name) => name.toLowerCase()).filter((name) => name !== 'none');
 }
@@ -223,23 +255,25 @@ function animationNames(property, value) {
 // back while the other stays off: `outline: none; outline-width: 2px` still
 // draws nothing. The shorthand sets both (a style it doesn't name is
 // `none`, so `outline: 2px red` is off too); `outline-style` and
-// `outline-width` set one each. A transparent outline isn't off (it still
-// shows in forced-colors mode, which is why it's used).
+// `outline-width` set one each. A color's own zeros (`rgb(0 0 0 / .6)`)
+// aren't a width, and a value with a `var()` in it can't be read, so it
+// counts as on. A transparent outline isn't off (it still shows in
+// forced-colors mode, which is why it's used).
 const ZERO = /^0(\.0+)?([a-z]+|%)?$/i;
 const OUTLINE_STYLES = new Set(['auto', 'dotted', 'dashed', 'solid', 'double', 'groove', 'ridge', 'inset', 'outset']);
 function outlineParts(property, value) {
-  const words = value.toLowerCase().split(/\s+/);
-  const wide = CSS_WIDE.has(words[0]);
+  if (!['outline', 'outline-style', 'outline-width'].includes(property)) return null;
+  const words = wordsOf(value.toLowerCase());
+  const unread = CSS_WIDE.has(words[0]) || /\bvar\(/i.test(value);
   if (property === 'outline') {
-    if (wide) return { style: 'on', width: 'on' };
+    if (unread) return { style: 'on', width: 'on' };
     return {
       style: words.some((word) => OUTLINE_STYLES.has(word)) ? 'on' : 'off',
       width: words.some((word) => ZERO.test(word)) ? 'off' : 'on',
     };
   }
-  if (property === 'outline-style') return { style: !wide && words.includes('none') ? 'off' : 'on' };
-  if (property === 'outline-width') return { width: !wide && ZERO.test(words[0]) ? 'off' : 'on' };
-  return null;
+  if (property === 'outline-style') return { style: !unread && words.includes('none') ? 'off' : 'on' };
+  return { width: !unread && ZERO.test(words[0] ?? '') ? 'off' : 'on' };
 }
 
 // Pointer focus only: every selector in the list leaves :focus-visible
@@ -248,13 +282,24 @@ const pointerOnly = (selector) => splitList(selector).every((one) => /:not\(\s*:
 
 const GATE = 'must be inside @media (prefers-reduced-motion: no-preference)';
 
+// A rule's transitions, one set per prefix, as CSS pairs them: the n-th
+// property with the n-th duration (the list repeated). What a longhand
+// leaves unset may come from another rule, which the linter can't see, so
+// an unknown duration counts as non-zero and an unknown property as `all`.
+function movingTransitions(state) {
+  if (!state.names) return state.durations.some(nonZeroTime) ? ['all'] : [];
+  return state.names.filter((name, i) => {
+    if (STILL_PROPERTIES.has(name)) return false;
+    return state.durations === null || nonZeroTime(state.durations[i % state.durations.length]);
+  });
+}
+
 function checkLandingCss(source, label) {
   for (const rule of cssRules(source)) {
     const outline = { style: null, width: null };
     let outlineLine = 0;
     let replaced = false;
-    let namesProperty = false;
-    let duration = null;
+    const transitions = new Map();
     const gated = motionAllowed(rule);
     for (const { property: written, value, line } of rule.declarations) {
       const parts = outlineParts(written, value);
@@ -263,33 +308,44 @@ function checkLandingCss(source, label) {
         outlineLine = line;
       }
       if (written === 'box-shadow' && !/^none$/i.test(value)) replaced = true;
-      const property = unprefixed(written);
-      if (property === 'transition' || property === 'transition-property') namesProperty = true;
-      if (gated || CSS_WIDE.has(value.toLowerCase())) continue;
-      const shown = `"${written}: ${value}" in "${rule.selector}"`;
+      if (gated) continue;
+      const prefix = prefixOf(written);
+      const property = written.slice(prefix.length);
+      const declaration = `${written}: ${value}`;
+      if (['transition', 'transition-property', 'transition-duration'].includes(property)) {
+        if (CSS_WIDE.has(value.toLowerCase())) {
+          transitions.delete(prefix);
+          continue;
+        }
+        const state = transitions.get(prefix) ?? { names: null, durations: null, declarations: [], line };
+        if (property === 'transition') {
+          const items = transitionItems(value);
+          Object.assign(state, { names: items.map((item) => item.name), durations: items.map((item) => item.duration) });
+        } else if (property === 'transition-property') {
+          state.names = splitList(value).map((name) => name.toLowerCase());
+        } else {
+          state.durations = splitList(value);
+        }
+        state.declarations.push(declaration);
+        transitions.set(prefix, state);
+        continue;
+      }
+      if (CSS_WIDE.has(value.toLowerCase())) continue;
+      const shown = `"${declaration}" in "${rule.selector}"`;
       if ((property === 'animation' || property === 'animation-name') && animationNames(property, value).length) {
         errors.push(`${label}:${line}: ${shown} ${GATE}`);
       }
       if (property === 'scroll-behavior' && /^smooth$/i.test(value)) {
         errors.push(`${label}:${line}: ${shown} ${GATE}`);
       }
-      if (property === 'transition' || property === 'transition-property') {
-        const moving = transitionedProperties(property, value).filter((name) => !STILL_PROPERTIES.has(name));
-        if (moving.length) {
-          errors.push(
-            `${label}:${line}: ${shown} transitions ${moving.join(', ')}, which ${GATE} (only colors, opacity and visibility may transition outside it)`
-          );
-        }
-      }
-      // A duration in a rule that names no property transitions `all`, the
-      // initial transition-property (unless another rule names one, which
-      // the linter can't see, so it asks for the property here).
-      if (property === 'transition-duration' && splitList(value).some((time) => TIME.test(time) && parseFloat(time) !== 0)) {
-        duration = { shown, line };
-      }
     }
-    if (duration && !namesProperty) {
-      errors.push(`${label}:${duration.line}: ${duration.shown} transitions all (the rule names no transition-property), which ${GATE}`);
+    for (const state of transitions.values()) {
+      const moving = movingTransitions(state);
+      if (!moving.length) continue;
+      const what = state.names ? moving.join(', ') : 'all (the rule names no transition-property)';
+      errors.push(
+        `${label}:${state.line}: "${state.declarations.join('; ')}" in "${rule.selector}" transitions ${what}, which ${GATE} (only colors, opacity, visibility and display may transition outside it)`
+      );
     }
     if ((outline.style === 'off' || outline.width === 'off') && !replaced && !pointerOnly(rule.selector)) {
       errors.push(
