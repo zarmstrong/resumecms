@@ -125,6 +125,16 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Or skip the build and run a released image from Docker Hub,
+[`zarmstrong/resumecms`](https://hub.docker.com/r/zarmstrong/resumecms)
+(linux/amd64 and linux/arm64). Each release is tagged with its version
+(`1.4.2`), its minor version (`1.4`) and its major version (`1`), and the
+newest release is also tagged `latest`. Pin a minor version to get fixes
+without new features. To use the image, replace `build: .` in
+`docker-compose.yml` with `image: zarmstrong/resumecms:1`. The release
+notes are in [CHANGELOG.md](CHANGELOG.md) and on the GitHub releases
+page.
+
 Visit `http://localhost:4000` for the public resume, and
 `http://localhost:4000/editor` to sign in and edit. Data is stored in a
 SQLite file on a named Docker volume (`resume-data`), so it survives
