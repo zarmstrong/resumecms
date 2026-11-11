@@ -27,8 +27,15 @@ in prose; check the diff against the ones that apply, especially:
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing
   page's style vs `siteColors.js`, the landing date reader `dateText.js`,
+  the media link parser `mediaUrl.js`,
   `contrastTextFor()` vs the favicon's `inkFor()`, `GRADIENT_SHADE` vs
   resume.css's 55% gradient mix, …).
+- A landing media section (issue #121) embeds only what `parseMediaUrl()`
+  reads (exact hosts, https), `resolveLanding()` sends its parsed form and
+  never the raw `url`, and nothing loads from the provider before a
+  visitor presses play (no provider thumbnail, no iframe in the facade). A
+  Content-Security-Policy added for pages needs `frame-src` for its four
+  players.
 - `landing.css` holds only what every landing template shares; an
   arrangement belongs in a template's `style.css`, scoped under
   `.l-template-<id>`, so a change for one template can't move another

@@ -434,6 +434,24 @@
   outline-offset: 3px;
 }
 
+/* A media section (issue #121): square corners like the images, the
+   caption in italics, and the play button a quiet outlined label rather
+   than a pill. */
+.l-template-editorial .l-media-facade,
+.l-template-editorial .l-media-frame {
+  border-radius: 2px;
+}
+
+.l-template-editorial .l-media-play {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.l-template-editorial .l-media-caption {
+  font-style: italic;
+  opacity: 0.8;
+}
+
 /* Two columns of running text, with a hairline between them, for a text
    section of more than one paragraph (a lone one keeps to its measure in
    one column, rather than being cut in half). Only the paragraphs flow:

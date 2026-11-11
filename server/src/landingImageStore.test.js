@@ -121,6 +121,32 @@ test("a gallery's images are public only while it shows them, and gone after the
   assert.ok(store.landingImage(b.id));
 });
 
+test("a media section's poster is public only while the section shows, and the page never sends its link", async () => {
+  const { db, store } = await makeStore();
+  const a = await store.uploadLandingImage(await png('#aa00aa'));
+  const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=45';
+  const media = (extra) => ({ id: 'm', kind: 'media', title: 'Talk', url, ...extra });
+  store.setLandingEnabled(true);
+  store.setLanding({ headline: 'Jo', sections: [media({ poster: { imageId: a.id, alt: '' } })] });
+  await assert.rejects(async () => store.publishLanding(), /sections\[0\]\.poster\.alt/);
+  // A link nobody recognizes never gets that far.
+  assert.equal(await status(() => store.setLanding({ headline: 'Jo', sections: [media({ url: 'https://evil.example/v' })] })), 400);
+  store.setLanding({ headline: 'Jo', sections: [media({ poster: { imageId: a.id, alt: 'On stage' } })] });
+  store.publishLanding();
+  assert.ok(store.publicLandingImage(a.id));
+  const [shown] = store.landingForHost('example.com').sections;
+  assert.deepEqual(shown.media, { provider: 'youtube', mediaId: 'dQw4w9WgXcQ', start: 45 });
+  assert.equal(shown.poster.src, `/api/public/landing/images/${a.id}`);
+  assert.equal(JSON.stringify(store.landingForHost('example.com')).includes('youtube.com'), false);
+
+  // Without its link it isn't shown, so neither is its poster.
+  store.setLanding({ headline: 'Jo', sections: [media({ url: '', poster: { imageId: a.id, alt: 'On stage' } })] });
+  store.publishLanding();
+  assert.equal(store.publicLandingImage(a.id), null);
+  age(db);
+  assert.equal(store.pruneLandingImages(), 0); // still referenced
+});
+
 test('clean-up keeps what the draft or the snapshot references, and anything recent', async () => {
   const { db, store } = await makeStore();
   const inDraft = await store.uploadLandingImage(await png('#111111'));

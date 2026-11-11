@@ -20,10 +20,13 @@
 // as the server reads it) is past its `expires` (dateText.js): left out,
 // or, `withHidden`, kept as `expired: true` for the preview to dim, and a
 // section of nothing but expired ones then comes back `hidden` and
-// `expired`, since the page won't show it.
+// `expired`, since the page won't show it. A media section (issue #121)
+// resolves to its link as mediaUrl.js's parseMediaUrl() reads it, never the
+// link itself, as the server's does.
 
 import { darkPalette, landingSite } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';
+import { parseMediaUrl } from './mediaUrl.js';
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 
@@ -191,6 +194,12 @@ function resolveSection(section, targets, images, { today, withHidden }) {
         return image ? [{ image, caption: entry.caption }] : [];
       });
       return shown.length ? { images: shown } : null;
+    }
+    case 'media': {
+      const media = parseMediaUrl(section.url);
+      if (!media) return null;
+      const poster = resolveImage(section.poster, images);
+      return { media, caption: section.caption, transcript: section.transcript, ...(poster ? { poster } : {}) };
     }
     case 'services': {
       const services = section.services

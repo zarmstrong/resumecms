@@ -37,6 +37,9 @@ import { hasPassed, utcToday } from '../dateText.js';
 // Nor are an image section's or a gallery's captions (issue #120): plain
 // text about a picture the model can't see, so the page context gives
 // either only its kind and title.
+// Nor is a media section (issue #121): its caption and transcript are
+// about a recording the model can't hear, so it gets only its kind and
+// title too, never the link.
 // Nor are a service's title, price and button (issue #122): what's offered
 // and on what terms are the person's to say, so the model only reads them.
 //

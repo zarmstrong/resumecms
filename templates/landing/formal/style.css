@@ -488,6 +488,22 @@
   border-radius: 2px;
 }
 
+/* A media section (issue #121): square corners, no shadow, the caption in
+   italics. */
+.l-template-formal .l-media-facade,
+.l-template-formal .l-media-frame {
+  border-radius: 0;
+}
+
+.l-template-formal .l-media-play {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.l-template-formal .l-media-caption {
+  font-style: italic;
+}
+
 /* A phone (or the editor's preview): the photo over the name, and each
    entry's details under its title instead of beside it. */
 @container (max-width: 600px) {
