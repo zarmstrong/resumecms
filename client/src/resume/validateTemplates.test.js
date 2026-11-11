@@ -78,6 +78,8 @@ test('a landing style.css may not remove an outline without a replacement in the
     '.l-template-other a:focus-visible { outline: 2px solid transparent; box-shadow: none; }',
     // Turned back on later in the same rule.
     '.l-template-other a:focus-visible { outline: none; outline: 2px solid red; }',
+    '.l-template-other a:focus-visible { outline: 0 solid; outline-width: 2px; }',
+    '.l-template-other a:focus-visible { outline-width: 3px; }',
     // A comment or a string mentioning it isn't a declaration.
     '/* outline: none */ .l-template-other a::after { content: "outline: none; }"; }',
   ];
@@ -97,6 +99,12 @@ test('a landing style.css may not remove an outline without a replacement in the
     // Only some of the selectors are pointer-only.
     ['.l-template-other a:not(:focus-visible), .l-template-other button:focus { outline: none; }', /removes the outline/],
     ['@container (max-width: 600px) {\n  .l-template-other a:focus { outline: none; }\n}', /other\/style\.css:3: .*removes the outline/],
+    // A longhand switches one part back on, the other stays off.
+    ['.l-template-other a:focus { outline: none; outline-width: 2px; }', /removes the outline/],
+    ['.l-template-other a:focus { outline-style: none; outline-width: 3px; }', /removes the outline/],
+    ['.l-template-other a:focus { outline: 0; outline-style: solid; }', /removes the outline/],
+    // The shorthand without a style draws none.
+    ['.l-template-other a:focus { outline: 2px red; }', /removes the outline/],
   ];
   for (const [body, message] of failing) {
     const run = validate(withCss(body));
@@ -118,6 +126,13 @@ test('a landing style.css moves things only under prefers-reduced-motion: no-pre
     '@media (prefers-reduced-motion: no-preference) { @container (width > 600px) { .l-template-other .l-card { transition: transform 1s; } } }',
     // Keyframes describe an animation; they don't start one.
     '@keyframes l-other-in { from { transform: scale(0.9); } }',
+    '.l-template-other .l-card { transition: visibility 0s linear 200ms, opacity 200ms; }',
+    '.l-template-other .l-card { animation: none 0s; -webkit-animation: none; animation-name: none, none; }',
+    '.l-template-other .l-card { transition-property: color; transition-duration: 200ms; }',
+    '.l-template-other .l-card { transition-duration: 0s; }',
+    '.l-template-other { scroll-behavior: auto; }',
+    '@media (prefers-reduced-motion: no-preference) { .l-template-other { scroll-behavior: smooth; } }',
+    '@media (prefers-reduced-motion: no-preference) and (min-width: 1px), (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }',
   ];
   for (const body of passing) {
     const run = validate(withCss(body));
@@ -136,6 +151,18 @@ test('a landing style.css moves things only under prefers-reduced-motion: no-pre
     // The opposite query, or no-preference negated, isn't the gate.
     ['@media (prefers-reduced-motion: reduce) { .l-template-other .l-card { transition: transform 1s; } }', /transitions transform/],
     ['@media not (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
+    // A query list is an OR: every query in it needs the condition.
+    ['@media screen, (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
+    // A duration alone transitions all.
+    ['.l-template-other .l-card { transition-duration: 300ms; }', /"transition-duration: 300ms" .* transitions all/],
+    ['.l-template-other .l-card { transition-duration: 0s, 1s; }', /transitions all/],
+    // Prefixed properties are the same properties.
+    ['.l-template-other .l-card { -webkit-transition: -webkit-transform 1s; }', /"-webkit-transition: -webkit-transform 1s" .* transitions -webkit-transform/],
+    ['.l-template-other .l-card { -moz-animation: spin 1s; }', /"-moz-animation: spin 1s"/],
+    ['.l-template-other .l-card { -o-transition-property: left; }', /transitions left/],
+    ['.l-template-other .l-card { -webkit-transition-duration: 1s; }', /transitions all/],
+    // Smooth scrolling is motion too.
+    ['.l-template-other { scroll-behavior: smooth; }', /"scroll-behavior: smooth" in "\.l-template-other" must be inside/],
   ];
   for (const [body, message] of failing) {
     const run = validate(withCss(body));

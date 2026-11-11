@@ -162,37 +162,83 @@ function transitionedProperties(property, value) {
   if (property === 'transition-property') return splitList(value).map((name) => name.toLowerCase());
   return splitList(value).map((item) => {
     const words = item.replace(/[a-z-]+\([^)]*\)/gi, ' ').split(/\s+/).filter(Boolean);
-    const name = words.find((word) => !/^-?[\d.]+m?s$/i.test(word) && !TRANSITION_WORDS.has(word.toLowerCase()));
+    const name = words.find((word) => !TIME.test(word) && !TRANSITION_WORDS.has(word.toLowerCase()));
     return name ? name.toLowerCase() : 'all';
   });
 }
 
 // What may change gradually without the visitor having asked for motion:
-// a color or a fade, which move nothing on the screen. Anything else
-// (transform, a position, a size, a margin, a shadow's offset, `all`)
-// belongs under prefers-reduced-motion: no-preference.
+// a color, a fade or a switch of visibility, which move nothing on the
+// screen. Anything else (transform, a position, a size, a margin, a
+// shadow's offset, `all`) belongs under prefers-reduced-motion:
+// no-preference.
 const STILL_PROPERTIES = new Set([
   'none', 'color', 'background', 'background-color', 'border-color', 'outline-color',
-  'text-decoration-color', 'caret-color', 'fill', 'stroke', 'opacity',
+  'text-decoration-color', 'caret-color', 'fill', 'stroke', 'opacity', 'visibility',
   ...['top', 'right', 'bottom', 'left', 'block', 'inline', 'block-start', 'block-end', 'inline-start', 'inline-end']
     .map((side) => `border-${side}-color`),
 ]);
 const CSS_WIDE = new Set(['initial', 'inherit', 'unset', 'revert', 'revert-layer']);
 
+// Inside the gate only if every query in the @media list has it: a list is
+// an OR, so `screen, (prefers-reduced-motion: no-preference)` matches a
+// visitor who asked for less motion too.
 const motionAllowed = (rule) =>
   rule.atRules.some(
-    (at) => /^@media\b/i.test(at) && /prefers-reduced-motion\s*:\s*no-preference/i.test(at) && !/\bnot\b/i.test(at)
+    (at) =>
+      /^@media\b/i.test(at) &&
+      splitList(at.replace(/^@media\s*/i, '')).every(
+        (query) => /prefers-reduced-motion\s*:\s*no-preference/i.test(query) && !/\bnot\b/i.test(query)
+      )
   );
 
-// An outline that's switched off: `outline: none`, `outline: 0`, `outline: 0
-// none`, `outline-style: none`, `outline-width: 0`. A transparent outline
-// isn't (it still shows in forced-colors mode, which is why it's used).
+// `-webkit-transition` is a transition (and so on for -moz-, -o-, -ms-).
+const unprefixed = (property) => property.replace(/^-(webkit|moz|o|ms)-/, '');
+
+const TIME = /^-?[\d.]+m?s$/i;
+
+// The animations an `animation` shorthand starts: in each comma-separated
+// item, the words that aren't a time, an easing, an iteration count, a
+// direction, a fill mode or a play state. An item with none of them left,
+// or only `none`, starts nothing (`animation: none 0s`).
+const ANIMATION_WORDS = new Set([
+  ...TRANSITION_WORDS, 'infinite', 'reverse', 'alternate', 'alternate-reverse',
+  'forwards', 'backwards', 'both', 'running', 'paused',
+]);
+function animationNames(property, value) {
+  const names =
+    property === 'animation-name'
+      ? splitList(value)
+      : splitList(value).flatMap((item) =>
+          item
+            .replace(/[a-z-]+\([^)]*\)/gi, ' ')
+            .split(/\s+/)
+            .filter((word) => word && !TIME.test(word) && !/^[\d.]+$/.test(word) && !ANIMATION_WORDS.has(word.toLowerCase()))
+        );
+  return names.map((name) => name.toLowerCase()).filter((name) => name !== 'none');
+}
+
+// An outline that's switched off, its style and its width followed
+// separately, since a longhand after the shorthand can switch either one
+// back while the other stays off: `outline: none; outline-width: 2px` still
+// draws nothing. The shorthand sets both (a style it doesn't name is
+// `none`, so `outline: 2px red` is off too); `outline-style` and
+// `outline-width` set one each. A transparent outline isn't off (it still
+// shows in forced-colors mode, which is why it's used).
 const ZERO = /^0(\.0+)?([a-z]+|%)?$/i;
-function outlineState(property, value) {
+const OUTLINE_STYLES = new Set(['auto', 'dotted', 'dashed', 'solid', 'double', 'groove', 'ridge', 'inset', 'outset']);
+function outlineParts(property, value) {
   const words = value.toLowerCase().split(/\s+/);
-  if (property === 'outline') return words.includes('none') || words.some((word) => ZERO.test(word)) ? 'off' : 'on';
-  if (property === 'outline-style') return words.includes('none') ? 'off' : 'on';
-  if (property === 'outline-width') return ZERO.test(words[0]) ? 'off' : 'on';
+  const wide = CSS_WIDE.has(words[0]);
+  if (property === 'outline') {
+    if (wide) return { style: 'on', width: 'on' };
+    return {
+      style: words.some((word) => OUTLINE_STYLES.has(word)) ? 'on' : 'off',
+      width: words.some((word) => ZERO.test(word)) ? 'off' : 'on',
+    };
+  }
+  if (property === 'outline-style') return { style: !wide && words.includes('none') ? 'off' : 'on' };
+  if (property === 'outline-width') return { width: !wide && ZERO.test(words[0]) ? 'off' : 'on' };
   return null;
 }
 
@@ -200,34 +246,52 @@ function outlineState(property, value) {
 // alone, so the keyboard's ring is untouched.
 const pointerOnly = (selector) => splitList(selector).every((one) => /:not\(\s*:focus-visible\s*\)/i.test(one));
 
+const GATE = 'must be inside @media (prefers-reduced-motion: no-preference)';
+
 function checkLandingCss(source, label) {
   for (const rule of cssRules(source)) {
-    let outline = null;
+    const outline = { style: null, width: null };
     let outlineLine = 0;
     let replaced = false;
-    for (const { property, value, line } of rule.declarations) {
-      const state = outlineState(property, value);
-      if (state) {
-        outline = state;
+    let namesProperty = false;
+    let duration = null;
+    const gated = motionAllowed(rule);
+    for (const { property: written, value, line } of rule.declarations) {
+      const parts = outlineParts(written, value);
+      if (parts) {
+        Object.assign(outline, parts);
         outlineLine = line;
       }
-      if (property === 'box-shadow' && !/^none$/i.test(value)) replaced = true;
-      if (motionAllowed(rule) || CSS_WIDE.has(value.toLowerCase())) continue;
-      if ((property === 'animation' || property === 'animation-name') && !/^none$/i.test(value)) {
-        errors.push(
-          `${label}:${line}: "${property}: ${value}" in "${rule.selector}" must be inside @media (prefers-reduced-motion: no-preference)`
-        );
+      if (written === 'box-shadow' && !/^none$/i.test(value)) replaced = true;
+      const property = unprefixed(written);
+      if (property === 'transition' || property === 'transition-property') namesProperty = true;
+      if (gated || CSS_WIDE.has(value.toLowerCase())) continue;
+      const shown = `"${written}: ${value}" in "${rule.selector}"`;
+      if ((property === 'animation' || property === 'animation-name') && animationNames(property, value).length) {
+        errors.push(`${label}:${line}: ${shown} ${GATE}`);
+      }
+      if (property === 'scroll-behavior' && /^smooth$/i.test(value)) {
+        errors.push(`${label}:${line}: ${shown} ${GATE}`);
       }
       if (property === 'transition' || property === 'transition-property') {
         const moving = transitionedProperties(property, value).filter((name) => !STILL_PROPERTIES.has(name));
         if (moving.length) {
           errors.push(
-            `${label}:${line}: "${property}: ${value}" in "${rule.selector}" transitions ${moving.join(', ')}, which must be inside @media (prefers-reduced-motion: no-preference) (only colors and opacity may transition outside it)`
+            `${label}:${line}: ${shown} transitions ${moving.join(', ')}, which ${GATE} (only colors, opacity and visibility may transition outside it)`
           );
         }
       }
+      // A duration in a rule that names no property transitions `all`, the
+      // initial transition-property (unless another rule names one, which
+      // the linter can't see, so it asks for the property here).
+      if (property === 'transition-duration' && splitList(value).some((time) => TIME.test(time) && parseFloat(time) !== 0)) {
+        duration = { shown, line };
+      }
     }
-    if (outline === 'off' && !replaced && !pointerOnly(rule.selector)) {
+    if (duration && !namesProperty) {
+      errors.push(`${label}:${duration.line}: ${duration.shown} transitions all (the rule names no transition-property), which ${GATE}`);
+    }
+    if ((outline.style === 'off' || outline.width === 'off') && !replaced && !pointerOnly(rule.selector)) {
       errors.push(
         `${label}:${outlineLine}: "${rule.selector}" removes the outline without a replacement focus style in the same rule (a box-shadow ring, or limit it to :not(:focus-visible))`
       );

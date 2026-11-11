@@ -160,8 +160,8 @@ checked by hand (and by the reviewer, whose checklist lists the same bar).
    window it sticks in, or it hides its own end (`split` stops its hero
    sticking in a window under 640 px tall).
 5. **Motion only under `prefers-reduced-motion: no-preference`.** Anything
-   that moves (a transform, a change of position or size, an animation)
-   goes inside `@media (prefers-reduced-motion: no-preference) { … }`, so
+   that moves (a transform, a change of position or size, an animation,
+   `scroll-behavior: smooth`) goes inside `@media (prefers-reduced-motion: no-preference) { … }`, so
    a visitor who asked for less motion never gets it, in any browser. A
    color or a fade may change gradually anywhere, since nothing moves.
    Switching the shared motion off (`transition: none`, `animation: none`,
@@ -176,24 +176,39 @@ checked by hand (and by the reviewer, whose checklist lists the same bar).
 `node scripts/validate-templates.mjs` reads each landing template's
 `style.css` and fails on:
 
-- **An outline removed without a replacement.** A rule whose declarations
-  end with the outline off (`outline: none`, `outline: 0`, `outline: 0
-  none`, `outline-style: none`, `outline-width: 0`) passes only if the
+- **An outline removed without a replacement.** The outline's style and
+  width are followed separately through the rule's declarations, since a
+  longhand can switch one back while the other stays off (`outline: none;
+  outline-width: 2px` still draws nothing). The shorthand sets both, and a
+  style it doesn't name is `none` (`outline: 2px red` is off). A rule that
+  ends with either one off (`outline: none`, `outline: 0`, `outline-style:
+  none`, `outline-width: 0`, or such a value followed by a longhand that
+  only sets the other part) passes only if the
   same rule also draws a `box-shadow` (other than `none`) as the ring, or
   every selector in it is limited to `:not(:focus-visible)` (pointer focus
   only, so the keyboard's ring is untouched). A border or background change
   doesn't count: it's too easy to make too faint to see. A transparent
   outline isn't a removal (forced-colors mode still draws it).
 - **Motion outside `@media (prefers-reduced-motion: no-preference)`.** Any
-  `animation` or `animation-name` other than `none`, and any `transition`
-  or `transition-property` that transitions something other than a color
+  `animation` or `animation-name` that names an animation (`animation:
+  none 0s` names none); `scroll-behavior: smooth`; any `transition` or
+  `transition-property` that transitions something other than a color
   (`color`, `background`, `background-color`, `border-color` and its sides,
   `outline-color`, `text-decoration-color`, `caret-color`, `fill`,
-  `stroke`) or `opacity`. A transition with no property named transitions
-  `all`, so it's flagged. `box-shadow` is flagged too, since a shadow's
-  offset can move. `none` and the CSS-wide keywords (`initial`, `unset`, …)
-  always pass. `@keyframes` blocks aren't read.
+  `stroke`), `opacity` or `visibility`; and a non-zero
+  `transition-duration` in a rule that names no property. A transition
+  with no property named transitions `all`, so those last two are flagged.
+  `box-shadow` is flagged too, since a shadow's offset can move. The
+  `-webkit-`, `-moz-`, `-o-` and `-ms-` forms count as the same
+  properties. A `@media` list is an OR, so it's the gate only if every
+  query in it has the `no-preference` condition. `none` and the CSS-wide
+  keywords (`initial`, `unset`, …) always pass. `@keyframes` blocks aren't
+  read.
 
-It can't see contrast, layout or headings: check those yourself, in both
-palettes, at 320 px and at 200% zoom, with the editor's preview and the
-published page.
+The validator lints only each template's own `style.css`. The shared
+[`landing.css`](../../client/src/landing/landing.css) isn't linted, so its
+motion and focus rules are kept by review (its card's ring on `::after`
+and the gallery dialog's missing ring would both be flagged if it were).
+The validator can't see contrast, layout or headings either: check those
+yourself, in both palettes, at 320 px and at 200% zoom, with the editor's
+preview and the published page.
