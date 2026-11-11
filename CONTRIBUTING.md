@@ -61,7 +61,7 @@ one. `docs`, `refactor`, `test`, `build`, `ci`, `chore` and `style`
 make no release on their own. Merging the release PR tags the release
 and publishes the Docker image (`.github/workflows/release.yml`). The
 commits inside a PR can say whatever you like, except a line starting
-`BREAKING CHANGE:`, which lands in the squash commit's body and makes a
-major release. Run the same locally
+`BREAKING CHANGE:`, which lands in the squash commit's body and can make
+a major release. Run the same locally
 first: `npm test` in `server/` and `client/`, and the two commands above
 for templates.
