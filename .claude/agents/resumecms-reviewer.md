@@ -43,6 +43,14 @@ in prose; check the diff against the ones that apply, especially:
   `columns: true`.
 - New public routes set a `cacheHeaders.js` constant before any early
   return; host-resolved ones send `HOST_HEADERS`.
+- A landing upload (an image, or a documents section's PDF, issue #128) is
+  stored only as cleaned bytes (re-encoded by `imageUpload.js`, or
+  metadata-stripped by `pdfUpload.js`, size capped before parsing), served
+  publicly only while `shownImageIds()`/`shownFiles()` of the shown,
+  resolved snapshot includes it, and pruned with its store
+  (`referencedImageIds()`/`referencedFileIds()` of draft and snapshot).
+  A PDF is sent with `nosniff`, `Content-Security-Policy: sandbox` and a
+  `Content-Disposition` from `contentDisposition()`, never a raw name.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a

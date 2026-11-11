@@ -1324,3 +1324,79 @@ test('a gallery image the page would show needs a description to publish', () =>
   assert.equal(fieldOf(gallery([entry('', IMG2)])), null);
   assert.equal(fieldOf(gallery([entry('')], { hidden: true })), null);
 });
+
+test('a documents section holds up to 12 entries of { file, label, description }, checked like every file reference', () => {
+  const FILE = 'd'.repeat(64);
+  const FILE2 = 'e'.repeat(64);
+  const withFiles = (...ids) => ({ knownResumeIds: new Set(), knownFileIds: new Set(ids) });
+  const ref = { fileId: FILE, name: 'Portfolio.pdf' };
+  const out = validateLanding(
+    { sections: [{ id: 'd', kind: 'documents', title: 'Writing', documents: [{ file: ref, label: 'Portfolio', description: 'Recent work' }, { file: null }, {}] }] },
+    withFiles(FILE)
+  );
+  // An entry starts without a file (the editor uploads into it), and every key is always stored.
+  assert.deepEqual(out.sections[0], {
+    id: 'd',
+    kind: 'documents',
+    title: 'Writing',
+    documents: [
+      { file: ref, label: 'Portfolio', description: 'Recent work' },
+      { file: null, label: '', description: '' },
+      { file: null, label: '', description: '' },
+    ],
+  });
+  assert.deepEqual(validateLanding({ sections: [{ id: 'd', kind: 'documents' }] }, withFiles()).sections[0].documents, []);
+
+  const entries = (n) => Array.from({ length: n }, () => ({ file: ref }));
+  assert.equal(validateLanding({ sections: [{ kind: 'documents', documents: entries(LANDING_LIMITS.documents) }] }, withFiles(FILE)).sections[0].documents.length, 12);
+  const bad = [
+    { sections: [{ kind: 'documents', documents: entries(LANDING_LIMITS.documents + 1) }] },
+    { sections: [{ kind: 'documents', documents: 'nope' }] },
+    { sections: [{ kind: 'documents', documents: [null] }] },
+    { sections: [{ kind: 'documents', documents: [{ file: ref, label: 'x'.repeat(LANDING_LIMITS.documentLabel + 1) }] }] },
+    { sections: [{ kind: 'documents', documents: [{ file: ref, description: 'x'.repeat(LANDING_LIMITS.documentDescription + 1) }] }] },
+    { sections: [{ kind: 'documents', documents: [{ file: ref, label: 3 }] }] },
+    { sections: [{ kind: 'documents', documents: [{ file: ref, url: 'https://example.com' }] }] },
+    { sections: [{ kind: 'documents', documents: [{ file: { fileId: FILE } }] }] }, // name is required
+    { sections: [{ kind: 'documents', documents: [{ file: { fileId: FILE, name: '../x.pdf' } }] }] },
+    { sections: [{ kind: 'documents', documents: [{ file: { fileId: FILE, name: 'x.exe' } }] }] },
+    { sections: [{ kind: 'documents', documents: [{ file: { fileId: FILE2, name: 'x.pdf' } }] }] }, // not stored
+    { sections: [{ kind: 'documents', images: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, withFiles(FILE))), 400, JSON.stringify(input).slice(0, 120));
+
+  // One already in the draft may outlive its file.
+  const kept = validateLanding(
+    { sections: [{ kind: 'documents', documents: [{ file: { fileId: FILE2, name: 'old.pdf' } }] }] },
+    { ...withFiles(FILE), previousFileIds: new Set([FILE2]) }
+  );
+  assert.equal(kept.sections[0].documents[0].file.fileId, FILE2);
+});
+
+test('a documents section resolves its stored files in order, dropping an entry whose file is gone and a section left with none', () => {
+  const FILE = 'd'.repeat(64);
+  const src = `/api/public/landing/files/${FILE}`;
+  const context = { site: null, resumes: new Map(), files: new Map([[FILE, { src, size: 2048 }]]) };
+  const landing = {
+    ...emptyLanding(),
+    sections: [
+      {
+        id: 'd',
+        kind: 'documents',
+        title: 'Writing',
+        documents: [
+          { file: { fileId: 'e'.repeat(64), name: 'gone.pdf' }, label: 'Gone', description: '' },
+          { file: { fileId: FILE, name: 'Lesson plan.pdf' }, label: '  ', description: 'Year 9' },
+          { file: null, label: 'Not yet', description: '' },
+        ],
+      },
+      { id: 'none', kind: 'documents', title: 'Empty', documents: [{ file: null, label: 'x', description: '' }] },
+      { id: 'hid', kind: 'documents', title: 'Hidden', hidden: true, documents: [{ file: { fileId: FILE, name: 'a.pdf' }, label: '', description: '' }] },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  assert.deepEqual(out.sections, [
+    { kind: 'documents', title: 'Writing', documents: [{ label: 'Lesson plan', description: 'Year 9', href: `${src}/Lesson%20plan.pdf`, size: 2048 }] },
+  ]);
+  assert.equal(JSON.stringify(out).includes('fileId'), false);
+});

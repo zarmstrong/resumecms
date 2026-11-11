@@ -333,7 +333,11 @@ issue #119, see below) and
 `LANDING_LIMITS.galleryImages` (24), an entry's `image` null until its
 upload lands; issue #120: a grid whose thumbnails open a modal
 `<dialog>` in `client/src/landing/LandingGallery.jsx`, keys in
-`gallery.js`, reordered with the same ↑ ↓ ✕ as items). Any section may be `hidden: true`: kept in the
+`gallery.js`, reordered with the same ↑ ↓ ✕ as items) and `documents`
+(`documents: [{ file, label, description }]`, at most
+`LANDING_LIMITS.documents` (12), `file` a `{ fileId, name }` reference
+or null until its upload lands; issue #128, see below; plain text,
+never an AI rewrite target). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -488,6 +492,46 @@ just because its hash is known, and a removed one is gone at the next
 publish (hence `REVALIDATE` with the id as a strong ETag, not
 `immutable`).
 
+Its documents (issue #128) are PDFs in a store of their own built the
+same way: the `landing_files` table (`schema.js`, in SQLite for the same
+backup reason), `landingFileStore.js` composed into the landing store,
+pure parts in `landingFileFields.js`. `POST /api/landing/files?name=`
+takes the raw file (`express.raw()` on that route only, after the login
+check, in `routes/landingFiles.js`, a factory over the store so its test
+runs on `:memory:`); there's no MCP upload (`/mcp`'s body cap), but MCP
+can reference a stored file. `pdfUpload.js`, the only module that loads
+`pdf-lib` (pinned), refuses anything over `LANDING_FILE_LIMITS.uploadBytes`
+before parsing and anything not starting `%PDF-` (never the
+`Content-Type`), then *always* saves it again: the trailer's Info
+dictionary dropped, `/Metadata` (XMP) and `/PieceInfo` taken off every
+object, and only what the catalog still reaches written out, as one
+revision, so no earlier incremental save survives; the pages themselves
+are copied, never re-rendered. A PDF pdf-lib can't load, or an encrypted
+one, is a 400 saying so. The id is the sha256 of the stripped bytes, and
+the caps (10 MB a file, 20 files and 30 MB in all, kept small because
+every backup copies the database) are `LANDING_FILE_LIMITS`. A reference
+is `{ fileId, name }` (`checkFileRef()`), `name` always a
+`cleanFileName()` (last path segment, no quotes, control, format or
+separator characters, at most 120 code points, ending `.pdf`), with the
+images' rules: a new one must name a stored file, one in the draft may
+outlive it (`referencedFileIds()`), and `pruneLandingFiles()` runs
+wherever `pruneLandingImages()` does, with the same `IMAGE_GRACE_MS`. A
+document resolves to `{ label, description, href, size }` (its label, or
+the name without `.pdf`), `href` the public path
+`/api/public/landing/files/<id>/<encoded name>`. That route
+(`publicLandingFile()`) serves a file only while the landing page is
+shown and `shownFiles()` of its resolved snapshot lists it *under that
+name*, as `application/pdf` with `Content-Disposition: inline` from
+`contentDisposition()` (an ASCII `filename` and an RFC 5987 `filename*`
+of the name cleaned again), `nosniff`, `Content-Security-Policy:
+sandbox` and `REVALIDATE` with the id as a strong ETag; the editor's
+`GET /api/landing/files/:id[/:name]` serves any stored one
+(`EDITOR_FILE`). In the editor, `LandingFileField.jsx` and
+`LandingEditorPage`'s `handleFileUpload()` work like the image upload:
+on the same two slots, tracked on the save queue, applied with
+`applyUploadedFile()` (`landingImages.js`, an entry known by its key) to
+the draft as it is when it resolves, or dropped.
+
 `resolveLanding()` is the only shape that leaves the server publicly, and
 it resolves references when the page is requested, not when it's
 published (`landingContext()`). That's what keeps a resume made private,
@@ -517,7 +561,7 @@ against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
 (no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
-question and an answer, no named credential left unexpired, no gallery entry whose image is stored) is dropped, heading and
+question and an answer, no named credential left unexpired, no gallery entry whose image is stored, no document whose file is stored) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -1067,7 +1111,8 @@ and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
 words), experience, education and skills sections (read from a
 resume), stats (a model mustn't make up figures; the page context shows
 them read-only), an item's `meta`, an FAQ question, credentials
-(facts, not prose) and image and gallery captions (plain text; the page
+(facts, not prose), documents (about files it can't read; the page
+context gives only their labels) and image and gallery captions (plain text; the page
 context gives those sections only their kind and title) are
 deliberately never targets. The page is
 public, so what the model sees is too: the route builds
@@ -1236,7 +1281,7 @@ Chromium's children.
 Every public response carries an explicit `Cache-Control` from
 `server/src/cacheHeaders.js`: `no-cache` for `/api/public/resume`,
 `/api/public/resumes/:slug`, `/api/public/images/:key`,
-`/api/public/landing/images/:id`, the favicons (see "Favicon") and the HTML shell
+`/api/public/landing/images/:id`, `/api/public/landing/files/:id/:name`, the favicons (see "Favicon") and the HTML shell
 (which also sends `HOST_HEADERS` as `Vary`, since its tags name the
 host's resume and origin; see "Search and link previews"), `private, no-cache` for
 every PDF route, `immutable` for the hashed

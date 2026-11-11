@@ -9,7 +9,8 @@
 // experienceRoles(), and education and skills likewise by its
 // educationEntries() and skillGroups()), and images:
 // [{ id, src, width, height }], the uploaded images (issue #92) at the
-// editor's own path, since a draft's may not be public yet. With `withIds`,
+// editor's own path, since a draft's may not be public yet, and files:
+// [{ id, src, size }], the uploaded documents (issue #128), likewise. With `withIds`,
 // each section keeps its id, which the server never sends: the editor's
 // preview outlines a section by it. With `withHidden`, a hidden section is
 // resolved too and kept as `hidden: true`, for the preview to dim; the
@@ -38,6 +39,7 @@ function isSafeUrl(url) {
 export function resolveLanding(landing, context, { withIds = false, withHidden = false } = {}) {
   const targets = new Map((context?.resumes || []).map((r) => [r.id, r]));
   const images = new Map((context?.images || []).map((image) => [image.id, image]));
+  const files = new Map((context?.files || []).map((file) => [file.id, file]));
   const upload = landing.photo === 'upload' ? resolveImage(landing.photoImage, images) : null;
   const photoUrl =
     landing.photo === 'custom' ? landing.photoUrl : landing.photo === 'resume' ? context?.photoUrl || '' : (upload?.src ?? '');
@@ -54,7 +56,7 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
     photoUrl,
     ...(upload ? { photoAlt: upload.alt } : {}),
     sections: landing.sections.flatMap((section) => {
-      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images, { today: context?.today ?? utcToday(), withHidden });
+      const shown = section.hidden && !withHidden ? null : resolveSection(section, targets, images, { today: context?.today ?? utcToday(), withHidden, files });
       if (!shown) return [];
       const hidden = section.hidden ? { hidden: true } : {};
       const column = section.column ? { column: section.column } : {};
@@ -90,9 +92,16 @@ function resolveImage(ref, images) {
   return image ? { src: image.src, alt: typeof ref.alt === 'string' ? ref.alt : '', width: image.width, height: image.height } : null;
 }
 
+// A file reference ({ fileId, name }) as { href, size }, or null while its
+// file isn't stored. Mirrors resolveFile() in server/src/landingFileFields.js.
+function resolveFile(ref, files) {
+  const file = ref && typeof ref === 'object' && typeof ref.name === 'string' ? files.get(ref.fileId) : null;
+  return file ? { href: `${file.src}/${encodeURIComponent(ref.name)}`, size: file.size } : null;
+}
+
 // A section as a visitor sees it, or null when nothing of it is left to
 // show (the server leaves those out, heading and all).
-function resolveSection(section, targets, images, { today, withHidden }) {
+function resolveSection(section, targets, images, { today, withHidden, files }) {
   switch (section.kind) {
     case 'text':
       return section.body.trim() ? { body: section.body } : null;
@@ -191,6 +200,17 @@ function resolveSection(section, targets, images, { today, withHidden }) {
         return image ? [{ image, caption: entry.caption }] : [];
       });
       return shown.length ? { images: shown } : null;
+    }
+    case 'documents': {
+      // Its label, or the file's name without .pdf; the file at its path
+      // with the name appended, and its size in bytes.
+      const documents = section.documents.flatMap((entry) => {
+        const file = resolveFile(entry.file, files);
+        if (!file) return [];
+        const label = entry.label.trim() ? entry.label : entry.file.name.replace(/\.pdf$/i, '');
+        return [{ label, description: entry.description, ...file }];
+      });
+      return documents.length ? { documents } : null;
     }
     default:
       return null;

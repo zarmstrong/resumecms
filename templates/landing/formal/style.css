@@ -411,6 +411,55 @@
   font-variant-caps: all-small-caps;
 }
 
+/* Documents (issue #128): ruled rows like the cards, the link and its
+   description on the left, the size on the right, and the "PDF" tag in
+   small capitals, untinted, like a credential's kind. */
+.l-template-formal .l-documents {
+  gap: 0;
+}
+
+.l-template-formal .l-document {
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 16%, transparent);
+}
+
+.l-template-formal .l-document-type {
+  margin-top: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 0.95em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  font-variant-caps: all-small-caps;
+}
+
+.l-template-formal .l-document-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'link meta'
+    'description description';
+  column-gap: 20px;
+  align-items: baseline;
+}
+
+.l-template-formal .l-document-link {
+  grid-area: link;
+  justify-self: start;
+}
+
+.l-template-formal .l-document-meta {
+  grid-area: meta;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.l-template-formal .l-document-description {
+  grid-area: description;
+}
+
 /* Questions: the heading's hairline already tops the list. */
 .l-template-formal .l-section-title + .l-faq {
   border-top: none;

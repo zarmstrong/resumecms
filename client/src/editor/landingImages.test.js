@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyUploadedImage, carryItemKey, uploadSpot } from './landingImages.js';
+import { applyUploadedFile, applyUploadedImage, carryItemKey, uploadSpot } from './landingImages.js';
 
 const ID = 'a'.repeat(64);
 const item = (title, text = '') => ({ title, text, url: '' });
@@ -162,4 +162,30 @@ test('several uploads into a gallery each land on their own entry, wherever it w
   assert.equal(applyUploadedImage({ ...draft, sections: [{ id: 'g', kind: 'items', title: '', items: [c] }] }, spots[2], ids[2]), null);
   assert.equal(uploadSpot(start, { kind: 'gallery', sectionId: 'g', index: 3 }), null);
   assert.equal(uploadSpot(start, { kind: 'gallery', sectionId: 'nope', index: 0 }), null);
+});
+
+test('a document upload lands on its own entry, wherever it went, keeping its label, or nowhere (issue #128)', () => {
+  const empty = () => ({ file: null, label: '', description: '' });
+  const docs = (documents) => ({ ...draft, sections: [{ id: 'd', kind: 'documents', title: '', documents }] });
+  const entries = (landing) => landing.sections[0].documents;
+  const file = (n) => ({ id: String(n).repeat(64), name: `doc ${n}.pdf` });
+  const [a, b] = [empty(), empty()];
+  const start = docs([a, b]);
+  const spots = [0, 1].map((index) => uploadSpot(start, { kind: 'document', sectionId: 'd', index }));
+
+  // Moved and labelled meanwhile (the form passes the key on).
+  let now = docs([b, carryItemKey(a, { ...a, label: 'Portfolio' })]);
+  now = applyUploadedFile(now, spots[0], file(1));
+  assert.deepEqual(entries(now), [empty(), { file: { fileId: file(1).id, name: 'doc 1.pdf' }, label: 'Portfolio', description: '' }]);
+  now = applyUploadedFile(now, spots[1], file(2));
+  assert.equal(entries(now)[0].file.name, 'doc 2.pdf');
+
+  // Removed before its upload lands, or a copy nobody passed the key to.
+  assert.equal(applyUploadedFile(docs([a]), spots[1], file(3)), null);
+  assert.equal(applyUploadedFile(docs([{ ...b }]), spots[1], file(3)), null);
+  // Only a document target takes a file, and only a documents section has one.
+  assert.equal(applyUploadedFile(start, uploadSpot(start, { kind: 'seo' }), file(3)), null);
+  assert.equal(applyUploadedFile(start, null, file(3)), null);
+  assert.equal(uploadSpot({ ...draft, sections: [{ id: 'd', kind: 'gallery', title: '', images: [a] }] }, { kind: 'document', sectionId: 'd', index: 0 }), null);
+  assert.equal(uploadSpot(start, { kind: 'document', sectionId: 'd', index: 2 }), null);
 });

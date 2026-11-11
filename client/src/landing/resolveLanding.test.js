@@ -403,3 +403,48 @@ test('a gallery resolves exactly like the server: stored images in order, the re
     ['hid', true],
   ]);
 });
+
+test('a documents section resolves exactly like the server: stored files in order, the rest left out (issue #128)', () => {
+  const id = 'a'.repeat(64);
+  const gone = 'b'.repeat(64);
+  const src = `/api/landing/files/${id}`;
+  const files = [{ id, src, size: 4096 }];
+  const landing = {
+    ...draft,
+    sections: [
+      {
+        id: 'd',
+        kind: 'documents',
+        title: 'Writing',
+        column: 'side',
+        documents: [
+          { file: { fileId: gone, name: 'gone.pdf' }, label: 'Gone', description: '' },
+          { file: { fileId: id, name: 'Teaching philosophy.pdf' }, label: '', description: 'Two pages' },
+          { file: { fileId: id, name: 'copy.pdf' }, label: 'Same file, other name', description: '' },
+          { file: null, label: 'Not yet', description: '' },
+        ],
+      },
+      { id: 'none', kind: 'documents', title: 'Empty', documents: [{ file: null, label: 'x', description: '' }] },
+      { id: 'hid', kind: 'documents', title: 'Hidden', hidden: true, documents: [{ file: { fileId: id, name: 'a.pdf' }, label: '', description: '' }] },
+    ],
+  };
+  const out = resolveLanding(landing, { ...context, files });
+  const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map(), files: new Map(files.map((f) => [f.id, f])) });
+  assert.deepEqual(out.sections, fromServer.sections);
+  assert.deepEqual(out.sections, [
+    {
+      kind: 'documents',
+      title: 'Writing',
+      column: 'side',
+      documents: [
+        { label: 'Teaching philosophy', description: 'Two pages', href: `${src}/Teaching%20philosophy.pdf`, size: 4096 },
+        { label: 'Same file, other name', description: '', href: `${src}/copy.pdf`, size: 4096 },
+      ],
+    },
+  ]);
+  const preview = resolveLanding(landing, { ...context, files }, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => [s.id, Boolean(s.hidden)]), [
+    ['d', false],
+    ['hid', true],
+  ]);
+});

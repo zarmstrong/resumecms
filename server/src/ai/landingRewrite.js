@@ -34,6 +34,9 @@ import { hasPassed, utcToday } from '../dateText.js';
 // Nor are an image section's or a gallery's captions (issue #120): plain
 // text about a picture the model can't see, so the page context gives
 // either only its kind and title.
+// Nor is a documents section (issue #128): its labels and descriptions
+// are about files the model can't read, so the page context gives it only
+// the labels, never a file's id or name.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*
@@ -318,6 +321,8 @@ function pageContext(landing, target, resumes) {
               .filter((c) => c.name.trim() && !hasPassed(c.expires, utcToday()))
               .map((c) => ({ kind: c.kind, name: c.name, issuer: c.issuer })),
           };
+        case 'documents':
+          return { ...base, documents: section.documents.map((entry) => entry.label).filter((label) => label.trim()) };
         default:
           return base;
       }

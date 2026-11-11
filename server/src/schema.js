@@ -113,4 +113,17 @@ export function ensureSchema(db) {
       created_at TEXT NOT NULL
     );
   `);
+
+  // The landing page's documents (issue #128), PDFs a `documents` section
+  // links to, kept like the images and for the same reason: referenced by
+  // `id`, the sha256 of the stored bytes (always the upload with its
+  // metadata stripped, see pdfUpload.js). Always application/pdf, so no
+  // type column. landingFileStore.js keeps the caps and the clean-up.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS landing_files (
+      id TEXT PRIMARY KEY,
+      bytes BLOB NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
 }

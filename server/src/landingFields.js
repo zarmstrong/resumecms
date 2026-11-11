@@ -3,6 +3,7 @@ import { httpError } from './httpError.js';
 import { blocksForMode } from './publicBlocks.js';
 import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inlineText.js';
 import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImageFields.js';
+import { checkFileRef, resolveFile } from './landingFileFields.js';
 import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, emptyStyle, landingSite, mergeStylePatch } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';
 
@@ -55,6 +56,10 @@ import { hasPassed, utcToday } from './dateText.js';
 //   gallery    — images: [{ image, caption }] (issue #120), drawn as a grid
 //                that opens each larger; an entry's image is a reference, or
 //                null until its upload lands, and its caption plain text
+//   documents  — documents: [{ file, label, description }] (issue #128),
+//                uploaded PDFs (a portfolio, writing samples); `file` is a
+//                reference ({ fileId, name }, landingFileFields.js), or null
+//                until its upload lands, the rest plain text
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown, and `column: 'side'`: drawn in the side column by a
 // template that has one (template.json's `columns`, e.g. split's column
@@ -124,6 +129,9 @@ export const LANDING_LIMITS = {
   credentialNumber: 60,
   credentialDate: 40,
   galleryImages: 24,
+  documents: 12,
+  documentLabel: 120,
+  documentDescription: 300,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -150,7 +158,7 @@ export const LINK_TYPES = [
   'custom',
 ];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'documents'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -182,6 +190,7 @@ const SECTION_FIELDS = {
   skills: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId'],
   credentials: ['id', 'kind', 'title', 'hidden', 'column', 'credentials'],
   gallery: ['id', 'kind', 'title', 'hidden', 'column', 'images'],
+  documents: ['id', 'kind', 'title', 'hidden', 'column', 'documents'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
@@ -189,6 +198,7 @@ const STAT_FIELDS = ['value', 'label'];
 const FAQ_FIELDS = ['question', 'answer'];
 const CREDENTIAL_FIELDS = ['kind', 'name', 'issuer', 'number', 'issued', 'expires', 'url'];
 const GALLERY_ENTRY_FIELDS = ['image', 'caption'];
+const DOCUMENT_FIELDS = ['file', 'label', 'description'];
 // What a credential is; only picks the label it's shown with.
 export const CREDENTIAL_KINDS = ['license', 'certification', 'membership'];
 // What an experience section shows when it's added without saying.
@@ -491,6 +501,17 @@ function checkGalleryEntry(entry, label, refs) {
   };
 }
 
+// A document: its file (null while the editor's upload for it is on its
+// way), a label and a description, all always stored.
+function checkDocument(entry, label, refs) {
+  checkKeys(entry, DOCUMENT_FIELDS, label);
+  return {
+    file: entry.file == null ? null : checkFileRef(entry.file, `${label}.file`, refs),
+    label: checkString(entry.label ?? '', LANDING_LIMITS.documentLabel, `${label}.label`),
+    description: checkString(entry.description ?? '', LANDING_LIMITS.documentDescription, `${label}.description`),
+  };
+}
+
 // One section, with the fields of its kind and nothing else. A section
 // without an id (an MCP client adding one) gets a new one.
 function checkSection(section, i, refs, ids) {
@@ -570,6 +591,11 @@ function checkSection(section, i, refs, ids) {
         checkGalleryEntry(entry, `${label}.images[${j}]`, refs)
       );
       break;
+    case 'documents':
+      out.documents = checkList(section.documents, LANDING_LIMITS.documents, `${label}.documents`).map((entry, j) =>
+        checkDocument(entry, `${label}.documents[${j}]`, refs)
+      );
+      break;
   }
   return out;
 }
@@ -590,8 +616,12 @@ function checkSeo(seo, refs) {
 // value, so a client can send only what it has. Strings aren't trimmed:
 // the editor saves while someone types. The image ids work like the resume
 // ids: a new reference must name a stored image, one in the draft before
-// may outlive it (referencedImageIds()).
-export function validateLanding(input, { knownResumeIds, previousResumeIds = new Set(), knownImageIds = new Set(), previousImageIds = new Set() }) {
+// may outlive it (referencedImageIds()), and so do the file ids
+// (referencedFileIds()).
+export function validateLanding(
+  input,
+  { knownResumeIds, previousResumeIds = new Set(), knownImageIds = new Set(), previousImageIds = new Set(), knownFileIds = new Set(), previousFileIds = new Set() }
+) {
   checkKeys(input, FIELDS, 'landing page');
   const base = emptyLanding();
   const out = {
@@ -606,7 +636,7 @@ export function validateLanding(input, { knownResumeIds, previousResumeIds = new
     throw httpError(400, 'photoUrl must be a base64 data: URL of a JPEG, PNG or WebP image');
   }
 
-  const refs = { knownResumeIds, previousResumeIds, knownImageIds, previousImageIds };
+  const refs = { knownResumeIds, previousResumeIds, knownImageIds, previousImageIds, knownFileIds, previousFileIds };
   if (input.photoImage != null) out.photoImage = checkImageRef(input.photoImage, 'photoImage', refs);
   out.actions = checkList(input.actions, LANDING_LIMITS.actions, 'actions').map((action, i) => checkAction(action, `actions[${i}]`, refs));
   const ids = new Set();
@@ -705,6 +735,9 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 //   context.images   — Map of image id → { src, width, height } for the
 //                      stored images (issue #92), `src` where a visitor
 //                      fetches it
+//   context.files    — Map of file id → { src, size } for the stored files
+//                      (issue #128), `src` where a visitor opens it once
+//                      the document's name is appended
 //   context.today    — 'YYYY-MM-DD', what a credential's expiry is read
 //                      against (dateText.js); today in UTC when not given
 // Cards and actions carry no resume ids and never a resume's internal name:
@@ -732,8 +765,12 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // reference resolves to { src, alt, width, height }, or is left out (a
 // photo, a thumbnail, the share image) when its image is gone; an image
 // section without one is left out, and so is a gallery entry, then a
-// gallery with no entry left. An uploaded hero photo is `photoUrl`
-// (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
+// gallery with no entry left. A document resolves to { label, description,
+// href, size } (its label, or its file name without .pdf when that's
+// empty, and the file's public path and size in bytes, never its id beyond
+// that path), or is left out when its file is gone or not uploaded yet,
+// and a documents section with none left is too. An uploaded hero photo
+// is `photoUrl` (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
 // `template` (an id the client may not know, and then draws as classic),
 // `site` (context.site, or the page's own colors and fonts in the site
 // settings' shape) and `darkColors` (its dark palette, or null).
@@ -874,6 +911,15 @@ function resolveSection(section, context) {
         return image ? [{ image, caption: entry.caption }] : [];
       });
       return images.length ? { images } : null;
+    }
+    case 'documents': {
+      const documents = section.documents.flatMap((entry) => {
+        const file = resolveFile(entry.file, context.files);
+        if (!file) return [];
+        const label = entry.label.trim() ? entry.label : entry.file.name.replace(/\.pdf$/i, '');
+        return [{ label, description: entry.description, ...file }];
+      });
+      return documents.length ? { documents } : null;
     }
     default:
       return null;

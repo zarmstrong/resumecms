@@ -6,6 +6,7 @@ import { httpError } from '../httpError.js';
 import { ACTION_ICONS, ACTION_OPENS, CREDENTIAL_KINDS, LANDING_LIMITS, LINK_TYPES, PHOTO_SOURCES, SECTION_COLUMNS } from '../landingFields.js';
 import { FONT_IDS, LANDING_STYLE_SOURCES } from '../landingStyle.js';
 import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
+import { LANDING_FILE_LIMITS } from '../landingFileFields.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
 import { moveBlockOrder } from './moveBlock.js';
 
@@ -46,7 +47,7 @@ Draft vs published: every write tool changes the DRAFT only, of one resume. Noth
 
 Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
 
-Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), and galleries of images; any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, or seo.image for link previews.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, and documents (uploaded PDFs); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, or seo.image for link previews. Its documents (PDFs) are uploaded only in the editor; a documents section can reference one already stored (get_landing_page's context.files) as { fileId, name }.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -553,6 +554,19 @@ const landingCredential = () =>
       .describe('When it expires. Read as YYYY, YYYY-MM, MM/YYYY, "Mar 2027", "March 2027" or YYYY-MM-DD, it leaves the page once that has passed (UTC); anything else is shown as written.'),
     url: z.string().optional().describe("An optional http, https, mailto or tel link, the issuer's page to verify it on, shown as \"Verify\"."),
   });
+const landingDocument = () =>
+  z.object({
+    file: z
+      .object({
+        fileId: z.string().describe("A stored PDF's id, from get_landing_page's context.files (PDFs are uploaded in the editor only)."),
+        name: z.string().describe(`The file name visitors get, ending in .pdf, at most ${LANDING_FILE_LIMITS.name} characters, without slashes, quotes or control characters.`),
+      })
+      .nullable()
+      .optional()
+      .describe('The PDF; null while there is none yet.'),
+    label: z.string().optional().describe("What the link says, e.g. \"Teaching philosophy\"; empty uses the file name."),
+    description: z.string().optional().describe('A line about it, plain text.'),
+  });
 const sectionBase = {
   id: z.string().optional().describe("Keep an existing section's id from get_landing_page; omit it for a new section."),
   title: z.string().optional().describe('Heading shown above the section; empty shows none.'),
@@ -609,6 +623,16 @@ const landingSection = () =>
           .describe(`At most ${LANDING_LIMITS.galleryImages}, in order. An entry without an image is left out, and a gallery with none is left off the public page.`),
       })
       .describe('Images in a grid, each opening larger when clicked. Never rewritten by AI.'),
+    z
+      .object({
+        ...sectionBase,
+        kind: z.literal('documents'),
+        documents: z
+          .array(landingDocument())
+          .optional()
+          .describe(`At most ${LANDING_LIMITS.documents}, in order. An entry without a stored file is left out, and a section with none is left off the public page.`),
+      })
+      .describe('Links to uploaded PDFs (a portfolio, writing samples), each with its size. Never rewritten by AI.'),
   ]);
 
 const landingColor = (what) => z.string().nullable().optional().describe(`${what}: #rrggbb, or '' (or null) for the default.`);
@@ -652,7 +676,7 @@ const LANDING_TOOLS = [
     config: {
       title: 'Get the landing page',
       description:
-        "Returns the landing page's DRAFT (`landing`), its status ({ enabled, publishedAt, isDirty }), and `context`: the resumes a card can currently link to (public and published; a card for any other resume is left out of the public page), the default resume's published photo and site settings, which the page reuses, and the uploaded images (images: id, width, height) a reference can name. Before anything is saved, the draft is built from the default resume's published header.",
+        "Returns the landing page's DRAFT (`landing`), its status ({ enabled, publishedAt, isDirty }), and `context`: the resumes a card can currently link to (public and published; a card for any other resume is left out of the public page), the default resume's published photo and site settings, which the page reuses, the uploaded images (images: id, width, height) a reference can name, and the uploaded PDFs (files: id, size in bytes) a documents section can. Before anything is saved, the draft is built from the default resume's published header.",
       annotations: readOnly,
     },
     run: (store) => ({ landing: store.getLanding(), status: store.getLandingStatus(), context: store.getLandingContext() }),

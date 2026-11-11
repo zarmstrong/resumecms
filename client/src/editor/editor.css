@@ -1539,6 +1539,14 @@
   flex-shrink: 0;
 }
 
+/* A landing page document's file (LandingFileField.jsx): its name, which
+   opens it, and its size, then the buttons. */
+.ed-landing-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .ed-link-preview-text {
   display: flex;
   flex-direction: column;

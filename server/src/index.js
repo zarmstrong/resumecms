@@ -111,8 +111,10 @@ const server = app.listen(PORT, () => {
     .catch((err) => console.error('Initial PDF generation failed:', err));
   // And the link previews' cards (shareStore.js), queued behind those.
   store.refreshShareCards();
-  // Landing page images nothing uses any more (landingImageStore.js).
+  // Landing page images and documents nothing uses any more
+  // (landingImageStore.js, landingFileStore.js).
   store.pruneLandingImages();
+  store.pruneLandingFiles();
 });
 
 const shutdown = createShutdown({ server, closeBrowser, closeDb: () => db.close() });

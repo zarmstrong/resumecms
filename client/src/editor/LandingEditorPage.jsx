@@ -8,7 +8,7 @@ import { createSaveQueue } from './saveQueue.js';
 import { useLeaveGuard } from './useLeaveGuard.js';
 import { landingUnsavedWork } from './unsavedWork.js';
 import { LANDING_PAGE, landingShown } from './resumeLinks.js';
-import { applyUploadedImage, uploadSpot } from './landingImages.js';
+import { applyUploadedFile, applyUploadedImage, uploadSpot } from './landingImages.js';
 import { createLimiter } from './uploadLimit.js';
 import {
   anchorFor,
@@ -160,6 +160,27 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       const next = applyUploadedImage(landingRef.current, spot, image.id);
       if (next) handleChangeRef.current(next);
       return image;
+    });
+    return saves.track(request);
+  }
+
+  // A document upload (issue #128) for a documents entry, `target` being
+  // { kind: 'document', sectionId, index }: the same as an image's, on the
+  // same two slots, with the stored file added to context.files and its
+  // reference ({ fileId, name }) put on its entry as the draft is then.
+  function handleFileUpload(file, target) {
+    const spot = uploadSpot(landingRef.current, target);
+    const upload = () => (mountedRef.current ? api.uploadLandingFile(file) : null);
+    const request = uploadSlotsRef.current(upload).then((stored) => {
+      if (!stored || !mountedRef.current) return stored; // see handleImageUpload
+      const entry = { id: stored.id, src: stored.src, size: stored.size };
+      setLoaded((prev) => ({
+        ...prev,
+        context: { ...prev.context, files: [...(prev.context.files || []).filter((f) => f.id !== stored.id), entry] },
+      }));
+      const next = applyUploadedFile(landingRef.current, spot, stored);
+      if (next) handleChangeRef.current(next);
+      return stored;
     });
     return saves.track(request);
   }
@@ -459,6 +480,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
                 onChange={handleChange}
                 ai={ai}
                 onUploadImage={handleImageUpload}
+                onUploadFile={handleFileUpload}
                 look={{ onApply: handleApplyStyle, applyState }}
               />
             </div>

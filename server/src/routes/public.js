@@ -6,6 +6,7 @@ import { httpError } from '../httpError.js';
 import { handle } from './sendError.js';
 import { HOST_HEADERS } from '../hostnames.js';
 import { publicResumeHandlers } from './publicResume.js';
+import { landingFileHandlers } from './landingFiles.js';
 
 const router = Router();
 
@@ -79,6 +80,10 @@ router.get('/landing/images/:id', handle((req, res) => {
   res.set('X-Content-Type-Options', 'nosniff');
   res.type(image.mime).send(image.bytes);
 }));
+
+// A document the landing page shows (issue #128), by its id and the name
+// it's shown under: see routes/landingFiles.js.
+router.get('/landing/files/:id/:name', landingFileHandlers(store).publicFile);
 
 router.get('/resumes/:slug', slugResume);
 
