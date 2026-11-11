@@ -1009,8 +1009,9 @@ queries (and `bold` and `card` their type with container units) on the
 page root, so the editor's narrower preview matches a phone. `card`
 (issue #130, pure CSS) is a business card for one phone screen: the hero
 centered on a panel, its buttons and a links section's rows full width
-and at least 44 px tall (as is everything else a visitor taps, a
-standalone link through padding its negative margin takes back), and
+and at least 44 px tall (as is every other control and standalone link,
+the latter through padding its negative margin takes back; a link inside
+a line of text keeps its line's height), and
 "Save contact" drawn as its primary button; like `bold` it draws no text
 in the accent or on it. `bold`
 (issue #130) bands every other *shown* section with

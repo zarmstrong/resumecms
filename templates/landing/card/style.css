@@ -33,8 +33,9 @@
    card without a photo, the availability's dot, the bars over section
    titles and stats, a hovered button's ring and the timeline's dots.
    Faded lines (meta, captions, labels) are a mix of the text and
-   background colors rather than an opacity. Nothing moves but a pressed
-   button, and that only under prefers-reduced-motion: no-preference.
+   background colors rather than an opacity. The only motion it adds is a
+   pressed button's, and that only under prefers-reduced-motion:
+   no-preference (the shared gallery's zoom and fade keep theirs).
 
    Words break anywhere they must, so a long name, email address or label
    wraps instead of widening its box past the page. */
@@ -560,7 +561,7 @@
   font-weight: 600;
 }
 
-.l-template-card .l-contact-directions {
+.l-template-card a.l-contact-link.l-contact-directions {
   display: flex;
   width: fit-content;
   margin-top: 0;
