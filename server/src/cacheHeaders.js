@@ -38,6 +38,11 @@ export const NOINDEX = 'noindex';
 // year-long cache would keep a removed photo up wherever it was cached.
 export const EDITOR_IMAGE = 'private, max-age=31536000, immutable';
 
+// The landing page's documents (issue #128) as the editor opens them: the
+// same rule, for the same reasons (/api/public/landing/files/:id/:name is
+// REVALIDATE).
+export const EDITOR_FILE = EDITOR_IMAGE;
+
 // Vite's content-hashed bundles under /assets/: the name changes whenever
 // the content does, so these can be cached indefinitely.
 export const IMMUTABLE = 'public, max-age=31536000, immutable';

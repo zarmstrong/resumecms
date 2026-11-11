@@ -10,6 +10,9 @@
 // and { kind: 'item', sectionId, index }, and a gallery's entry (issue #120),
 // { kind: 'gallery', sectionId, index }, known by its key like an item, and
 // a media section's poster (issue #121), { kind: 'poster', sectionId }.
+// A document upload (issue #128) works the same way, for a documents
+// section's entry, { kind: 'document', sectionId, index }, also known by
+// its key, and is applied by applyUploadedFile().
 
 // Items have no id, and their content can't tell them apart (two empty
 // ones, or one deleted and a new one added in its place), so the editor
@@ -43,9 +46,18 @@ const entriesOf = (landing, sectionId) => {
   return section?.kind === 'gallery' ? section.images : null;
 };
 
+const documentsOf = (landing, sectionId) => {
+  const section = landing.sections.find((s) => s.id === sectionId);
+  return section?.kind === 'documents' ? section.documents : null;
+};
+
 // What the upload remembers of its target, from the draft it started in
 // (null when it isn't there).
 export function uploadSpot(landing, target) {
+  if (target.kind === 'document') {
+    const entry = documentsOf(landing, target.sectionId)?.[target.index];
+    return entry ? { target, key: itemKey(entry) } : null;
+  }
   if (target.kind === 'gallery') {
     const entry = entriesOf(landing, target.sectionId)?.[target.index];
     return entry ? { target, key: itemKey(entry) } : null;
@@ -103,4 +115,21 @@ export function applyUploadedImage(landing, spot, imageId) {
     default:
       return null;
   }
+}
+
+// `landing` with the stored file `file` ({ id, name }, as the upload
+// resolves) on the documents entry at `spot`, or null when that entry is
+// gone. Its label and description stay as they are.
+export function applyUploadedFile(landing, spot, file) {
+  if (spot?.target.kind !== 'document') return null;
+  const entries = documentsOf(landing, spot.target.sectionId);
+  const entry = entries?.find((candidate) => itemKeys.get(candidate) === spot.key);
+  if (!entry) return null;
+  const placed = carryItemKey(entry, { ...entry, file: { fileId: file.id, name: file.name } });
+  return {
+    ...landing,
+    sections: landing.sections.map((s) =>
+      s.id === spot.target.sectionId ? { ...s, documents: s.documents.map((e) => (e === entry ? placed : e)) } : s
+    ),
+  };
 }

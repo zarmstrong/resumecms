@@ -13,8 +13,8 @@
    dark. No text is drawn in the accent or on it either: what's
    accent-colored text elsewhere (a card's "View resume", "Full resume",
    the availability line, the buttons' labels, a stat's figure, an FAQ's
-   + and −, a credential's kind and "Verify", the gallery's buttons, a
-   media section's play button) is
+   + and −, a credential's kind and "Verify", a document's "PDF" tag, the
+   gallery's buttons, a media section's play button) is
    in the heading or text color here, and so are the focus rings. The
    primary button is filled with the heading color rather than the accent
    (--r-on-accent, the better of white and near-black, isn't AA on every
@@ -616,6 +616,42 @@
 
 .l-template-bold .l-contact-days {
   font-weight: 800;
+}
+
+/* Documents (issue #128): the "PDF" tag in the heading color inside an
+   accent outline like a credential's kind (the shared one is accent text
+   on an accent tint), the link heavy and underlined in its own color, and
+   the size at full strength. */
+.l-template-bold .l-documents {
+  gap: 24px;
+}
+
+.l-template-bold .l-document-type {
+  padding: 2px 6px;
+  border: 2px solid var(--r-accent, var(--ink));
+  border-radius: 0;
+  background: none;
+  color: var(--r-heading, var(--ink));
+  font-weight: 800;
+}
+
+.l-template-bold a.l-document-link {
+  font-size: 1.2em;
+  font-weight: 800;
+  line-height: 1.3;
+  border-bottom: none;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.18em;
+}
+
+.l-template-bold a.l-document-link:hover {
+  text-decoration-thickness: 4px;
+}
+
+.l-template-bold .l-document-meta {
+  color: var(--r-text, var(--ink));
+  font-size: 0.85em;
 }
 
 /* A gallery: square corners, and nothing moves (the shared thumbnails

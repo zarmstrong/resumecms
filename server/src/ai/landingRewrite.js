@@ -47,6 +47,9 @@ import { hasPassed, utcToday } from '../dateText.js';
 // Nor is a contact section (issue #124): an email, a phone number, an
 // address and hours are facts, and the page context gives only its kind
 // and title, so none of them reaches the model.
+// Nor is a documents section (issue #128): its labels and descriptions
+// are about files the model can't read, so the page context gives it only
+// the labels, never a file's id or name.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*
@@ -361,6 +364,8 @@ function pageContext(landing, target, resumes) {
               .filter((entry) => entry.title.trim())
               .map((entry) => ({ kind: entry.kind, title: entry.title, outlet: entry.outlet, date: entry.date })),
           };
+        case 'documents':
+          return { ...base, documents: section.documents.map((entry) => entry.label).filter((label) => label.trim()) };
         default:
           return base;
       }

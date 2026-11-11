@@ -344,9 +344,13 @@ number, and `action` an optional button with a hero link action's shape
 and URL rules (`checkAction()`, only `type: 'link'`; a mailto
 `?subject=` is kept as written), stored only when set and resolved to
 `{ label, href, icon? }` only while its URL is safe; a service with
-neither a title nor a text is dropped; no `makesOffer` structured data)
-and `contact` (`email`, `phone`, `area`, `address`, `hours: [{ days, time
-}]`, `vcard`; issue #124, see below). Any section may be `hidden: true`: kept in the
+neither a title nor a text is dropped; no `makesOffer` structured data),
+`contact` (`email`, `phone`, `area`, `address`, `hours: [{ days, time
+}]`, `vcard`; issue #124, see below) and `documents`
+(`documents: [{ file, label, description }]`, at most
+`LANDING_LIMITS.documents` (12), `file` a `{ fileId, name }` reference
+or null until its upload lands; issue #128, see below; plain text,
+never an AI rewrite target). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -502,6 +506,79 @@ just because its hash is known, and a removed one is gone at the next
 publish (hence `REVALIDATE` with the id as a strong ETag, not
 `immutable`).
 
+Its documents (issue #128) are PDFs in a store of their own built the
+same way: the `landing_files` table (`schema.js`, in SQLite for the same
+backup reason), `landingFileStore.js` composed into the landing store,
+pure parts in `landingFileFields.js`. `POST /api/landing/files?name=`
+takes the raw file (`express.raw()` on that route only, after the login
+check, in `routes/landingFiles.js`, a factory over the store so its test
+runs on `:memory:`); there's no MCP upload (`/mcp`'s body cap), but MCP
+can reference a stored file. `pdfUpload.js` refuses anything over
+`LANDING_FILE_LIMITS.uploadBytes` before parsing and anything not
+starting `%PDF-` (never the `Content-Type`), then *always* has it saved
+again by `pdfStrip.js`, which with `pdfStripWorker.js` are the only
+modules that load `pdf-lib` (pinned): the trailer's Info dictionary
+dropped, `/Metadata` (XMP), `/PieceInfo`, `/LastModified` (a page's or
+form XObject's, written beside `/PieceInfo`), `/AF` (associated files)
+and `/EF` (a file specification's embedded file) taken off every
+dictionary, the catalog's `/Names /EmbeddedFiles` and `/Collection`
+removed, a page's `FileAttachment` annotations (and their popups)
+removed and every other annotation's `/M` and `/CreationDate` and,
+except on a form widget (whose `/T` is the field's name), its `/T`
+author cleared, and only what the catalog still reaches written out, as
+one revision, so no earlier incremental save survives; the pages, the
+annotations' text and form field values (a signature's included, with
+its own name and date) are copied, never re-rendered. A PDF pdf-lib
+can't load, or an encrypted one, is a 400 saying so.
+
+Never parse an upload on the main thread. pdf-lib's work isn't bounded
+by the file's size (a 1 KB cross-reference stream can declare millions
+of entries, which it loops over without yielding, keeping a `PDFRef`
+for each in a module-level pool it never empties), so `stripPdf()` runs
+each upload in a `node:worker_threads` Worker of its own, one at a time,
+the bytes transferred in and out, with `resourceLimits` of
+`LANDING_FILE_LIMITS.parseHeapMb` (256 MB old generation) and
+`terminate()`d after `parseMs` (15 s); either is a 413 "too complex to
+read", and the worker's heap goes with it. Inside it, loading decodes
+every object and cross-reference stream at once, with no limit in
+pdf-lib, so `pdfStrip.js` wraps both parsers' exported `forStream()` and
+hands them the stream already decoded by its own `boundedDecode()`
+(Flate inflated raw with `maxOutputLength`, its zlib header checked as
+pdf-lib does and its Adler-32 never verified, since pdf-lib, pdf.js and
+Chrome don't; a worst-case bound checked before any other filter runs),
+all of an upload's streams together held to `decodedBytes` (64 MB; past
+it, a 413), and then checks what the stream declares against what it
+holds: an xref stream's `/Index` (or `/Size`) counts times its `/W`
+widths within its bytes, an object stream's `/N` pairs within its
+`/First` (a 400 otherwise), and all their entries together within
+`streamEntries` (1,000,000; a 413). The worker script resolves by
+`import.meta.url`, so it's found from source and in the Docker image,
+which copies `server/` whole. Its test fails if pdf-lib stops going
+through `forStream()`, so keep it when bumping the pinned version. The id is the sha256 of the stripped bytes, and
+the caps (10 MB a file, 20 files and 30 MB in all, kept small because
+every backup copies the database) are `LANDING_FILE_LIMITS`. A reference
+is `{ fileId, name }` (`checkFileRef()`), `name` always a
+`cleanFileName()` (last path segment, no quotes, control, format or
+separator characters, at most 120 code points, ending `.pdf`), with the
+images' rules: a new one must name a stored file, one in the draft may
+outlive it (`referencedFileIds()`), and `pruneLandingFiles()` runs
+wherever `pruneLandingImages()` does, with the same `IMAGE_GRACE_MS`. A
+document resolves to `{ label, description, href, size }` (its label, or
+the name without `.pdf`), `href` the public path
+`/api/public/landing/files/<id>/<encoded name>`. That route
+(`publicLandingFile()`) serves a file only while the landing page is
+shown and `shownFiles()` of its resolved snapshot lists it *under that
+name*, as `application/pdf` with `Content-Disposition: inline` from
+`contentDisposition()` (an ASCII `filename` and an RFC 5987 `filename*`
+of the name cleaned again), `nosniff`, `Content-Security-Policy:
+sandbox` and `REVALIDATE` with the id as a strong ETag; the editor's
+`GET /api/landing/files/:id[/:name]` serves any stored one
+(`EDITOR_FILE`). In the editor, `LandingFileField.jsx` and
+`LandingEditorPage`'s `handleFileUpload()` work like the image upload:
+on the same two slots, tracked on the save queue, applied with
+`applyUploadedFile()` (`landingImages.js`, an entry known by its key) to
+the draft as it is when it resolves, or dropped.
+
 `resolveLanding()` is the only shape that leaves the server publicly, and
 it resolves references when the page is requested, not when it's
 published (`landingContext()`). That's what keeps a resume made private,
@@ -532,7 +609,8 @@ or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
 (no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
 question and an answer, no named credential left unexpired, no gallery entry whose image is stored, no media link that parses, no service with a title or a text, no publication with a title, a contact section with no email or phone
-that makes a link and no area, address or hours) is dropped, heading and
+that makes a link and no area, address or hours, no document whose file
+is stored) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -1179,7 +1257,8 @@ resume), stats (a model mustn't make up figures; the page context shows
 them read-only), an item's `meta`, an FAQ question, a service's title, price and button
 (the page context shows them read-only, a button by its label),
 credentials, publications and the
-contact section (facts, not prose), image and gallery captions and media sections
+contact section (facts, not prose), documents (about files it can't read;
+the page context gives only their labels), image and gallery captions and media sections
 (plain text, or about a recording the model can't hear; the page
 context gives those sections only their kind and title) are
 deliberately never targets. The page is
@@ -1350,7 +1429,8 @@ Chromium's children.
 Every public response carries an explicit `Cache-Control` from
 `server/src/cacheHeaders.js`: `no-cache` for `/api/public/resume`,
 `/api/public/resumes/:slug`, `/api/public/images/:key`,
-`/api/public/landing/images/:id`, `/api/public/landing/contact.vcf`, the favicons (see "Favicon") and the HTML shell
+`/api/public/landing/images/:id`, `/api/public/landing/contact.vcf`,
+`/api/public/landing/files/:id/:name`, the favicons (see "Favicon") and the HTML shell
 (which also sends `HOST_HEADERS` as `Vary`, since its tags name the
 host's resume and origin; see "Search and link previews"), `private, no-cache` for
 every PDF route, `immutable` for the hashed

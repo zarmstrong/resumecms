@@ -58,6 +58,16 @@
   margin-top: 12px;
 }
 
+/* Documents there sit closer together, their tag nearer the label, so a
+   label keeps as much of the narrow column as it can (issue #128). */
+.l-template-split .l-split-side .l-documents {
+  gap: 12px;
+}
+
+.l-template-split .l-split-side .l-document {
+  gap: 8px;
+}
+
 /* Smaller gallery thumbnails there, three to a row. */
 .l-template-split .l-split-side .l-gallery {
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));

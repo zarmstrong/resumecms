@@ -8,6 +8,7 @@ import { renderInline } from './renderInline.js';
 import { readDate } from './dateText.js';
 import { LandingGallery } from './LandingGallery.jsx';
 import { LandingMedia } from './LandingMedia.jsx';
+import { formatFileSize } from './documents.js';
 import { ActionIcon } from './ActionIcon.jsx';
 import './landing.css';
 
@@ -393,6 +394,31 @@ function SectionBody({ section, preview }) {
       );
     case 'contact':
       return <ContactDetails contact={section} preview={preview} />;
+    case 'documents':
+      // Uploaded PDFs (issue #128), each opened in the browser's own viewer
+      // from a path on this site, with its size so a visitor knows what
+      // they're opening.
+      return (
+        <ul className="l-documents">
+          {section.documents.map((doc, i) => (
+            <li key={i} className="l-document">
+              <span className="l-document-type" aria-hidden="true">
+                PDF
+              </span>
+              <span className="l-document-body">
+                <a className="l-document-link" {...hrefProps(doc.href)} type="application/pdf">
+                  {doc.label}
+                </a>
+                <span className="l-document-meta">
+                  <span className="l-sr-only">PDF, </span>
+                  {formatFileSize(doc.size)}
+                </span>
+                {doc.description && <p className="l-document-description">{doc.description}</p>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
     default:
       return null;
   }

@@ -68,6 +68,15 @@ export const api = {
   // re-encoded and stored it.
   uploadLandingImage: (file) =>
     request('/landing/images', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file }),
+  // A PDF for a documents section (issue #128), the file itself as the
+  // body and its name in the query. Resolves with { id, size, name, src }
+  // once the server has stripped its metadata and stored it.
+  uploadLandingFile: (file) =>
+    request(`/landing/files?name=${encodeURIComponent(file.name || '')}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: file,
+    }),
   // An AI rewrite of one spot on the landing page (issue #73): the draft as
   // the editor has it, without its photo (landingAi.js's rewriteCopy). Saves
   // nothing; resolves with { target, proposals, explanation }.

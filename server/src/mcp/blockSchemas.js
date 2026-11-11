@@ -665,6 +665,34 @@ export const LANDING_SCHEMA = {
               vcard: { type: 'boolean', description: 'Show the "Save contact" (vCard) button (default true)' },
             },
           },
+          {
+            type: 'object',
+            description: 'Links to uploaded PDFs (a portfolio, writing samples), each shown with its size; left out until one has a stored file. Never rewritten by AI',
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'documents' },
+              documents: {
+                type: 'array',
+                description: 'At most 12, in order; an entry without a stored file is left out',
+                items: {
+                  type: 'object',
+                  properties: {
+                    file: {
+                      type: 'object',
+                      description:
+                        "An uploaded PDF: { fileId, name }, both required, or null until there is one. PDFs are uploaded in the editor only (stripped of their metadata); a new reference must name a stored file, one whose file is gone shows nothing",
+                      properties: {
+                        fileId: { type: 'string', description: "From get_landing_page's context.files" },
+                        name: { type: 'string', description: 'The file name visitors get, ending in .pdf, at most 120 characters, without slashes, quotes or control characters' },
+                      },
+                    },
+                    label: { type: 'string', description: "What the link says, at most 120 characters; '' uses the file name" },
+                    description: { type: 'string', description: 'Plain text under it, at most 300 characters' },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     },

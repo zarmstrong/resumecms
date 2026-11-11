@@ -4,10 +4,12 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { handle, sendError } from './sendError.js';
 import { LANDING_LIMITS } from '../landingFields.js';
 import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
+import { LANDING_FILE_LIMITS } from '../landingFileFields.js';
 import { EDITOR_IMAGE } from '../cacheHeaders.js';
 import { httpError } from '../httpError.js';
 import { landingRewriteHandlers } from './ai.js';
 import { splitTextFormat } from '../landingTextMigration.js';
+import { landingFileHandlers } from './landingFiles.js';
 
 // The editor's routes for the landing page (issue #70), thin wrappers over
 // the store (landingStore.js) like the rest. Mounted at /api/landing before
@@ -26,7 +28,7 @@ router.get('/', handle((req, res) => {
     landing: store.getLanding(),
     status: store.getLandingStatus(),
     context: store.getLandingContext(),
-    limits: { ...LANDING_LIMITS, images: LANDING_IMAGE_LIMITS },
+    limits: { ...LANDING_LIMITS, images: LANDING_IMAGE_LIMITS, files: LANDING_FILE_LIMITS },
   });
 }));
 
@@ -92,6 +94,13 @@ router.get('/images/:id', handle((req, res) => {
   res.set('X-Content-Type-Options', 'nosniff');
   res.type(image.mime).send(image.bytes);
 }));
+
+// A document upload (issue #128) and the editor's copy of any stored one,
+// after the login check above like the images: see routes/landingFiles.js.
+const files = landingFileHandlers(store);
+router.post('/files', ...files.upload);
+router.get('/files/:id', files.editorFile);
+router.get('/files/:id/:name', files.editorFile);
 
 // { enabled } — takes effect at once; see the store's setLandingEnabled.
 router.put('/enabled', handle((req, res) => {

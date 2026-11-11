@@ -8,6 +8,7 @@ import { introSectionId } from './landingAi.js';
 import { SearchSharingFields } from './SearchSharingFields.jsx';
 import { LandingLookFields } from './LandingLookFields.jsx';
 import { IMAGE_TYPES, LandingImageField, imageFileProblem, withImageRef } from './LandingImageField.jsx';
+import { FILE_TYPES, LandingFileField, pdfFileProblem } from './LandingFileField.jsx';
 import { carryItemKey } from './landingImages.js';
 import { ActionIconPicker } from './ActionIconPicker.jsx';
 import { ACTION_LABELS, resolveLanding } from '../landing/resolveLanding.js';
@@ -74,6 +75,7 @@ const SECTION_KINDS = [
     empty: () => ({ email: '', phone: '', area: '', address: '', hours: [], vcard: true }),
     once: true,
   },
+  { kind: 'documents', label: 'Documents', addLabel: 'Documents (PDFs: a portfolio, writing samples)', empty: () => ({ documents: [] }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -167,6 +169,8 @@ function hasContent(section) {
       return section.entries.some((e) => [e.title, e.outlet, e.date, e.url, e.doi, e.note].some((value) => value.trim()));
     case 'contact':
       return [section.email, section.phone, section.area, section.address].some((value) => value.trim()) || section.hours.some((h) => h.days.trim() || h.time.trim());
+    case 'documents':
+      return section.documents.some((entry) => Boolean(entry.file) || Boolean(entry.label.trim()) || Boolean(entry.description.trim()));
     default:
       return false;
   }
@@ -215,6 +219,8 @@ function sectionSummary(section, resumes) {
       return section.entries.length === 1 ? '1 entry' : section.entries.length ? `${section.entries.length} entries` : '';
     case 'contact':
       return shorten(section.email.trim() || section.phone.trim() || section.area.trim());
+    case 'documents':
+      return count(section.documents.length, 'document') || 'No documents yet';
     default:
       return '';
   }
@@ -310,12 +316,14 @@ function AiField({ ai, ...props }) {
 // and `limits` come from GET /api/landing, `resumes` is the editor's list,
 // `ai` is LandingEditorPage's AI rewrite state and handlers (issue #73),
 // `onUploadImage` its image upload (issue #92, see LandingImageField),
+// `onUploadFile` its document upload (issue #128, see LandingFileField),
 // `look` its "Apply to the default resume" ({ onApply, applyState }, issue
 // #93, see LandingLookFields).
-export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage, look }) {
+export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage, onUploadFile, look }) {
   const set = (patch) => onChange({ ...landing, ...patch });
   // Each field passes its own target to the upload (landingImages.js).
   const imageProps = (target) => ({ images: context.images || [], limits: limits?.images, onUpload: (file) => onUploadImage(file, target) });
+  const fileProps = (target) => ({ files: context.files || [], limits: limits?.files, onUpload: (file) => onUploadFile(file, target) });
   const sections = landing.sections;
   const introId = introSectionId(landing);
   // Whether the page's template has a side column to put a section in.
@@ -412,6 +420,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
           limits={limits}
           ai={ai}
           imageProps={imageProps}
+          fileProps={fileProps}
         />
         {(!limits || sections.length < limits.sections) && (
           <select className="ed-input" value="" onChange={(e) => e.target.value && addSection(e.target.value)} aria-label="Add a section">
@@ -577,7 +586,7 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
 // fields stay mounted, only hidden, so an upload in flight or an AI
 // instruction half typed is still there when it's opened again. Which ones
 // are collapsed is this browser's own convenience, kept in localStorage.
-function SectionList({ sections, onChange, hasColumns, resumes, context, limits, ai, imageProps }) {
+function SectionList({ sections, onChange, hasColumns, resumes, context, limits, ai, imageProps, fileProps }) {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [liveMessage, setLiveMessage] = useState('');
   const liveTimer = useRef(null);
@@ -731,7 +740,7 @@ function SectionList({ sections, onChange, hasColumns, resumes, context, limits,
           liveMessage={liveMessage}
           collapsed={collapsed}
           suggestions={suggestions}
-          rowProps={{ hasColumns, resumes, context, limits, ai, imageProps, toggle, updateSection, removeSection, moveSection }}
+          rowProps={{ hasColumns, resumes, context, limits, ai, imageProps, fileProps, toggle, updateSection, removeSection, moveSection }}
         />
       </DndContext>
     </>
@@ -779,7 +788,7 @@ function SectionRows({ sections, listRef, liveMessage, collapsed, suggestions, r
 // the shared props (rowProps) keep their identity.
 const SectionEditor = memo(function SectionEditor({
   section, index, count, collapsed, suggested, dragging, dropEdge, dropLabel,
-  hasColumns, resumes, context, limits, ai, imageProps, toggle, updateSection, removeSection, moveSection,
+  hasColumns, resumes, context, limits, ai, imageProps, fileProps, toggle, updateSection, removeSection, moveSection,
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, setActivatorNodeRef } = useDraggable({ id: section.id });
   const { setNodeRef: setDropRef } = useDroppable({ id: section.id });
@@ -877,6 +886,7 @@ const SectionEditor = memo(function SectionEditor({
           limits={limits}
           ai={ai}
           imageProps={imageProps}
+          fileProps={fileProps}
         />
       </div>
     </div>
@@ -887,7 +897,7 @@ const SectionEditor = memo(function SectionEditor({
 // text take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
 
-function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps }) {
+function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps, fileProps }) {
   switch (section.kind) {
     case 'text':
       return (
@@ -969,6 +979,10 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
       return <PublicationsFields section={section} onChange={onChange} limits={limits} />;
     case 'contact':
       return <ContactFields section={section} onChange={onChange} limits={limits} />;
+    case 'documents':
+      return (
+        <DocumentsFields sectionId={section.id} documents={section.documents} onChange={(documents) => onChange({ documents })} limits={limits} fileProps={fileProps} />
+      );
     default:
       return null;
   }
@@ -1643,6 +1657,94 @@ function MediaFields({ section, onChange, limits, imageProps }) {
         until they press it, and YouTube and Vimeo then play in their privacy modes. A video with captions, and a transcript
         here (shown under "Transcript"; a blank line starts a new paragraph), let everyone follow it. The poster is optional
         and needs a description before publishing. A section with no link yet is left off the page.
+      </span>
+    </>
+  );
+}
+
+// Documents (issue #128): uploaded PDFs in order, each with a label and a
+// line about it. "Add documents" takes several files at once, like a
+// gallery's "Add images": each gets an entry of its own straight away, and
+// its upload lands on that entry (by its key, landingImages.js) wherever it
+// has moved by then, or nowhere if it was removed. No ✨: the model can't
+// read the files.
+function DocumentsFields({ sectionId, documents, onChange, limits, fileProps }) {
+  const [uploading, setUploading] = useState(0);
+  const [error, setError] = useState('');
+  const max = limits?.documents ?? 12;
+  // An edited entry stays the same entry to an upload in flight.
+  const setEntry = (i, patch) => onChange(documents.map((entry, idx) => (idx === i ? carryItemKey(entry, { ...entry, ...patch }) : entry)));
+
+  async function handleFiles(e) {
+    const files = [...(e.target.files || [])];
+    e.target.value = ''; // so picking the same files again still uploads them
+    if (!files.length) return;
+    const problems = files.map((file) => pdfFileProblem(file, limits?.files)).filter(Boolean);
+    const fine = files.filter((file) => !pdfFileProblem(file, limits?.files));
+    const taken = fine.slice(0, Math.max(0, max - documents.length));
+    const notes = [...new Set(problems)];
+    if (problems.length) notes.unshift(problems.length === 1 ? "1 file wasn't added:" : `${problems.length} files weren't added:`);
+    if (taken.length < fine.length) notes.push(`A documents section holds at most ${max}, so ${fine.length - taken.length} more weren't added.`);
+    setError(notes.join(' '));
+    if (!taken.length) return;
+    // The new entries go into the draft first, so each upload has its own
+    // entry to find (uploadSpot() reads the draft as it is now).
+    const start = documents.length;
+    onChange([...documents, ...taken.map(() => ({ file: null, label: '', description: '' }))]);
+    setUploading((n) => n + taken.length);
+    const results = await Promise.allSettled(taken.map((file, j) => fileProps({ kind: 'document', sectionId, index: start + j }).onUpload(file)));
+    setUploading((n) => n - taken.length);
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length) setError(`${failed.length} of the documents couldn't be uploaded: ${failed[0].reason?.message || 'Upload failed'}`);
+  }
+
+  return (
+    <>
+      {documents.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Document {i + 1}</span>
+            <RowActions
+              index={i}
+              count={documents.length}
+              onMove={(delta) => onChange(moved(documents, i, delta))}
+              onRemove={() => onChange(documents.filter((_, idx) => idx !== i))}
+              what="document"
+            />
+          </div>
+          <LandingFileField value={entry.file} onChange={(file) => setEntry(i, { file })} {...fileProps({ kind: 'document', sectionId, index: i })} />
+          <input
+            className="ed-input"
+            value={entry.label}
+            maxLength={limits?.documentLabel}
+            onChange={(e) => setEntry(i, { label: e.target.value })}
+            placeholder="Label, e.g. Teaching philosophy (the file name when empty)"
+            aria-label={`Label of document ${i + 1}`}
+          />
+          <textarea
+            className="ed-input"
+            rows={2}
+            value={entry.description}
+            maxLength={limits?.documentDescription}
+            onChange={(e) => setEntry(i, { description: e.target.value })}
+            placeholder="A line about it (optional)"
+            aria-label={`Description of document ${i + 1}`}
+          />
+        </div>
+      ))}
+      {documents.length < max && (
+        <label className={`ed-btn ed-btn-ghost${uploading ? ' ed-btn-inert' : ''}`}>
+          {uploading ? `Uploading ${uploading} document${uploading === 1 ? '' : 's'}…` : '+ Add documents'}
+          <input type="file" accept={FILE_TYPES.join(',')} multiple onChange={handleFiles} disabled={uploading > 0} hidden />
+        </label>
+      )}
+      {error && <div className="ed-field-error">{error}</div>}
+      <span className="ed-field-hint">
+        Up to {max} PDFs, each opened in the visitor's browser and shown with its size. On upload, a PDF's metadata (its author,
+        title, the app that made it, its creation, modification and last-modified dates, earlier saved versions), its
+        comments' author names and dates, and any files attached to it are removed. What's on its pages, the comments' text
+        and form field values (a signature's name and date too) are kept as they are, so check it holds nothing you don't
+        mean to share. One with no file yet is left off the page.
       </span>
     </>
   );

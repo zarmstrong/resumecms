@@ -130,6 +130,27 @@
   justify-content: center;
 }
 
+/* Documents (issue #128) keep to the same column too, read left to right
+   like the questions, each between hairlines. */
+.l-template-centered .l-section-documents {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.l-template-centered .l-documents {
+  gap: 0;
+}
+
+.l-template-centered .l-document {
+  padding: 14px 0;
+  border-top: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+}
+
+.l-template-centered .l-document:last-child {
+  border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+}
+
 /* A gallery takes the page's full width, its captions centered. */
 .l-template-centered .l-gallery {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

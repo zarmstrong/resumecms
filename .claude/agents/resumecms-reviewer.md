@@ -59,6 +59,19 @@ in prose; check the diff against the ones that apply, especially:
   nothing the page doesn't show and never reads the draft; a draft has at
   most one contact section; the Person JSON-LD gets no email, phone or area,
   and the card no photo.
+- A landing upload (an image, or a documents section's PDF, issue #128) is
+  stored only as cleaned bytes (re-encoded by `imageUpload.js`, or
+  metadata-stripped by `pdfUpload.js`, size capped before parsing, its
+  annotation authors and attachments removed, its stream decoding held to
+  `LANDING_FILE_LIMITS.decodedBytes` and its streams' declared entries
+  to `streamEntries`; a PDF is never parsed on the main thread: only
+  `pdfStrip.js`/`pdfStripWorker.js` load pdf-lib, run in a Worker per
+  upload with `parseHeapMb` and `parseMs`, a 413 past either), served
+  publicly only while `shownImageIds()`/`shownFiles()` of the shown,
+  resolved snapshot includes it, and pruned with its store
+  (`referencedImageIds()`/`referencedFileIds()` of draft and snapshot).
+  A PDF is sent with `nosniff`, `Content-Security-Policy: sandbox` and a
+  `Content-Disposition` from `contentDisposition()`, never a raw name.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a

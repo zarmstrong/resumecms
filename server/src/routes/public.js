@@ -7,6 +7,7 @@ import { handle } from './sendError.js';
 import { HOST_HEADERS } from '../hostnames.js';
 import { publicResumeHandlers } from './publicResume.js';
 import { landingContactHandler } from './landingContact.js';
+import { landingFileHandlers } from './landingFiles.js';
 
 const router = Router();
 
@@ -83,6 +84,10 @@ router.get('/landing/images/:id', handle((req, res) => {
 
 // The landing page's "Save contact" vCard (issue #124): see landingContact.js.
 router.get('/landing/contact.vcf', landingContactHandler(store));
+
+// A document the landing page shows (issue #128), by its id and the name
+// it's shown under: see routes/landingFiles.js.
+router.get('/landing/files/:id/:name', landingFileHandlers(store).publicFile);
 
 router.get('/resumes/:slug', slugResume);
 
