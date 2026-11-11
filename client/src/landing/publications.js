@@ -11,17 +11,11 @@ export const PUBLICATION_KINDS = ['article', 'paper', 'book', 'chapter', 'talk',
 export const PUBLICATION_ORDERS = ['manual', 'newest'];
 
 const DOI = /^10\.\d{4,9}(?:\.\d+)*\/\S+$/;
-const DOI_TYPED_SO_FAR = /^(?:1|10|10\.\d{0,9}|10\.\d{4,9}(?:\.\d+)*[./]?)$/;
-const DOI_LINK = /^\s*(?:(?:https?:\/\/)?(?:dx\.)?doi\.org\/|doi:\s*)/i;
+const DOI_LINK = /^\s*(?:https?:\/\/)?(?:dx\.|www\.)?doi\.org\//i;
+const DOI_LABEL = /^\s*doi(?::|\s)\s*/i;
 
 export function isDoi(text) {
   return typeof text === 'string' && DOI.test(text.trim());
-}
-
-export function isDraftDoi(text) {
-  if (typeof text !== 'string') return false;
-  const value = text.trim();
-  return value === '' || DOI.test(value) || DOI_TYPED_SO_FAR.test(value);
 }
 
 // The characters a DOI may hold that would end or break a URL's path are
@@ -31,8 +25,17 @@ export function doiUrl(doi) {
   return `https://doi.org/${doi.trim().replace(/[%"#?<>\\^`{|}]/g, (c) => encodeURIComponent(c))}`;
 }
 
+// A link's path is percent-encoded (doiUrl() encodes it again), so it's
+// decoded; one that doesn't decode is kept as pasted.
 export function cleanDoi(text) {
-  return typeof text === 'string' ? text.replace(DOI_LINK, '') : '';
+  if (typeof text !== 'string') return '';
+  if (!DOI_LINK.test(text)) return text.replace(DOI_LABEL, '');
+  const path = text.replace(DOI_LINK, '');
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
 }
 
 function dateKey(text) {

@@ -3,38 +3,38 @@
 // (client/src/landing/publications.test.js), so the two can't drift apart.
 // Node builtins only, so the client's tests can import it.
 
-// [text, isDoi, isDraftDoi, doiUrl]
+// [text, isDoi, doiUrl]
 export const DOI_CASES = [
-  ['10.1234/abcd', true, true, 'https://doi.org/10.1234/abcd'],
-  ['10.1038/s41586-020-2649-2', true, true, 'https://doi.org/10.1038/s41586-020-2649-2'],
-  ['10.1000.10/123456', true, true, 'https://doi.org/10.1000.10/123456'],
-  ['10.123456789/x', true, true, 'https://doi.org/10.123456789/x'],
-  ['10.1002/(SICI)1097-4571(199806)49:8<693::AID-ASI4>3.0.CO;2-0', true, true, 'https://doi.org/10.1002/(SICI)1097-4571(199806)49:8%3C693::AID-ASI4%3E3.0.CO;2-0'],
-  ['10.1234/a#b?c%d', true, true, 'https://doi.org/10.1234/a%23b%3Fc%25d'],
-  ['10.1234/a/b/c', true, true, 'https://doi.org/10.1234/a/b/c'],
-  [' 10.1234/abcd ', true, true, 'https://doi.org/10.1234/abcd'],
-  // Typed so far: saves, but isn't a link yet.
-  ['', false, true, ''],
-  ['1', false, true, ''],
-  ['10', false, true, ''],
-  ['10.', false, true, ''],
-  ['10.12', false, true, ''],
-  ['10.1234', false, true, ''],
-  ['10.1234.', false, true, ''],
-  ['10.1234.5', false, true, ''],
-  ['10.1234/', false, true, ''],
+  ['10.1234/abcd', true, 'https://doi.org/10.1234/abcd'],
+  ['10.1038/s41586-020-2649-2', true, 'https://doi.org/10.1038/s41586-020-2649-2'],
+  ['10.1000.10/123456', true, 'https://doi.org/10.1000.10/123456'],
+  ['10.123456789/x', true, 'https://doi.org/10.123456789/x'],
+  ['10.1002/(SICI)1097-4571(199806)49:8<693::AID-ASI4>3.0.CO;2-0', true, 'https://doi.org/10.1002/(SICI)1097-4571(199806)49:8%3C693::AID-ASI4%3E3.0.CO;2-0'],
+  ['10.1234/a#b?c%d', true, 'https://doi.org/10.1234/a%23b%3Fc%25d'],
+  ['10.1234/a/b/c', true, 'https://doi.org/10.1234/a/b/c'],
+  [' 10.1234/abcd ', true, 'https://doi.org/10.1234/abcd'],
+  // Typed so far: saves as text, but isn't a link yet.
+  ['', false, ''],
+  ['1', false, ''],
+  ['10', false, ''],
+  ['10.', false, ''],
+  ['10.12', false, ''],
+  ['10.1234', false, ''],
+  ['10.1234.', false, ''],
+  ['10.1234.5', false, ''],
+  ['10.1234/', false, ''],
   // Never a DOI.
-  ['https://doi.org/10.1234/abcd', false, false, ''],
-  ['doi:10.1234/abcd', false, false, ''],
-  ['11.1234/abcd', false, false, ''],
-  ['10.123/abcd', false, false, ''],
-  ['10.1234567890/abcd', false, false, ''],
-  ['10.1.5', false, false, ''],
-  ['10.abcd/efgh', false, false, ''],
-  ['10.1234/ab cd', false, false, ''],
-  ['javascript:alert(1)', false, false, ''],
-  [null, false, false, ''],
-  [1234, false, false, ''],
+  ['https://doi.org/10.1234/abcd', false, ''],
+  ['doi:10.1234/abcd', false, ''],
+  ['11.1234/abcd', false, ''],
+  ['10.123/abcd', false, ''],
+  ['10.1234567890/abcd', false, ''],
+  ['10.1.5', false, ''],
+  ['10.abcd/efgh', false, ''],
+  ['10.1234/ab cd', false, ''],
+  ['javascript:alert(1)', false, ''],
+  [null, false, ''],
+  [1234, false, ''],
 ];
 
 // [pasted, what the editor's field keeps]
@@ -45,6 +45,13 @@ export const CLEAN_DOI_CASES = [
   ['doi.org/10.1234/abcd', '10.1234/abcd'],
   ['doi:10.1234/abcd', '10.1234/abcd'],
   ['DOI: 10.1234/abcd', '10.1234/abcd'],
+  ['https://www.doi.org/10.1234/abcd', '10.1234/abcd'],
+  ['DOI 10.1234/abcd', '10.1234/abcd'],
+  ['doi', 'doi'],
+  // A link from the address bar, %-escaped: decoded, so doiUrl() doesn't
+  // encode it twice.
+  ['https://doi.org/10.1002/(SICI)1097-4571(199806)49:8%3C693::AID-ASI4%3E3.0.CO;2-0', '10.1002/(SICI)1097-4571(199806)49:8<693::AID-ASI4>3.0.CO;2-0'],
+  ['https://doi.org/10.1234/a%zz', '10.1234/a%zz'],
   ['10.1234/abcd', '10.1234/abcd'],
   ['https://example.org/10.1234/abcd', 'https://example.org/10.1234/abcd'],
   ['', ''],

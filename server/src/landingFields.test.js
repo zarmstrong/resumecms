@@ -1360,7 +1360,9 @@ test('publications are checked strictly, field by field, and stored whole', () =
     doi: `10.1234/${'x'.repeat(LANDING_LIMITS.doi - 8)}`,
   };
   assert.equal(status(() => validateLanding(publications(Array.from({ length: LANDING_LIMITS.publications }, () => atCaps)), known())), null);
-  for (const doi of ['', '1', '10.', '10.12', '10.1234', '10.1234/', '10.1234.5', '10.1234/abcd']) {
+  // A DOI saves as any text, as a half-typed URL does (it's linked only
+  // once it's one), so a typo or a paused paste never blocks a save.
+  for (const doi of ['', '1', '10.', 'd', 'doi', '10.1234/abcd', 'https://www.doi.org/10.1234/abcd', '10.123/abcd', '10.1234/ab cd (2020)', 'javascript:alert(1)']) {
     assert.equal(status(() => validateLanding(publications([{ title: 'X', doi }]), known())), null, doi);
   }
 
@@ -1373,11 +1375,6 @@ test('publications are checked strictly, field by field, and stored whole', () =
     publications([{ title: 'X', doi: `10.1234/${'x'.repeat(LANDING_LIMITS.doi)}` }]),
     publications([{ title: 'X', url: 'java\tscript:alert(1)' }]),
     publications([{ title: 'X', url: 'data:text/html,hi' }]),
-    publications([{ title: 'X', doi: 'https://doi.org/10.1234/abcd' }]),
-    publications([{ title: 'X', doi: 'doi:10.1234/abcd' }]),
-    publications([{ title: 'X', doi: '10.123/abcd' }]),
-    publications([{ title: 'X', doi: '10.1234/ab cd' }]),
-    publications([{ title: 'X', doi: 'javascript:alert(1)' }]),
     publications([{ kind: 'award', title: 'X' }]),
     publications([{ kind: 'Paper', title: 'X' }]),
     publications([{ title: 'X', authors: 'Me' }]),

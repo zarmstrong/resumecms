@@ -552,9 +552,10 @@ preview to dim and label "Expired", and a section of nothing else as
 A publication (issue #127: an `article`, `paper`, `book`, `chapter`,
 `talk`, `podcast` or `press` entry, `PUBLICATION_KINDS`) is plain text
 throughout, capped by `LANDING_LIMITS`; awards stay credentials. Its `url`
-is held to the item URL rules, and its `doi` to a DOI's pattern
-(`10.<4–9 digits>/<suffix>`, no `https://doi.org/` or `doi:` in front, or
-the start of one while it's typed: `isDraftDoi()`); the title links to its
+is held to the item URL rules; its `doi` saves as any text, like a
+half-typed URL, and counts only once it matches a DOI's pattern
+(`10.<4–9 digits>/<suffix>`, `isDoi()`; the editor's field trims a pasted
+`https://doi.org/…` link, decoding its %-escapes, or `doi:`); the title links to its
 own safe `url`, else `https://doi.org/<doi>` (`doiUrl()`), else nothing,
 and a resolved entry carries only that `url`, never the `doi`. The rules
 both resolvers apply are in `server/src/publications.js` and its copy

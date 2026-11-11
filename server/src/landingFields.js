@@ -5,7 +5,7 @@ import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inline
 import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImageFields.js';
 import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, emptyStyle, landingSite, mergeStylePatch } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';
-import { PUBLICATION_KINDS, PUBLICATION_ORDERS, arrangePublications, doiUrl, isDraftDoi } from './publications.js';
+import { PUBLICATION_KINDS, PUBLICATION_ORDERS, arrangePublications, doiUrl } from './publications.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -506,8 +506,8 @@ function checkGalleryEntry(entry, label, refs) {
 }
 
 // A publication: plain text throughout, its `url` held to the item URL
-// rules and its `doi` to a DOI's pattern, or the start of one while it's
-// typed (isDraftDoi()).
+// rules. Its `doi` saves as any text, as a half-typed URL does, and is
+// only linked once it's a DOI (doiUrl()).
 function checkPublication(entry, label) {
   checkKeys(entry, PUBLICATION_FIELDS, label);
   const kind = entry.kind ?? 'article';
@@ -522,7 +522,6 @@ function checkPublication(entry, label) {
     note: checkString(entry.note ?? '', LANDING_LIMITS.publicationNote, `${label}.note`),
   };
   if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
-  if (!isDraftDoi(out.doi)) throw httpError(400, `${label}.doi must be a DOI, such as 10.1234/abcd`);
   return out;
 }
 

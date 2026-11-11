@@ -1,13 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PUBLICATION_KINDS, arrangePublications, cleanDoi, doiUrl, isDoi, isDraftDoi, newestFirst } from './publications.js';
+import { PUBLICATION_KINDS, arrangePublications, cleanDoi, doiUrl, isDoi, newestFirst } from './publications.js';
 import { CLEAN_DOI_CASES, DOI_CASES, NEWEST_CASES } from './publications.cases.js';
 
-test('tells a DOI, and the start of one, by its pattern', () => {
-  for (const [text, doi, draft, url] of DOI_CASES) {
+test('tells a DOI by its pattern', () => {
+  for (const [text, doi, url] of DOI_CASES) {
     const what = JSON.stringify(text);
     assert.equal(isDoi(text), doi, what);
-    assert.equal(isDraftDoi(text), draft, what);
     assert.equal(doiUrl(text), url, what);
   }
 });
