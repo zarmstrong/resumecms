@@ -26,6 +26,17 @@ export function escapeText(value) {
     .replace(/\n/g, '\\n');
 }
 
+// A phone number as TEL's value: a phone-number, not text, so RFC 2426's
+// escaping doesn't apply and a reader would keep the backslash. The
+// characters that would need it (`\ , ;`) and every control character
+// become a space instead, so "555 0100, ext. 12" stays readable.
+export function phoneValue(value) {
+  return String(value)
+    .replace(/[\u0000-\u001f\u007f\\,;]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function utf8Octets(ch) {
   const code = ch.codePointAt(0);
   if (code < 0x80) return 1;
@@ -91,7 +102,7 @@ export function contactCard(contact, { name = '', title = '', url = '' } = {}) {
     `FN:${escapeText(shownName)}`,
     textOf(title) && `TITLE:${escapeText(textOf(title))}`,
     email && `EMAIL;TYPE=INTERNET,WORK:${escapeText(email)}`,
-    phone && `TEL;TYPE=WORK,VOICE:${escapeText(phone)}`,
+    phone && `TEL;TYPE=WORK,VOICE:${phoneValue(phone)}`,
     // The address is free text, so all of it goes in the street part.
     address && `ADR;TYPE=WORK:;;${escapeText(address)};;;;`,
     note && `NOTE:${escapeText(note)}`,

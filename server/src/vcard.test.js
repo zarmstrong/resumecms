@@ -97,6 +97,9 @@ test('contactCard writes vCard 3.0 with CRLF line ends, and leaves out every emp
     'END:VCARD',
     '',
   ]);
+  // TEL is a phone-number, not text: nothing in it is backslash-escaped.
+  assert.ok(unfolded(contactCard({ phone: '+1 512 555 0100, ext. 12' })).includes('TEL;TYPE=WORK,VOICE:+1 512 555 0100 ext. 12'));
+  assert.ok(unfolded(contactCard({ phone: '555-0100;1\\2' })).includes('TEL;TYPE=WORK,VOICE:555-0100 1 2'));
   // FN is required: without a name, the email (or the phone) names the card.
   assert.ok(unfolded(contactCard({ email: 'jo@example.com' })).includes('FN:jo@example.com'));
   assert.ok(unfolded(contactCard({ phone: '555 0100' })).includes('FN:555 0100'));
