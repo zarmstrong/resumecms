@@ -11,6 +11,8 @@ import { ensureSchema } from '../schema.js';
 import { createResumeStore } from '../resumeStore.js';
 import { migrateToResumes } from '../resumeMigration.js';
 import { NEUTRAL_COLORS } from '../favicon.js';
+import { createIconVersions } from '../faviconContent.js';
+import { mountClient } from '../clientStatic.js';
 import { faviconRoutes } from './favicon.js';
 
 // /favicon.svg and /apple-touch-icon.png (issue #104) over the real store
@@ -224,6 +226,109 @@ test('a failed render is a 500 that still carries the cache headers', async () =
     assert.equal(res.status, 500);
     assert.equal(res.headers['cache-control'], 'no-cache');
     assert.match(res.headers.vary, /\bHost\b/);
+  } finally {
+    console.error = original;
+  }
+});
+
+// The HTML shell's links to them (issue #108): a `?v=` per host from the
+// same content, over the real index.html.
+const shellDist = path.join(pdfDir, 'dist');
+fs.mkdirSync(shellDist);
+fs.copyFileSync(new URL('../../../client/index.html', import.meta.url), path.join(shellDist, 'index.html'));
+function serveWithShell(on) {
+  const app = express();
+  app.use(faviconRoutes(on));
+  mountClient(app, shellDist, { iconVersions: createIconVersions(on) });
+  const s = app.listen(0);
+  after(() => s.close());
+  return s;
+}
+const site = serveWithShell(store);
+
+async function iconLinks(urlPath, host, on = site) {
+  const { text } = await get(urlPath, { host, on });
+  return {
+    svg: text.match(/<link rel="icon" href="([^"]*)"/)[1],
+    png: text.match(/<link rel="apple-touch-icon" href="([^"]*)"/)[1],
+  };
+}
+const versionIn = (href) => new URL(href, 'http://x').searchParams.get('v');
+
+test("the shell links each host's icons by the version of what they serve", async () => {
+  store.setHeader({ name: 'Jo Doe', title: 'Engineer' });
+  await store.publish();
+  for (const host of ['jo.example', 'sales.example']) {
+    const links = await iconLinks('/', host);
+    assert.match(links.svg, /^\/favicon\.svg\?v=[0-9a-f]{32}$/, host);
+    assert.match(links.png, /^\/apple-touch-icon\.png\?v=[0-9a-f]{32}$/, host);
+    assert.deepEqual(await iconLinks('/editor', host), links, `${host}: a generic shell too`);
+    const svg = await get(links.svg, { host, on: site });
+    assert.equal(svg.headers.etag, `"${versionIn(links.svg)}"`, `${host}: the SVG's version is its ETag`);
+  }
+  const jo = await iconLinks('/', 'jo.example');
+  const sales = await iconLinks('/', 'sales.example');
+  assert.notEqual(jo.svg, sales.svg);
+  assert.notEqual(jo.png, sales.png);
+});
+
+test('the routes ignore ?v=: the same bytes, headers and ETag', async () => {
+  const links = await iconLinks('/', 'jo.example');
+  for (const [bare, versioned] of [['/favicon.svg', links.svg], ['/apple-touch-icon.png', links.png], ['/favicon.svg', '/favicon.svg?v=anything']]) {
+    const a = await get(bare, { on: site });
+    const b = await get(versioned, { on: site });
+    assert.equal(b.status, 200, versioned);
+    assert.deepEqual(b.body, a.body, versioned);
+    for (const header of ['etag', 'cache-control', 'vary', 'content-type', 'x-content-type-options', 'content-security-policy']) {
+      assert.equal(b.headers[header], a.headers[header], `${versioned}: ${header}`);
+    }
+    const again = await get(versioned, { on: site, headers: { 'if-none-match': a.headers.etag } });
+    assert.equal(again.status, 304, versioned);
+  }
+});
+
+test('a publish that changes the icon changes the links; a draft edit does not', async () => {
+  const before = await iconLinks('/', 'jo.example');
+  store.setSite({ colors: { accent: '#117733' } });
+  assert.deepEqual(await iconLinks('/', 'jo.example'), before, 'not yet published');
+  await store.publish();
+  const after = await iconLinks('/', 'jo.example');
+  assert.notEqual(after.svg, before.svg);
+  assert.notEqual(after.png, before.png);
+  assert.equal((await get(after.svg, { on: site })).headers.etag, `"${versionIn(after.svg)}"`);
+  assert.equal(tileColor((await get(after.svg, { on: site })).text), '#117733');
+  assert.deepEqual(await iconLinks('/', 'sales.example'), await iconLinks('/editor', 'sales.example'));
+  // A publish that changes something else keeps them.
+  store.createBlock({ type: 'summary', data: { text: 'More.' } });
+  await store.publish();
+  assert.deepEqual(await iconLinks('/', 'jo.example'), after);
+});
+
+test("while the landing page holds `/`, the links follow its icon", async () => {
+  store.setLandingEnabled(true);
+  try {
+    const links = await iconLinks('/', 'jo.example');
+    const svg = await get(links.svg, { on: site });
+    assert.equal(svg.headers.etag, `"${versionIn(links.svg)}"`);
+    assert.match(svg.text, /prefers-color-scheme/, "the landing page's own icon");
+  } finally {
+    store.setLandingEnabled(false);
+  }
+});
+
+test('a store that throws: the bare paths', async () => {
+  const original = console.error;
+  console.error = () => {};
+  try {
+    const broken = new Proxy({}, {
+      get() {
+        return () => {
+          throw new Error('SQLITE_BUSY');
+        };
+      },
+    });
+    const links = await iconLinks('/', 'jo.example', serveWithShell(broken));
+    assert.deepEqual(links, { svg: '/favicon.svg', png: '/apple-touch-icon.png' });
   } finally {
     console.error = original;
   }
