@@ -75,7 +75,12 @@ test('a landing style.css may not remove an outline without a replacement in the
     '.l-template-other a:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--r-heading); }',
     '.l-template-other a:focus:not(:focus-visible) { outline: none; }',
     '.l-template-other a:not(:focus-visible), .l-template-other button:not( :focus-visible ) { outline: 0; }',
-    '.l-template-other a:focus-visible { outline: 2px solid transparent; box-shadow: none; }',
+    // The forced-colors pattern: a transparent outline with a box-shadow ring.
+    '.l-template-other a:focus-visible { outline: 2px solid transparent; box-shadow: 0 0 0 3px var(--r-heading); }',
+    '.l-template-other a:focus-visible { outline: 2px solid; outline-color: rgba(0, 0, 0, 0); box-shadow: 0 0 0 3px red; }',
+    // Black in the legacy comma form isn't transparent.
+    '.l-template-other a:focus-visible { outline: 2px solid rgb(0, 0, 0); }',
+    '.l-template-other a:focus-visible { outline: 2px solid transparent; outline-color: red; }',
     // Turned back on later in the same rule.
     '.l-template-other a:focus-visible { outline: none; outline: 2px solid red; }',
     '.l-template-other a:focus-visible { outline: 0 solid; outline-width: 2px; }',
@@ -110,6 +115,12 @@ test('a landing style.css may not remove an outline without a replacement in the
     ['.l-template-other a:focus { outline: 0; outline-style: solid; }', /removes the outline/],
     // The shorthand without a style draws none.
     ['.l-template-other a:focus { outline: 2px red; }', /removes the outline/],
+    // A transparent outline is drawn only in forced-colors mode.
+    ['.l-template-other a:focus-visible { outline: 2px solid transparent; }', /removes the outline/],
+    ['.l-template-other a:focus-visible { outline: 2px solid transparent; box-shadow: none; }', /removes the outline/],
+    ['.l-template-other a:focus-visible { outline: 2px solid red; outline-color: transparent; }', /removes the outline/],
+    ['.l-template-other a:focus-visible { outline: 2px solid rgba(0,0,0,0); }', /removes the outline/],
+    ['.l-template-other a:focus-visible { outline: 2px solid rgb(0 0 0 / 0%); }', /removes the outline/],
   ];
   for (const [body, message] of failing) {
     const run = validate(withCss(body));
@@ -145,6 +156,8 @@ test('a landing style.css moves things only under prefers-reduced-motion: no-pre
     '.l-template-other { scroll-behavior: auto; }',
     '@media (prefers-reduced-motion: no-preference) { .l-template-other { scroll-behavior: smooth; } }',
     '@media (prefers-reduced-motion: no-preference) and (min-width: 1px), (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }',
+    // A `not` on another condition leaves the gate alone.
+    '@media (hover: hover) and (prefers-reduced-motion: no-preference) and (not (pointer: coarse)) { .l-template-other .l-card { animation: x 1s; } }',
   ];
   for (const body of passing) {
     const run = validate(withCss(body));
@@ -166,6 +179,9 @@ test('a landing style.css moves things only under prefers-reduced-motion: no-pre
     // A query list is an OR: every query in it needs the condition.
     ['@media screen, (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
     ['@media (prefers-reduced-motion: no-preference) or (min-width: 1px) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
+    // A whole query negated, or the condition itself.
+    ['@media not screen and (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
+    ['@media (hover: hover) and (not (prefers-reduced-motion: no-preference)) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
     ['@media (min-width: 1px) OR (prefers-reduced-motion: no-preference) { .l-template-other .l-card { animation: x 1s; } }', /"animation: x 1s"/],
     // Pairs by index: the second property gets the second duration.
     ['.l-template-other .l-card { transition-property: color, transform; transition-duration: 1s, 2s; }', /transitions transform,/],

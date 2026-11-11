@@ -46,7 +46,11 @@
    that (a long headline, several buttons) scrolls on its own, so its
    buttons are always in reach. The 6 px of padding, given back by the
    margins (and the top), keep it where it was and leave room inside the
-   scroller for the buttons' focus rings. */
+   scroller for the buttons' focus rings, and scroll-padding keeps that
+   room when a focused button is scrolled into view. The left margin is
+   what auto was (pushing the 360 px hero to the column's right), less
+   the 6 px, and never more than -6 px, so a column narrower than the
+   cap doesn't move it either. */
 @container (width > 820px) {
   @media (height >= 640px) {
     .l-template-split .l-split-sticky {
@@ -55,8 +59,9 @@
       max-height: calc(100vh - 66px);
       max-height: calc(100dvh - 66px);
       padding: 6px;
-      margin: -6px -6px -6px auto;
+      margin: -6px -6px -6px max(-6px, calc(100% - 366px));
       overflow-y: auto;
+      scroll-padding: 8px;
     }
   }
 }

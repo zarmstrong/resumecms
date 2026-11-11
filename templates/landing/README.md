@@ -194,7 +194,10 @@ checked by hand (and by the reviewer, whose checklist lists the same bar).
   every selector in it is limited to `:not(:focus-visible)` (pointer focus
   only, so the keyboard's ring is untouched). A border or background change
   doesn't count: it's too easy to make too faint to see. A transparent
-  outline isn't a removal (forced-colors mode still draws it).
+  outline (`transparent`, or a color with a zero alpha, in `outline` or
+  `outline-color`) counts as removed too, since only forced-colors mode
+  draws it: the forced-colors pattern, a transparent outline with a
+  `box-shadow` ring, passes through the ring.
 - **Motion outside `@media (prefers-reduced-motion: no-preference)`.** Any
   `animation` or `animation-name` that names an animation (`animation:
   none 0s` names none); `scroll-behavior: smooth`; any `transition` or
@@ -212,7 +215,10 @@ checked by hand (and by the reviewer, whose checklist lists the same bar).
   too, since a shadow's offset can move. The `-webkit-`, `-moz-`, `-o-`
   and `-ms-` forms count as the same properties. A `@media` list's commas
   and a top-level `or` are both an OR, so it's the gate only if every
-  alternative has the `no-preference` condition. `none` and the CSS-wide
+  alternative has the `no-preference` condition and isn't negated: a
+  leading `not`, or a `not` applied to that condition, voids it, while a
+  `not` on another condition (`and (not (pointer: coarse))`) doesn't.
+  `none` and the CSS-wide
   keywords (`initial`, `unset`, …) always pass. `@keyframes` blocks aren't
   read.
 

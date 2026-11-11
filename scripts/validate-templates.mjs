@@ -219,13 +219,19 @@ function mediaAlternatives(prelude) {
 
 // Inside the gate only if every alternative of the @media list has it:
 // `screen, (prefers-reduced-motion: no-preference)` or `… or (min-width:
-// 1px)` matches a visitor who asked for less motion too.
+// 1px)` matches a visitor who asked for less motion too. So does a query
+// negated as a whole (`not screen and (…)`) or one whose no-preference
+// condition is itself negated; a `not` on another condition (`and (not
+// (pointer: coarse))`) leaves the gate alone.
 const motionAllowed = (rule) =>
   rule.atRules.some(
     (at) =>
       /^@media\b/i.test(at) &&
       mediaAlternatives(at).every(
-        (query) => /prefers-reduced-motion\s*:\s*no-preference/i.test(query) && !/\bnot\b/i.test(query)
+        (query) =>
+          /prefers-reduced-motion\s*:\s*no-preference/i.test(query) &&
+          !/^\s*not\b/i.test(query) &&
+          !/\bnot\s*\(\s*prefers-reduced-motion\b/i.test(query)
       )
   );
 
@@ -257,22 +263,39 @@ function animationNames(property, value) {
 // `none`, so `outline: 2px red` is off too); `outline-style` and
 // `outline-width` set one each. A color's own zeros (`rgb(0 0 0 / .6)`)
 // aren't a width, and a value with a `var()` in it can't be read, so it
-// counts as on. A transparent outline isn't off (it still shows in
-// forced-colors mode, which is why it's used).
+// counts as on. Its color is followed too: a transparent outline
+// (`transparent`, or a color function with a zero alpha) is off, since
+// only forced-colors mode draws it; the forced-colors pattern pairs it
+// with a box-shadow ring, which is the replacement that lets it pass.
 const ZERO = /^0(\.0+)?([a-z]+|%)?$/i;
 const OUTLINE_STYLES = new Set(['auto', 'dotted', 'dashed', 'solid', 'double', 'groove', 'ridge', 'inset', 'outset']);
+// `transparent`, `rgba(0, 0, 0, 0)`, `rgb(0 0 0 / 0%)`, `hsl(… / 0)`, …
+const ZERO_ALPHA = /^0*(\.0+)?%?$/;
+function isTransparent(value) {
+  if (/(^|[\s(])transparent\b/i.test(value)) return true;
+  // A color function's alpha: after a slash, or the fourth of its commas.
+  return [...value.matchAll(/\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(([^()]*)\)/gi)].some(([, args]) => {
+    const slash = args.split('/');
+    if (slash.length === 2) return ZERO_ALPHA.test(slash[1].trim());
+    const commas = args.split(',');
+    return commas.length === 4 && ZERO_ALPHA.test(commas[3].trim());
+  });
+}
 function outlineParts(property, value) {
-  if (!['outline', 'outline-style', 'outline-width'].includes(property)) return null;
+  if (!['outline', 'outline-style', 'outline-width', 'outline-color'].includes(property)) return null;
   const words = wordsOf(value.toLowerCase());
   const unread = CSS_WIDE.has(words[0]) || /\bvar\(/i.test(value);
+  const color = !unread && isTransparent(value) ? 'off' : 'on';
   if (property === 'outline') {
-    if (unread) return { style: 'on', width: 'on' };
+    if (unread) return { style: 'on', width: 'on', color: 'on' };
     return {
       style: words.some((word) => OUTLINE_STYLES.has(word)) ? 'on' : 'off',
       width: words.some((word) => ZERO.test(word)) ? 'off' : 'on',
+      color,
     };
   }
   if (property === 'outline-style') return { style: !unread && words.includes('none') ? 'off' : 'on' };
+  if (property === 'outline-color') return { color };
   return { width: !unread && ZERO.test(words[0] ?? '') ? 'off' : 'on' };
 }
 
@@ -296,7 +319,7 @@ function movingTransitions(state) {
 
 function checkLandingCss(source, label) {
   for (const rule of cssRules(source)) {
-    const outline = { style: null, width: null };
+    const outline = { style: null, width: null, color: null };
     let outlineLine = 0;
     let replaced = false;
     const transitions = new Map();
@@ -347,7 +370,7 @@ function checkLandingCss(source, label) {
         `${label}:${state.line}: "${state.declarations.join('; ')}" in "${rule.selector}" transitions ${what}, which ${GATE} (only colors, opacity, visibility and display may transition outside it)`
       );
     }
-    if ((outline.style === 'off' || outline.width === 'off') && !replaced && !pointerOnly(rule.selector)) {
+    if (Object.values(outline).includes('off') && !replaced && !pointerOnly(rule.selector)) {
       errors.push(
         `${label}:${outlineLine}: "${rule.selector}" removes the outline without a replacement focus style in the same rule (a box-shadow ring, or limit it to :not(:focus-visible))`
       );
