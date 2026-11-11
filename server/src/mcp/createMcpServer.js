@@ -6,6 +6,7 @@ import { httpError } from '../httpError.js';
 import { ACTION_ICONS, ACTION_OPENS, CREDENTIAL_KINDS, LANDING_LIMITS, LINK_TYPES, PHOTO_SOURCES, SECTION_COLUMNS } from '../landingFields.js';
 import { FONT_IDS, LANDING_STYLE_SOURCES } from '../landingStyle.js';
 import { LANDING_IMAGE_LIMITS } from '../landingImageFields.js';
+import { PUBLICATION_KINDS, PUBLICATION_ORDERS } from '../publications.js';
 import { LANDING_FILE_LIMITS } from '../landingFileFields.js';
 import { BLOCK_SCHEMAS, blockSchemaFor } from './blockSchemas.js';
 import { moveBlockOrder } from './moveBlock.js';
@@ -47,7 +48,7 @@ Draft vs published: every write tool changes the DRAFT only, of one resume. Noth
 
 Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
 
-Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, and documents (uploaded PDFs); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, or seo.image for link previews. Its documents (PDFs) are uploaded only in the editor; a documents section can reference one already stored (get_landing_page's context.files) as { fileId, name }.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, services (what you offer, each with a short description, an optional price line and an optional button), a video or audio clip (media: one YouTube, Vimeo, SoundCloud or Spotify link, loaded only when a visitor presses play), publications (papers, articles, books, talks, podcasts and press, sorted newest first or grouped by kind if asked), one contact section (email, phone, service area, address, hours and a "Save contact" vCard), and documents (uploaded PDFs); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, a media section's poster, or seo.image for link previews. Its documents (PDFs) are uploaded only in the editor; a documents section can reference one already stored (get_landing_page's context.files) as { fileId, name }.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -554,6 +555,25 @@ const landingCredential = () =>
       .describe('When it expires. Read as YYYY, YYYY-MM, MM/YYYY, "Mar 2027", "March 2027" or YYYY-MM-DD, it leaves the page once that has passed (UTC); anything else is shown as written.'),
     url: z.string().optional().describe("An optional http, https, mailto or tel link, the issuer's page to verify it on, shown as \"Verify\"."),
   });
+const landingService = () =>
+  z.object({
+    title: z.string().optional().describe(`What's offered, plain text (at most ${LANDING_LIMITS.serviceTitle} characters), e.g. "Private tutoring".`),
+    text: z
+      .string()
+      .optional()
+      .describe(`A short description (at most ${LANDING_LIMITS.serviceText} characters); may hold [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is. A service without a title or a text isn't shown.`),
+    price: z.string().optional().describe(`Free text, never a number (at most ${LANDING_LIMITS.servicePrice} characters), e.g. "From $60/hour", "Free 15-minute consultation", "Sliding scale".`),
+    action: z
+      .object({
+        type: z.literal('link').optional().describe("Always 'link'."),
+        label: z.string().optional().describe('Button text, e.g. "Book a session". Empty shows the URL.'),
+        url: z.string().describe('An http, https, mailto or tel URL; mailto:you@example.com?subject=Booking prefills a subject.'),
+        icon: actionIcon(),
+      })
+      .nullable()
+      .optional()
+      .describe('An optional button for this service; null removes it. Shown only while its URL is a full http, https, mailto or tel link.'),
+  });
 const landingDocument = () =>
   z.object({
     file: z
@@ -573,6 +593,19 @@ const sectionBase = {
   hidden: z.boolean().optional().describe('true keeps the section in the draft without showing it.'),
   column: z.enum(SECTION_COLUMNS).optional().describe("'side' draws it in the side column of a template that has one (split: under the hero); others draw it in order with the rest. Default 'main'."),
 };
+const landingPublication = () =>
+  z.object({
+    kind: z.enum(PUBLICATION_KINDS).optional().describe("What it is (default 'article'); picks the label on its line and, with group, its subheading."),
+    title: z.string().optional().describe(`At most ${LANDING_LIMITS.publicationTitle} characters. One without a title isn't shown.`),
+    outlet: z.string().optional().describe('Where it appeared: a journal, publisher, conference, show or paper.'),
+    date: z
+      .string()
+      .optional()
+      .describe('Shown as written. Read as YYYY, YYYY-MM, MM/YYYY, "Mar 2024", "March 2024" or YYYY-MM-DD, it sorts with order: \'newest\'; anything else ("Forthcoming") keeps its place.'),
+    url: z.string().optional().describe('An optional http, https, mailto or tel link for the title.'),
+    doi: z.string().optional().describe('An optional DOI, just 10.<registrant>/<suffix> (no https://doi.org/ or doi: in front); the title links to https://doi.org/<doi> when url is empty.'),
+    note: z.string().optional().describe('Plain text under it: co-authors, "invited", "keynote".'),
+  });
 const landingSection = () =>
   z.discriminatedUnion('kind', [
     z.object({ ...sectionBase, kind: z.literal('text'), body: z.string().optional().describe('Text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is; a blank line starts a new paragraph.') }),
@@ -623,6 +656,58 @@ const landingSection = () =>
           .describe(`At most ${LANDING_LIMITS.galleryImages}, in order. An entry without an image is left out, and a gallery with none is left off the public page.`),
       })
       .describe('Images in a grid, each opening larger when clicked. Never rewritten by AI.'),
+    z
+      .object({
+        ...sectionBase,
+        kind: z.literal('media'),
+        url: z
+          .string()
+          .optional()
+          .describe(
+            "An https link to one YouTube or Vimeo video (a start time in it, t=90, t=1m30s or #t=, is kept), or a SoundCloud track or playlist or a Spotify track, album, playlist, episode or show, as copied from the address bar or the share button. Any other link is a 400; '' while there's none, and then the section is left off the public page."
+          ),
+        caption: z.string().optional().describe(`Plain text shown under it, at most ${LANDING_LIMITS.mediaCaption} characters.`),
+        poster: landingImage().nullable().optional().describe("An optional uploaded image shown before it's played (the provider's own thumbnail is never fetched); null removes it."),
+        transcript: z
+          .string()
+          .optional()
+          .describe(`Optional plain text, at most ${LANDING_LIMITS.transcript} characters, shown under a "Transcript" disclosure; a blank line starts a new paragraph.`),
+      })
+      .describe(
+        "One video or audio clip behind a click-to-load facade: nothing loads from the provider until a visitor presses play, and then it plays in the provider's privacy mode where it has one. Never rewritten by AI."
+      ),
+    z.object({
+      ...sectionBase,
+      kind: z.literal('services'),
+      services: z.array(landingService()).optional().describe(`What you offer, at most ${LANDING_LIMITS.services}, in order.`),
+    }),
+    z
+      .object({
+        ...sectionBase,
+        kind: z.literal('publications'),
+        order: z.enum(PUBLICATION_ORDERS).optional().describe("'manual' (default): as listed; 'newest': entries with a readable date newest first, the others in their places."),
+        group: z.boolean().optional().describe('Show each kind under a subheading of its own, in a fixed order (default false).'),
+        entries: z.array(landingPublication()).optional().describe(`At most ${LANDING_LIMITS.publications}.`),
+      })
+      .describe('Published work and appearances, each a linked title over "Outlet · Date · Kind" and a note. Plain text; never rewritten by AI.'),
+    z
+      .object({
+        ...sectionBase,
+        kind: z.literal('contact'),
+        email: z.string().optional().describe("An email address, linked with mailto:. Not shown until it's a whole address."),
+        phone: z.string().optional().describe('A phone number as it should read, linked with tel:. Not shown without digits to dial.'),
+        area: z.string().optional().describe('The area served, e.g. "Serving Travis and Williamson counties".'),
+        address: z
+          .string()
+          .optional()
+          .describe("A postal address, one line per line, shown with a \"Directions\" link to a map search. It's public: a service area is often better than a home address."),
+        hours: z
+          .array(z.object({ days: z.string().optional().describe('e.g. "Tue–Sat".'), time: z.string().optional().describe('e.g. "9–6" or "Evenings by appointment".') }))
+          .optional()
+          .describe(`Opening hours, at most ${LANDING_LIMITS.contactHours} lines, plain text.`),
+        vcard: z.boolean().optional().describe('Show a "Save contact" button that downloads a vCard of what the section shows (default true).'),
+      })
+      .describe('How to reach the person. At most one per page. All plain text; never rewritten by AI.'),
     z
       .object({
         ...sectionBase,

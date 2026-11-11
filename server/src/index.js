@@ -8,6 +8,7 @@ import { store } from './store.js';
 import { applyTrustProxy } from './trustProxy.js';
 import { mountClient } from './clientStatic.js';
 import { createShellHead } from './shellHead.js';
+import { createIconVersions } from './faviconContent.js';
 import { closeBrowser } from './pdfRenderer.js';
 import { createShutdown } from './shutdown.js';
 
@@ -85,8 +86,12 @@ app.use(faviconRoutes(store));
 
 // Serve the built client (Vite output) for everything else — see
 // clientStatic.js for the SPA fallback and the cache policy, and
-// shellHead.js for the public pages' titles and link previews.
-mountClient(app, path.join(__dirname, '..', '..', 'client', 'dist'), { headFor: createShellHead(store) });
+// shellHead.js for the public pages' titles and link previews, and
+// faviconContent.js for the icon links' versions.
+mountClient(app, path.join(__dirname, '..', '..', 'client', 'dist'), {
+  headFor: createShellHead(store),
+  iconVersions: createIconVersions(store),
+});
 
 const server = app.listen(PORT, () => {
   console.log(`resume server listening on port ${PORT}`);

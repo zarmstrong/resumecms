@@ -6,6 +6,8 @@ import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImag
 import { checkFileRef, resolveFile } from './landingFileFields.js';
 import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, emptyStyle, landingSite, mergeStylePatch } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';
+import { parseMediaUrl } from './mediaUrl.js';
+import { PUBLICATION_KINDS, PUBLICATION_ORDERS, arrangePublications, doiUrl } from './publications.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -56,6 +58,28 @@ import { hasPassed, utcToday } from './dateText.js';
 //   gallery    — images: [{ image, caption }] (issue #120), drawn as a grid
 //                that opens each larger; an entry's image is a reference, or
 //                null until its upload lands, and its caption plain text
+//   media      — url, caption, poster?, transcript (issue #121): one video
+//                or audio clip from YouTube, Vimeo, SoundCloud or Spotify
+//                (mediaUrl.js; any other link is a 400, '' allowed while
+//                there's none yet), drawn behind a click-to-load facade;
+//                `poster` an optional image reference shown on it, the
+//                caption and transcript plain text
+//   services   — services: [{ title, text, price, action? }] (issue #122),
+//                what the person offers: `price` is free text ("From
+//                $60/hour", "Sliding scale"), never a number, and `action`
+//                an optional button with a hero link action's shape
+//                ({ type: 'link', label, url, icon? }), stored only when set
+//   publications — order ('manual' | 'newest'), group (a subheading per
+//                kind) and entries: [{ kind, title, outlet, date, url, doi,
+//                note }] (issue #127), published work and appearances;
+//                `date` is free-form (dateText.js reads it for 'newest'),
+//                `doi` a DOI (publications.js), linked when `url` is empty
+//   contact    — email, phone, area, address, hours: [{ days, time }],
+//                vcard (issue #124): how to reach the person, the area they
+//                serve, a postal address (multi-line), opening hours as
+//                plain-text pairs, and whether the page offers a "Save
+//                contact" vCard (vcard.js); at most one per page, so the
+//                vCard has one source
 //   documents  — documents: [{ file, label, description }] (issue #128),
 //                uploaded PDFs (a portfolio, writing samples); `file` is a
 //                reference ({ fileId, name }, landingFileFields.js), or null
@@ -65,10 +89,10 @@ import { hasPassed, utcToday } from './dateText.js';
 // template that has one (template.json's `columns`, e.g. split's column
 // under the hero) and in the main flow by every other. `hidden`, `column`
 // and an item's `meta` are only stored when set.
-// A text section's body, an item's text and an FAQ answer may hold links
-// and emphasis (issue #91, inlineText.js); every other string, a quote's
-// text, an item's meta, a stat and an FAQ question included, is plain
-// text.
+// A text section's body, an item's text, an FAQ answer and a service's
+// text may hold links and emphasis (issue #91, inlineText.js); every other
+// string, a quote's text, an item's meta, a stat, an FAQ question and a
+// service's title and price included, is plain text.
 // `id` only tells sections apart in the editor; it never leaves the server
 // publicly. `seo` is { title, description, noindex } (issue #87): what
 // the page's <title>, description and link previews say instead of the
@@ -76,7 +100,7 @@ import { hasPassed, utcToday } from './dateText.js';
 // are asked to leave it out, plus an optional `image`, the share image
 // link previews show instead of a drawn card. Image references
 // ({ imageId, alt }, landingImageFields.js) are stored only where one is
-// set: `photoImage`, an item's `image` and `seo.image` are optional keys,
+// set: `photoImage`, an item's `image`, a media section's `poster` and `seo.image` are optional keys,
 // not nulls. `homeLink` (issue #89) is whether a resume
 // page shows a "← Home" link back here while this page holds `/` (see
 // landingStore.js's homeLinkForHost()), and `homeLinkLabel` what it says
@@ -129,6 +153,27 @@ export const LANDING_LIMITS = {
   credentialNumber: 60,
   credentialDate: 40,
   galleryImages: 24,
+  mediaCaption: 300,
+  // About a twenty-minute talk.
+  transcript: 20_000,
+  services: 12,
+  serviceTitle: 120,
+  serviceText: 1000,
+  servicePrice: 80,
+  publications: 40,
+  publicationTitle: 300,
+  publicationOutlet: 160,
+  publicationDate: 40,
+  publicationNote: 300,
+  doi: 200,
+  // An email address can't be longer (RFC 5321's path limit).
+  contactEmail: 254,
+  contactPhone: 40,
+  contactArea: 200,
+  contactAddress: 300,
+  contactHours: 10,
+  contactDays: 60,
+  contactTime: 60,
   documents: 12,
   documentLabel: 120,
   documentDescription: 300,
@@ -158,7 +203,7 @@ export const LINK_TYPES = [
   'custom',
 ];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'documents'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'media', 'services', 'publications', 'contact', 'documents'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -190,6 +235,10 @@ const SECTION_FIELDS = {
   skills: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId'],
   credentials: ['id', 'kind', 'title', 'hidden', 'column', 'credentials'],
   gallery: ['id', 'kind', 'title', 'hidden', 'column', 'images'],
+  media: ['id', 'kind', 'title', 'hidden', 'column', 'url', 'caption', 'poster', 'transcript'],
+  services: ['id', 'kind', 'title', 'hidden', 'column', 'services'],
+  publications: ['id', 'kind', 'title', 'hidden', 'column', 'order', 'group', 'entries'],
+  contact: ['id', 'kind', 'title', 'hidden', 'column', 'email', 'phone', 'area', 'address', 'hours', 'vcard'],
   documents: ['id', 'kind', 'title', 'hidden', 'column', 'documents'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
@@ -198,6 +247,9 @@ const STAT_FIELDS = ['value', 'label'];
 const FAQ_FIELDS = ['question', 'answer'];
 const CREDENTIAL_FIELDS = ['kind', 'name', 'issuer', 'number', 'issued', 'expires', 'url'];
 const GALLERY_ENTRY_FIELDS = ['image', 'caption'];
+const SERVICE_FIELDS = ['title', 'text', 'price', 'action'];
+const PUBLICATION_FIELDS = ['kind', 'title', 'outlet', 'date', 'url', 'doi', 'note'];
+const HOURS_FIELDS = ['days', 'time'];
 const DOCUMENT_FIELDS = ['file', 'label', 'description'];
 // What a credential is; only picks the label it's shown with.
 export const CREDENTIAL_KINDS = ['license', 'certification', 'membership'];
@@ -501,6 +553,65 @@ function checkGalleryEntry(entry, label, refs) {
   };
 }
 
+// A service (issue #122): its title and price are plain text, its text
+// takes links and emphasis like an item's, and its button, when it has
+// one, is a hero link action (checkAction()'s rules, a `type` other than
+// 'link' refused) stored only when set.
+function checkService(service, label, refs) {
+  checkKeys(service, SERVICE_FIELDS, label);
+  const out = {
+    title: checkString(service.title ?? '', LANDING_LIMITS.serviceTitle, `${label}.title`),
+    text: checkInlineText(service.text ?? '', LANDING_LIMITS.serviceText, `${label}.text`),
+    price: checkString(service.price ?? '', LANDING_LIMITS.servicePrice, `${label}.price`),
+  };
+  if (service.action != null) {
+    const action = service.action;
+    if (!isPlainObject(action)) throw httpError(400, `${label}.action must be an object`);
+    if ((action.type ?? 'link') !== 'link') throw httpError(400, `${label}.action.type must be link`);
+    out.action = checkAction({ ...action, type: 'link' }, `${label}.action`, refs);
+  }
+  return out;
+}
+
+// A publication: plain text throughout, its `url` held to the item URL
+// rules. Its `doi` saves as any text, as a half-typed URL does, and is
+// only linked once it's a DOI (doiUrl()).
+function checkPublication(entry, label) {
+  checkKeys(entry, PUBLICATION_FIELDS, label);
+  const kind = entry.kind ?? 'article';
+  if (!PUBLICATION_KINDS.includes(kind)) throw httpError(400, `${label}.kind must be one of ${PUBLICATION_KINDS.join(', ')}`);
+  const out = {
+    kind,
+    title: checkString(entry.title ?? '', LANDING_LIMITS.publicationTitle, `${label}.title`),
+    outlet: checkString(entry.outlet ?? '', LANDING_LIMITS.publicationOutlet, `${label}.outlet`),
+    date: checkString(entry.date ?? '', LANDING_LIMITS.publicationDate, `${label}.date`),
+    url: checkString(entry.url ?? '', LANDING_LIMITS.url, `${label}.url`),
+    doi: checkString(entry.doi ?? '', LANDING_LIMITS.doi, `${label}.doi`),
+    note: checkString(entry.note ?? '', LANDING_LIMITS.publicationNote, `${label}.note`),
+  };
+  if (!isAllowedDraftUrl(out.url)) throw httpError(400, `${label}.url must be an http, https, mailto or tel link`);
+  return out;
+}
+
+// A line of a contact section's opening hours: both plain text, so "Tue–Sat"
+// and "9–6, evenings by appointment" need no time zone or format.
+function checkHours(entry, label) {
+  checkKeys(entry, HOURS_FIELDS, label);
+  return {
+    days: checkString(entry.days ?? '', LANDING_LIMITS.contactDays, `${label}.days`),
+    time: checkString(entry.time ?? '', LANDING_LIMITS.contactTime, `${label}.time`),
+  };
+}
+
+// A contact section's email or phone: one line, since it goes into a link
+// and a vCard property. A half-typed one saves and isn't shown (like a
+// half-typed link); mailtoUrl() and telUrl() decide.
+function checkContactLine(value, max, label) {
+  const text = checkString(value ?? '', max, label);
+  if (/[\u0000-\u001f\u007f]/.test(text)) throw httpError(400, `${label} must be a single line`);
+  return text;
+}
+
 // A document: its file (null while the editor's upload for it is on its
 // way), a label and a description, all always stored.
 function checkDocument(entry, label, refs) {
@@ -591,6 +702,38 @@ function checkSection(section, i, refs, ids) {
         checkGalleryEntry(entry, `${label}.images[${j}]`, refs)
       );
       break;
+    case 'media':
+      // Only a link the parser knows, so nothing else is ever embedded; the
+      // editor holds a half-typed one back until it reads as one.
+      out.url = checkString(section.url ?? '', LANDING_LIMITS.url, `${label}.url`);
+      if (out.url.trim() !== '' && !parseMediaUrl(out.url)) {
+        throw httpError(400, `${label}.url must be an https link to a YouTube or Vimeo video, or to something on SoundCloud or Spotify`);
+      }
+      out.caption = checkString(section.caption ?? '', LANDING_LIMITS.mediaCaption, `${label}.caption`);
+      if (section.poster != null) out.poster = checkImageRef(section.poster, `${label}.poster`, refs);
+      out.transcript = checkString(section.transcript ?? '', LANDING_LIMITS.transcript, `${label}.transcript`);
+      break;
+    case 'services':
+      out.services = checkList(section.services, LANDING_LIMITS.services, `${label}.services`).map((service, j) =>
+        checkService(service, `${label}.services[${j}]`, refs)
+      );
+      break;
+    case 'publications':
+      out.order = section.order ?? 'manual';
+      if (!PUBLICATION_ORDERS.includes(out.order)) throw httpError(400, `${label}.order must be one of ${PUBLICATION_ORDERS.join(', ')}`);
+      out.group = checkBoolean(section.group ?? false, `${label}.group`);
+      out.entries = checkList(section.entries, LANDING_LIMITS.publications, `${label}.entries`).map((entry, j) =>
+        checkPublication(entry, `${label}.entries[${j}]`)
+      );
+      break;
+    case 'contact':
+      out.email = checkContactLine(section.email, LANDING_LIMITS.contactEmail, `${label}.email`);
+      out.phone = checkContactLine(section.phone, LANDING_LIMITS.contactPhone, `${label}.phone`);
+      out.area = checkString(section.area ?? '', LANDING_LIMITS.contactArea, `${label}.area`);
+      out.address = checkString(section.address ?? '', LANDING_LIMITS.contactAddress, `${label}.address`);
+      out.hours = checkList(section.hours, LANDING_LIMITS.contactHours, `${label}.hours`).map((entry, j) => checkHours(entry, `${label}.hours[${j}]`));
+      out.vcard = checkBoolean(section.vcard ?? true, `${label}.vcard`);
+      break;
     case 'documents':
       out.documents = checkList(section.documents, LANDING_LIMITS.documents, `${label}.documents`).map((entry, j) =>
         checkDocument(entry, `${label}.documents[${j}]`, refs)
@@ -641,6 +784,9 @@ export function validateLanding(
   out.actions = checkList(input.actions, LANDING_LIMITS.actions, 'actions').map((action, i) => checkAction(action, `actions[${i}]`, refs));
   const ids = new Set();
   out.sections = checkList(input.sections, LANDING_LIMITS.sections, 'sections').map((section, i) => checkSection(section, i, refs, ids));
+  // One contact section at most (issue #124): the vCard is built from it.
+  const contacts = out.sections.flatMap((section, i) => (section.kind === 'contact' ? [i] : []));
+  if (contacts.length > 1) throw httpError(400, `sections[${contacts[1]}]: the page already has a contact section, and can have only one`);
   out.seo = checkSeo(input.seo, refs);
   out.homeLink = input.homeLink ?? base.homeLink;
   if (typeof out.homeLink !== 'boolean') throw httpError(400, 'homeLink must be a boolean');
@@ -682,6 +828,38 @@ export function telUrl(phone) {
   if (!digits || /[a-z#]/i.test(number)) return '';
   return `tel:${number.startsWith('+') ? '+' : ''}${digits}${ext ? `;ext=${ext[1]}` : ''}`;
 }
+
+// An email address as typed as a mailto: URL, or '' while it isn't one yet
+// (half typed, or with a character that would make the link do something
+// else: `?` would add a subject, `%` decode into anything, `,` a second
+// recipient). Mirrors mailtoHref() in client/src/resume/safeUrl.js.
+export function mailtoUrl(email) {
+  const text = typeof email === 'string' ? email.trim() : '';
+  const at = text.indexOf('@');
+  if (at < 1 || at !== text.lastIndexOf('@')) return '';
+  const local = text.slice(0, at);
+  const domain = text.slice(at + 1);
+  const part = /^[^\s\u0000-\u001f\u007f@?#%/\\:;,<>"()[\]]+$/u;
+  if (!part.test(local) || !part.test(domain)) return '';
+  if (!domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) return '';
+  return `mailto:${text}`;
+}
+
+// Where a contact section's "Directions" link goes: a map search for its
+// address, the lines joined with commas. Only ever a link, never an
+// embedded map, which would make a third-party request from every visitor.
+// Mirrored in client/src/landing/resolveLanding.js.
+export function directionsUrl(address) {
+  const query = (typeof address === 'string' ? address : '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(', ');
+  return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : '';
+}
+
+// Where the "Save contact" button downloads the vCard from (routes/landingContact.js).
+export const CONTACT_CARD_PATH = '/api/public/landing/contact.vcf';
 
 // A first draft for an install that has never saved one, from the default
 // resume's *published* header (never its draft, so nothing unpublished is
@@ -748,7 +926,8 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // is { label, href }. A section
 // left with nothing to show (no text, no item, every link half typed, every
 // card's resume hidden, every quote empty, no stat with a value, no FAQ
-// entry with both a question and an answer) is left out, title and all, and
+// entry with both a question and an answer, no service with a title or a
+// text, no publication with a title) is left out, title and all, and
 // so is a hidden one; sections lose their ids, and keep `column` when set
 // (a divider always goes along: whether it has anything to divide depends
 // on how the template arranges the sections, so the client decides, in
@@ -759,18 +938,30 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // skill group of its resume. A credential without a name is left out, and
 // so is one whose `expires` has passed (hasPassed()), at the time of the
 // request, so a lapsed one leaves the page without a republish; one whose
-// date can't be read stays, the date shown as written.
+// date can't be read stays, the date shown as written. A publication without
+// a title is left out; the rest resolve to { entries } or, with `group`,
+// { groups: [{ kind, entries }] } (arrangePublications()), each entry's
+// `url` its own when that's safe, else its DOI's link (doiUrl()), else ''.
+// A contact section (resolveContact()) shows an email and a phone only
+// once they make a link, and an address with a map search link for
+// "Directions"; it's left out with none of those, no area and no hours,
+// and its `vcardHref` is there only while `vcard` is on.
 // `seo` goes along whole (everything in it ends up in the page's head and
 // its X-Robots-Tag anyway), its image resolved like the others. An image
 // reference resolves to { src, alt, width, height }, or is left out (a
 // photo, a thumbnail, the share image) when its image is gone; an image
 // section without one is left out, and so is a gallery entry, then a
-// gallery with no entry left. A document resolves to { label, description,
-// href, size } (its label, or its file name without .pdf when that's
-// empty, and the file's public path and size in bytes, never its id beyond
-// that path), or is left out when its file is gone or not uploaded yet,
-// and a documents section with none left is too. An uploaded hero photo
-// is `photoUrl` (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
+// gallery with no entry left. A media section resolves to { media,
+// caption, transcript, poster? }: `media` is parseMediaUrl()'s reading of
+// its link, never the link itself, and one whose link doesn't read (none
+// yet) is left out. A service resolves to { title, text, price }, plus its
+// button as a resolved link action ({ label, href, icon? }) while its URL
+// is safe. A document resolves to { label, description, href, size } (its
+// label, or its file name without .pdf when that's empty, and the file's
+// public path and size in bytes, never its id beyond that path), or is
+// left out when its file is gone or not uploaded yet, and a documents
+// section with none left is too. An uploaded hero photo is `photoUrl`
+// (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
 // `template` (an id the client may not know, and then draws as classic),
 // `site` (context.site, or the page's own colors and fonts in the site
 // settings' shape) and `darkColors` (its dark palette, or null).
@@ -912,6 +1103,28 @@ function resolveSection(section, context) {
       });
       return images.length ? { images } : null;
     }
+    case 'media': {
+      const media = parseMediaUrl(section.url);
+      if (!media) return null;
+      const poster = resolveImage(section.poster, context.images);
+      return { media, caption: section.caption, transcript: section.transcript, ...(poster ? { poster } : {}) };
+    }
+    case 'services': {
+      // A price or a button alone says nothing about what's offered.
+      const services = section.services
+        .filter((service) => service.title.trim() || service.text.trim())
+        .map((service) => {
+          const action = service.action ? resolveAction(service.action, context) : null;
+          return { title: service.title, text: service.text, price: service.price, ...(action ? { action } : {}) };
+        });
+      return services.length ? { services } : null;
+    }
+    case 'publications': {
+      const entries = section.entries.filter((entry) => entry.title.trim()).map((entry) => resolvePublication(entry));
+      return entries.length ? arrangePublications(entries, section) : null;
+    }
+    case 'contact':
+      return resolveContact(section);
     case 'documents': {
       const documents = section.documents.flatMap((entry) => {
         const file = resolveFile(entry.file, context.files);
@@ -924,6 +1137,34 @@ function resolveSection(section, context) {
     default:
       return null;
   }
+}
+
+function resolvePublication(entry) {
+  const { kind, title, outlet, date, note } = entry;
+  return { kind, title, outlet, date, url: entry.url !== '' && isSafeUrl(entry.url) ? entry.url : doiUrl(entry.doi), note };
+}
+
+// A contact section as a visitor sees it (issue #124): every field always
+// there, '' for one that isn't shown. The vCard (vcard.js) is built from
+// this, so it holds no more than the page shows.
+function resolveContact(section) {
+  const emailHref = mailtoUrl(section.email);
+  const phoneHref = telUrl(section.phone);
+  const address = section.address.trim() ? section.address : '';
+  const hours = section.hours.filter((entry) => entry.days.trim() || entry.time.trim()).map((entry) => ({ days: entry.days, time: entry.time }));
+  const area = section.area.trim() ? section.area : '';
+  if (!emailHref && !phoneHref && !area && !address && !hours.length) return null;
+  return {
+    email: emailHref ? section.email.trim() : '',
+    emailHref,
+    phone: phoneHref ? section.phone.trim() : '',
+    phoneHref,
+    area,
+    address,
+    directionsHref: directionsUrl(address),
+    hours,
+    vcardHref: section.vcard ? CONTACT_CARD_PATH : '',
+  };
 }
 
 function resolveCredential(credential) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { textParagraphs, resolveLanding } from './resolveLanding.js';
+import { textParagraphs, resolveLanding, directionsUrl, CONTACT_CARD_PATH } from './resolveLanding.js';
 import * as server from '../../../server/src/landingFields.js';
 import { splitItems } from '../resume/skillItems.js';
 
@@ -223,6 +223,46 @@ test('FAQ sections resolve exactly like the server, dropping an entry without bo
   assert.deepEqual(preview.sections.map((s) => s.id), ['f', 'f3']);
 });
 
+test('services resolve exactly like the server: one without a title or a text is dropped, a button only while its link is whole', () => {
+  const book = { type: 'link', label: 'Book', url: 'https://cal.example/jo', icon: 'calendar-days' };
+  const landing = {
+    ...draft,
+    sections: [
+      {
+        id: 'sv',
+        kind: 'services',
+        title: 'Services',
+        column: 'side',
+        services: [
+          { title: 'Tutoring', text: 'Weekly, **one to one**.', price: 'From $60/hour', action: book },
+          { title: '', text: 'Just words.', price: '', action: { type: 'link', label: '', url: 'mailto:jo@example.com?subject=Hi' } },
+          { title: 'Half typed', text: '', price: '', action: { type: 'link', label: 'Go', url: 'https://' } },
+          { title: ' ', text: '', price: 'Free', action: book },
+        ],
+      },
+      { id: 'sv2', kind: 'services', title: 'Only prices', services: [{ title: '', text: '', price: '$5', action: book }] },
+      { id: 'sv3', kind: 'services', title: 'Later', hidden: true, services: [{ title: 'T', text: '', price: '' }] },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map() });
+  assert.deepEqual(out.sections, fromServer.sections);
+  assert.deepEqual(out.sections, [
+    {
+      kind: 'services',
+      title: 'Services',
+      column: 'side',
+      services: [
+        { title: 'Tutoring', text: 'Weekly, **one to one**.', price: 'From $60/hour', action: { label: 'Book', href: 'https://cal.example/jo', icon: 'calendar-days' } },
+        { title: '', text: 'Just words.', price: '', action: { label: 'mailto:jo@example.com?subject=Hi', href: 'mailto:jo@example.com?subject=Hi' } },
+        { title: 'Half typed', text: '', price: '' },
+      ],
+    },
+  ]);
+  const preview = resolveLanding(landing, context, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => s.id), ['sv', 'sv3']);
+});
+
 test('education and skills sections resolve exactly like the server', () => {
   const education = [
     { degree: 'BSc Nursing', institution: 'State U', location: 'Ohio', startDate: '2010', endDate: '2014' },
@@ -400,6 +440,129 @@ test('a gallery resolves exactly like the server: stored images in order, the re
   const preview = resolveLanding(landing, { ...context, images }, { withIds: true, withHidden: true });
   assert.deepEqual(preview.sections.map((s) => [s.id, Boolean(s.hidden)]), [
     ['g', false],
+    ['hid', true],
+  ]);
+});
+
+test('a media section resolves exactly like the server: the parsed link only, left out without one (issue #121)', () => {
+  const id = 'a'.repeat(64);
+  const src = `/api/landing/images/${id}`;
+  const images = [{ id, src, width: 1600, height: 900 }];
+  const landing = {
+    ...draft,
+    sections: [
+      { id: 'm', kind: 'media', title: 'Reel', column: 'side', url: 'https://youtu.be/dQw4w9WgXcQ?t=90', caption: 'Spring', poster: { imageId: id, alt: 'Stage' }, transcript: 'Hi.' },
+      { id: 'sc', kind: 'media', title: '', url: 'https://soundcloud.com/forss/sets/soulhack', caption: '', poster: { imageId: 'b'.repeat(64), alt: '' }, transcript: '' },
+      { id: 'none', kind: 'media', title: 'Not yet', url: 'https://youtu', caption: '', transcript: '' },
+      { id: 'hid', kind: 'media', title: 'Hidden', hidden: true, url: 'https://vimeo.com/76979871', caption: '', transcript: '' },
+    ],
+  };
+  const out = resolveLanding(landing, { ...context, images });
+  const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map(), images: new Map(images.map((i) => [i.id, i])) });
+  assert.deepEqual(out.sections, fromServer.sections);
+  assert.deepEqual(out.sections, [
+    {
+      kind: 'media',
+      title: 'Reel',
+      column: 'side',
+      media: { provider: 'youtube', mediaId: 'dQw4w9WgXcQ', start: 90 },
+      caption: 'Spring',
+      transcript: 'Hi.',
+      poster: { src, alt: 'Stage', width: 1600, height: 900 },
+    },
+    { kind: 'media', title: '', media: { provider: 'soundcloud', mediaId: 'forss/sets/soulhack', start: 0 }, caption: '', transcript: '' },
+  ]);
+  assert.equal(JSON.stringify(out.sections).includes('youtu.be'), false);
+  const preview = resolveLanding(landing, { ...context, images }, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => [s.id, Boolean(s.hidden)]), [
+    ['m', false],
+    ['sc', false],
+    ['hid', true],
+  ]);
+});
+
+test('publications resolve exactly like the server, sorted, grouped and linked', () => {
+  const entry = (kind, title, date, extra = {}) => ({ kind, title, outlet: 'Outlet', date, url: '', doi: '', note: '', ...extra });
+  const entries = [
+    entry('talk', 'Keynote', '2019', { url: 'https://conf.example/2019', doi: '10.1234/ignored' }),
+    entry('paper', 'Old paper', 'Mar 2021', { doi: '10.1234/old#1' }),
+    entry('article', 'Forthcoming piece', 'Forthcoming', { url: 'java\tscript:alert(1)' }),
+    entry('paper', 'New paper', '2024-02-01', { doi: '10.1234/' }),
+    entry('press', 'Profile', '05/2023', { doi: '10.5555/profile', note: 'Interviewed' }),
+    entry('article', ' ', '2030'),
+  ];
+  for (const order of ['manual', 'newest']) {
+    for (const group of [false, true]) {
+      const landing = {
+        ...draft,
+        sections: [
+          { id: 'p', kind: 'publications', title: 'Work', column: 'side', order, group, entries },
+          { id: 'none', kind: 'publications', title: 'None', order, group, entries: [entry('book', '', '2020')] },
+          { id: 'hid', kind: 'publications', title: 'Hidden', hidden: true, order, group, entries },
+        ],
+      };
+      const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map() });
+      const out = resolveLanding(landing, context).sections;
+      assert.deepEqual(out, fromServer.sections, `${order} ${group}`);
+      assert.deepEqual(out.map((s) => s.title), ['Work']);
+    }
+  }
+  const newest = resolveLanding({ ...draft, sections: [{ id: 'p', kind: 'publications', title: '', order: 'newest', group: false, entries }] }, context);
+  assert.deepEqual(
+    newest.sections[0].entries.map((e) => [e.title, e.url]),
+    [
+      ['New paper', ''],
+      ['Profile', 'https://doi.org/10.5555/profile'],
+      ['Forthcoming piece', ''],
+      ['Old paper', 'https://doi.org/10.1234/old%231'],
+      ['Keynote', 'https://conf.example/2019'],
+    ]
+  );
+});
+
+test('a contact section resolves exactly like the server (issue #124)', () => {
+  const contact = (id, fields) => ({ id, kind: 'contact', title: 'Contact', email: '', phone: '', area: '', address: '', hours: [], vcard: true, ...fields });
+  const landing = {
+    ...draft,
+    sections: [
+      contact('full', {
+        email: ' jo@example.com ',
+        phone: '+1 (512) 555-0100 x12',
+        area: 'Central Texas',
+        address: '100 Congress Ave\nAustin, TX',
+        hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: ' ', time: '' }, { days: '', time: 'By appointment' }],
+        column: 'side',
+      }),
+      contact('half', { email: 'jo@', phone: 'call me', area: 'Austin', vcard: false }),
+      contact('none', { email: 'jo@exam', phone: 'x', address: ' \n ', hours: [{ days: '', time: ' ' }] }),
+      contact('hid', { email: 'jo@example.com', hidden: true }),
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  assert.deepEqual(out.sections, server.resolveLanding(landing, { ...context, resumes: new Map() }).sections);
+  assert.deepEqual(out.sections[0], {
+    kind: 'contact',
+    title: 'Contact',
+    column: 'side',
+    email: 'jo@example.com',
+    emailHref: 'mailto:jo@example.com',
+    phone: '+1 (512) 555-0100 x12',
+    phoneHref: 'tel:+15125550100;ext=12',
+    area: 'Central Texas',
+    address: '100 Congress Ave\nAustin, TX',
+    directionsHref: 'https://www.google.com/maps/search/?api=1&query=100%20Congress%20Ave%2C%20Austin%2C%20TX',
+    hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: '', time: 'By appointment' }],
+    vcardHref: CONTACT_CARD_PATH,
+  });
+  assert.equal(out.sections[1].email, '');
+  assert.equal(out.sections[1].vcardHref, '');
+  assert.equal(out.sections.length, 2);
+  assert.equal(CONTACT_CARD_PATH, server.CONTACT_CARD_PATH);
+  for (const address of ['', ' \n', 'Suite #4 & Co?\n Austin ', undefined]) assert.equal(directionsUrl(address), server.directionsUrl(address));
+  const preview = resolveLanding(landing, context, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => [s.id, Boolean(s.hidden)]), [
+    ['full', false],
+    ['half', false],
     ['hid', true],
   ]);
 });

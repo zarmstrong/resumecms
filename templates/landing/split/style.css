@@ -48,6 +48,16 @@
   }
 }
 
+/* A contact section there: each label over its line (issue #124). */
+.l-template-split .l-split-side .l-contact-lines {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 2px;
+}
+
+.l-template-split .l-split-side .l-contact-line + .l-contact-line .l-contact-label {
+  margin-top: 12px;
+}
+
 /* Documents there sit closer together, their tag nearer the label, so a
    label keeps as much of the narrow column as it can (issue #128). */
 .l-template-split .l-split-side .l-documents {
@@ -62,6 +72,13 @@
 .l-template-split .l-split-side .l-gallery {
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 8px;
+}
+
+/* A media section there (issue #121): the play button and its label a
+   size down, so a long title still fits a narrow facade. */
+.l-template-split .l-split-side .l-media-play {
+  padding: 8px 14px;
+  font-size: 0.9em;
 }
 
 .l-template-split .l-hero {
@@ -119,6 +136,15 @@
 /* The heading's hairline already tops a list of questions. */
 .l-template-split .l-section-title + .l-faq {
   border-top: none;
+}
+
+/* A publications group's subheading (issue #127) in the heading color
+   and the text's case, so it doesn't read as another section's title. */
+.l-template-split .l-publication-group-title {
+  font-size: 0.95em;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--r-heading, var(--ink));
 }
 
 .l-template-split .l-cards {

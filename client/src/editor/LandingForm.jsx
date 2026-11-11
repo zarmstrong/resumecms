@@ -16,6 +16,9 @@ import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
 import { getLandingTemplate } from '../resume/templateRegistry.js';
 import { hasPassed, utcToday } from '../landing/dateText.js';
+import { MEDIA_PROVIDER_LABELS, parseMediaUrl } from '../landing/mediaUrl.js';
+import { cleanDoi, isDoi } from '../landing/publications.js';
+import { mailtoHref, telHref } from '../resume/safeUrl.js';
 import { applySectionDrop, liveCollapsedIds, moveSectionBy, projectSectionDrop } from './sectionDrag.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
@@ -56,6 +59,22 @@ const SECTION_KINDS = [
     empty: () => ({ credentials: [emptyCredential()] }),
   },
   { kind: 'gallery', label: 'Gallery', addLabel: 'Gallery (several images in a grid)', empty: () => ({ images: [] }) },
+  { kind: 'media', label: 'Video or audio', addLabel: 'Video or audio (YouTube, Vimeo, SoundCloud, Spotify)', empty: () => ({ url: '', caption: '', transcript: '' }) },
+  { kind: 'services', label: 'Services', addLabel: 'Services (what you offer, with prices)', empty: () => ({ services: [emptyService()] }) },
+  {
+    kind: 'publications',
+    label: 'Publications',
+    addLabel: 'Publications (papers, articles, books, talks, press)',
+    empty: () => ({ order: 'manual', group: false, entries: [emptyPublication()] }),
+  },
+  // At most one per page (issue #124), so it's left out of the menu once there is one.
+  {
+    kind: 'contact',
+    label: 'Contact',
+    addLabel: 'Contact (email, phone, area, hours, "Save contact")',
+    empty: () => ({ email: '', phone: '', area: '', address: '', hours: [], vcard: true }),
+    once: true,
+  },
   { kind: 'documents', label: 'Documents', addLabel: 'Documents (PDFs: a portfolio, writing samples)', empty: () => ({ documents: [] }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
@@ -86,8 +105,20 @@ function emptyFaqEntry() {
   return { question: '', answer: '' };
 }
 
+function emptyService() {
+  return { title: '', text: '', price: '' };
+}
+
+function emptyHours() {
+  return { days: '', time: '' };
+}
+
 function emptyCredential() {
   return { kind: 'certification', name: '', issuer: '', number: '', issued: '', expires: '', url: '' };
+}
+
+function emptyPublication() {
+  return { kind: 'article', title: '', outlet: '', date: '', url: '', doi: '', note: '' };
 }
 
 // Only tells sections apart (React keys, and the server keeps it); not
@@ -128,6 +159,16 @@ function hasContent(section) {
       return section.credentials.some((c) => [c.name, c.issuer, c.number, c.issued, c.expires, c.url].some((value) => value.trim()));
     case 'gallery':
       return section.images.some((entry) => Boolean(entry.image) || Boolean(entry.caption.trim()));
+    case 'media':
+      return Boolean(section.url.trim() || section.poster || section.caption.trim() || section.transcript.trim());
+    case 'services':
+      return section.services.some(
+        (service) => service.title.trim() || service.text.trim() || service.price.trim() || service.action?.label.trim() || service.action?.url.trim()
+      );
+    case 'publications':
+      return section.entries.some((e) => [e.title, e.outlet, e.date, e.url, e.doi, e.note].some((value) => value.trim()));
+    case 'contact':
+      return [section.email, section.phone, section.area, section.address].some((value) => value.trim()) || section.hours.some((h) => h.days.trim() || h.time.trim());
     case 'documents':
       return section.documents.some((entry) => Boolean(entry.file) || Boolean(entry.label.trim()) || Boolean(entry.description.trim()));
     default:
@@ -168,6 +209,16 @@ function sectionSummary(section, resumes) {
       return count(section.credentials.length, 'credential');
     case 'gallery':
       return count(section.images.length, 'image') || 'No images yet';
+    case 'media': {
+      const media = parseMediaUrl(section.url);
+      return media ? `${MEDIA_PROVIDER_LABELS[media.provider]} ${media.provider === 'youtube' || media.provider === 'vimeo' ? 'video' : 'audio'}` : 'No link yet';
+    }
+    case 'services':
+      return count(section.services.length, 'service');
+    case 'publications':
+      return section.entries.length === 1 ? '1 entry' : section.entries.length ? `${section.entries.length} entries` : '';
+    case 'contact':
+      return shorten(section.email.trim() || section.phone.trim() || section.area.trim());
     case 'documents':
       return count(section.documents.length, 'document') || 'No documents yet';
     default:
@@ -193,6 +244,7 @@ function needsDescription(section, images) {
   if (section.kind === 'image') return blank(section.image);
   if (section.kind === 'items') return section.items.some((item) => (item.title?.trim() || item.text?.trim()) && blank(item.image));
   if (section.kind === 'gallery') return section.images.some((entry) => blank(entry.image));
+  if (section.kind === 'media') return Boolean(parseMediaUrl(section.url)) && blank(section.poster);
   return false;
 }
 
@@ -373,7 +425,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
         {(!limits || sections.length < limits.sections) && (
           <select className="ed-input" value="" onChange={(e) => e.target.value && addSection(e.target.value)} aria-label="Add a section">
             <option value="">+ Add a section…</option>
-            {SECTION_KINDS.map((k) => (
+            {SECTION_KINDS.filter((k) => !k.once || !sections.some((s) => s.kind === k.kind)).map((k) => (
               <option key={k.kind} value={k.kind}>
                 {k.addLabel}
               </option>
@@ -841,7 +893,8 @@ const SectionEditor = memo(function SectionEditor({
   );
 });
 
-// The syntax a text section, an item's text and an FAQ answer take (issue #91).
+// The syntax a text section, an item's text, an FAQ answer and a service's
+// text take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
 
 function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps, fileProps }) {
@@ -918,6 +971,14 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
       return <CredentialsFields credentials={section.credentials} onChange={(credentials) => onChange({ credentials })} limits={limits} />;
     case 'gallery':
       return <GalleryFields sectionId={section.id} images={section.images} onChange={(images) => onChange({ images })} limits={limits} imageProps={imageProps} />;
+    case 'media':
+      return <MediaFields section={section} onChange={onChange} limits={limits} imageProps={imageProps} />;
+    case 'services':
+      return <ServicesFields sectionId={section.id} services={section.services} onChange={(services) => onChange({ services })} limits={limits} ai={ai} />;
+    case 'publications':
+      return <PublicationsFields section={section} onChange={onChange} limits={limits} />;
+    case 'contact':
+      return <ContactFields section={section} onChange={onChange} limits={limits} />;
     case 'documents':
       return (
         <DocumentsFields sectionId={section.id} documents={section.documents} onChange={(documents) => onChange({ documents })} limits={limits} fileProps={fileProps} />
@@ -1025,6 +1086,215 @@ function FaqFields({ sectionId, entries, onChange, limits, ai }) {
   );
 }
 
+// What the person offers (issue #122): each service a title, a short text,
+// a price line (free text: "From $60/hour", "Sliding scale") and an
+// optional button, a link like a hero button's. Only the text has a ✨:
+// what's offered and for how much are the person's to say.
+function ServicesFields({ sectionId, services, onChange, limits, ai }) {
+  const setService = (i, patch) => onChange(services.map((service, idx) => (idx === i ? { ...service, ...patch } : service)));
+  // Like the server, no button (and no icon) isn't stored.
+  const withoutAction = (service) => {
+    const { action: _old, ...rest } = service;
+    return rest;
+  };
+  const withIcon = (action, icon) => {
+    const { icon: _old, ...rest } = action;
+    return icon ? { ...rest, icon } : rest;
+  };
+  const setAction = (i, action) => onChange(services.map((service, idx) => (idx === i ? (action ? { ...service, action } : withoutAction(service)) : service)));
+  return (
+    <>
+      {services.map((service, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Service {i + 1}</span>
+            <RowActions
+              index={i}
+              count={services.length}
+              onMove={(delta) => onChange(moved(services, i, delta))}
+              onRemove={() => onChange(services.filter((_, idx) => idx !== i))}
+              what="service"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={service.title}
+            maxLength={limits?.serviceTitle}
+            onChange={(e) => setService(i, { title: e.target.value })}
+            placeholder="What you offer, e.g. Private tutoring"
+            aria-label="Service name"
+          />
+          <input
+            className="ed-input"
+            value={service.price}
+            maxLength={limits?.servicePrice}
+            onChange={(e) => setService(i, { price: e.target.value })}
+            placeholder="Price (optional), e.g. From $60/hour or Free 15-minute consultation"
+            aria-label="Service price"
+          />
+          <textarea
+            className="ed-input"
+            rows={3}
+            value={service.text}
+            onChange={(e) => {
+              const text = inlineEdit(service.text, e.target.value, limits?.serviceText);
+              if (text !== service.text) setService(i, { text });
+            }}
+            placeholder="What a client gets from it"
+            aria-label="Service description"
+          />
+          <span className="ed-field-hint">{INLINE_HINT}</span>
+          <AiField ai={ai} target={{ kind: 'service', sectionId, index: i }} current={service.text} />
+          {service.action ? (
+            <div className="ed-field">
+              <span>Button</span>
+              <input
+                className="ed-input"
+                value={service.action.label}
+                maxLength={limits?.actionLabel}
+                onChange={(e) => setAction(i, { ...service.action, label: e.target.value })}
+                placeholder="Button text, e.g. Book a session"
+                aria-label="Service button text"
+              />
+              <input
+                className="ed-input"
+                value={service.action.url}
+                maxLength={limits?.url}
+                onChange={(e) => setAction(i, { ...service.action, url: e.target.value })}
+                placeholder="mailto:you@example.com, tel:… or https://…"
+                aria-label="Service button link"
+              />
+              {/^\s*mailto:/i.test(service.action.url) && !service.action.url.includes('?') && (
+                <span className="ed-field-hint">
+                  To fill in the subject, add it to the link: mailto:you@example.com?subject=Booking{service.title.trim() ? `: ${service.title.trim()}` : ''}
+                </span>
+              )}
+              <ActionIconPicker value={service.action.icon ?? ''} onChange={(icon) => setAction(i, withIcon(service.action, icon))} />
+              <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={() => setAction(i, null)}>
+                Remove button
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={() => setAction(i, { type: 'link', label: '', url: '' })}>
+              + Add a button
+            </button>
+          )}
+        </div>
+      ))}
+      {(!limits || services.length < limits.services) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...services, emptyService()])}>
+          + Add service
+        </button>
+      )}
+      <span className="ed-field-hint">A service without a name or a description isn't shown, and a button only once its link is complete.</span>
+    </>
+  );
+}
+
+// How to reach the person (issue #124). No ✨: an address, a number and
+// hours are facts. The email and phone are shown once they make a link
+// (mailtoHref(), telHref()), so the hint says when one doesn't yet.
+function ContactFields({ section, onChange, limits }) {
+  const setHours = (i, patch) => onChange({ hours: section.hours.map((h, idx) => (idx === i ? { ...h, ...patch } : h)) });
+  const email = section.email.trim();
+  const phone = section.phone.trim();
+  return (
+    <>
+      <input
+        className="ed-input"
+        type="email"
+        value={section.email}
+        maxLength={limits?.contactEmail}
+        onChange={(e) => onChange({ email: e.target.value })}
+        placeholder="Email (optional), e.g. jo@example.com"
+        aria-label="Email"
+      />
+      {email && !mailtoHref(email) && (
+        <span className="ed-field-hint ed-landing-card-status">Not shown until it's a whole email address.</span>
+      )}
+      <input
+        className="ed-input"
+        type="tel"
+        value={section.phone}
+        maxLength={limits?.contactPhone}
+        onChange={(e) => onChange({ phone: e.target.value })}
+        placeholder="Phone (optional), e.g. +1 512 555 0100"
+        aria-label="Phone"
+      />
+      {phone && !telHref(phone) && <span className="ed-field-hint ed-landing-card-status">Not shown: there's no number to dial in it.</span>}
+      <input
+        className="ed-input"
+        value={section.area}
+        maxLength={limits?.contactArea}
+        onChange={(e) => onChange({ area: e.target.value })}
+        placeholder="Area served (optional), e.g. Serving Travis and Williamson counties"
+        aria-label="Area served"
+      />
+      <textarea
+        className="ed-input"
+        rows={3}
+        value={section.address}
+        maxLength={limits?.contactAddress}
+        onChange={(e) => onChange({ address: e.target.value })}
+        placeholder="Address (optional), one line per line"
+        aria-label="Address"
+      />
+      {section.address.trim() && (
+        <span className="ed-field-hint ed-landing-card-status">
+          Everyone who visits the page sees this address, and it's in the "Save contact" card. For a home address, the area
+          served is usually enough.
+        </span>
+      )}
+      {section.hours.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Hours {i + 1}</span>
+            <RowActions
+              index={i}
+              count={section.hours.length}
+              onMove={(delta) => onChange({ hours: moved(section.hours, i, delta) })}
+              onRemove={() => onChange({ hours: section.hours.filter((_, idx) => idx !== i) })}
+              what="line of hours"
+            />
+          </div>
+          <div className="ed-landing-dates">
+            <input
+              className="ed-input"
+              value={entry.days}
+              maxLength={limits?.contactDays}
+              onChange={(e) => setHours(i, { days: e.target.value })}
+              placeholder="Days, e.g. Tue–Sat"
+              aria-label="Days"
+            />
+            <input
+              className="ed-input"
+              value={entry.time}
+              maxLength={limits?.contactTime}
+              onChange={(e) => setHours(i, { time: e.target.value })}
+              placeholder="Time, e.g. 9–6"
+              aria-label="Time"
+            />
+          </div>
+        </div>
+      ))}
+      {(!limits || section.hours.length < limits.contactHours) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange({ hours: [...section.hours, emptyHours()] })}>
+          + Add hours
+        </button>
+      )}
+      <label className="ed-field ed-checkbox-field">
+        <input type="checkbox" checked={section.vcard !== false} onChange={(e) => onChange({ vcard: e.target.checked })} />
+        <span>Show a "Save contact" button</span>
+      </label>
+      <span className="ed-field-hint">
+        The button downloads a contact card (vCard) of what this section shows, with the page's name, title and link, for a
+        phone's contacts. An address is shown with a "Directions" link to a map search; no map is embedded. A page can have
+        one contact section.
+      </span>
+    </>
+  );
+}
+
 // Licenses, certifications and memberships (issue #119). No ✨ here:
 // they're facts, not prose.
 function CredentialsFields({ credentials, onChange, limits }) {
@@ -1124,6 +1394,115 @@ function CredentialsFields({ credentials, onChange, limits }) {
   );
 }
 
+// Published work and appearances (issue #127). No ✨ here: titles and
+// outlets are facts, not prose.
+function PublicationsFields({ section, onChange, limits }) {
+  const { entries } = section;
+  const setEntries = (next) => onChange({ entries: next });
+  const setEntry = (i, patch) => setEntries(entries.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
+  return (
+    <>
+      <label className="ed-field">
+        <span>Order</span>
+        <select className="ed-input" value={section.order} onChange={(e) => onChange({ order: e.target.value })}>
+          <option value="manual">As listed here</option>
+          <option value="newest">Newest first</option>
+        </select>
+      </label>
+      <label className="ed-field ed-checkbox-field">
+        <input type="checkbox" checked={Boolean(section.group)} onChange={(e) => onChange({ group: e.target.checked })} />
+        Group by kind (Articles, Papers, Books, …)
+      </label>
+      {entries.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Entry {i + 1}</span>
+            <RowActions
+              index={i}
+              count={entries.length}
+              onMove={(delta) => setEntries(moved(entries, i, delta))}
+              onRemove={() => setEntries(entries.filter((_, idx) => idx !== i))}
+              what="entry"
+            />
+          </div>
+          <select className="ed-input" value={entry.kind} onChange={(e) => setEntry(i, { kind: e.target.value })} aria-label="Kind of entry">
+            <option value="article">Article</option>
+            <option value="paper">Paper</option>
+            <option value="book">Book</option>
+            <option value="chapter">Chapter</option>
+            <option value="talk">Talk</option>
+            <option value="podcast">Podcast</option>
+            <option value="press">Press</option>
+          </select>
+          <input
+            className="ed-input"
+            value={entry.title}
+            maxLength={limits?.publicationTitle}
+            onChange={(e) => setEntry(i, { title: e.target.value })}
+            placeholder="Title"
+            aria-label="Title"
+          />
+          <div className="ed-landing-dates">
+            <input
+              className="ed-input"
+              value={entry.outlet}
+              maxLength={limits?.publicationOutlet}
+              onChange={(e) => setEntry(i, { outlet: e.target.value })}
+              placeholder="Where, e.g. a journal, publisher or event"
+              aria-label="Outlet"
+            />
+            <input
+              className="ed-input"
+              value={entry.date}
+              maxLength={limits?.publicationDate}
+              onChange={(e) => setEntry(i, { date: e.target.value })}
+              placeholder="Date, e.g. Mar 2024"
+              aria-label="Date"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={entry.url}
+            maxLength={limits?.url}
+            onChange={(e) => setEntry(i, { url: e.target.value })}
+            placeholder="Link (optional), https://…"
+            aria-label="Link"
+          />
+          <input
+            className="ed-input"
+            value={entry.doi}
+            maxLength={limits?.doi}
+            onChange={(e) => setEntry(i, { doi: cleanDoi(e.target.value) })}
+            placeholder="DOI (optional), e.g. 10.1234/abcd"
+            aria-label="DOI"
+          />
+          {entry.doi.trim() && !isDoi(entry.doi) && (
+            <span className="ed-field-hint ed-landing-card-status">Not a DOI yet: one looks like 10.1234/abcd.</span>
+          )}
+          <input
+            className="ed-input"
+            value={entry.note}
+            maxLength={limits?.publicationNote}
+            onChange={(e) => setEntry(i, { note: e.target.value })}
+            placeholder="Note (optional), e.g. with A. Author; invited; keynote"
+            aria-label="Note"
+          />
+        </div>
+      ))}
+      {(!limits || entries.length < limits.publications) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => setEntries([...entries, emptyPublication()])}>
+          + Add entry
+        </button>
+      )}
+      <span className="ed-field-hint">
+        One without a title isn't shown. Its title links to the link, or to the DOI when there's no link. Newest first sorts the
+        entries whose date is a year, a month (such as Mar 2024 or 03/2024) or a day (2024-03-31); one dated any other way
+        ("Forthcoming") keeps its place.
+      </span>
+    </>
+  );
+}
+
 // A gallery (issue #120): its images in order, each with a caption. "Add
 // images" takes several files at once: each gets an entry of its own
 // straight away, with an empty description, and its upload lands on that
@@ -1196,6 +1575,88 @@ function GalleryFields({ sectionId, images, onChange, limits, imageProps }) {
       <span className="ed-field-hint">
         Up to {max} images, shown in a grid that opens each one larger. Pick several files at once if you like. Each needs a
         description before publishing; one with no image yet is left off the page.
+      </span>
+    </>
+  );
+}
+
+// A video or audio clip (issue #121): its link, an optional poster, a
+// caption and a transcript. The server takes only a link mediaUrl.js
+// reads, and the draft is saved as it's typed, so the link is kept here
+// while it doesn't read as one yet (or no longer does) and only reaches
+// the draft once it does, or once it's cleared; until then the preview
+// shows the last one that did. No ✨: it's about a recording the AI can't
+// hear.
+function MediaFields({ section, onChange, limits, imageProps }) {
+  const [url, setUrl] = useState(section.url);
+  const sent = useRef(section.url);
+  // A link from elsewhere (Discard, an MCP edit seen on reload) replaces
+  // what's typed here.
+  useEffect(() => {
+    if (section.url !== sent.current) {
+      sent.current = section.url;
+      setUrl(section.url);
+    }
+  }, [section.url]);
+  const media = parseMediaUrl(url);
+  const unreadable = url.trim() !== '' && !media;
+
+  function handleUrl(e) {
+    const next = e.target.value;
+    setUrl(next);
+    if (next.trim() === '' || parseMediaUrl(next)) {
+      sent.current = next;
+      onChange({ url: next });
+    }
+  }
+
+  return (
+    <>
+      <input
+        className="ed-input"
+        type="url"
+        value={url}
+        maxLength={limits?.url}
+        onChange={handleUrl}
+        placeholder="https://www.youtube.com/watch?v=…"
+        aria-label="Link to the video or audio"
+        aria-invalid={unreadable || undefined}
+      />
+      {unreadable && (
+        <div className="ed-field-error">
+          Not a link this can show: paste an https link to one YouTube or Vimeo video, or a SoundCloud track or playlist, or a
+          Spotify track, album, playlist, episode or show. It isn't saved until it is one.
+        </div>
+      )}
+      <LandingImageField
+        label="Poster (optional)"
+        value={section.poster ?? null}
+        onChange={(poster) => onChange({ poster })}
+        {...imageProps({ kind: 'poster', sectionId: section.id })}
+      />
+      <textarea
+        className="ed-input"
+        rows={2}
+        value={section.caption}
+        maxLength={limits?.mediaCaption}
+        onChange={(e) => onChange({ caption: e.target.value })}
+        placeholder="Caption (optional)"
+        aria-label="Caption"
+      />
+      <textarea
+        className="ed-input"
+        rows={4}
+        value={section.transcript}
+        maxLength={limits?.transcript}
+        onChange={(e) => onChange({ transcript: e.target.value })}
+        placeholder="Transcript (optional)"
+        aria-label="Transcript"
+      />
+      <span className="ed-field-hint">
+        Visitors see the poster (or a plain panel) and a play button: nothing loads from {media ? MEDIA_PROVIDER_LABELS[media.provider] : 'the provider'}{' '}
+        until they press it, and YouTube and Vimeo then play in their privacy modes. A video with captions, and a transcript
+        here (shown under "Transcript"; a blank line starts a new paragraph), let everyone follow it. The poster is optional
+        and needs a description before publishing. A section with no link yet is left off the page.
       </span>
     </>
   );

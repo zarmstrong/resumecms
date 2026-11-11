@@ -27,8 +27,17 @@ in prose; check the diff against the ones that apply, especially:
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing
   page's style vs `siteColors.js`, the landing date reader `dateText.js`,
+  the media link parser `mediaUrl.js`, the publications rules
+  `publications.js`, `mailtoUrl()` vs `mailtoHref()`, the two
+  `directionsUrl()` copies,
   `contrastTextFor()` vs the favicon's `inkFor()`, `GRADIENT_SHADE` vs
   resume.css's 55% gradient mix, …).
+- A landing media section (issue #121) embeds only what `parseMediaUrl()`
+  reads (exact hosts, https), `resolveLanding()` sends its parsed form and
+  never the raw `url`, and nothing loads from the provider before a
+  visitor presses play (no provider thumbnail, no iframe in the facade). A
+  Content-Security-Policy added for pages needs `frame-src` for its four
+  players.
 - `landing.css` holds only what every landing template shares; an
   arrangement belongs in a template's `style.css`, scoped under
   `.l-template-<id>`, so a change for one template can't move another
@@ -43,6 +52,13 @@ in prose; check the diff against the ones that apply, especially:
   `columns: true`.
 - New public routes set a `cacheHeaders.js` constant before any early
   return; host-resolved ones send `HOST_HEADERS`.
+- The shell's favicon `?v=` versions and the favicon routes both come from
+  `iconContentFor()`, so a change to what an icon shows changes its URL.
+- The landing page's vCard (`vcard.js`, `GET /api/public/landing/contact.vcf`)
+  is built only from the *resolved published* contact section, so it holds
+  nothing the page doesn't show and never reads the draft; a draft has at
+  most one contact section; the Person JSON-LD gets no email, phone or area,
+  and the card no photo.
 - A landing upload (an image, or a documents section's PDF, issue #128) is
   stored only as cleaned bytes (re-encoded by `imageUpload.js`, or
   metadata-stripped by `pdfUpload.js`, size capped before parsing, its

@@ -1334,7 +1334,7 @@
   color: var(--warn);
 }
 
-/* A credential's two dates, side by side. */
+/* A credential's two dates, side by side, and a publication's outlet and date. */
 .ed-landing-dates {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

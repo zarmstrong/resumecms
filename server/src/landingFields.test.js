@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CONTACT_CARD_PATH,
   LANDING_LIMITS,
   LINK_TYPES,
+  directionsUrl,
+  mailtoUrl,
   referencedResumeIds,
   emptyLanding,
   experienceRoles,
@@ -757,6 +760,116 @@ test('an FAQ section is checked strictly, its answers as inline text, and an ent
   for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
 });
 
+test('a services section is checked strictly: inline text, a free-text price, and a button stored only when set', () => {
+  const services = (list) => ({ sections: [{ id: 'sv', kind: 'services', title: 'Services', services: list }] });
+  const message = (fn) => {
+    try {
+      fn();
+    } catch (err) {
+      return `${err.status} ${err.message}`;
+    }
+    return null;
+  };
+  const tutoring = {
+    title: 'Private tutoring',
+    text: 'One-to-one **maths** sessions. [Syllabus](https://jo.example/syllabus).',
+    price: 'From $60/hour',
+    action: { type: 'link', label: 'Book a session', url: 'mailto:jo@example.com?subject=Booking: tutoring', icon: 'calendar-days' },
+  };
+  const draft = validateLanding(services([tutoring, { title: 'Consultation' }, { text: 'No title.', action: null }, { price: 'Free' }]), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'sv',
+    kind: 'services',
+    title: 'Services',
+    services: [
+      tutoring,
+      { title: 'Consultation', text: '', price: '' },
+      { title: '', text: 'No title.', price: '' },
+      { title: '', text: '', price: 'Free' },
+    ],
+  });
+  // A button's type may be left out; it's always a link, and stored as one.
+  assert.deepEqual(validateLanding(services([{ title: 'T', action: { label: 'Call', url: 'tel:+15555550100' } }]), known()).sections[0].services[0].action, {
+    type: 'link',
+    label: 'Call',
+    url: 'tel:+15555550100',
+  });
+
+  // The text's links follow every other link's rules, read as a whole like
+  // an item's; the title and the price are plain text, never parsed.
+  assert.equal(
+    message(() => validateLanding(services([{ title: 'T', text: 'See\n\n[this](javascript:alert(1))' }]), known())),
+    '400 sections[0].services[0].text: the link "this" must be an http, https, mailto or tel link'
+  );
+  const plain = validateLanding(services([{ title: '[x](javascript:alert(1))', price: '*$5*' }]), known()).sections[0].services[0];
+  assert.deepEqual([plain.title, plain.price], ['[x](javascript:alert(1))', '*$5*']);
+  // The button's link follows a hero button's rules.
+  for (const url of ['javascript:alert(1)', 'java\tscript:x', 'data:text/html,x', 'sms:123']) {
+    assert.equal(
+      message(() => validateLanding(services([{ title: 'T', action: { type: 'link', label: 'Go', url } }]), known())),
+      '400 sections[0].services[0].action.url must be an http, https, mailto or tel link',
+      url
+    );
+  }
+  // The text's cap doesn't count an escaping backslash; the others count every character.
+  const atCap = `\\*${'a'.repeat(LANDING_LIMITS.serviceText - 1)}`;
+  assert.equal(validateLanding(services([{ text: atCap }]), known()).sections[0].services[0].text, atCap);
+  const longest = { title: 'x'.repeat(LANDING_LIMITS.serviceTitle), price: 'x'.repeat(LANDING_LIMITS.servicePrice) };
+  assert.deepEqual(validateLanding(services([longest]), known()).sections[0].services[0], { ...longest, text: '' });
+
+  const bad = [
+    services([{ title: 'x'.repeat(LANDING_LIMITS.serviceTitle + 1) }]),
+    services([{ text: 'x'.repeat(LANDING_LIMITS.serviceText + 1) }]),
+    services([{ price: 'x'.repeat(LANDING_LIMITS.servicePrice + 1) }]),
+    services([{ price: 60 }]),
+    services([{ title: 'T', image: null }]),
+    services([{ title: 'T', action: 'mailto:jo@example.com' }]),
+    services([{ title: 'T', action: { type: 'resume', resumeId: 'a', open: 'page' } }]),
+    services([{ title: 'T', action: { type: 'link', url: 'https://a.example', extra: 1 } }]),
+    services([{ title: 'T', action: { type: 'link', url: 'https://a.example', icon: 'skull' } }]),
+    services([{ title: 'T', action: { type: 'link', label: 'x'.repeat(LANDING_LIMITS.actionLabel + 1), url: 'https://a.example' } }]),
+    services(['T']),
+    services('T'),
+    services(Array.from({ length: LANDING_LIMITS.services + 1 }, () => ({ title: 'T' }))),
+    { sections: [{ id: 'sv', kind: 'services', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known('a'))), 400, JSON.stringify(input).slice(0, 80));
+});
+
+test('a service without a title or a text is dropped, then a section with none; a button only while its link is whole', () => {
+  const services = (list, extra = {}) => ({ sections: [{ id: 'sv', kind: 'services', title: 'Services', services: list, ...extra }] });
+  const resolve = (input) => resolveLanding(validateLanding(input, known()), { resumes: new Map() }).sections;
+  assert.deepEqual(
+    resolve(
+      services([
+        { title: 'Tutoring', text: 'Maths.', price: '$60/hour', action: { type: 'link', label: 'Book', url: 'https://cal.example/jo', icon: 'calendar-days' } },
+        { title: '', text: 'Just a description.', action: { type: 'link', label: '', url: 'mailto:jo@example.com?subject=Hello' } },
+        { title: 'Half typed', action: { type: 'link', label: 'Go', url: 'https://' } },
+        { title: 'Not yet', action: { type: 'link', label: 'Go', url: '' } },
+        { title: '  ', text: ' ', price: 'Free', action: { type: 'link', label: 'Book', url: 'https://cal.example/jo' } },
+      ])
+    ),
+    [
+      {
+        kind: 'services',
+        title: 'Services',
+        services: [
+          { title: 'Tutoring', text: 'Maths.', price: '$60/hour', action: { label: 'Book', href: 'https://cal.example/jo', icon: 'calendar-days' } },
+          { title: '', text: 'Just a description.', price: '', action: { label: 'mailto:jo@example.com?subject=Hello', href: 'mailto:jo@example.com?subject=Hello' } },
+          { title: 'Half typed', text: '', price: '' },
+          { title: 'Not yet', text: '', price: '' },
+        ],
+      },
+    ]
+  );
+  // A section with nothing but prices and buttons goes, heading and all, and so does an empty or hidden one.
+  assert.deepEqual(resolve(services([{ price: 'Free', action: { type: 'link', label: 'Book', url: 'https://cal.example' } }])), []);
+  assert.deepEqual(resolve(services([])), []);
+  assert.deepEqual(resolve(services([{ title: 'T' }], { hidden: true })), []);
+  // `column` goes along like any section's.
+  assert.deepEqual(resolve(services([{ title: 'T' }], { column: 'side' })), [{ kind: 'services', title: 'Services', column: 'side', services: [{ title: 'T', text: '', price: '' }] }]);
+});
+
 test('an experience section follows the reference rules of a card, with a count from 1 to 10', () => {
   const section = (extra) => ({ sections: [{ id: 'x', kind: 'experience', ...extra }] });
   assert.deepEqual(validateLanding(section({ resumeId: 'a' }), known('a')).sections[0], {
@@ -1323,6 +1436,393 @@ test('a gallery image the page would show needs a description to publish', () =>
   // One whose image is gone shows nothing; nor does a hidden gallery.
   assert.equal(fieldOf(gallery([entry('', IMG2)])), null);
   assert.equal(fieldOf(gallery([entry('')], { hidden: true })), null);
+});
+
+const YT_URL = 'https://youtu.be/dQw4w9WgXcQ?t=1m30s';
+
+test('a media section takes only a link the parser reads, and checks its caption, poster and transcript', () => {
+  const poster = { imageId: IMG, alt: 'On stage' };
+  const out = validateLanding(
+    { sections: [{ id: 'm', kind: 'media', title: 'My talk', url: YT_URL, caption: 'At PyCon', poster, transcript: 'Hello.\n\nThanks.' }] },
+    withImages(IMG)
+  );
+  assert.deepEqual(out.sections[0], { id: 'm', kind: 'media', title: 'My talk', url: YT_URL, caption: 'At PyCon', poster, transcript: 'Hello.\n\nThanks.' });
+  // A new one has no link yet; the poster is stored only when set.
+  assert.deepEqual(validateLanding({ sections: [{ id: 'm', kind: 'media' }] }, withImages()).sections[0], {
+    id: 'm',
+    kind: 'media',
+    title: '',
+    url: '',
+    caption: '',
+    transcript: '',
+  });
+  assert.equal(validateLanding({ sections: [{ kind: 'media', url: YT_URL, poster: null }] }, withImages()).sections[0].poster, undefined);
+  for (const url of ['https://vimeo.com/76979871', 'https://soundcloud.com/forss/flickermood', 'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC', '  ']) {
+    assert.equal(validateLanding({ sections: [{ kind: 'media', url }] }, withImages()).sections[0].url, url);
+  }
+
+  const bad = [
+    { sections: [{ kind: 'media', url: 'https://example.com/video.mp4' }] },
+    { sections: [{ kind: 'media', url: 'http://www.youtube.com/watch?v=dQw4w9WgXcQ' }] },
+    { sections: [{ kind: 'media', url: 'https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ' }] },
+    { sections: [{ kind: 'media', url: 'https://www.youtube.com/@someone' }] },
+    { sections: [{ kind: 'media', url: 'javascript:alert(1)' }] },
+    { sections: [{ kind: 'media', url: 'https://youtu' }] },
+    { sections: [{ kind: 'media', url: `https://youtu.be/dQw4w9WgXcQ?x=${'a'.repeat(LANDING_LIMITS.url)}` }] },
+    { sections: [{ kind: 'media', url: 3 }] },
+    { sections: [{ kind: 'media', url: YT_URL, caption: 'x'.repeat(LANDING_LIMITS.mediaCaption + 1) }] },
+    { sections: [{ kind: 'media', url: YT_URL, transcript: 'x'.repeat(LANDING_LIMITS.transcript + 1) }] },
+    { sections: [{ kind: 'media', url: YT_URL, transcript: ['x'] }] },
+    { sections: [{ kind: 'media', url: YT_URL, poster: { imageId: IMG } }] }, // alt is required
+    { sections: [{ kind: 'media', url: YT_URL, poster: { imageId: IMG2, alt: '' } }] }, // not stored
+    { sections: [{ kind: 'media', url: YT_URL, image: poster }] },
+    { sections: [{ kind: 'media', url: YT_URL, provider: 'youtube' }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, withImages(IMG))), 400, JSON.stringify(input).slice(0, 120));
+  assert.throws(
+    () => validateLanding({ sections: [{ kind: 'media', url: 'https://example.com/v' }] }, withImages()),
+    /sections\[0\]\.url must be an https link to a YouTube or Vimeo video/
+  );
+  // At its caps exactly, it's fine; the transcript is plain text, kept as written.
+  const transcript = `*[b](javascript:x)* ${'x'.repeat(LANDING_LIMITS.transcript - 20)}`;
+  const capped = validateLanding({ sections: [{ kind: 'media', url: YT_URL, caption: 'x'.repeat(LANDING_LIMITS.mediaCaption), transcript }] }, withImages());
+  assert.equal(capped.sections[0].transcript, transcript);
+
+  // A poster already in the draft may outlive its image, and every one counts as referenced.
+  const kept = validateLanding(
+    { sections: [{ kind: 'media', url: YT_URL, poster: { imageId: IMG2, alt: '' } }] },
+    { ...withImages(IMG), previousImageIds: new Set([IMG2]) }
+  );
+  assert.deepEqual([...referencedImageIds({ sections: [...out.sections, ...kept.sections] })].sort(), [IMG, IMG2]);
+});
+
+test('a media section resolves to the parsed link, never the link itself, and is left out without one', () => {
+  const src = `/api/public/landing/images/${IMG}`;
+  const context = { site: null, resumes: new Map(), images: new Map([[IMG, { src, width: 1600, height: 900 }]]) };
+  const landing = {
+    ...emptyLanding(),
+    sections: [
+      { id: 'm', kind: 'media', title: 'Demo lesson', column: 'side', url: YT_URL, caption: 'Grade 5', poster: { imageId: IMG, alt: 'A classroom' }, transcript: 'Good morning.' },
+      { id: 'v', kind: 'media', title: '', url: 'https://vimeo.com/76979871/8272103f6e#t=90s', caption: '', poster: { imageId: IMG2, alt: 'Gone' }, transcript: '' },
+      { id: 's', kind: 'media', title: 'Track', url: 'https://open.spotify.com/intl-de/album/4uLU6hMCjMI75M1A2tKUQC?si=x', caption: '', transcript: '' },
+      { id: 'none', kind: 'media', title: 'No link yet', url: '', caption: 'x', transcript: 'x' },
+      // Stored by hand, past the checks: still never shown.
+      { id: 'bad', kind: 'media', title: 'Elsewhere', url: 'https://evil.example/v.mp4', caption: '', transcript: '' },
+      { id: 'hid', kind: 'media', title: 'Hidden', hidden: true, url: YT_URL, caption: '', transcript: '' },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  assert.deepEqual(out.sections, [
+    {
+      kind: 'media',
+      title: 'Demo lesson',
+      column: 'side',
+      media: { provider: 'youtube', mediaId: 'dQw4w9WgXcQ', start: 90 },
+      caption: 'Grade 5',
+      transcript: 'Good morning.',
+      poster: { src, alt: 'A classroom', width: 1600, height: 900 },
+    },
+    { kind: 'media', title: '', media: { provider: 'vimeo', mediaId: '76979871', start: 90, hash: '8272103f6e' }, caption: '', transcript: '' },
+    { kind: 'media', title: 'Track', media: { provider: 'spotify', mediaId: '4uLU6hMCjMI75M1A2tKUQC', start: 0, type: 'album' }, caption: '', transcript: '' },
+  ]);
+  const sent = JSON.stringify(out);
+  for (const raw of ['youtu.be', 'vimeo.com', 'spotify.com', 'si=x', 'evil.example', '"url"', 'imageId']) assert.equal(sent.includes(raw), false, raw);
+  assert.deepEqual([...shownImageIds(out)], [IMG]);
+});
+
+test("a media section's poster needs a description to publish, while the section would show", () => {
+  const stored = new Set([IMG]);
+  const page = (section) => ({
+    ...emptyLanding(),
+    sections: [{ id: 't', kind: 'text', title: '', body: 'x' }, { id: 'm', kind: 'media', title: '', caption: '', transcript: '', ...section }],
+  });
+  const fieldOf = (landing) => {
+    try {
+      assertImagesDescribed(landing, stored);
+    } catch (err) {
+      assert.equal(err.status, 400);
+      assert.match(err.message, /the poster in section 2/);
+      return err.message.match(/\(([^)]*\.alt)\)/)[1];
+    }
+    return null;
+  };
+  assert.equal(fieldOf(page({ url: YT_URL, poster: { imageId: IMG, alt: ' ' } })), 'sections[1].poster.alt');
+  assert.equal(fieldOf(page({ url: YT_URL, poster: { imageId: IMG, alt: 'On stage' } })), null);
+  assert.equal(fieldOf(page({ url: YT_URL })), null);
+  // Nothing shows it: no link yet, a hidden section, or an image that's gone.
+  assert.equal(fieldOf(page({ url: '', poster: { imageId: IMG, alt: '' } })), null);
+  assert.equal(fieldOf(page({ url: YT_URL, hidden: true, poster: { imageId: IMG, alt: '' } })), null);
+  assert.equal(fieldOf(page({ url: YT_URL, poster: { imageId: IMG2, alt: '' } })), null);
+});
+
+test('publications are checked strictly, field by field, and stored whole', () => {
+  const publications = (entries, extra = {}) => ({ sections: [{ id: 'p', kind: 'publications', title: 'Writing', ...extra, entries }] });
+  const paper = {
+    kind: 'paper',
+    title: 'Array programming with NumPy',
+    outlet: 'Nature',
+    date: 'Sep 2020',
+    url: '',
+    doi: '10.1038/s41586-020-2649-2',
+    note: 'with C. Harris et al.',
+  };
+  const draft = validateLanding(publications([paper, { title: 'On kitchens' }]), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'p',
+    kind: 'publications',
+    title: 'Writing',
+    order: 'manual',
+    group: false,
+    entries: [paper, { kind: 'article', title: 'On kitchens', outlet: '', date: '', url: '', doi: '', note: '' }],
+  });
+  for (const kind of ['article', 'paper', 'book', 'chapter', 'talk', 'podcast', 'press']) {
+    assert.equal(validateLanding(publications([{ kind, title: 'X' }]), known()).sections[0].entries[0].kind, kind);
+  }
+  const options = validateLanding(publications([], { order: 'newest', group: true, column: 'side' }), known()).sections[0];
+  assert.deepEqual([options.order, options.group, options.column], ['newest', true, 'side']);
+  // At every cap is fine, and so is a DOI half typed (the editor saves as someone types).
+  const atCaps = {
+    title: 't'.repeat(LANDING_LIMITS.publicationTitle),
+    outlet: 'o'.repeat(LANDING_LIMITS.publicationOutlet),
+    date: 'd'.repeat(LANDING_LIMITS.publicationDate),
+    note: 'n'.repeat(LANDING_LIMITS.publicationNote),
+    url: 'mailto:press@example.org',
+    doi: `10.1234/${'x'.repeat(LANDING_LIMITS.doi - 8)}`,
+  };
+  assert.equal(status(() => validateLanding(publications(Array.from({ length: LANDING_LIMITS.publications }, () => atCaps)), known())), null);
+  // A DOI saves as any text, as a half-typed URL does (it's linked only
+  // once it's one), so a typo or a paused paste never blocks a save.
+  for (const doi of ['', '1', '10.', 'd', 'doi', '10.1234/abcd', 'https://www.doi.org/10.1234/abcd', '10.123/abcd', '10.1234/ab cd (2020)', 'javascript:alert(1)']) {
+    assert.equal(status(() => validateLanding(publications([{ title: 'X', doi }]), known())), null, doi);
+  }
+
+  const bad = [
+    publications([{ title: 't'.repeat(LANDING_LIMITS.publicationTitle + 1) }]),
+    publications([{ title: 'X', outlet: 'o'.repeat(LANDING_LIMITS.publicationOutlet + 1) }]),
+    publications([{ title: 'X', date: 'd'.repeat(LANDING_LIMITS.publicationDate + 1) }]),
+    publications([{ title: 'X', note: 'n'.repeat(LANDING_LIMITS.publicationNote + 1) }]),
+    publications([{ title: 'X', url: 'x'.repeat(LANDING_LIMITS.url + 1) }]),
+    publications([{ title: 'X', doi: `10.1234/${'x'.repeat(LANDING_LIMITS.doi)}` }]),
+    publications([{ title: 'X', url: 'java\tscript:alert(1)' }]),
+    publications([{ title: 'X', url: 'data:text/html,hi' }]),
+    publications([{ kind: 'award', title: 'X' }]),
+    publications([{ kind: 'Paper', title: 'X' }]),
+    publications([{ title: 'X', authors: 'Me' }]),
+    publications([{ title: 5 }]),
+    publications([{ title: 'X', date: 2024 }]),
+    publications(['A paper']),
+    publications('A paper'),
+    publications(Array.from({ length: LANDING_LIMITS.publications + 1 }, () => ({ title: 'X' }))),
+    publications([], { order: 'oldest' }),
+    publications([], { group: 'yes' }),
+    { sections: [{ id: 'p', kind: 'publications', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 160));
+});
+
+test('a publications section resolves sorted, grouped and linked, its untitled entries left out', () => {
+  const entry = (kind, title, date, extra = {}) => ({ kind, title, outlet: 'Outlet', date, url: '', doi: '', note: '', ...extra });
+  const entries = [
+    entry('talk', 'Keynote', '2019', { url: 'https://conf.example/2019', doi: '10.1234/ignored' }),
+    entry('paper', 'Old paper', 'Mar 2021', { doi: '10.1234/old#1' }),
+    entry('article', 'Forthcoming piece', 'Forthcoming'),
+    entry('paper', 'New paper', '2024-02-01', { doi: '10.1234/' }),
+    entry('press', 'Profile', '05/2023', { doi: '10.5555/profile' }),
+    entry('book', 'Half-typed link', '2022', { url: 'https://' }),
+    entry('article', '  ', '2030'),
+  ];
+  const landing = (extra) => validateLanding({ sections: [{ id: 'p', kind: 'publications', title: 'Work', entries, ...extra }] }, known());
+  const shown = (extra) => resolveLanding(landing(extra), { resumes: new Map() }).sections[0];
+
+  const manual = shown({});
+  assert.deepEqual(Object.keys(manual), ['kind', 'title', 'entries']);
+  assert.deepEqual(manual.entries.map((e) => e.title), ['Keynote', 'Old paper', 'Forthcoming piece', 'New paper', 'Profile', 'Half-typed link']);
+  // Its own safe URL first, else its DOI's link, else nothing.
+  assert.deepEqual(manual.entries.map((e) => e.url), [
+    'https://conf.example/2019',
+    'https://doi.org/10.1234/old%231',
+    '',
+    '',
+    'https://doi.org/10.5555/profile',
+    '',
+  ]);
+  assert.deepEqual(manual.entries[0], { kind: 'talk', title: 'Keynote', outlet: 'Outlet', date: '2019', url: 'https://conf.example/2019', note: '' });
+
+  // Newest first: the unreadable date keeps its place.
+  assert.deepEqual(shown({ order: 'newest' }).entries.map((e) => e.title), [
+    'New paper',
+    'Profile',
+    'Forthcoming piece',
+    'Half-typed link',
+    'Old paper',
+    'Keynote',
+  ]);
+
+  // Grouped: a subheading per kind that has any, in a fixed order.
+  const groups = (extra) => shown(extra).groups.map((g) => [g.kind, g.entries.map((e) => e.title)]);
+  assert.equal('entries' in shown({ group: true }), false);
+  assert.deepEqual(groups({ group: true }), [
+    ['article', ['Forthcoming piece']],
+    ['paper', ['Old paper', 'New paper']],
+    ['book', ['Half-typed link']],
+    ['talk', ['Keynote']],
+    ['press', ['Profile']],
+  ]);
+  assert.deepEqual(groups({ group: true, order: 'newest' })[1], ['paper', ['New paper', 'Old paper']]);
+
+  // Nothing with a title, or hidden: gone, heading and all.
+  const none = validateLanding({ sections: [{ id: 'p', kind: 'publications', title: 'Work', entries: [entry('paper', '', '2020')] }] }, known());
+  assert.deepEqual(resolveLanding(none, { resumes: new Map() }).sections, []);
+  assert.deepEqual(resolveLanding(landing({ hidden: true }), { resumes: new Map() }).sections, []);
+});
+
+test('a contact section is checked strictly, field by field, and stored whole', () => {
+  const contact = (fields) => ({ sections: [{ id: 'k', kind: 'contact', title: 'Get in touch', ...fields }] });
+  const full = {
+    email: 'jo@example.com',
+    phone: '+1 (512) 555-0100',
+    area: 'Serving Travis and Williamson counties',
+    address: '100 Congress Ave\nAustin, TX 78701',
+    hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: '', time: 'Evenings by appointment' }],
+    vcard: false,
+  };
+  assert.deepEqual(validateLanding(contact(full), known()).sections[0], { id: 'k', kind: 'contact', title: 'Get in touch', ...full });
+  // Every field filled in, the vCard button on unless switched off.
+  assert.deepEqual(validateLanding(contact({}), known()).sections[0], {
+    id: 'k',
+    kind: 'contact',
+    title: 'Get in touch',
+    email: '',
+    phone: '',
+    area: '',
+    address: '',
+    hours: [],
+    vcard: true,
+  });
+  assert.deepEqual(validateLanding(contact({ hours: [{ days: 'Mon' }] }), known()).sections[0].hours, [{ days: 'Mon', time: '' }]);
+  // At every cap is fine, and a half-typed email or phone saves.
+  const atCaps = {
+    email: 'e'.repeat(LANDING_LIMITS.contactEmail),
+    phone: '5'.repeat(LANDING_LIMITS.contactPhone),
+    area: 'a'.repeat(LANDING_LIMITS.contactArea),
+    address: 'a'.repeat(LANDING_LIMITS.contactAddress),
+    hours: Array.from({ length: LANDING_LIMITS.contactHours }, () => ({ days: 'd'.repeat(LANDING_LIMITS.contactDays), time: 't'.repeat(LANDING_LIMITS.contactTime) })),
+  };
+  assert.equal(status(() => validateLanding(contact(atCaps), known())), null);
+  assert.equal(status(() => validateLanding(contact({ email: 'jo@', phone: '+1 (' }), known())), null);
+
+  const bad = [
+    contact({ email: 'e'.repeat(LANDING_LIMITS.contactEmail + 1) }),
+    contact({ phone: '5'.repeat(LANDING_LIMITS.contactPhone + 1) }),
+    contact({ area: 'a'.repeat(LANDING_LIMITS.contactArea + 1) }),
+    contact({ address: 'a'.repeat(LANDING_LIMITS.contactAddress + 1) }),
+    contact({ hours: Array.from({ length: LANDING_LIMITS.contactHours + 1 }, () => ({ days: 'Mon' })) }),
+    contact({ hours: [{ days: 'd'.repeat(LANDING_LIMITS.contactDays + 1) }] }),
+    contact({ hours: [{ time: 't'.repeat(LANDING_LIMITS.contactTime + 1) }] }),
+    contact({ hours: [{ days: 'Mon', open: '9' }] }),
+    contact({ hours: ['Mon 9–5'] }),
+    contact({ hours: 'Mon 9–5' }),
+    contact({ hours: [{ days: 1 }] }),
+    // One line each, since they go into a link and a vCard property.
+    contact({ email: 'jo@example.com\nBCC:x@example.com' }),
+    contact({ phone: '555\r0100' }),
+    contact({ email: 5 }),
+    contact({ address: ['100 Congress Ave'] }),
+    contact({ vcard: 'yes' }),
+    contact({ links: [] }),
+    contact({ website: 'https://example.com' }),
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
+});
+
+test('a page has at most one contact section, hidden or not, so the vCard has one source', () => {
+  const one = { id: 'a', kind: 'contact', email: 'jo@example.com' };
+  assert.equal(status(() => validateLanding({ sections: [one, { id: 't', kind: 'text', body: 'Hi' }] }, known())), null);
+  for (const second of [{ id: 'b', kind: 'contact' }, { id: 'b', kind: 'contact', hidden: true, vcard: false }]) {
+    let error;
+    try {
+      validateLanding({ sections: [{ id: 't', kind: 'text' }, one, second] }, known());
+    } catch (err) {
+      error = err;
+    }
+    assert.equal(error?.status, 400);
+    assert.match(error.message, /^sections\[2\]: .*only one/);
+  }
+});
+
+test('mailtoUrl links only a whole address that a mailto: URL would read as it is', () => {
+  assert.equal(mailtoUrl('jo@example.com'), 'mailto:jo@example.com');
+  assert.equal(mailtoUrl('  jo.doe+work@mail.example.co.uk '), 'mailto:jo.doe+work@mail.example.co.uk');
+  assert.equal(mailtoUrl('josé@exämple.de'), 'mailto:josé@exämple.de');
+  for (const notYet of ['', ' ', 'jo', 'jo@', '@example.com', 'jo@example', 'jo@example.', 'jo@.com', 'jo@@example.com', 'jo@a@b.com']) {
+    assert.equal(mailtoUrl(notYet), '', notYet);
+  }
+  // Anything that would make the link do more than write to this address.
+  for (const tricky of ['jo@example.com?subject=hi', 'jo@example.com,eve@example.com', 'jo@example.com#x', 'j%6f@example.com', 'jo @example.com', 'jo@exa mple.com', 'jo@exa\nmple.com', '<jo@example.com>', 'jo@example.com;x']) {
+    assert.equal(mailtoUrl(tricky), '', JSON.stringify(tricky));
+  }
+  assert.equal(mailtoUrl(undefined), '');
+  assert.equal(mailtoUrl(5), '');
+});
+
+test('directionsUrl is a map search for the address, its lines joined', () => {
+  assert.equal(
+    directionsUrl(' 100 Congress Ave \n\nAustin, TX 78701\n'),
+    'https://www.google.com/maps/search/?api=1&query=100%20Congress%20Ave%2C%20Austin%2C%20TX%2078701'
+  );
+  assert.equal(directionsUrl('Suite #4 & Co?'), 'https://www.google.com/maps/search/?api=1&query=Suite%20%234%20%26%20Co%3F');
+  assert.equal(directionsUrl(' \n '), '');
+  assert.equal(directionsUrl(undefined), '');
+  assert.ok(isSafeUrl(directionsUrl('Austin')));
+});
+
+test('a contact section shows only what makes a link or has text, and is dropped with none of it', () => {
+  const landing = (fields, extra = {}) =>
+    validateLanding({ sections: [{ id: 'k', kind: 'contact', title: 'Contact', ...fields, ...extra }] }, known());
+  const shown = (fields, extra) => resolveLanding(landing(fields, extra), { resumes: new Map() }).sections;
+  assert.deepEqual(
+    shown({
+      email: ' jo@example.com ',
+      phone: '+1 (512) 555-0100 x12',
+      area: 'Central Texas',
+      address: '100 Congress Ave\nAustin, TX',
+      hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: ' ', time: ' ' }, { days: '', time: 'By appointment' }],
+    }),
+    [
+      {
+        kind: 'contact',
+        title: 'Contact',
+        email: 'jo@example.com',
+        emailHref: 'mailto:jo@example.com',
+        phone: '+1 (512) 555-0100 x12',
+        phoneHref: 'tel:+15125550100;ext=12',
+        area: 'Central Texas',
+        address: '100 Congress Ave\nAustin, TX',
+        directionsHref: directionsUrl('100 Congress Ave\nAustin, TX'),
+        hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: '', time: 'By appointment' }],
+        vcardHref: CONTACT_CARD_PATH,
+      },
+    ]
+  );
+  // A half-typed email or a phone with nothing to dial isn't shown; the rest is.
+  const [partial] = shown({ email: 'jo@', phone: 'call me', area: 'Austin' }, { vcard: false, column: 'side' });
+  assert.deepEqual(partial, {
+    kind: 'contact',
+    title: 'Contact',
+    column: 'side',
+    email: '',
+    emailHref: '',
+    phone: '',
+    phoneHref: '',
+    area: 'Austin',
+    address: '',
+    directionsHref: '',
+    hours: [],
+    vcardHref: '',
+  });
+  // Nothing to show: no email or phone that links, no area, address or hours.
+  assert.deepEqual(shown({ email: 'jo@', phone: 'x', area: ' ', address: '\n', hours: [{ days: ' ', time: '' }] }), []);
+  assert.deepEqual(shown({ email: 'jo@example.com' }, { hidden: true }), []);
 });
 
 test('a documents section holds up to 12 entries of { file, label, description }, checked like every file reference', () => {

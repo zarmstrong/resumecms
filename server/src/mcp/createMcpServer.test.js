@@ -518,6 +518,35 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   await call('update_landing_page', { sections: credentials });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: credentials }, { merge: true }]);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'credentials', credentials: [{ kind: 'degree', name: 'BSc' }] }] })).isError, true);
+  // a services section (issue #122) passes through; a price is text, a button only ever a link
+  const services = [
+    {
+      kind: 'services',
+      title: 'Services',
+      services: [
+        { title: 'Tutoring', text: 'Weekly, **one to one**.', price: 'From $60/hour', action: { type: 'link', label: 'Book', url: 'mailto:jo@example.com?subject=Booking', icon: 'calendar-days' } },
+        { title: 'Consultation', price: 'Free', action: null },
+      ],
+    },
+  ];
+  await call('update_landing_page', { sections: services });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: services }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'services', services: [{ title: 'T', price: 60 }] }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'services', services: [{ title: 'T', action: { type: 'resume', url: 'x' } }] }] })).isError, true);
+  // publications (issue #127): kinds and orders are the server's
+  const publications = [
+    {
+      kind: 'publications',
+      title: 'Writing',
+      order: 'newest',
+      group: true,
+      entries: [{ kind: 'paper', title: 'Array programming', outlet: 'Nature', date: 'Sep 2020', url: '', doi: '10.1038/s41586-020-2649-2', note: 'with others' }, { title: 'On kitchens' }],
+    },
+  ];
+  await call('update_landing_page', { sections: publications });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: publications }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'publications', entries: [{ kind: 'award', title: 'X' }] }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'publications', order: 'oldest' }] })).isError, true);
   // a resumeId isn't a landing page field (the page belongs to the install)
   await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi' }, { merge: true }]);
@@ -580,6 +609,19 @@ test('upload_landing_image decodes base64 (or a data: URL) under its own cap, an
   await call('update_landing_page', { sections: gallery });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: gallery }, { merge: true }]);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'gallery', images: [{ image: { imageId: 'a'.repeat(64) } }] }] })).isError, true);
+  // So does a media section (issue #121), its poster a reference like the others.
+  const media = [{ kind: 'media', title: 'Talk', url: 'https://youtu.be/dQw4w9WgXcQ', caption: 'At PyCon', poster: image, transcript: 'Hello.' }];
+  await call('update_landing_page', { sections: media });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: media }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'media', poster: { imageId: 'a'.repeat(64) } }] })).isError, true);
+  // A contact section (issue #124) passes through; its hours are pairs and its button a boolean.
+  const contact = [
+    { kind: 'contact', title: 'Contact', email: 'jo@example.com', phone: '+1 512 555 0100', area: 'Austin', address: '1 Main St\nAustin', hours: [{ days: 'Mon', time: '9–5' }, { time: 'By appointment' }], vcard: false },
+  ];
+  await call('update_landing_page', { sections: contact });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: contact }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'contact', hours: ['Mon 9–5'] }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'contact', vcard: 'yes' }] })).isError, true);
 });
 
 test('cover letter tools: create, merge or replace on update, delete, scoped by resumeId', async (t) => {

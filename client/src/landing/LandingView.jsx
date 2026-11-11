@@ -7,6 +7,7 @@ import { dropStrayDividers } from './dividers.js';
 import { renderInline } from './renderInline.js';
 import { readDate } from './dateText.js';
 import { LandingGallery } from './LandingGallery.jsx';
+import { LandingMedia } from './LandingMedia.jsx';
 import { formatFileSize } from './documents.js';
 import { ActionIcon } from './ActionIcon.jsx';
 import './landing.css';
@@ -29,8 +30,9 @@ import './landing.css';
 // sees to that for a template without columns, and hands one with columns
 // `dropStrayDividers(sections, { atStart })` to apply to each column.
 // Everything is rendered as text,
-// apart from the links and emphasis a text section, an item's text or an
-// FAQ answer may hold (issue #91, renderInline.js), which become elements,
+// apart from the links and emphasis a text section, an item's text, an
+// FAQ answer or a service's text may hold (issue #91, renderInline.js),
+// which become elements,
 // never HTML; every href still goes through safeHref() (by way of
 // linkProps()) although the server only stores safe ones. `highlightIds`
 // (editor preview only) outlines the parts an AI suggestion is shown in:
@@ -38,7 +40,8 @@ import './landing.css';
 // preview resolves its draft `withIds`). A section marked `hidden` (only
 // the preview resolves those, `withHidden`) is dimmed and labelled, and so
 // is an expired credential (issue #119), or a credentials section with
-// nothing else (`expired`).
+// nothing else (`expired`). A media section (issue #121) is a facade until
+// a visitor presses play (LandingMedia.jsx), in the preview too.
 export function LandingView({ landing, preview = false, highlightIds = null, scheme = 'auto' }) {
   const template = getLandingTemplate(landing.template);
   const { colors, style } = landingPageStyle(landing.site, landing.darkColors);
@@ -345,6 +348,52 @@ function SectionBody({ section, preview }) {
       );
     case 'gallery':
       return <LandingGallery images={section.images} label={section.title} />;
+    case 'media':
+      return <LandingMedia section={section} />;
+    case 'services':
+      // What the person offers (issue #122): each one's name with its price
+      // beside it, where a visitor finds it at a glance, then what it is,
+      // then its button. The comma is for a screen reader ("Tutoring, From
+      // $60/hour"), as a stat's.
+      return (
+        <ul className="l-services">
+          {section.services.map((service, i) => (
+            <li key={i} className="l-service">
+              {(service.title || service.price) && (
+                <span className="l-service-head">
+                  {service.title && <span className="l-service-title">{service.title}</span>}
+                  {service.title && service.price && <span className="l-sr-only">, </span>}
+                  {service.price && <span className="l-service-price">{service.price}</span>}
+                </span>
+              )}
+              {service.text && <p className="l-service-text">{renderInline(service.text)}</p>}
+              {service.action && (
+                <a className="l-action l-service-action" {...hrefProps(service.action.href)}>
+                  {service.action.icon && <ActionIcon name={service.action.icon} />}
+                  {service.action.label}
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      );
+    case 'publications':
+      // Grouped (issue #127), each kind under a subheading of its own, and
+      // then the kind isn't repeated on each entry's line.
+      return section.groups ? (
+        <div className="l-publication-groups">
+          {section.groups.map((group) => (
+            <div key={group.kind} className="l-publication-group">
+              <h3 className="l-publication-group-title">{PUBLICATION_GROUP_LABELS[group.kind] || PUBLICATION_GROUP_LABELS.article}</h3>
+              <PublicationList entries={group.entries} showKind={false} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <PublicationList entries={section.entries} showKind />
+      );
+    case 'contact':
+      return <ContactDetails contact={section} preview={preview} />;
     case 'documents':
       // Uploaded PDFs (issue #128), each opened in the browser's own viewer
       // from a path on this site, with its size so a visitor knows what
@@ -375,6 +424,86 @@ function SectionBody({ section, preview }) {
   }
 }
 
+// A contact section (issue #124): each thing it shows on a labelled line,
+// the email and phone as mailto:/tel: links, the address as written with
+// a "Directions" map search (a link, never an embedded map), and the
+// "Save contact" vCard button. The editor's preview draws that button
+// without a link: the card is built from the published page, not the
+// draft on screen.
+function ContactDetails({ contact, preview }) {
+  return (
+    <div className="l-contact">
+      <dl className="l-contact-lines">
+        {contact.emailHref && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Email</dt>
+            <dd className="l-contact-value">
+              <a className="l-contact-link" href={contact.emailHref}>
+                {contact.email}
+              </a>
+            </dd>
+          </div>
+        )}
+        {contact.phoneHref && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Phone</dt>
+            <dd className="l-contact-value">
+              <a className="l-contact-link" href={contact.phoneHref}>
+                {contact.phone}
+              </a>
+            </dd>
+          </div>
+        )}
+        {contact.area && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Area</dt>
+            <dd className="l-contact-value">{contact.area}</dd>
+          </div>
+        )}
+        {contact.address && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Address</dt>
+            <dd className="l-contact-value">
+              <span className="l-contact-address">{contact.address}</span>
+              {contact.directionsHref && (
+                <a className="l-contact-link l-contact-directions" {...linkProps(contact.directionsHref)}>
+                  Directions
+                </a>
+              )}
+            </dd>
+          </div>
+        )}
+        {contact.hours.length > 0 && (
+          <div className="l-contact-line">
+            <dt className="l-contact-label">Hours</dt>
+            <dd className="l-contact-value">
+              <ul className="l-contact-hours">
+                {contact.hours.map((entry, i) => (
+                  <li key={i}>
+                    {entry.days && <span className="l-contact-days">{entry.days}</span>}
+                    {entry.days && entry.time && ' '}
+                    {entry.time && <span className="l-contact-time">{entry.time}</span>}
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
+      </dl>
+      {contact.vcardHref &&
+        (preview ? (
+          <span className="l-action l-contact-save" title="Downloads the published page's contact card">
+            Save contact
+          </span>
+        ) : (
+          <a className="l-action l-contact-save" href={contact.vcardHref} download>
+            Save contact
+          </a>
+        ))}
+    </div>
+  );
+}
+
 // The small label next to a credential's name.
 const CREDENTIAL_LABELS = { license: 'License', certification: 'Certification', membership: 'Membership' };
 
@@ -399,6 +528,44 @@ function CredentialDetails({ credential }) {
         </a>
       )}
     </span>
+  );
+}
+
+// What an entry is, on its line, and a group's subheading.
+const PUBLICATION_LABELS = { article: 'Article', paper: 'Paper', book: 'Book', chapter: 'Chapter', talk: 'Talk', podcast: 'Podcast', press: 'Press' };
+const PUBLICATION_GROUP_LABELS = {
+  article: 'Articles',
+  paper: 'Papers',
+  book: 'Books',
+  chapter: 'Chapters',
+  talk: 'Talks',
+  podcast: 'Podcasts',
+  press: 'Press',
+};
+
+// Publications as a citation reads: the title (linked to its URL or its
+// DOI, which resolveLanding() has already chosen), a muted "Outlet · Date ·
+// Kind" line, then the note, all plain text.
+function PublicationList({ entries, showKind }) {
+  return (
+    <ul className="l-publications">
+      {entries.map((entry, i) => {
+        const meta = [entry.outlet, entry.date, showKind && (PUBLICATION_LABELS[entry.kind] || PUBLICATION_LABELS.article)].filter(Boolean);
+        return (
+          <li key={i} className="l-publication">
+            {entry.url ? (
+              <a className="l-publication-title" {...linkProps(entry.url)}>
+                {entry.title}
+              </a>
+            ) : (
+              <span className="l-publication-title">{entry.title}</span>
+            )}
+            {meta.length > 0 && <span className="l-publication-meta">{meta.join(' · ')}</span>}
+            {entry.note && <p className="l-publication-note">{entry.note}</p>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

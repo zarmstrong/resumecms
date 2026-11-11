@@ -11,7 +11,7 @@ import { carryItemKey } from './landingImages.js';
 // a position, so a proposal for one carries an `anchor` (the item's title and
 // text when it was made) and locateTarget() follows the item if it moves. An
 // FAQ answer (issue #123) is a position too, followed the same way by its
-// question.
+// question, and so is a service's text (issue #122), by the service's title.
 
 // A spot's key: what a request is tracked by, and what a panel finds its
 // proposals by.
@@ -29,6 +29,8 @@ export function targetKey(target) {
       return `card:${target.sectionId}:${target.resumeId}`;
     case 'answer':
       return `answer:${target.sectionId}:${target.index}`;
+    case 'service':
+      return `service:${target.sectionId}:${target.index}`;
     default:
       return '';
   }
@@ -51,14 +53,16 @@ function sectionOf(landing, target, kind) {
 }
 
 // The targets that are a position in a list, rather than an id.
-const POSITIONED = ['item', 'answer'];
+const POSITIONED = ['item', 'answer', 'service'];
 
 // The list a positioned target's index is in, each entry as { title, text }
-// (an FAQ entry's question and answer), so locateTarget() follows both alike.
+// (an FAQ entry's question and answer; a service already is one), so
+// locateTarget() follows them all alike.
 function positionedList(landing, target) {
   if (target.kind === 'answer') {
     return sectionOf(landing, target, 'faq')?.entries.map((entry) => ({ title: entry.question, text: entry.answer })) ?? null;
   }
+  if (target.kind === 'service') return sectionOf(landing, target, 'services')?.services ?? null;
   return sectionOf(landing, target, 'items')?.items ?? null;
 }
 
@@ -77,6 +81,8 @@ export function landingSlice(landing, target) {
       return sectionOf(landing, target, 'resumes')?.cards.find((c) => c.resumeId === target.resumeId)?.blurb ?? null;
     case 'answer':
       return sectionOf(landing, target, 'faq')?.entries[target.index]?.answer ?? null;
+    case 'service':
+      return sectionOf(landing, target, 'services')?.services[target.index]?.text ?? null;
     default:
       return null;
   }
@@ -96,6 +102,8 @@ export function setLandingSlice(landing, target, value) {
         return { ...section, cards: section.cards.map((card) => (card.resumeId === target.resumeId ? { ...card, blurb: value } : card)) };
       case 'answer':
         return { ...section, entries: section.entries.map((entry, i) => (i === target.index ? { ...entry, answer: value } : entry)) };
+      case 'service':
+        return { ...section, services: section.services.map((service, i) => (i === target.index ? { ...service, text: value } : service)) };
       default:
         return section;
     }
@@ -103,7 +111,8 @@ export function setLandingSlice(landing, target, value) {
   return { ...landing, sections };
 }
 
-// What the proposal for `target` needs to find its item (or FAQ entry) again.
+// What the proposal for `target` needs to find its item (or FAQ entry, or
+// service) again.
 export function anchorFor(landing, target) {
   if (!POSITIONED.includes(target.kind)) return null;
   const items = positionedList(landing, target);
@@ -119,7 +128,7 @@ export function anchorFor(landing, target) {
 // go by, so an edited one is taken to be in place only while the list is as
 // long as it was: otherwise its neighbour, slid into its place after it was
 // removed, would look like it. An FAQ answer is followed the same way, its
-// question standing for the title.
+// question standing for the title, and a service's text by its title.
 export function locateTarget(landing, proposal) {
   const { target } = proposal;
   if (!POSITIONED.includes(target.kind)) return landingSlice(landing, target) === null ? null : target;
@@ -148,7 +157,8 @@ export function requestSpot(landing, target) {
 }
 
 // Where a request's spot (requestSpot()'s) is now, or null when it's gone:
-// an item's follows its item, an answer's its FAQ entry; any other spot is
+// an item's follows its item, an answer's its FAQ entry, a service's its
+// service; any other spot is
 // an id, or the hero, and an intro's is its section.
 export function locateRequest(landing, spot) {
   return POSITIONED.includes(spot.target.kind) ? locateTarget(landing, spot) : spot.target;
@@ -229,6 +239,14 @@ export function presetsFor(kind, current) {
             { label: 'Clearer', instruction: 'Make this answer clearer and more direct.' },
             { label: 'Fix grammar', instruction: 'Fix grammar and spelling only.' },
           ];
+    case 'service':
+      return empty
+        ? [{ label: 'Write a description', instruction: 'Write a short description of this service, saying what a client gets from it.' }]
+        : [
+            { label: 'Shorter', instruction: 'Make this shorter.' },
+            { label: 'Clearer', instruction: 'Make it clearer what a client gets from this service.' },
+            { label: 'Fix grammar', instruction: 'Fix grammar and spelling only.' },
+          ];
     default:
       return [];
   }
@@ -242,4 +260,5 @@ export const TARGET_LABELS = {
   card: 'this card',
   intro: 'the headline and intro',
   answer: 'this answer',
+  service: 'this service',
 };

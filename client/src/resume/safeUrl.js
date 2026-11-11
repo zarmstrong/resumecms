@@ -36,3 +36,19 @@ export function telHref(phone) {
   if (!digits || /[a-z#]/i.test(number)) return undefined;
   return `tel:${number.startsWith('+') ? '+' : ''}${digits}${ext ? `;ext=${ext[1]}` : ''}`;
 }
+
+// An email address as typed as a mailto: URL, or undefined while it isn't
+// a whole address yet, or has a character that would make the link do
+// more than write to it (`?` a subject, `%` anything, `,` a second
+// recipient). Mirrors mailtoUrl() in server/src/landingFields.js.
+export function mailtoHref(email) {
+  const text = typeof email === 'string' ? email.trim() : '';
+  const at = text.indexOf('@');
+  if (at < 1 || at !== text.lastIndexOf('@')) return undefined;
+  const local = text.slice(0, at);
+  const domain = text.slice(at + 1);
+  const part = /^[^\s\u0000-\u001f\u007f@?#%/\\:;,<>"()[\]]+$/u;
+  if (!part.test(local) || !part.test(domain)) return undefined;
+  if (!domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) return undefined;
+  return `mailto:${text}`;
+}

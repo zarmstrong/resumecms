@@ -21,10 +21,19 @@
 // as the server reads it) is past its `expires` (dateText.js): left out,
 // or, `withHidden`, kept as `expired: true` for the preview to dim, and a
 // section of nothing but expired ones then comes back `hidden` and
-// `expired`, since the page won't show it.
+// `expired`, since the page won't show it. A media section (issue #121)
+// resolves to its link as mediaUrl.js's parseMediaUrl() reads it, never the
+// link itself, as the server's does. A publications section (issue #127)
+// is ordered and grouped by publications.js, the server's copy. A contact
+// section (issue #124) shows an email and a phone only once they make a
+// link (mailtoHref() and telHref()), an address with a "Directions" map
+// search, and the "Save contact" vCard's link while `vcard` is on.
 
 import { darkPalette, landingSite } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';
+import { parseMediaUrl } from './mediaUrl.js';
+import { arrangePublications, doiUrl } from './publications.js';
+import { mailtoHref, telHref } from '../resume/safeUrl.js';
 
 const SAFE_SCHEMES = ['http:', 'https:', 'mailto:', 'tel:'];
 
@@ -72,7 +81,7 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
 // What a button without a label of its own says.
 export const ACTION_LABELS = { page: 'View my resume', pdf: 'Download my resume (PDF)' };
 
-// A hero button as a visitor sees it, { label, href }, or null when it
+// A hero button (or a service's, issue #122) as a visitor sees it, { label, href }, or null when it
 // isn't shown: a link that's half typed or unsafe, a resume a visitor
 // can't open, or a PDF it doesn't have.
 function resolveAction(action, targets) {
@@ -201,6 +210,27 @@ function resolveSection(section, targets, images, { today, withHidden, files }) 
       });
       return shown.length ? { images: shown } : null;
     }
+    case 'media': {
+      const media = parseMediaUrl(section.url);
+      if (!media) return null;
+      const poster = resolveImage(section.poster, images);
+      return { media, caption: section.caption, transcript: section.transcript, ...(poster ? { poster } : {}) };
+    }
+    case 'services': {
+      const services = section.services
+        .filter((service) => service.title.trim() || service.text.trim())
+        .map((service) => {
+          const action = service.action ? resolveAction(service.action, targets) : null;
+          return { title: service.title, text: service.text, price: service.price, ...(action ? { action } : {}) };
+        });
+      return services.length ? { services } : null;
+    }
+    case 'publications': {
+      const entries = section.entries.filter((entry) => entry.title.trim()).map((entry) => resolvePublication(entry));
+      return entries.length ? arrangePublications(entries, section) : null;
+    }
+    case 'contact':
+      return resolveContact(section);
     case 'documents': {
       // Its label, or the file's name without .pdf; the file at its path
       // with the name appended, and its size in bytes.
@@ -215,6 +245,49 @@ function resolveSection(section, targets, images, { today, withHidden, files }) 
     default:
       return null;
   }
+}
+
+function resolvePublication(entry) {
+  const { kind, title, outlet, date, note } = entry;
+  return { kind, title, outlet, date, url: entry.url !== '' && isSafeUrl(entry.url) ? entry.url : doiUrl(entry.doi), note };
+}
+
+// Where the "Save contact" button downloads the vCard from: the server's
+// CONTACT_CARD_PATH, which serves only the published page's, so the
+// editor's preview draws the button without linking it.
+export const CONTACT_CARD_PATH = '/api/public/landing/contact.vcf';
+
+// A contact section as a visitor sees it, every field there, '' for one
+// that isn't shown; null with nothing to show.
+function resolveContact(section) {
+  const emailHref = mailtoHref(section.email) ?? '';
+  const phoneHref = telHref(section.phone) ?? '';
+  const address = section.address.trim() ? section.address : '';
+  const hours = section.hours.filter((entry) => entry.days.trim() || entry.time.trim()).map((entry) => ({ days: entry.days, time: entry.time }));
+  const area = section.area.trim() ? section.area : '';
+  if (!emailHref && !phoneHref && !area && !address && !hours.length) return null;
+  return {
+    email: emailHref ? section.email.trim() : '',
+    emailHref,
+    phone: phoneHref ? section.phone.trim() : '',
+    phoneHref,
+    area,
+    address,
+    directionsHref: directionsUrl(address),
+    hours,
+    vcardHref: section.vcard ? CONTACT_CARD_PATH : '',
+  };
+}
+
+// A map search for an address, its lines joined with commas; a link, never
+// an embedded map. Mirrors directionsUrl() in server/src/landingFields.js.
+export function directionsUrl(address) {
+  const query = (typeof address === 'string' ? address : '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(', ');
+  return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : '';
 }
 
 function resolveCredential(credential) {

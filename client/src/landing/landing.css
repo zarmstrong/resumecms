@@ -712,6 +712,196 @@ a.l-credential-verify:focus-visible {
   margin-bottom: 2px;
 }
 
+/* Services (issue #122): each its name with its price beside it (under it
+   when there's no room), what it is, then its button, a hero button's
+   look. */
+.l-services {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0;
+  margin: 0;
+}
+
+.l-service {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.l-service-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+}
+
+.l-service-title {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+.l-service-price {
+  font-weight: 600;
+  font-size: 0.92em;
+  color: var(--r-accent, var(--slate));
+  overflow-wrap: anywhere;
+}
+
+.l-service-text {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.l-service-action {
+  margin-top: 8px;
+}
+
+/* Publications (issue #127): each a title, linked like a list entry's, a
+   muted "Outlet · Date · Kind" line, and the note; grouped, each kind
+   under a small subheading. */
+.l-publications {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0;
+  margin: 0;
+}
+
+.l-publication {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.l-publication-title {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+a.l-publication-title {
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);
+}
+
+a.l-publication-title:hover,
+a.l-publication-title:focus-visible {
+  border-bottom-color: var(--r-accent, var(--ink));
+}
+
+.l-publication-meta {
+  font-size: 0.88em;
+  color: color-mix(in srgb, var(--r-text, var(--ink)) 72%, transparent);
+  overflow-wrap: anywhere;
+}
+
+.l-publication-note {
+  margin: 2px 0 0;
+  font-size: 0.95em;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.l-publication-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.l-publication-group-title {
+  margin: 0 0 10px;
+  font-size: 0.82em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--r-heading, var(--ink)) 80%, transparent);
+}
+
+/* A contact section (issue #124): a muted label beside each line, the
+   email, phone and "Directions" as links like "Verify", the address as
+   written, line by line, and the "Save contact" button under it all. */
+.l-contact {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.l-contact-lines {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px 20px;
+  margin: 0;
+  max-width: 100%;
+}
+
+.l-contact-line {
+  display: contents;
+}
+
+.l-contact-label {
+  padding-top: 0.2em;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--r-text, var(--ink)) 72%, transparent);
+}
+
+.l-contact-value {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.l-contact-address {
+  display: block;
+  white-space: pre-line;
+}
+
+a.l-contact-link {
+  color: var(--r-accent, var(--slate));
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);
+}
+
+a.l-contact-link:hover,
+a.l-contact-link:focus-visible {
+  border-bottom-color: var(--r-accent, var(--ink));
+}
+
+.l-contact-directions {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.9em;
+}
+
+.l-contact-hours {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.l-contact-days {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+}
+
+/* The preview's button isn't a link (LandingView). */
+span.l-contact-save {
+  cursor: default;
+}
+
 /* Documents (issue #128): each a small "PDF" tag beside its link, with its
    size on a muted line and the description under it. */
 .l-documents {
@@ -1006,4 +1196,117 @@ a.l-document-link:focus-visible {
   .l-gallery-dialog[open] {
     animation: none;
   }
+}
+
+/* A media section (issue #121): one clip behind a facade drawn from this
+   site alone, a panel (or the poster) with a play button in the middle
+   and a note of where it plays from, swapped for the provider's player
+   when pressed. A video is 16:9; audio is as tall as its player
+   (LandingMedia.jsx sets the height). The button is filled, so its label
+   reads on any poster. */
+.l-media-facade,
+.l-media-frame {
+  display: block;
+  position: relative;
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.l-media-video .l-media-facade,
+.l-media-video .l-media-frame {
+  aspect-ratio: 16 / 9;
+}
+
+.l-media-facade {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  background: color-mix(in srgb, var(--r-text, var(--ink)) 8%, var(--r-bg, var(--panel)));
+}
+
+.l-media-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.l-media-play {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 10px 20px;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  background: var(--r-accent, var(--ink));
+  color: var(--r-on-accent, #fff);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: start;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.2);
+}
+
+.l-media-play:hover {
+  background: color-mix(in srgb, var(--r-accent, var(--ink)) 85%, var(--r-accent-hover-mix, #000));
+}
+
+.l-media-play:focus-visible {
+  outline: 3px solid var(--r-heading, var(--ink));
+  outline-offset: 3px;
+}
+
+.l-media-play-icon {
+  flex: none;
+  width: 1.25em;
+  height: 1.25em;
+  fill: currentColor;
+}
+
+.l-media-note {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  color: var(--r-text, var(--ink));
+  background: var(--r-bg, var(--panel));
+}
+
+.l-media-caption {
+  margin: 8px 0 0;
+  font-size: 0.9em;
+  opacity: 0.75;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.l-media-transcript {
+  margin-top: 10px;
+}
+
+.l-media-transcript-toggle {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-media-transcript-toggle:focus-visible {
+  outline: 2px solid var(--r-accent, var(--ink));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.l-media-transcript-text {
+  margin: 8px 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
