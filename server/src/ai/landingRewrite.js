@@ -34,6 +34,9 @@ import { hasPassed, utcToday } from '../dateText.js';
 // Nor are an image section's or a gallery's captions (issue #120): plain
 // text about a picture the model can't see, so the page context gives
 // either only its kind and title.
+// Nor is a media section (issue #121): its caption and transcript are
+// about a recording the model can't hear, so it gets only its kind and
+// title too, never the link.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*

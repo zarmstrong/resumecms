@@ -7,6 +7,7 @@ import { dropStrayDividers } from './dividers.js';
 import { renderInline } from './renderInline.js';
 import { readDate } from './dateText.js';
 import { LandingGallery } from './LandingGallery.jsx';
+import { LandingMedia } from './LandingMedia.jsx';
 import { ActionIcon } from './ActionIcon.jsx';
 import './landing.css';
 
@@ -37,7 +38,8 @@ import './landing.css';
 // preview resolves its draft `withIds`). A section marked `hidden` (only
 // the preview resolves those, `withHidden`) is dimmed and labelled, and so
 // is an expired credential (issue #119), or a credentials section with
-// nothing else (`expired`).
+// nothing else (`expired`). A media section (issue #121) is a facade until
+// a visitor presses play (LandingMedia.jsx), in the preview too.
 export function LandingView({ landing, preview = false, highlightIds = null, scheme = 'auto' }) {
   const template = getLandingTemplate(landing.template);
   const { colors, style } = landingPageStyle(landing.site, landing.darkColors);
@@ -344,6 +346,8 @@ function SectionBody({ section, preview }) {
       );
     case 'gallery':
       return <LandingGallery images={section.images} label={section.title} />;
+    case 'media':
+      return <LandingMedia section={section} />;
     default:
       return null;
   }

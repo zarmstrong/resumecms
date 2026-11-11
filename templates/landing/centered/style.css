@@ -133,6 +133,18 @@
   text-align: center;
 }
 
+/* A media section (issue #121) keeps to the reading column, its caption
+   centered under the clip. */
+.l-template-centered .l-section-media {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.l-template-centered .l-media-caption {
+  text-align: center;
+}
+
 /* The grids: rows of cards, centered, so one card alone stays card-sized. */
 .l-template-centered .l-cards,
 .l-template-centered .l-items,

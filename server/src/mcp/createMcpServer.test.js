@@ -580,6 +580,11 @@ test('upload_landing_image decodes base64 (or a data: URL) under its own cap, an
   await call('update_landing_page', { sections: gallery });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: gallery }, { merge: true }]);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'gallery', images: [{ image: { imageId: 'a'.repeat(64) } }] }] })).isError, true);
+  // So does a media section (issue #121), its poster a reference like the others.
+  const media = [{ kind: 'media', title: 'Talk', url: 'https://youtu.be/dQw4w9WgXcQ', caption: 'At PyCon', poster: image, transcript: 'Hello.' }];
+  await call('update_landing_page', { sections: media });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: media }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'media', poster: { imageId: 'a'.repeat(64) } }] })).isError, true);
 });
 
 test('cover letter tools: create, merge or replace on update, delete, scoped by resumeId', async (t) => {

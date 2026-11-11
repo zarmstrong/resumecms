@@ -5,6 +5,7 @@ import { inlineLength, inlineLinks, parseInline, textParagraphs } from './inline
 import { LANDING_IMAGE_LIMITS, checkImageRef, resolveImage } from './landingImageFields.js';
 import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, emptyStyle, landingSite, mergeStylePatch } from './landingStyle.js';
 import { hasPassed, utcToday } from './dateText.js';
+import { parseMediaUrl } from './mediaUrl.js';
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -55,6 +56,12 @@ import { hasPassed, utcToday } from './dateText.js';
 //   gallery    — images: [{ image, caption }] (issue #120), drawn as a grid
 //                that opens each larger; an entry's image is a reference, or
 //                null until its upload lands, and its caption plain text
+//   media      — url, caption, poster?, transcript (issue #121): one video
+//                or audio clip from YouTube, Vimeo, SoundCloud or Spotify
+//                (mediaUrl.js; any other link is a 400, '' allowed while
+//                there's none yet), drawn behind a click-to-load facade;
+//                `poster` an optional image reference shown on it, the
+//                caption and transcript plain text
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown, and `column: 'side'`: drawn in the side column by a
 // template that has one (template.json's `columns`, e.g. split's column
@@ -71,7 +78,7 @@ import { hasPassed, utcToday } from './dateText.js';
 // are asked to leave it out, plus an optional `image`, the share image
 // link previews show instead of a drawn card. Image references
 // ({ imageId, alt }, landingImageFields.js) are stored only where one is
-// set: `photoImage`, an item's `image` and `seo.image` are optional keys,
+// set: `photoImage`, an item's `image`, a media section's `poster` and `seo.image` are optional keys,
 // not nulls. `homeLink` (issue #89) is whether a resume
 // page shows a "← Home" link back here while this page holds `/` (see
 // landingStore.js's homeLinkForHost()), and `homeLinkLabel` what it says
@@ -124,6 +131,9 @@ export const LANDING_LIMITS = {
   credentialNumber: 60,
   credentialDate: 40,
   galleryImages: 24,
+  mediaCaption: 300,
+  // About a twenty-minute talk.
+  transcript: 20_000,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -150,7 +160,7 @@ export const LINK_TYPES = [
   'custom',
 ];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'media'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -182,6 +192,7 @@ const SECTION_FIELDS = {
   skills: ['id', 'kind', 'title', 'hidden', 'column', 'resumeId'],
   credentials: ['id', 'kind', 'title', 'hidden', 'column', 'credentials'],
   gallery: ['id', 'kind', 'title', 'hidden', 'column', 'images'],
+  media: ['id', 'kind', 'title', 'hidden', 'column', 'url', 'caption', 'poster', 'transcript'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
@@ -570,6 +581,17 @@ function checkSection(section, i, refs, ids) {
         checkGalleryEntry(entry, `${label}.images[${j}]`, refs)
       );
       break;
+    case 'media':
+      // Only a link the parser knows, so nothing else is ever embedded; the
+      // editor holds a half-typed one back until it reads as one.
+      out.url = checkString(section.url ?? '', LANDING_LIMITS.url, `${label}.url`);
+      if (out.url.trim() !== '' && !parseMediaUrl(out.url)) {
+        throw httpError(400, `${label}.url must be an https link to a YouTube or Vimeo video, or to something on SoundCloud or Spotify`);
+      }
+      out.caption = checkString(section.caption ?? '', LANDING_LIMITS.mediaCaption, `${label}.caption`);
+      if (section.poster != null) out.poster = checkImageRef(section.poster, `${label}.poster`, refs);
+      out.transcript = checkString(section.transcript ?? '', LANDING_LIMITS.transcript, `${label}.transcript`);
+      break;
   }
   return out;
 }
@@ -732,7 +754,10 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // reference resolves to { src, alt, width, height }, or is left out (a
 // photo, a thumbnail, the share image) when its image is gone; an image
 // section without one is left out, and so is a gallery entry, then a
-// gallery with no entry left. An uploaded hero photo is `photoUrl`
+// gallery with no entry left. A media section resolves to { media,
+// caption, transcript, poster? }: `media` is parseMediaUrl()'s reading of
+// its link, never the link itself, and one whose link doesn't read (none
+// yet) is left out. An uploaded hero photo is `photoUrl`
 // (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
 // `template` (an id the client may not know, and then draws as classic),
 // `site` (context.site, or the page's own colors and fonts in the site
@@ -874,6 +899,12 @@ function resolveSection(section, context) {
         return image ? [{ image, caption: entry.caption }] : [];
       });
       return images.length ? { images } : null;
+    }
+    case 'media': {
+      const media = parseMediaUrl(section.url);
+      if (!media) return null;
+      const poster = resolveImage(section.poster, context.images);
+      return { media, caption: section.caption, transcript: section.transcript, ...(poster ? { poster } : {}) };
     }
     default:
       return null;

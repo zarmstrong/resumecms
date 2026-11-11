@@ -290,6 +290,26 @@ test("a credential is never a target, and the page context shows the ones a visi
   for (const left of ['RN-0951', 'board.example', 'Lapsed cert', 'Old Board']) assert.ok(!user.includes(left), left);
 });
 
+test('a media section is never a target, and the page context gives it only its kind and title', () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      { id: 'reel', kind: 'media', title: 'My reel', url: 'https://youtu.be/dQw4w9WgXcQ', caption: 'Spring showcase', transcript: 'Spoken words.' },
+    ],
+  };
+  for (const target of [
+    { kind: 'media', sectionId: 'reel' },
+    { kind: 'text', sectionId: 'reel' },
+    { kind: 'item', sectionId: 'reel', index: 0 },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+  const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null, new Map());
+  assert.ok(user.includes('My reel'));
+  for (const left of ['youtu', 'dQw4w9WgXcQ', 'Spring showcase', 'Spoken words']) assert.ok(!user.includes(left), left);
+});
+
 test('the page context leaves hidden sections out, and shows quotes, meta lines, roles, education and skills as a visitor reads them', () => {
   const page = {
     ...landing,

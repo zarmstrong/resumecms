@@ -560,6 +560,23 @@ export const LANDING_SCHEMA = {
               },
             },
           },
+          {
+            type: 'object',
+            description:
+              "One video or audio clip behind a click-to-load facade (the title, a play button and the poster); nothing loads from the provider until a visitor presses play. Left out while it has no link. Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'media' },
+              url: {
+                type: 'string',
+                description:
+                  "An https link to a YouTube or Vimeo video (start times t=90, t=1m30s or #t= kept), a SoundCloud track or playlist, or a Spotify track, album, playlist, episode or show; any other link is a 400. Only its parsed form ever reaches a visitor, embedded from youtube-nocookie.com, Vimeo with dnt=1, w.soundcloud.com or open.spotify.com/embed",
+              },
+              caption: { type: 'string', description: 'Plain text under it, at most 300 characters' },
+              poster: { ...LANDING_IMAGE_REF, description: "Optional image shown before it's played; absent shows a plain panel" },
+              transcript: { type: 'string', description: "Optional plain text, at most 20000 characters, under a 'Transcript' disclosure; a blank line starts a new paragraph" },
+            },
+          },
         ],
       },
     },

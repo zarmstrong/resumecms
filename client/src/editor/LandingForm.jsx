@@ -15,6 +15,7 @@ import { landingPageMeta } from '../share/pageMeta.js';
 import { inlineEdit } from '../landing/inlineText.js';
 import { getLandingTemplate } from '../resume/templateRegistry.js';
 import { hasPassed, utcToday } from '../landing/dateText.js';
+import { MEDIA_PROVIDER_LABELS, parseMediaUrl } from '../landing/mediaUrl.js';
 import { applySectionDrop, liveCollapsedIds, moveSectionBy, projectSectionDrop } from './sectionDrag.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
@@ -55,6 +56,7 @@ const SECTION_KINDS = [
     empty: () => ({ credentials: [emptyCredential()] }),
   },
   { kind: 'gallery', label: 'Gallery', addLabel: 'Gallery (several images in a grid)', empty: () => ({ images: [] }) },
+  { kind: 'media', label: 'Video or audio', addLabel: 'Video or audio (YouTube, Vimeo, SoundCloud, Spotify)', empty: () => ({ url: '', caption: '', transcript: '' }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -126,6 +128,8 @@ function hasContent(section) {
       return section.credentials.some((c) => [c.name, c.issuer, c.number, c.issued, c.expires, c.url].some((value) => value.trim()));
     case 'gallery':
       return section.images.some((entry) => Boolean(entry.image) || Boolean(entry.caption.trim()));
+    case 'media':
+      return Boolean(section.url.trim() || section.poster || section.caption.trim() || section.transcript.trim());
     default:
       return false;
   }
@@ -164,6 +168,10 @@ function sectionSummary(section, resumes) {
       return count(section.credentials.length, 'credential');
     case 'gallery':
       return count(section.images.length, 'image') || 'No images yet';
+    case 'media': {
+      const media = parseMediaUrl(section.url);
+      return media ? `${MEDIA_PROVIDER_LABELS[media.provider]} ${media.provider === 'youtube' || media.provider === 'vimeo' ? 'video' : 'audio'}` : 'No link yet';
+    }
     default:
       return '';
   }
@@ -187,6 +195,7 @@ function needsDescription(section, images) {
   if (section.kind === 'image') return blank(section.image);
   if (section.kind === 'items') return section.items.some((item) => (item.title?.trim() || item.text?.trim()) && blank(item.image));
   if (section.kind === 'gallery') return section.images.some((entry) => blank(entry.image));
+  if (section.kind === 'media') return Boolean(parseMediaUrl(section.url)) && blank(section.poster);
   return false;
 }
 
@@ -908,6 +917,8 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
       return <CredentialsFields credentials={section.credentials} onChange={(credentials) => onChange({ credentials })} limits={limits} />;
     case 'gallery':
       return <GalleryFields sectionId={section.id} images={section.images} onChange={(images) => onChange({ images })} limits={limits} imageProps={imageProps} />;
+    case 'media':
+      return <MediaFields section={section} onChange={onChange} limits={limits} imageProps={imageProps} />;
     default:
       return null;
   }
@@ -1182,6 +1193,88 @@ function GalleryFields({ sectionId, images, onChange, limits, imageProps }) {
       <span className="ed-field-hint">
         Up to {max} images, shown in a grid that opens each one larger. Pick several files at once if you like. Each needs a
         description before publishing; one with no image yet is left off the page.
+      </span>
+    </>
+  );
+}
+
+// A video or audio clip (issue #121): its link, an optional poster, a
+// caption and a transcript. The server takes only a link mediaUrl.js
+// reads, and the draft is saved as it's typed, so the link is kept here
+// while it doesn't read as one yet (or no longer does) and only reaches
+// the draft once it does, or once it's cleared; until then the preview
+// shows the last one that did. No ✨: it's about a recording the AI can't
+// hear.
+function MediaFields({ section, onChange, limits, imageProps }) {
+  const [url, setUrl] = useState(section.url);
+  const sent = useRef(section.url);
+  // A link from elsewhere (Discard, an MCP edit seen on reload) replaces
+  // what's typed here.
+  useEffect(() => {
+    if (section.url !== sent.current) {
+      sent.current = section.url;
+      setUrl(section.url);
+    }
+  }, [section.url]);
+  const media = parseMediaUrl(url);
+  const unreadable = url.trim() !== '' && !media;
+
+  function handleUrl(e) {
+    const next = e.target.value;
+    setUrl(next);
+    if (next.trim() === '' || parseMediaUrl(next)) {
+      sent.current = next;
+      onChange({ url: next });
+    }
+  }
+
+  return (
+    <>
+      <input
+        className="ed-input"
+        type="url"
+        value={url}
+        maxLength={limits?.url}
+        onChange={handleUrl}
+        placeholder="https://www.youtube.com/watch?v=…"
+        aria-label="Link to the video or audio"
+        aria-invalid={unreadable || undefined}
+      />
+      {unreadable && (
+        <div className="ed-field-error">
+          Not a link this can show: paste an https link to one YouTube or Vimeo video, or a SoundCloud track or playlist, or a
+          Spotify track, album, playlist, episode or show. It isn't saved until it is one.
+        </div>
+      )}
+      <LandingImageField
+        label="Poster (optional)"
+        value={section.poster ?? null}
+        onChange={(poster) => onChange({ poster })}
+        {...imageProps({ kind: 'poster', sectionId: section.id })}
+      />
+      <textarea
+        className="ed-input"
+        rows={2}
+        value={section.caption}
+        maxLength={limits?.mediaCaption}
+        onChange={(e) => onChange({ caption: e.target.value })}
+        placeholder="Caption (optional)"
+        aria-label="Caption"
+      />
+      <textarea
+        className="ed-input"
+        rows={4}
+        value={section.transcript}
+        maxLength={limits?.transcript}
+        onChange={(e) => onChange({ transcript: e.target.value })}
+        placeholder="Transcript (optional)"
+        aria-label="Transcript"
+      />
+      <span className="ed-field-hint">
+        Visitors see the poster (or a plain panel) and a play button: nothing loads from {media ? MEDIA_PROVIDER_LABELS[media.provider] : 'the provider'}{' '}
+        until they press it, and YouTube and Vimeo then play in their privacy modes. A video with captions, and a transcript
+        here (shown under "Transcript"; a blank line starts a new paragraph), let everyone follow it. The poster is optional
+        and needs a description before publishing. A section with no link yet is left off the page.
       </span>
     </>
   );

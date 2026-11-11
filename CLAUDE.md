@@ -333,7 +333,8 @@ issue #119, see below) and
 `LANDING_LIMITS.galleryImages` (24), an entry's `image` null until its
 upload lands; issue #120: a grid whose thumbnails open a modal
 `<dialog>` in `client/src/landing/LandingGallery.jsx`, keys in
-`gallery.js`, reordered with the same ↑ ↓ ✕ as items). Any section may be `hidden: true`: kept in the
+`gallery.js`, reordered with the same ↑ ↓ ✕ as items) and
+`media` (`{ url, caption, poster?, transcript }`, issue #121, see below). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -473,7 +474,7 @@ required string, '' allowed in a draft while it's typed, but
 `publishLanding()` refuses with a 400 naming the field while a reference
 the page would show has a blank one: `assertImagesDescribed()`) in `photoImage` (with
 `photo: 'upload'`), an item's `image`, an `image` section, each
-`gallery` entry and `seo.image`; the optional ones are stored only when set. Like a card, a
+`gallery` entry, a `media` section's `poster` and `seo.image`; the optional ones are stored only when set. Like a card, a
 new reference must name a stored image and one already in the draft may
 outlive it (`referencedImageIds()`). After a publish and on boot,
 `pruneLandingImages()` deletes images neither the stored draft nor the
@@ -517,7 +518,7 @@ against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
 (no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
-question and an answer, no named credential left unexpired, no gallery entry whose image is stored) is dropped, heading and
+question and an answer, no named credential left unexpired, no gallery entry whose image is stored, no media link that parses) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -545,6 +546,36 @@ files match; publications (#127) are meant to reuse it. The client
 resolver, `withHidden`, keeps an expired entry as `expired: true` for the
 preview to dim and label "Expired", and a section of nothing else as
 `hidden` and `expired` ("Not shown: every entry has expired").
+
+A media section (issue #121) embeds one clip from YouTube, Vimeo,
+SoundCloud or Spotify and nothing else (no uploads). `parseMediaUrl()`
+in `server/src/mediaUrl.js` reads a pasted link with the WHATWG parser
+into `{ provider, mediaId, start }` (plus Vimeo's `hash` and Spotify's
+`type`): https only, no port or login, the host matched exactly against
+its list (so `youtube.com.evil.example` isn't one), one clip's path, and
+a start time from `t=90`, `t=1m30s`, `start=` or `#t=` (YouTube and
+Vimeo only). Any other link is a 400 in `checkSection()` ('' is allowed
+while there's none). `embedUrl()` builds the player's address from the
+parsed form, in privacy mode where there is one (`youtube-nocookie.com`,
+Vimeo's `dnt=1`). `client/src/landing/mediaUrl.js` is a copy (only its
+header comment differs), kept in step by `server/src/mediaUrl.cases.js`,
+which the client's `mediaUrl.test.js` runs through both and which also
+checks the two files match. `resolveLanding()` (both copies) sends only
+the parsed `media`, never `url`, and drops a section whose link doesn't
+parse. `LandingMedia.jsx` draws a facade from this site alone (the
+`poster`, an image reference like the others, or a plain panel, and a
+"Play: <title>" button), so nothing is requested from the provider
+before a press, not even a thumbnail; the press swaps in an iframe with
+a `title`, the minimal `allow` from `mediaPlayer.js` and
+`referrerpolicy="strict-origin-when-cross-origin"`. The editor's preview
+uses the facade too, and `LandingForm`'s `MediaFields` keeps a link that
+doesn't parse on screen only, so a half-typed one never fails a save. The
+`transcript` (plain text, capped by `LANDING_LIMITS`) is under a
+`<details>`. The app sends no Content-Security-Policy for its pages
+today; one added later needs a `frame-src` listing
+`https://www.youtube-nocookie.com`, `https://player.vimeo.com`,
+`https://w.soundcloud.com` and `https://open.spotify.com`, or the players
+won't load.
 
 `GET /api/public/home` is what `/` loads: `{ kind: 'landing' }` from
 `landingForHost()` when it's enabled, published and the host isn't in
@@ -1067,7 +1098,8 @@ and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
 words), experience, education and skills sections (read from a
 resume), stats (a model mustn't make up figures; the page context shows
 them read-only), an item's `meta`, an FAQ question, credentials
-(facts, not prose) and image and gallery captions (plain text; the page
+(facts, not prose), image and gallery captions and media sections
+(plain text, or about a recording the model can't hear; the page
 context gives those sections only their kind and title) are
 deliberately never targets. The page is
 public, so what the model sees is too: the route builds
