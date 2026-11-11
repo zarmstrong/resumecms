@@ -129,8 +129,10 @@ Or skip the build and run a released image from Docker Hub,
 [`zarmstrong/resumecms`](https://hub.docker.com/r/zarmstrong/resumecms)
 (linux/amd64 and linux/arm64). Each release is tagged with its version
 (`1.4.2`), its minor version (`1.4`) and its major version (`1`), and the
-newest release is also tagged `latest`. Pin a minor version to get fixes
-without new features. To use the image, replace `build: .` in
+newest release is also tagged `latest`. Releases only come from the
+newest version (there are no maintenance branches), so `1.4` stops
+moving once 1.5.0 ships; pin the major version to keep getting fixes
+without breaking changes. To use the image, replace `build: .` in
 `docker-compose.yml` with `image: zarmstrong/resumecms:1`. The release
 notes are in [CHANGELOG.md](CHANGELOG.md) and on the GitHub releases
 page.
