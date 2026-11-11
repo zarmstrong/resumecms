@@ -484,6 +484,34 @@
   color: var(--r-heading, var(--ink));
 }
 
+/* A contact section (issue #124): ruled rows like the credentials, each
+   label in small capitals (untinted) on the left of its line. */
+/* No gap between the columns, so each row's rule runs unbroken. */
+.l-template-formal .l-contact-lines {
+  width: 100%;
+  gap: 0;
+}
+
+.l-template-formal .l-contact-label,
+.l-template-formal .l-contact-value {
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 22%, transparent);
+}
+
+.l-template-formal .l-contact-label {
+  font-size: 0.95em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  font-variant-caps: all-small-caps;
+  padding-right: 24px;
+}
+
+.l-template-formal .l-contact-days {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Questions: the heading's hairline already tops the list. */
 .l-template-formal .l-section-title + .l-faq {
   border-top: none;
@@ -619,6 +647,16 @@
     grid-row: auto;
     justify-self: start;
     text-align: left;
+  }
+  .l-template-formal .l-contact-lines {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .l-template-formal .l-contact-label {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+  .l-template-formal .l-contact-value {
+    padding-top: 2px;
   }
   .l-template-formal .l-gallery {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

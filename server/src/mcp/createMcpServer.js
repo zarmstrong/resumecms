@@ -47,7 +47,7 @@ Draft vs published: every write tool changes the DRAFT only, of one resume. Noth
 
 Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
 
-Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, services (what you offer, each with a short description, an optional price line and an optional button), a video or audio clip (media: one YouTube, Vimeo, SoundCloud or Spotify link, loaded only when a visitor presses play), and publications (papers, articles, books, talks, podcasts and press, sorted newest first or grouped by kind if asked); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, a media section's poster, or seo.image for link previews.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, services (what you offer, each with a short description, an optional price line and an optional button), a video or audio clip (media: one YouTube, Vimeo, SoundCloud or Spotify link, loaded only when a visitor presses play), publications (papers, articles, books, talks, podcasts and press, sorted newest first or grouped by kind if asked), and one contact section (email, phone, service area, address, hours and a "Save contact" vCard); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, a media section's poster, or seo.image for link previews.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -676,6 +676,24 @@ const landingSection = () =>
         entries: z.array(landingPublication()).optional().describe(`At most ${LANDING_LIMITS.publications}.`),
       })
       .describe('Published work and appearances, each a linked title over "Outlet · Date · Kind" and a note. Plain text; never rewritten by AI.'),
+    z
+      .object({
+        ...sectionBase,
+        kind: z.literal('contact'),
+        email: z.string().optional().describe("An email address, linked with mailto:. Not shown until it's a whole address."),
+        phone: z.string().optional().describe('A phone number as it should read, linked with tel:. Not shown without digits to dial.'),
+        area: z.string().optional().describe('The area served, e.g. "Serving Travis and Williamson counties".'),
+        address: z
+          .string()
+          .optional()
+          .describe("A postal address, one line per line, shown with a \"Directions\" link to a map search. It's public: a service area is often better than a home address."),
+        hours: z
+          .array(z.object({ days: z.string().optional().describe('e.g. "Tue–Sat".'), time: z.string().optional().describe('e.g. "9–6" or "Evenings by appointment".') }))
+          .optional()
+          .describe(`Opening hours, at most ${LANDING_LIMITS.contactHours} lines, plain text.`),
+        vcard: z.boolean().optional().describe('Show a "Save contact" button that downloads a vCard of what the section shows (default true).'),
+      })
+      .describe('How to reach the person. At most one per page. All plain text; never rewritten by AI.'),
   ]);
 
 const landingColor = (what) => z.string().nullable().optional().describe(`${what}: #rrggbb, or '' (or null) for the default.`);

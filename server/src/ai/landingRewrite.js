@@ -44,6 +44,9 @@ import { hasPassed, utcToday } from '../dateText.js';
 // title too, never the link.
 // Nor are a service's title, price and button (issue #122): what's offered
 // and on what terms are the person's to say, so the model only reads them.
+// Nor is a contact section (issue #124): an email, a phone number, an
+// address and hours are facts, and the page context gives only its kind
+// and title, so none of them reaches the model.
 //
 // The page is shown to every visitor, so what the AI may draw on is too:
 // the profile (landingProfile) is built from a resume's *published*

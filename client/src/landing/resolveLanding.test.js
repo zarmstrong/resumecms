@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { textParagraphs, resolveLanding } from './resolveLanding.js';
+import { textParagraphs, resolveLanding, directionsUrl, CONTACT_CARD_PATH } from './resolveLanding.js';
 import * as server from '../../../server/src/landingFields.js';
 import { splitItems } from '../resume/skillItems.js';
 
@@ -518,4 +518,51 @@ test('publications resolve exactly like the server, sorted, grouped and linked',
       ['Keynote', 'https://conf.example/2019'],
     ]
   );
+});
+
+test('a contact section resolves exactly like the server (issue #124)', () => {
+  const contact = (id, fields) => ({ id, kind: 'contact', title: 'Contact', email: '', phone: '', area: '', address: '', hours: [], vcard: true, ...fields });
+  const landing = {
+    ...draft,
+    sections: [
+      contact('full', {
+        email: ' jo@example.com ',
+        phone: '+1 (512) 555-0100 x12',
+        area: 'Central Texas',
+        address: '100 Congress Ave\nAustin, TX',
+        hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: ' ', time: '' }, { days: '', time: 'By appointment' }],
+        column: 'side',
+      }),
+      contact('half', { email: 'jo@', phone: 'call me', area: 'Austin', vcard: false }),
+      contact('none', { email: 'jo@exam', phone: 'x', address: ' \n ', hours: [{ days: '', time: ' ' }] }),
+      contact('hid', { email: 'jo@example.com', hidden: true }),
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  assert.deepEqual(out.sections, server.resolveLanding(landing, { ...context, resumes: new Map() }).sections);
+  assert.deepEqual(out.sections[0], {
+    kind: 'contact',
+    title: 'Contact',
+    column: 'side',
+    email: 'jo@example.com',
+    emailHref: 'mailto:jo@example.com',
+    phone: '+1 (512) 555-0100 x12',
+    phoneHref: 'tel:+15125550100;ext=12',
+    area: 'Central Texas',
+    address: '100 Congress Ave\nAustin, TX',
+    directionsHref: 'https://www.google.com/maps/search/?api=1&query=100%20Congress%20Ave%2C%20Austin%2C%20TX',
+    hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: '', time: 'By appointment' }],
+    vcardHref: CONTACT_CARD_PATH,
+  });
+  assert.equal(out.sections[1].email, '');
+  assert.equal(out.sections[1].vcardHref, '');
+  assert.equal(out.sections.length, 2);
+  assert.equal(CONTACT_CARD_PATH, server.CONTACT_CARD_PATH);
+  for (const address of ['', ' \n', 'Suite #4 & Co?\n Austin ', undefined]) assert.equal(directionsUrl(address), server.directionsUrl(address));
+  const preview = resolveLanding(landing, context, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => [s.id, Boolean(s.hidden)]), [
+    ['full', false],
+    ['half', false],
+    ['hid', true],
+  ]);
 });

@@ -826,6 +826,82 @@ a.l-publication-title:focus-visible {
   color: color-mix(in srgb, var(--r-heading, var(--ink)) 80%, transparent);
 }
 
+/* A contact section (issue #124): a muted label beside each line, the
+   email, phone and "Directions" as links like "Verify", the address as
+   written, line by line, and the "Save contact" button under it all. */
+.l-contact {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.l-contact-lines {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px 20px;
+  margin: 0;
+  max-width: 100%;
+}
+
+.l-contact-line {
+  display: contents;
+}
+
+.l-contact-label {
+  padding-top: 0.2em;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--r-text, var(--ink)) 72%, transparent);
+}
+
+.l-contact-value {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.l-contact-address {
+  display: block;
+  white-space: pre-line;
+}
+
+a.l-contact-link {
+  color: var(--r-accent, var(--slate));
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--r-accent, var(--ink)) 45%, transparent);
+}
+
+a.l-contact-link:hover,
+a.l-contact-link:focus-visible {
+  border-bottom-color: var(--r-accent, var(--ink));
+}
+
+.l-contact-directions {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.9em;
+}
+
+.l-contact-hours {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.l-contact-days {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+}
+
+/* The preview's button isn't a link (LandingView). */
+span.l-contact-save {
+  cursor: default;
+}
+
 /* The editor's preview: a section hidden from the page. */
 .l-section-hidden > :not(.l-hidden-label) {
   opacity: 0.35;

@@ -454,6 +454,26 @@
   border-bottom: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 16%, transparent);
 }
 
+/* A contact section (issue #124): each label in the headline font's
+   italics, like a byline, and the address kept to the text's measure. */
+.l-template-editorial .l-contact-label {
+  padding-top: 0;
+  font-family: var(--r-name-font, inherit);
+  font-size: 1em;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.l-template-editorial .l-contact-value {
+  max-width: 40em;
+}
+
+.l-template-editorial .l-contact-save {
+  border-radius: 2px;
+}
+
 /* A gallery (issue #120): square corners like the other images, captions
    in italics like an image section's, and no zoom on hover or fade-in of
    the enlarged view. */

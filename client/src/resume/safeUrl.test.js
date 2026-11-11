@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { safeHref, linkProps, telHref } from './safeUrl.js';
+import { safeHref, linkProps, telHref, mailtoHref } from './safeUrl.js';
+import { mailtoUrl } from '../../../server/src/landingFields.js';
 
 globalThis.window ??= { location: { origin: 'https://resume.example' } };
 
@@ -30,4 +31,12 @@ test('telHref dials the digits of a number as typed, with its extension', () => 
   const start = Date.now();
   for (const phone of [`${' '.repeat(20000)}a`, `${'x '.repeat(10000)}a`, `#${' '.repeat(20000)}a`]) assert.equal(telHref(phone), undefined);
   assert.ok(Date.now() - start < 500);
+});
+
+test("mailtoHref links only a whole address, like the server's mailtoUrl() (issue #124)", () => {
+  assert.equal(mailtoHref(' jo.doe+work@mail.example.co.uk '), 'mailto:jo.doe+work@mail.example.co.uk');
+  const cases = ['jo@example.com', ' jo@example.com ', 'josé@exämple.de', '', 'jo', 'jo@', '@example.com', 'jo@example', 'jo@example.', 'jo@.com', 'jo@@example.com'];
+  cases.push('jo@example.com?subject=hi', 'jo@example.com,eve@example.com', 'j%6f@example.com', 'jo @example.com', 'jo@exa\nmple.com', '<jo@example.com>', undefined, 5);
+  for (const email of cases) assert.equal(mailtoHref(email) ?? '', mailtoUrl(email), JSON.stringify(email));
+  for (const email of ['jo@', 'jo@example.com?subject=hi', undefined]) assert.equal(mailtoHref(email), undefined);
 });

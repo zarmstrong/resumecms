@@ -17,6 +17,7 @@ import { getLandingTemplate } from '../resume/templateRegistry.js';
 import { hasPassed, utcToday } from '../landing/dateText.js';
 import { MEDIA_PROVIDER_LABELS, parseMediaUrl } from '../landing/mediaUrl.js';
 import { cleanDoi, isDoi } from '../landing/publications.js';
+import { mailtoHref, telHref } from '../resume/safeUrl.js';
 import { applySectionDrop, liveCollapsedIds, moveSectionBy, projectSectionDrop } from './sectionDrag.js';
 
 // The kinds of section the landing page can hold (server/src/landingFields.js's
@@ -65,6 +66,14 @@ const SECTION_KINDS = [
     addLabel: 'Publications (papers, articles, books, talks, press)',
     empty: () => ({ order: 'manual', group: false, entries: [emptyPublication()] }),
   },
+  // At most one per page (issue #124), so it's left out of the menu once there is one.
+  {
+    kind: 'contact',
+    label: 'Contact',
+    addLabel: 'Contact (email, phone, area, hours, "Save contact")',
+    empty: () => ({ email: '', phone: '', area: '', address: '', hours: [], vcard: true }),
+    once: true,
+  },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -96,6 +105,10 @@ function emptyFaqEntry() {
 
 function emptyService() {
   return { title: '', text: '', price: '' };
+}
+
+function emptyHours() {
+  return { days: '', time: '' };
 }
 
 function emptyCredential() {
@@ -152,6 +165,8 @@ function hasContent(section) {
       );
     case 'publications':
       return section.entries.some((e) => [e.title, e.outlet, e.date, e.url, e.doi, e.note].some((value) => value.trim()));
+    case 'contact':
+      return [section.email, section.phone, section.area, section.address].some((value) => value.trim()) || section.hours.some((h) => h.days.trim() || h.time.trim());
     default:
       return false;
   }
@@ -198,6 +213,8 @@ function sectionSummary(section, resumes) {
       return count(section.services.length, 'service');
     case 'publications':
       return section.entries.length === 1 ? '1 entry' : section.entries.length ? `${section.entries.length} entries` : '';
+    case 'contact':
+      return shorten(section.email.trim() || section.phone.trim() || section.area.trim());
     default:
       return '';
   }
@@ -399,7 +416,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
         {(!limits || sections.length < limits.sections) && (
           <select className="ed-input" value="" onChange={(e) => e.target.value && addSection(e.target.value)} aria-label="Add a section">
             <option value="">+ Add a section…</option>
-            {SECTION_KINDS.map((k) => (
+            {SECTION_KINDS.filter((k) => !k.once || !sections.some((s) => s.kind === k.kind)).map((k) => (
               <option key={k.kind} value={k.kind}>
                 {k.addLabel}
               </option>
@@ -950,6 +967,8 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
       return <ServicesFields sectionId={section.id} services={section.services} onChange={(services) => onChange({ services })} limits={limits} ai={ai} />;
     case 'publications':
       return <PublicationsFields section={section} onChange={onChange} limits={limits} />;
+    case 'contact':
+      return <ContactFields section={section} onChange={onChange} limits={limits} />;
     default:
       return null;
   }
@@ -1154,6 +1173,110 @@ function ServicesFields({ sectionId, services, onChange, limits, ai }) {
         </button>
       )}
       <span className="ed-field-hint">A service without a name or a description isn't shown, and a button only once its link is complete.</span>
+    </>
+  );
+}
+
+// How to reach the person (issue #124). No ✨: an address, a number and
+// hours are facts. The email and phone are shown once they make a link
+// (mailtoHref(), telHref()), so the hint says when one doesn't yet.
+function ContactFields({ section, onChange, limits }) {
+  const setHours = (i, patch) => onChange({ hours: section.hours.map((h, idx) => (idx === i ? { ...h, ...patch } : h)) });
+  const email = section.email.trim();
+  const phone = section.phone.trim();
+  return (
+    <>
+      <input
+        className="ed-input"
+        type="email"
+        value={section.email}
+        maxLength={limits?.contactEmail}
+        onChange={(e) => onChange({ email: e.target.value })}
+        placeholder="Email (optional), e.g. jo@example.com"
+        aria-label="Email"
+      />
+      {email && !mailtoHref(email) && (
+        <span className="ed-field-hint ed-landing-card-status">Not shown until it's a whole email address.</span>
+      )}
+      <input
+        className="ed-input"
+        type="tel"
+        value={section.phone}
+        maxLength={limits?.contactPhone}
+        onChange={(e) => onChange({ phone: e.target.value })}
+        placeholder="Phone (optional), e.g. +1 512 555 0100"
+        aria-label="Phone"
+      />
+      {phone && !telHref(phone) && <span className="ed-field-hint ed-landing-card-status">Not shown: there's no number to dial in it.</span>}
+      <input
+        className="ed-input"
+        value={section.area}
+        maxLength={limits?.contactArea}
+        onChange={(e) => onChange({ area: e.target.value })}
+        placeholder="Area served (optional), e.g. Serving Travis and Williamson counties"
+        aria-label="Area served"
+      />
+      <textarea
+        className="ed-input"
+        rows={3}
+        value={section.address}
+        maxLength={limits?.contactAddress}
+        onChange={(e) => onChange({ address: e.target.value })}
+        placeholder="Address (optional), one line per line"
+        aria-label="Address"
+      />
+      {section.address.trim() && (
+        <span className="ed-field-hint ed-landing-card-status">
+          Everyone who visits the page sees this address, and it's in the "Save contact" card. For a home address, the area
+          served is usually enough.
+        </span>
+      )}
+      {section.hours.map((entry, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Hours {i + 1}</span>
+            <RowActions
+              index={i}
+              count={section.hours.length}
+              onMove={(delta) => onChange({ hours: moved(section.hours, i, delta) })}
+              onRemove={() => onChange({ hours: section.hours.filter((_, idx) => idx !== i) })}
+              what="line of hours"
+            />
+          </div>
+          <div className="ed-landing-dates">
+            <input
+              className="ed-input"
+              value={entry.days}
+              maxLength={limits?.contactDays}
+              onChange={(e) => setHours(i, { days: e.target.value })}
+              placeholder="Days, e.g. Tue–Sat"
+              aria-label="Days"
+            />
+            <input
+              className="ed-input"
+              value={entry.time}
+              maxLength={limits?.contactTime}
+              onChange={(e) => setHours(i, { time: e.target.value })}
+              placeholder="Time, e.g. 9–6"
+              aria-label="Time"
+            />
+          </div>
+        </div>
+      ))}
+      {(!limits || section.hours.length < limits.contactHours) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange({ hours: [...section.hours, emptyHours()] })}>
+          + Add hours
+        </button>
+      )}
+      <label className="ed-field ed-checkbox-field">
+        <input type="checkbox" checked={section.vcard !== false} onChange={(e) => onChange({ vcard: e.target.checked })} />
+        <span>Show a "Save contact" button</span>
+      </label>
+      <span className="ed-field-hint">
+        The button downloads a contact card (vCard) of what this section shows, with the page's name, title and link, for a
+        phone's contacts. An address is shown with a "Directions" link to a map search; no map is embedded. A page can have
+        one contact section.
+      </span>
     </>
   );
 }

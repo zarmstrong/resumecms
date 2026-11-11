@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CONTACT_CARD_PATH,
   LANDING_LIMITS,
   LINK_TYPES,
+  directionsUrl,
+  mailtoUrl,
   referencedResumeIds,
   emptyLanding,
   experienceRoles,
@@ -1671,4 +1674,153 @@ test('a publications section resolves sorted, grouped and linked, its untitled e
   const none = validateLanding({ sections: [{ id: 'p', kind: 'publications', title: 'Work', entries: [entry('paper', '', '2020')] }] }, known());
   assert.deepEqual(resolveLanding(none, { resumes: new Map() }).sections, []);
   assert.deepEqual(resolveLanding(landing({ hidden: true }), { resumes: new Map() }).sections, []);
+});
+
+test('a contact section is checked strictly, field by field, and stored whole', () => {
+  const contact = (fields) => ({ sections: [{ id: 'k', kind: 'contact', title: 'Get in touch', ...fields }] });
+  const full = {
+    email: 'jo@example.com',
+    phone: '+1 (512) 555-0100',
+    area: 'Serving Travis and Williamson counties',
+    address: '100 Congress Ave\nAustin, TX 78701',
+    hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: '', time: 'Evenings by appointment' }],
+    vcard: false,
+  };
+  assert.deepEqual(validateLanding(contact(full), known()).sections[0], { id: 'k', kind: 'contact', title: 'Get in touch', ...full });
+  // Every field filled in, the vCard button on unless switched off.
+  assert.deepEqual(validateLanding(contact({}), known()).sections[0], {
+    id: 'k',
+    kind: 'contact',
+    title: 'Get in touch',
+    email: '',
+    phone: '',
+    area: '',
+    address: '',
+    hours: [],
+    vcard: true,
+  });
+  assert.deepEqual(validateLanding(contact({ hours: [{ days: 'Mon' }] }), known()).sections[0].hours, [{ days: 'Mon', time: '' }]);
+  // At every cap is fine, and a half-typed email or phone saves.
+  const atCaps = {
+    email: 'e'.repeat(LANDING_LIMITS.contactEmail),
+    phone: '5'.repeat(LANDING_LIMITS.contactPhone),
+    area: 'a'.repeat(LANDING_LIMITS.contactArea),
+    address: 'a'.repeat(LANDING_LIMITS.contactAddress),
+    hours: Array.from({ length: LANDING_LIMITS.contactHours }, () => ({ days: 'd'.repeat(LANDING_LIMITS.contactDays), time: 't'.repeat(LANDING_LIMITS.contactTime) })),
+  };
+  assert.equal(status(() => validateLanding(contact(atCaps), known())), null);
+  assert.equal(status(() => validateLanding(contact({ email: 'jo@', phone: '+1 (' }), known())), null);
+
+  const bad = [
+    contact({ email: 'e'.repeat(LANDING_LIMITS.contactEmail + 1) }),
+    contact({ phone: '5'.repeat(LANDING_LIMITS.contactPhone + 1) }),
+    contact({ area: 'a'.repeat(LANDING_LIMITS.contactArea + 1) }),
+    contact({ address: 'a'.repeat(LANDING_LIMITS.contactAddress + 1) }),
+    contact({ hours: Array.from({ length: LANDING_LIMITS.contactHours + 1 }, () => ({ days: 'Mon' })) }),
+    contact({ hours: [{ days: 'd'.repeat(LANDING_LIMITS.contactDays + 1) }] }),
+    contact({ hours: [{ time: 't'.repeat(LANDING_LIMITS.contactTime + 1) }] }),
+    contact({ hours: [{ days: 'Mon', open: '9' }] }),
+    contact({ hours: ['Mon 9–5'] }),
+    contact({ hours: 'Mon 9–5' }),
+    contact({ hours: [{ days: 1 }] }),
+    // One line each, since they go into a link and a vCard property.
+    contact({ email: 'jo@example.com\nBCC:x@example.com' }),
+    contact({ phone: '555\r0100' }),
+    contact({ email: 5 }),
+    contact({ address: ['100 Congress Ave'] }),
+    contact({ vcard: 'yes' }),
+    contact({ links: [] }),
+    contact({ website: 'https://example.com' }),
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
+});
+
+test('a page has at most one contact section, hidden or not, so the vCard has one source', () => {
+  const one = { id: 'a', kind: 'contact', email: 'jo@example.com' };
+  assert.equal(status(() => validateLanding({ sections: [one, { id: 't', kind: 'text', body: 'Hi' }] }, known())), null);
+  for (const second of [{ id: 'b', kind: 'contact' }, { id: 'b', kind: 'contact', hidden: true, vcard: false }]) {
+    let error;
+    try {
+      validateLanding({ sections: [{ id: 't', kind: 'text' }, one, second] }, known());
+    } catch (err) {
+      error = err;
+    }
+    assert.equal(error?.status, 400);
+    assert.match(error.message, /^sections\[2\]: .*only one/);
+  }
+});
+
+test('mailtoUrl links only a whole address that a mailto: URL would read as it is', () => {
+  assert.equal(mailtoUrl('jo@example.com'), 'mailto:jo@example.com');
+  assert.equal(mailtoUrl('  jo.doe+work@mail.example.co.uk '), 'mailto:jo.doe+work@mail.example.co.uk');
+  assert.equal(mailtoUrl('josé@exämple.de'), 'mailto:josé@exämple.de');
+  for (const notYet of ['', ' ', 'jo', 'jo@', '@example.com', 'jo@example', 'jo@example.', 'jo@.com', 'jo@@example.com', 'jo@a@b.com']) {
+    assert.equal(mailtoUrl(notYet), '', notYet);
+  }
+  // Anything that would make the link do more than write to this address.
+  for (const tricky of ['jo@example.com?subject=hi', 'jo@example.com,eve@example.com', 'jo@example.com#x', 'j%6f@example.com', 'jo @example.com', 'jo@exa mple.com', 'jo@exa\nmple.com', '<jo@example.com>', 'jo@example.com;x']) {
+    assert.equal(mailtoUrl(tricky), '', JSON.stringify(tricky));
+  }
+  assert.equal(mailtoUrl(undefined), '');
+  assert.equal(mailtoUrl(5), '');
+});
+
+test('directionsUrl is a map search for the address, its lines joined', () => {
+  assert.equal(
+    directionsUrl(' 100 Congress Ave \n\nAustin, TX 78701\n'),
+    'https://www.google.com/maps/search/?api=1&query=100%20Congress%20Ave%2C%20Austin%2C%20TX%2078701'
+  );
+  assert.equal(directionsUrl('Suite #4 & Co?'), 'https://www.google.com/maps/search/?api=1&query=Suite%20%234%20%26%20Co%3F');
+  assert.equal(directionsUrl(' \n '), '');
+  assert.equal(directionsUrl(undefined), '');
+  assert.ok(isSafeUrl(directionsUrl('Austin')));
+});
+
+test('a contact section shows only what makes a link or has text, and is dropped with none of it', () => {
+  const landing = (fields, extra = {}) =>
+    validateLanding({ sections: [{ id: 'k', kind: 'contact', title: 'Contact', ...fields, ...extra }] }, known());
+  const shown = (fields, extra) => resolveLanding(landing(fields, extra), { resumes: new Map() }).sections;
+  assert.deepEqual(
+    shown({
+      email: ' jo@example.com ',
+      phone: '+1 (512) 555-0100 x12',
+      area: 'Central Texas',
+      address: '100 Congress Ave\nAustin, TX',
+      hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: ' ', time: ' ' }, { days: '', time: 'By appointment' }],
+    }),
+    [
+      {
+        kind: 'contact',
+        title: 'Contact',
+        email: 'jo@example.com',
+        emailHref: 'mailto:jo@example.com',
+        phone: '+1 (512) 555-0100 x12',
+        phoneHref: 'tel:+15125550100;ext=12',
+        area: 'Central Texas',
+        address: '100 Congress Ave\nAustin, TX',
+        directionsHref: directionsUrl('100 Congress Ave\nAustin, TX'),
+        hours: [{ days: 'Tue–Sat', time: '9–6' }, { days: '', time: 'By appointment' }],
+        vcardHref: CONTACT_CARD_PATH,
+      },
+    ]
+  );
+  // A half-typed email or a phone with nothing to dial isn't shown; the rest is.
+  const [partial] = shown({ email: 'jo@', phone: 'call me', area: 'Austin' }, { vcard: false, column: 'side' });
+  assert.deepEqual(partial, {
+    kind: 'contact',
+    title: 'Contact',
+    column: 'side',
+    email: '',
+    emailHref: '',
+    phone: '',
+    phoneHref: '',
+    area: 'Austin',
+    address: '',
+    directionsHref: '',
+    hours: [],
+    vcardHref: '',
+  });
+  // Nothing to show: no email or phone that links, no area, address or hours.
+  assert.deepEqual(shown({ email: 'jo@', phone: 'x', area: ' ', address: '\n', hours: [{ days: ' ', time: '' }] }), []);
+  assert.deepEqual(shown({ email: 'jo@example.com' }, { hidden: true }), []);
 });
