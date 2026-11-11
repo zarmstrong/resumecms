@@ -197,6 +197,8 @@ missing id is drawn as `classic`, which must always exist.
     //   atStart true when something sits above it, so it draws only the
     //   dividers it has something to divide; without `columns`, the list
     //   comes already tidied)
+    //   A section given an `anchor` ({ ...section, anchor }) is drawn
+    //   with that as its id, so the template can link to it
     // colors / darkColors: the normalized palettes (darkColors null if none)
     // preview: true in the editor
     return (
@@ -207,7 +209,16 @@ missing id is drawn as `classic`, which must always exist.
     );
   }
   ```
-  Without one, that's exactly what's rendered.
+  Without one, that's exactly what's rendered. Landing helpers are
+  imported through the `@landing` alias (to `client/src/landing/`), as
+  resume templates use `@resume`. `directory` is the example of linking
+  to sections: a section's `id` never leaves the server, so
+  `@landing/sectionAnchors.js`'s `withAnchors()` makes anchors from the
+  titles (deduplicated, prefixed so they can't meet another id on the
+  page; pass a prefix of your own in the preview), and
+  `@landing/useSectionSpy.js` tracks which section is in view and
+  scrolls to one inside whatever holds the page, the editor's preview
+  pane included, without touching the editor's URL.
 
 ## Validating
 

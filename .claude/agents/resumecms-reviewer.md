@@ -42,6 +42,12 @@ in prose; check the diff against the ones that apply, especially:
   arrangement belongs in a template's `style.css`, scoped under
   `.l-template-<id>`, so a change for one template can't move another
   (issue #93).
+- A landing section's anchor (`directory`'s contents, issue #130) comes
+  from `withAnchors()` on the client, a slug of its title after a prefix,
+  never its `id` (which never leaves the server); only a template that
+  sets `anchor` gives a `<section>` an id. A jump in the editor's preview
+  scrolls only the preview and never changes the editor's URL; smooth
+  scrolling only under `prefers-reduced-motion: no-preference`.
 - A new landing section kind or section-wide field is in `SECTION_FIELDS`,
   `checkSection()`, both `resolveSection()`/`resolveLanding()` copies, the
   MCP union and `LANDING_SCHEMA`, `LandingForm` (its `SectionFields`, its
