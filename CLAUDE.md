@@ -333,7 +333,14 @@ issue #119, see below) and
 `LANDING_LIMITS.galleryImages` (24), an entry's `image` null until its
 upload lands; issue #120: a grid whose thumbnails open a modal
 `<dialog>` in `client/src/landing/LandingGallery.jsx`, keys in
-`gallery.js`, reordered with the same ↑ ↓ ✕ as items). Any section may be `hidden: true`: kept in the
+`gallery.js`, reordered with the same ↑ ↓ ✕ as items) and `services`
+(`services: [{ title, text, price, action? }]`, at most
+`LANDING_LIMITS.services` (12; issue #122): `price` free text, never a
+number, and `action` an optional button with a hero link action's shape
+and URL rules (`checkAction()`, only `type: 'link'`; a mailto
+`?subject=` is kept as written), stored only when set and resolved to
+`{ label, href, icon? }` only while its URL is safe; a service with
+neither a title nor a text is dropped; no `makesOffer` structured data). Any section may be `hidden: true`: kept in the
 draft, dropped by `resolveLanding()`, dimmed in the editor's preview
 (the client resolver's `withHidden`), and `column: 'side'` (`SECTION_COLUMNS`),
 which `resolveLanding()` passes on and only a landing template with
@@ -403,9 +410,10 @@ merged into the default resume's site settings *draft* through its
 `touchDraft()` runs; nothing is published, and it's a 400 while
 `source` is `'resume'`. The editor flushes its saves before calling it.
 
-A text section's `body`, an item's `text` and an FAQ entry's `answer`
-(issue #91, nothing else: a quote's `text`, an item's `meta`, an FAQ
-`question`, an image section's `caption`, an
+A text section's `body`, an item's `text`, an FAQ entry's `answer` and a
+service's `text` (issue #91, nothing else: a quote's `text`, an item's
+`meta`, an FAQ `question`, a service's `title` and `price`, an image
+section's `caption`, an
 image's `alt`, a stat's `value` and every title or label stay plain text,
 never parsed, escaped or migrated) may
 hold `[label](url)`, `**bold**` and `*italic*`; a `\` before `\ * [ ]`
@@ -414,13 +422,13 @@ escapes it, and an unmatched marker stays literal. The tokenizer,
 `client/src/landing/inlineText.js` (the shared part identical), kept in
 step by the cases in `server/src/inlineText.cases.js`, which the client's
 `inlineText.test.js` runs through both. A body is parsed one paragraph at a
-time (`textParagraphs()`, also in both), an item's text and an answer
-whole, and every
+time (`textParagraphs()`, also in both), an item's text, an answer and a
+service's text whole, and every
 consumer has to read it the same way: `checkInlineText()` holds each
 link's URL to `isAllowedDraftUrl()` (a 400 naming the section and
 paragraph) and counts its cap with `inlineLength()`, every character as
 written except an escaping backslash (also in both copies; the landing
-rewrite's length check counts the same way, and the editor's three textareas
+rewrite's length check counts the same way, and the editor's four textareas
 refuse an edit past it with `inlineEdit()` instead of a `maxLength`, which
 can't be exact: typing inside an escape changes the count by two), so escaping never takes a field over its cap. `LandingView` renders the tokens as
 elements through `renderInline.js` (hrefs through `linkProps()`, never
@@ -443,9 +451,9 @@ matched by section id. An item's text is kept when it equals the stored
 item at its index, escaped when its escaped form equals some stored item
 in that section (an original the editor never re-read), kept when it
 equals one (a moved echo), and escaped otherwise (`keepItem()`); an FAQ
-answer the same way among its stored section's answers (an FAQ came
-after the syntax, so only a plain write, never the migration, meets
-one). So an
+answer the same way among its stored section's answers, and a service's
+text among its stored section's services (FAQs and services came after
+the syntax, so only a plain write, never the migration, meets one). So an
 echoed field is never escaped twice, and an edited one reads as that
 editor showed it, backslashes included. The marker is never stored. The store's default is `'inline'`, so MCP writes (whose
 tool descriptions document the syntax) and tests are taken as inline.
@@ -517,7 +525,7 @@ against `context.images` to `{ src, alt, width, height }` (its public path)
 or drops out when its image is gone; an uploaded hero photo is `photoUrl`
 plus `photoAlt`. A section left with nothing to show
 (no text, no item or quote, every card's resume hidden, no role, entry or skill group, no image, no stat with a value, no FAQ entry with both a
-question and an answer, no named credential left unexpired, no gallery entry whose image is stored) is dropped, heading and
+question and an answer, no named credential left unexpired, no gallery entry whose image is stored, no service with a title or a text) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
@@ -1063,10 +1071,13 @@ is one string, so a proposal is `{ target, before, after }`, and one
 request returns a list (an `intro` target writes headline, subheadline and
 a text section, three proposals). Targets are an allowlist
 (`LANDING_TARGET_KINDS`); sections and cards are addressed by id, items
-and FAQ answers (`answer`, issue #123) by index. Quotes (someone else's
+FAQ answers (`answer`, issue #123) and services' text (`service`, issue
+#122) by index. Quotes (someone else's
 words), experience, education and skills sections (read from a
 resume), stats (a model mustn't make up figures; the page context shows
-them read-only), an item's `meta`, an FAQ question, credentials
+them read-only), an item's `meta`, an FAQ question, a service's title, price and button
+(the page context shows them read-only, a button by its label),
+credentials
 (facts, not prose) and image and gallery captions (plain text; the page
 context gives those sections only their kind and title) are
 deliberately never targets. The page is
@@ -1082,13 +1093,13 @@ add a target or a field to the profile.
 The editor copy it works on is checked by `store.checkLandingDraft()`. In
 the editor, `LandingEditorPage` holds the requests and proposals,
 `client/src/editor/landingAi.js` mirrors `landingSlice()` and follows an
-item's or an answer's proposal when its entry moves (`locateTarget()`, an
-answer's question standing for an item's title), and each field's
+item's, an answer's or a service's proposal when its entry moves
+(`locateTarget()`, an answer's question standing for an item's title), and each field's
 panel is `LandingAiPanel.jsx`.
 
 The model must never be able to put a URL on the landing page (issue #91).
-In the text it rewrites (a `text`, an `item`, an `answer`, or an `intro`'s
-section),
+In the text it rewrites (a `text`, an `item`, an `answer`, a `service`, or an
+`intro`'s section),
 each link's URL becomes a placeholder (`linkPlaceholders()`: `#L1`, `#L2`,
 …, one per URL, built from the draft alone so prompt and merge agree), and
 in the page context a link is just its label. `landingProposals()` maps

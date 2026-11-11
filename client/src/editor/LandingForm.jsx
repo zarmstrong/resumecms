@@ -55,6 +55,7 @@ const SECTION_KINDS = [
     empty: () => ({ credentials: [emptyCredential()] }),
   },
   { kind: 'gallery', label: 'Gallery', addLabel: 'Gallery (several images in a grid)', empty: () => ({ images: [] }) },
+  { kind: 'services', label: 'Services', addLabel: 'Services (what you offer, with prices)', empty: () => ({ services: [emptyService()] }) },
 ];
 const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
 
@@ -82,6 +83,10 @@ function emptyStat() {
 
 function emptyFaqEntry() {
   return { question: '', answer: '' };
+}
+
+function emptyService() {
+  return { title: '', text: '', price: '' };
 }
 
 function emptyCredential() {
@@ -126,6 +131,10 @@ function hasContent(section) {
       return section.credentials.some((c) => [c.name, c.issuer, c.number, c.issued, c.expires, c.url].some((value) => value.trim()));
     case 'gallery':
       return section.images.some((entry) => Boolean(entry.image) || Boolean(entry.caption.trim()));
+    case 'services':
+      return section.services.some(
+        (service) => service.title.trim() || service.text.trim() || service.price.trim() || service.action?.label.trim() || service.action?.url.trim()
+      );
     default:
       return false;
   }
@@ -164,6 +173,8 @@ function sectionSummary(section, resumes) {
       return count(section.credentials.length, 'credential');
     case 'gallery':
       return count(section.images.length, 'image') || 'No images yet';
+    case 'services':
+      return count(section.services.length, 'service');
     default:
       return '';
   }
@@ -831,7 +842,8 @@ const SectionEditor = memo(function SectionEditor({
   );
 });
 
-// The syntax a text section, an item's text and an FAQ answer take (issue #91).
+// The syntax a text section, an item's text, an FAQ answer and a service's
+// text take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
 
 function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps }) {
@@ -908,6 +920,8 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
       return <CredentialsFields credentials={section.credentials} onChange={(credentials) => onChange({ credentials })} limits={limits} />;
     case 'gallery':
       return <GalleryFields sectionId={section.id} images={section.images} onChange={(images) => onChange({ images })} limits={limits} imageProps={imageProps} />;
+    case 'services':
+      return <ServicesFields sectionId={section.id} services={section.services} onChange={(services) => onChange({ services })} limits={limits} ai={ai} />;
     default:
       return null;
   }
@@ -1007,6 +1021,111 @@ function FaqFields({ sectionId, entries, onChange, limits, ai }) {
         </button>
       )}
       <span className="ed-field-hint">Visitors open an answer by its question. One without both a question and an answer isn't shown.</span>
+    </>
+  );
+}
+
+// What the person offers (issue #122): each service a title, a short text,
+// a price line (free text: "From $60/hour", "Sliding scale") and an
+// optional button, a link like a hero button's. Only the text has a ✨:
+// what's offered and for how much are the person's to say.
+function ServicesFields({ sectionId, services, onChange, limits, ai }) {
+  const setService = (i, patch) => onChange(services.map((service, idx) => (idx === i ? { ...service, ...patch } : service)));
+  // Like the server, no button (and no icon) isn't stored.
+  const withoutAction = (service) => {
+    const { action: _old, ...rest } = service;
+    return rest;
+  };
+  const withIcon = (action, icon) => {
+    const { icon: _old, ...rest } = action;
+    return icon ? { ...rest, icon } : rest;
+  };
+  const setAction = (i, action) => onChange(services.map((service, idx) => (idx === i ? (action ? { ...service, action } : withoutAction(service)) : service)));
+  return (
+    <>
+      {services.map((service, i) => (
+        <div className="ed-landing-card" key={i}>
+          <div className="ed-landing-card-head">
+            <span>Service {i + 1}</span>
+            <RowActions
+              index={i}
+              count={services.length}
+              onMove={(delta) => onChange(moved(services, i, delta))}
+              onRemove={() => onChange(services.filter((_, idx) => idx !== i))}
+              what="service"
+            />
+          </div>
+          <input
+            className="ed-input"
+            value={service.title}
+            maxLength={limits?.serviceTitle}
+            onChange={(e) => setService(i, { title: e.target.value })}
+            placeholder="What you offer, e.g. Private tutoring"
+            aria-label="Service name"
+          />
+          <input
+            className="ed-input"
+            value={service.price}
+            maxLength={limits?.servicePrice}
+            onChange={(e) => setService(i, { price: e.target.value })}
+            placeholder="Price (optional), e.g. From $60/hour or Free 15-minute consultation"
+            aria-label="Service price"
+          />
+          <textarea
+            className="ed-input"
+            rows={3}
+            value={service.text}
+            onChange={(e) => {
+              const text = inlineEdit(service.text, e.target.value, limits?.serviceText);
+              if (text !== service.text) setService(i, { text });
+            }}
+            placeholder="What a client gets from it"
+            aria-label="Service description"
+          />
+          <span className="ed-field-hint">{INLINE_HINT}</span>
+          <AiField ai={ai} target={{ kind: 'service', sectionId, index: i }} current={service.text} />
+          {service.action ? (
+            <div className="ed-field">
+              <span>Button</span>
+              <input
+                className="ed-input"
+                value={service.action.label}
+                maxLength={limits?.actionLabel}
+                onChange={(e) => setAction(i, { ...service.action, label: e.target.value })}
+                placeholder="Button text, e.g. Book a session"
+                aria-label="Service button text"
+              />
+              <input
+                className="ed-input"
+                value={service.action.url}
+                maxLength={limits?.url}
+                onChange={(e) => setAction(i, { ...service.action, url: e.target.value })}
+                placeholder="mailto:you@example.com, tel:… or https://…"
+                aria-label="Service button link"
+              />
+              {/^\s*mailto:/i.test(service.action.url) && !service.action.url.includes('?') && (
+                <span className="ed-field-hint">
+                  To fill in the subject, add it to the link: mailto:you@example.com?subject=Booking{service.title.trim() ? `: ${service.title.trim()}` : ''}
+                </span>
+              )}
+              <ActionIconPicker value={service.action.icon ?? ''} onChange={(icon) => setAction(i, withIcon(service.action, icon))} />
+              <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={() => setAction(i, null)}>
+                Remove button
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={() => setAction(i, { type: 'link', label: '', url: '' })}>
+              + Add a button
+            </button>
+          )}
+        </div>
+      ))}
+      {(!limits || services.length < limits.services) && (
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={() => onChange([...services, emptyService()])}>
+          + Add service
+        </button>
+      )}
+      <span className="ed-field-hint">A service without a name or a description isn't shown, and a button only once its link is complete.</span>
     </>
   );
 }

@@ -47,17 +47,19 @@ export function splitTextFormat(body) {
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // `landing` (a draft, a snapshot or a write, checked or not) with its text
-// sections' bodies, items' text and FAQ answers escaped, and how many that
-// changed. (FAQ sections came after the syntax, issue #123, so the boot
-// migration never finds one; a plain write may still hold one.) Both
+// sections' bodies, items' text, FAQ answers and services' text escaped,
+// and how many that changed. (FAQ and services sections came after the
+// syntax, issues #123 and #122, so the boot migration never finds one; a
+// plain write may still hold one.) Both
 // the current shape and the one from before sections (`intro`, which
 // upgradeLanding() reads as a text section); anything else is left as it
 // is, for validation to judge. With `stored` (the stored draft, for a plain
 // write), a field equal to the stored one at its place is kept as it is: a
 // text section's body to the body of the stored section with its id, an
 // item's text to an item's in that section (keepItem(): so reordering
-// items in such an editor doesn't escape them again), and an FAQ answer the
-// same way to the answers in its stored section.
+// items in such an editor doesn't escape them again), and an FAQ answer or
+// a service's text the same way to the answers or services in its stored
+// section.
 // Whether an item's text at `index` in a plain write is an echo of the
 // stored section's (`storedItems`, their texts `storedTexts`), in order:
 // the stored item at the same place says yes; one equal to it once escaped
@@ -111,6 +113,17 @@ export function escapeLandingText(landing, stored = null) {
         return {
           ...section,
           entries: section.entries.map((entry, i) => (isObject(entry) ? { ...entry, answer: escape(entry.answer, keepItem(storedAnswers, storedTexts, i)) } : entry)),
+        };
+      }
+      if (section?.kind === 'services' && Array.isArray(section.services)) {
+        // A service's text, matched exactly as an item's.
+        const storedServices = storedSection(section, 'services')?.services;
+        const storedTexts = new Set((Array.isArray(storedServices) ? storedServices : []).filter(isObject).map((service) => service.text));
+        return {
+          ...section,
+          services: section.services.map((service, i) =>
+            isObject(service) ? { ...service, text: escape(service.text, keepItem(storedServices, storedTexts, i)) } : service
+          ),
         };
       }
       return section;

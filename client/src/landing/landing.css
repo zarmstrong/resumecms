@@ -712,6 +712,56 @@ a.l-credential-verify:focus-visible {
   margin-bottom: 2px;
 }
 
+/* Services (issue #122): each its name with its price beside it (under it
+   when there's no room), what it is, then its button, a hero button's
+   look. */
+.l-services {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0;
+  margin: 0;
+}
+
+.l-service {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.l-service-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+}
+
+.l-service-title {
+  font-weight: 600;
+  color: var(--r-heading, var(--ink));
+  overflow-wrap: anywhere;
+}
+
+.l-service-price {
+  font-weight: 600;
+  font-size: 0.92em;
+  color: var(--r-accent, var(--slate));
+  overflow-wrap: anywhere;
+}
+
+.l-service-text {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.l-service-action {
+  margin-top: 8px;
+}
+
 /* The editor's preview: a section hidden from the page. */
 .l-section-hidden > :not(.l-hidden-label) {
   opacity: 0.35;

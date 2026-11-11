@@ -757,6 +757,116 @@ test('an FAQ section is checked strictly, its answers as inline text, and an ent
   for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
 });
 
+test('a services section is checked strictly: inline text, a free-text price, and a button stored only when set', () => {
+  const services = (list) => ({ sections: [{ id: 'sv', kind: 'services', title: 'Services', services: list }] });
+  const message = (fn) => {
+    try {
+      fn();
+    } catch (err) {
+      return `${err.status} ${err.message}`;
+    }
+    return null;
+  };
+  const tutoring = {
+    title: 'Private tutoring',
+    text: 'One-to-one **maths** sessions. [Syllabus](https://jo.example/syllabus).',
+    price: 'From $60/hour',
+    action: { type: 'link', label: 'Book a session', url: 'mailto:jo@example.com?subject=Booking: tutoring', icon: 'calendar-days' },
+  };
+  const draft = validateLanding(services([tutoring, { title: 'Consultation' }, { text: 'No title.', action: null }, { price: 'Free' }]), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'sv',
+    kind: 'services',
+    title: 'Services',
+    services: [
+      tutoring,
+      { title: 'Consultation', text: '', price: '' },
+      { title: '', text: 'No title.', price: '' },
+      { title: '', text: '', price: 'Free' },
+    ],
+  });
+  // A button's type may be left out; it's always a link, and stored as one.
+  assert.deepEqual(validateLanding(services([{ title: 'T', action: { label: 'Call', url: 'tel:+15555550100' } }]), known()).sections[0].services[0].action, {
+    type: 'link',
+    label: 'Call',
+    url: 'tel:+15555550100',
+  });
+
+  // The text's links follow every other link's rules, read as a whole like
+  // an item's; the title and the price are plain text, never parsed.
+  assert.equal(
+    message(() => validateLanding(services([{ title: 'T', text: 'See\n\n[this](javascript:alert(1))' }]), known())),
+    '400 sections[0].services[0].text: the link "this" must be an http, https, mailto or tel link'
+  );
+  const plain = validateLanding(services([{ title: '[x](javascript:alert(1))', price: '*$5*' }]), known()).sections[0].services[0];
+  assert.deepEqual([plain.title, plain.price], ['[x](javascript:alert(1))', '*$5*']);
+  // The button's link follows a hero button's rules.
+  for (const url of ['javascript:alert(1)', 'java\tscript:x', 'data:text/html,x', 'sms:123']) {
+    assert.equal(
+      message(() => validateLanding(services([{ title: 'T', action: { type: 'link', label: 'Go', url } }]), known())),
+      '400 sections[0].services[0].action.url must be an http, https, mailto or tel link',
+      url
+    );
+  }
+  // The text's cap doesn't count an escaping backslash; the others count every character.
+  const atCap = `\\*${'a'.repeat(LANDING_LIMITS.serviceText - 1)}`;
+  assert.equal(validateLanding(services([{ text: atCap }]), known()).sections[0].services[0].text, atCap);
+  const longest = { title: 'x'.repeat(LANDING_LIMITS.serviceTitle), price: 'x'.repeat(LANDING_LIMITS.servicePrice) };
+  assert.deepEqual(validateLanding(services([longest]), known()).sections[0].services[0], { ...longest, text: '' });
+
+  const bad = [
+    services([{ title: 'x'.repeat(LANDING_LIMITS.serviceTitle + 1) }]),
+    services([{ text: 'x'.repeat(LANDING_LIMITS.serviceText + 1) }]),
+    services([{ price: 'x'.repeat(LANDING_LIMITS.servicePrice + 1) }]),
+    services([{ price: 60 }]),
+    services([{ title: 'T', image: null }]),
+    services([{ title: 'T', action: 'mailto:jo@example.com' }]),
+    services([{ title: 'T', action: { type: 'resume', resumeId: 'a', open: 'page' } }]),
+    services([{ title: 'T', action: { type: 'link', url: 'https://a.example', extra: 1 } }]),
+    services([{ title: 'T', action: { type: 'link', url: 'https://a.example', icon: 'skull' } }]),
+    services([{ title: 'T', action: { type: 'link', label: 'x'.repeat(LANDING_LIMITS.actionLabel + 1), url: 'https://a.example' } }]),
+    services(['T']),
+    services('T'),
+    services(Array.from({ length: LANDING_LIMITS.services + 1 }, () => ({ title: 'T' }))),
+    { sections: [{ id: 'sv', kind: 'services', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known('a'))), 400, JSON.stringify(input).slice(0, 80));
+});
+
+test('a service without a title or a text is dropped, then a section with none; a button only while its link is whole', () => {
+  const services = (list, extra = {}) => ({ sections: [{ id: 'sv', kind: 'services', title: 'Services', services: list, ...extra }] });
+  const resolve = (input) => resolveLanding(validateLanding(input, known()), { resumes: new Map() }).sections;
+  assert.deepEqual(
+    resolve(
+      services([
+        { title: 'Tutoring', text: 'Maths.', price: '$60/hour', action: { type: 'link', label: 'Book', url: 'https://cal.example/jo', icon: 'calendar-days' } },
+        { title: '', text: 'Just a description.', action: { type: 'link', label: '', url: 'mailto:jo@example.com?subject=Hello' } },
+        { title: 'Half typed', action: { type: 'link', label: 'Go', url: 'https://' } },
+        { title: 'Not yet', action: { type: 'link', label: 'Go', url: '' } },
+        { title: '  ', text: ' ', price: 'Free', action: { type: 'link', label: 'Book', url: 'https://cal.example/jo' } },
+      ])
+    ),
+    [
+      {
+        kind: 'services',
+        title: 'Services',
+        services: [
+          { title: 'Tutoring', text: 'Maths.', price: '$60/hour', action: { label: 'Book', href: 'https://cal.example/jo', icon: 'calendar-days' } },
+          { title: '', text: 'Just a description.', price: '', action: { label: 'mailto:jo@example.com?subject=Hello', href: 'mailto:jo@example.com?subject=Hello' } },
+          { title: 'Half typed', text: '', price: '' },
+          { title: 'Not yet', text: '', price: '' },
+        ],
+      },
+    ]
+  );
+  // A section with nothing but prices and buttons goes, heading and all, and so does an empty or hidden one.
+  assert.deepEqual(resolve(services([{ price: 'Free', action: { type: 'link', label: 'Book', url: 'https://cal.example' } }])), []);
+  assert.deepEqual(resolve(services([])), []);
+  assert.deepEqual(resolve(services([{ title: 'T' }], { hidden: true })), []);
+  // `column` goes along like any section's.
+  assert.deepEqual(resolve(services([{ title: 'T' }], { column: 'side' })), [{ kind: 'services', title: 'Services', column: 'side', services: [{ title: 'T', text: '', price: '' }] }]);
+});
+
 test('an experience section follows the reference rules of a card, with a count from 1 to 10', () => {
   const section = (extra) => ({ sections: [{ id: 'x', kind: 'experience', ...extra }] });
   assert.deepEqual(validateLanding(section({ resumeId: 'a' }), known('a')).sections[0], {
