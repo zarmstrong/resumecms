@@ -163,7 +163,10 @@ const withoutFunctions = (value) => {
 const wordsOf = (value) => withoutFunctions(value).split(/\s+/).filter(Boolean);
 
 const TIME = /^-?[\d.]+m?s$/i;
-const nonZeroTime = (time) => TIME.test(time) && parseFloat(time) !== 0;
+// A duration that's a custom property or a calc() can't be read, so it
+// counts as non-zero, like a longhand left to another rule.
+const COMPUTED = /\b(?:var|calc)\(/i;
+const nonZeroTime = (time) => (TIME.test(time) ? parseFloat(time) !== 0 : COMPUTED.test(time));
 
 // What a `transition` shorthand animates, and for how long: in each
 // comma-separated item, the one word that isn't a time, an easing or a
@@ -176,7 +179,11 @@ function transitionItems(value) {
   return splitList(value).map((item) => {
     const words = wordsOf(item);
     const name = words.find((word) => !TIME.test(word) && !TRANSITION_WORDS.has(word.toLowerCase()));
-    return { name: name ? name.toLowerCase() : 'all', duration: words.find((word) => TIME.test(word)) || '0s' };
+    const time = words.find((word) => TIME.test(word));
+    // No time left after the functions are taken out, but a var() or
+    // calc() may have held one: unknown, so non-zero (`transform var(--speed)`).
+    const duration = time || (COMPUTED.test(item) ? item : '0s');
+    return { name: name ? name.toLowerCase() : 'all', duration };
   });
 }
 
@@ -272,7 +279,13 @@ const OUTLINE_STYLES = new Set(['auto', 'dotted', 'dashed', 'solid', 'double', '
 // `transparent`, `rgba(0, 0, 0, 0)`, `rgb(0 0 0 / 0%)`, `hsl(… / 0)`, …
 const ZERO_ALPHA = /^0*(\.0+)?%?$/;
 function isTransparent(value) {
-  if (/(^|[\s(])transparent\b/i.test(value)) return true;
+  // Only a color the outline is drawn in, never one mixed into it:
+  // `color-mix(in srgb, currentColor 60%, transparent)` is a visible tint.
+  const words = wordsOf(value.toLowerCase());
+  if (words.includes('transparent')) return true;
+  // A hex color with a zero alpha: #rgb0 or #rrggbb00.
+  if (words.some((word) => /^#(?:[0-9a-f]{3}0|[0-9a-f]{6}00)$/.test(word))) return true;
+  if (/\bcolor-mix\(/i.test(value)) return false;
   // A color function's alpha: after a slash, or the fourth of its commas.
   return [...value.matchAll(/\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(([^()]*)\)/gi)].some(([, args]) => {
     const slash = args.split('/');

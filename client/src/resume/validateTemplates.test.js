@@ -81,6 +81,9 @@ test('a landing style.css may not remove an outline without a replacement in the
     // Black in the legacy comma form isn't transparent.
     '.l-template-other a:focus-visible { outline: 2px solid rgb(0, 0, 0); }',
     '.l-template-other a:focus-visible { outline: 2px solid transparent; outline-color: red; }',
+    // A tint mixed toward transparent is still a visible ring.
+    '.l-template-other a:focus-visible { outline: 2px solid color-mix(in srgb, currentColor 60%, transparent); }',
+    '.l-template-other a:focus-visible { outline: 2px solid; outline-color: color-mix(in srgb, #2f6f4e 70%, transparent); }',
     // Turned back on later in the same rule.
     '.l-template-other a:focus-visible { outline: none; outline: 2px solid red; }',
     '.l-template-other a:focus-visible { outline: 0 solid; outline-width: 2px; }',
@@ -118,6 +121,8 @@ test('a landing style.css may not remove an outline without a replacement in the
     // A transparent outline is drawn only in forced-colors mode.
     ['.l-template-other a:focus-visible { outline: 2px solid transparent; }', /removes the outline/],
     ['.l-template-other a:focus-visible { outline: 2px solid transparent; box-shadow: none; }', /removes the outline/],
+    ['.l-template-other a:focus-visible { outline: 2px solid #0000; }', /removes the outline/],
+    ['.l-template-other a:focus-visible { outline: 2px solid #00000000; }', /removes the outline/],
     ['.l-template-other a:focus-visible { outline: 2px solid red; outline-color: transparent; }', /removes the outline/],
     ['.l-template-other a:focus-visible { outline: 2px solid rgba(0,0,0,0); }', /removes the outline/],
     ['.l-template-other a:focus-visible { outline: 2px solid rgb(0 0 0 / 0%); }', /removes the outline/],
@@ -170,6 +175,10 @@ test('a landing style.css moves things only under prefers-reduced-motion: no-pre
     ['.l-template-other .l-card { transition: 120ms; }', /transitions all/],
     ['.l-template-other .l-card { transition: all 120ms; }', /transitions all/],
     ['.l-template-other .l-card { transition: box-shadow 120ms; }', /transitions box-shadow/],
+    // A duration held in a custom property can't be read, so it isn't 0s.
+    ['.l-template-other .l-card { transition: transform var(--l-speed) ease; }', /transitions transform/],
+    ['.l-template-other .l-card { transition: transform var(--l-speed, 160ms); }', /transitions transform/],
+    ['.l-template-other .l-card { transition-property: transform; transition-duration: var(--l-speed); }', /transitions transform/],
     ['.l-template-other .l-card { transition-property: top, color; }', /transitions top/],
     ['.l-template-other .l-card { animation: l-other-in 160ms ease-out; }', /"animation: l-other-in 160ms ease-out" .* must be inside @media \(prefers-reduced-motion: no-preference\)/],
     ['.l-template-other .l-card { animation-name: l-other-in; }', /"animation-name: l-other-in"/],

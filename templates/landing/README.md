@@ -194,8 +194,9 @@ checked by hand (and by the reviewer, whose checklist lists the same bar).
   every selector in it is limited to `:not(:focus-visible)` (pointer focus
   only, so the keyboard's ring is untouched). A border or background change
   doesn't count: it's too easy to make too faint to see. A transparent
-  outline (`transparent`, or a color with a zero alpha, in `outline` or
-  `outline-color`) counts as removed too, since only forced-colors mode
+  outline (`transparent`, a hex or color function with a zero alpha, in
+  `outline` or `outline-color`; a `color-mix()` toward transparent is a
+  visible tint and passes) counts as removed too, since only forced-colors mode
   draws it: the forced-colors pattern, a transparent outline with a
   `box-shadow` ring, passes through the ring.
 - **Motion outside `@media (prefers-reduced-motion: no-preference)`.** Any
@@ -209,8 +210,8 @@ checked by hand (and by the reviewer, whose checklist lists the same bar).
   rule's transitions are read as CSS pairs them, the n-th property with
   the n-th duration, so `transition: transform 0s` (or a shorthand with
   no time, whose duration is 0s) moves nothing. What a longhand leaves
-  unset may come from another rule, so an unknown duration counts as
-  non-zero, and a non-zero `transition-duration` in a rule that names no
+  unset may come from another rule, so an unknown duration (that, or one
+  held in a `var()` or `calc()`) counts as non-zero, and a non-zero `transition-duration` in a rule that names no
   property transitions `all` and is flagged. `box-shadow` is flagged
   too, since a shadow's offset can move. The `-webkit-`, `-moz-`, `-o-`
   and `-ms-` forms count as the same properties. A `@media` list's commas
