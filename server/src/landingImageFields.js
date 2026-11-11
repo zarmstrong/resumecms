@@ -12,8 +12,9 @@ import { parseMediaUrl } from './mediaUrl.js';
 // may outlive its resume, and then shows nothing. Where they're used: the
 // hero (`photo: 'upload'` with `photoImage`), an item's `image` (a
 // thumbnail), an `image` section, a `gallery` section's entries (issue
-// #120), a `media` section's `poster` (issue #121), and `seo.image` (the
-// link-preview image).
+// #120), a `media` section's `poster` (issue #121), `seo.image` (the
+// link-preview image) and `coverImage` (issue #130, the wide image a
+// cover template draws behind the hero, whose alt may stay blank).
 
 export const LANDING_IMAGE_LIMITS = {
   // What the editor may send. Everything is re-encoded, so this only bounds
@@ -91,6 +92,7 @@ export function checkImageRef(ref, label, { knownImageIds = new Set(), previousI
 export function referencedImageIds(landing) {
   const refs = [
     landing?.photoImage,
+    landing?.coverImage,
     landing?.seo?.image,
     ...(Array.isArray(landing?.sections) ? landing.sections : []).flatMap((section) =>
       section?.kind === 'image' ? [section.image] : section?.kind === 'items' && Array.isArray(section.items) ? section.items.map((item) => item?.image) : []
@@ -110,7 +112,9 @@ export function referencedImageIds(landing) {
 // with photo: 'upload', an item's only on an item with a title or text,
 // every gallery entry's, a media section's poster only while its link
 // reads as one (parseMediaUrl()), and only a reference whose image is among `storedIds` (one whose image
-// is gone shows nothing).
+// is gone shows nothing). The cover image (`coverImage`) is never asked
+// about: the headline is real text over it, so a blank alt is a fair
+// choice (the image is then decoration), and allowed when published too.
 export function assertImagesDescribed(landing, storedIds) {
   const missing = [];
   const check = (ref, field, where) => {
@@ -162,6 +166,7 @@ export function imageIdOfPath(src) {
 export function shownImageIds(resolved) {
   const srcs = [
     resolved?.photoUrl,
+    resolved?.coverImage?.src,
     resolved?.seo?.image?.src,
     ...(resolved?.sections ?? []).flatMap((section) =>
       section.kind === 'image' ? [section.image?.src] : section.kind === 'items' ? section.items.map((item) => item.image?.src) : []

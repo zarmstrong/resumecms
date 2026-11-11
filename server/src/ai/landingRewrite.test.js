@@ -135,6 +135,12 @@ test('the prompt marks the target, and leaves out URLs, ids and the photo', () =
   assert.ok(!/resume profile/i.test(user));
 });
 
+test("the prompt never mentions the cover image (issue #130), its alt included", () => {
+  const withCover = { ...landing, template: 'cover', coverImage: { imageId: 'c'.repeat(64), alt: 'Harbor at dawn' } };
+  const { system, user } = buildLandingPrompt(withCover, { kind: 'headline' }, 'Shorter', null);
+  for (const hidden of ['c'.repeat(64), 'Harbor at dawn', 'coverImage']) assert.ok(!`${system}${user}`.includes(hidden), hidden);
+});
+
 test('an intro prompt marks all three spots and includes the profile', () => {
   const { system, user } = buildLandingPrompt(landing, { kind: 'intro', sectionId: 'intro' }, 'Write it', { name: 'Jo' });
   const context = user.slice(user.indexOf('The rest of the page'), user.indexOf('Section to rewrite'));

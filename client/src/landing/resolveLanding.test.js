@@ -350,6 +350,25 @@ test('uploaded images resolve like the server does, at the editor path the conte
   assert.equal('image' in bare.seo, false);
 });
 
+test('a cover image (issue #130) resolves exactly like the server, whatever the template', () => {
+  const id = 'a'.repeat(64);
+  const gone = 'b'.repeat(64);
+  const src = `/api/landing/images/${id}`;
+  const ctx = { ...context, images: [{ id, src, width: 1600, height: 900 }] };
+  const serverContext = { ...context, resumes: new Map(), images: new Map([[id, { src, width: 1600, height: 900 }]]) };
+  for (const landing of [
+    { ...draft, template: 'cover', coverImage: { imageId: id, alt: '' } },
+    { ...draft, template: 'classic', coverImage: { imageId: id, alt: 'The harbor at dawn' } },
+    { ...draft, template: 'cover', coverImage: { imageId: gone, alt: '' } },
+    { ...draft, template: 'cover' },
+  ]) {
+    const out = resolveLanding(landing, ctx);
+    assert.deepEqual(out.coverImage, server.resolveLanding(landing, serverContext).coverImage);
+    assert.equal('coverImage' in out, landing.coverImage?.imageId === id);
+  }
+  assert.deepEqual(resolveLanding({ ...draft, coverImage: { imageId: id, alt: '' } }, ctx).coverImage, { src, alt: '', width: 1600, height: 900 });
+});
+
 test('credentials resolve exactly like the server, expired ones dropped, or dimmed in the preview', () => {
   const entry = (name, expires, extra = {}) => ({ kind: 'license', name, issuer: 'Board', number: '', issued: '', expires, url: '', ...extra });
   const landing = {

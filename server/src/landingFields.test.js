@@ -1192,6 +1192,43 @@ test('images resolve to { src, alt, width, height } while stored, and drop out (
   assert.equal(resolveLanding({ ...landing, photo: 'none' }, { resumes: new Map() }).photoUrl, '');
 });
 
+test('a cover image (issue #130) is an optional reference, resolved whatever the template, and needs no description', () => {
+  const ref = (alt, imageId = IMG) => ({ imageId, alt });
+  // Checked like any other reference, stored only when set.
+  const out = validateLanding({ coverImage: ref('') }, withImages(IMG));
+  assert.deepEqual(out.coverImage, ref(''));
+  assert.equal('coverImage' in validateLanding({ coverImage: null }, withImages(IMG)), false);
+  for (const coverImage of [ref('', IMG2), { imageId: IMG }, { ...ref(''), src: '/evil' }, 'https://example.com/wide.jpg']) {
+    assert.equal(status(() => validateLanding({ coverImage }, withImages(IMG))), 400, JSON.stringify(coverImage));
+  }
+  // One already in the draft may outlive its image; it's referenced, so the
+  // prune keeps it.
+  assert.equal(validateLanding({ coverImage: ref('', IMG2) }, { ...withImages(IMG), previousImageIds: new Set([IMG2]) }).coverImage.imageId, IMG2);
+  assert.deepEqual([...referencedImageIds({ coverImage: ref('') })], [IMG]);
+  // The MCP merge sets it and removes it.
+  const merged = mergeLandingPatch(emptyLanding(), { coverImage: ref('Harbor') });
+  assert.deepEqual(merged.coverImage, ref('Harbor'));
+  assert.equal('coverImage' in mergeLandingPatch(merged, { coverImage: null }), false);
+
+  // It resolves while its image is stored, for every template (the server
+  // doesn't read template.json), and the public route may then serve it.
+  const src = `/api/public/landing/images/${IMG}`;
+  const context = { photoUrl: '', site: null, resumes: new Map(), images: new Map([[IMG, { src, width: 1600, height: 900 }]]) };
+  for (const template of ['classic', 'cover']) {
+    const shown = resolveLanding({ ...emptyLanding(), template, coverImage: ref('') }, context);
+    assert.deepEqual(shown.coverImage, { src, alt: '', width: 1600, height: 900 });
+    assert.deepEqual([...shownImageIds(shown)], [IMG]);
+  }
+  const gone = resolveLanding({ ...emptyLanding(), coverImage: ref('', IMG2) }, context);
+  assert.equal('coverImage' in gone, false);
+  assert.deepEqual([...shownImageIds(gone)], []);
+  assert.equal('coverImage' in resolveLanding(emptyLanding(), context), false);
+
+  // The headline is real text over it, so a blank description is allowed
+  // even when published.
+  assert.doesNotThrow(() => assertImagesDescribed({ ...emptyLanding(), template: 'cover', coverImage: ref(' ') }, new Set([IMG])));
+});
+
 test('only an uploaded image path counts as one', () => {
   assert.equal(imageIdOfPath(`/api/public/landing/images/${IMG}`), IMG);
   for (const other of [`/api/landing/images/${IMG}`, `/api/public/landing/images/${IMG}/x`, 'data:image/png;base64,AA', '', null]) {

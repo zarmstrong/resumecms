@@ -32,8 +32,51 @@
   top: 72px;
 }
 
+/* A short window can't hold the hero (a 1080 px screen at 200% zoom is a
+   540 px window, and the hero fills it), and a sticky one taller than the
+   window hides its own end, the buttons, until the page's: there it
+   scrolls with the page. */
+@media (height < 640px) {
+  .l-template-split .l-split-sticky {
+    position: static;
+  }
+}
+
+/* And where it sticks, it never outgrows the window: a hero taller than
+   that (a long headline, several buttons) scrolls on its own, so its
+   buttons are always in reach. The 6 px of padding, given back by the
+   margins (and the top), keep it where it was and leave room inside the
+   scroller for the buttons' focus rings, and scroll-padding keeps that
+   room when a focused button is scrolled into view. The left margin is
+   what auto was (pushing the 360 px hero to the column's right), less
+   the 6 px, and never more than -6 px, so a column narrower than the
+   cap doesn't move it either. */
+@container (width > 820px) {
+  @media (height >= 640px) {
+    .l-template-split .l-split-sticky {
+      top: 66px;
+      max-width: 372px;
+      max-height: calc(100vh - 66px);
+      max-height: calc(100dvh - 66px);
+      padding: 6px;
+      margin: -6px -6px -6px max(-6px, calc(100% - 366px));
+      overflow-y: auto;
+      scroll-padding: 8px;
+    }
+  }
+}
+
 .l-template-split .l-split-side-sections {
   margin-top: 44px;
+}
+
+/* The accent-on-tint tags (the availability line, a credential's kind, a
+   document's "PDF") tinted over the page's background rather than over
+   the column's tint, so the column doesn't darken them a second time: on
+   the default palette the doubled tint took the accent text below AA
+   (4.49:1). */
+.l-template-split .l-split-side :is(.l-availability, .l-credential-kind, .l-document-type) {
+  background: color-mix(in srgb, var(--r-accent, var(--ink)) 12%, var(--r-bg, var(--panel)));
 }
 
 /* The side column is narrow: one card per row. */
