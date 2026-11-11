@@ -563,6 +563,53 @@ export const LANDING_SCHEMA = {
           {
             type: 'object',
             description:
+              "One video or audio clip behind a click-to-load facade (the title, a play button and the poster); nothing loads from the provider until a visitor presses play. Left out while it has no link. Never rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'media' },
+              url: {
+                type: 'string',
+                description:
+                  "An https link to a YouTube or Vimeo video (start times t=90, t=1m30s or #t= kept), a SoundCloud track or playlist, or a Spotify track, album, playlist, episode or show; any other link is a 400. Only its parsed form ever reaches a visitor, embedded from youtube-nocookie.com, Vimeo with dnt=1, w.soundcloud.com or open.spotify.com/embed",
+              },
+              caption: { type: 'string', description: 'Plain text under it, at most 300 characters' },
+              poster: { ...LANDING_IMAGE_REF, description: "Optional image shown before it's played; absent shows a plain panel" },
+              transcript: { type: 'string', description: "Optional plain text, at most 20000 characters, under a 'Transcript' disclosure; a blank line starts a new paragraph" },
+            },
+          },
+          {
+            type: 'object',
+            description:
+              "What you offer, at most 12, each with a short description, an optional price line and an optional button; one without a title or a text isn't shown. Only a service's text is ever rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'services' },
+              services: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string', description: "Plain text, at most 120 characters, e.g. 'Private tutoring'" },
+                    text: { type: 'string', description: 'At most 1000 characters; text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is' },
+                    price: { type: 'string', description: "Free text, not a number, at most 80 characters: 'From $60/hour', 'Free 15-minute consultation', 'Sliding scale'" },
+                    action: {
+                      type: 'object',
+                      description: 'Optional button (absent for none), a link like a hero button',
+                      properties: {
+                        type: { const: 'link' },
+                        label: { type: 'string', description: "e.g. 'Book a session'; '' shows the URL" },
+                        url: { type: 'string', description: 'An http, https, mailto or tel link (mailto:you@example.com?subject=Booking prefills a subject)' },
+                        icon: ACTION_ICON,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            type: 'object',
+            description:
               'Published work and appearances, at most 40; each a title (linked to its url, or its DOI when url is empty) over a muted "Outlet · Date · Kind" line, then its note. One without a title isn\'t shown. Plain text; never rewritten by AI',
             properties: {
               ...LANDING_SECTION_BASE,

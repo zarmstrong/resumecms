@@ -8,7 +8,8 @@
 //
 // Targets: { kind: 'photo' }, { kind: 'seo' }, { kind: 'section', sectionId }
 // and { kind: 'item', sectionId, index }, and a gallery's entry (issue #120),
-// { kind: 'gallery', sectionId, index }, known by its key like an item.
+// { kind: 'gallery', sectionId, index }, known by its key like an item, and
+// a media section's poster (issue #121), { kind: 'poster', sectionId }.
 
 // Items have no id, and their content can't tell them apart (two empty
 // ones, or one deleted and a new one added in its place), so the editor
@@ -73,6 +74,11 @@ export function applyUploadedImage(landing, spot, imageId) {
       const section = landing.sections.find((s) => s.id === target.sectionId);
       if (section?.kind !== 'image') return null;
       return { ...landing, sections: landing.sections.map((s) => (s === section ? { ...s, image: ref(s.image) } : s)) };
+    }
+    case 'poster': {
+      const section = landing.sections.find((s) => s.id === target.sectionId);
+      if (section?.kind !== 'media') return null;
+      return { ...landing, sections: landing.sections.map((s) => (s === section ? { ...s, poster: ref(s.poster) } : s)) };
     }
     case 'item': {
       const items = itemsOf(landing, target.sectionId);

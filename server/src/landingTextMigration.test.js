@@ -313,3 +313,32 @@ test('a plain write escapes an FAQ answer it changed, keeps one it echoed, and n
   const odd = { sections: [{ kind: 'faq', entries: 'x' }, { kind: 'faq', entries: [null, { answer: 3 }] }] };
   assert.deepEqual(escapeLandingText(odd).landing, odd);
 });
+
+test("a plain write escapes a service's text it changed, keeps one it echoed, and never touches its title, price or button", () => {
+  const { store, put } = makeStore();
+  const services = (list) => ({ id: 'sv', kind: 'services', title: '', services: list });
+  const action = { type: 'link', label: '*Book*', url: 'mailto:jo@example.com?subject=Booking' };
+  // Written with the syntax (MCP, a current editor), then echoed by a tab without the marker.
+  const stored = store.setLanding({
+    headline: 'Jo',
+    sections: [
+      services([
+        { title: '*Tutoring*', text: 'One-to-one, **weekly**. [Syllabus](https://jo.example)', price: '*$60*/hour', action },
+        { title: 'Consult', text: 'c \\*x\\*', price: '' },
+      ]),
+    ],
+  });
+  assert.deepEqual(put({ ...stored, headline: 'Jo Doe' }).sections, stored.sections);
+  // Moved, the echoes still match their stored services.
+  const [first, second] = stored.sections[0].services;
+  assert.deepEqual(put({ ...stored, sections: [services([second, first])] }).sections[0].services, [second, first]);
+  // An edited text reads as that tab showed it; the rest stays plain text, as written.
+  const edited = put({ ...stored, sections: [services([{ ...first, text: 'Weekly, *in person*.' }])] });
+  assert.deepEqual(edited.sections[0].services[0], { ...first, text: 'Weekly, \\*in person\\*.' });
+  assert.deepEqual(parseInline(edited.sections[0].services[0].text), [{ t: 'text', text: 'Weekly, *in person*.' }]);
+  // A marked write is taken as written.
+  assert.equal(put({ ...stored, sections: [services([{ title: 'T', text: '*Now*' }])], textFormat: 'inline' }).sections[0].services[0].text, '*Now*');
+  // What isn't text is left for validation.
+  const odd = { sections: [{ kind: 'services', services: 'x' }, { kind: 'services', services: [null, { text: 3 }] }] };
+  assert.deepEqual(escapeLandingText(odd).landing, odd);
+});

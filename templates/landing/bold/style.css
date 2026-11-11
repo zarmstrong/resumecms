@@ -13,7 +13,8 @@
    dark. No text is drawn in the accent or on it either: what's
    accent-colored text elsewhere (a card's "View resume", "Full resume",
    the availability line, the buttons' labels, a stat's figure, an FAQ's
-   + and −, a credential's kind and "Verify", the gallery's buttons) is
+   + and −, a credential's kind and "Verify", the gallery's buttons, a
+   media section's play button) is
    in the heading or text color here, and so are the focus rings. The
    primary button is filled with the heading color rather than the accent
    (--r-on-accent, the better of white and near-black, isn't AA on every
@@ -513,6 +514,43 @@
   font-weight: 700;
 }
 
+/* Services (issue #122) in a grid like the list entries: the name heavy,
+   the price in capitals in the heading color (the shared one is in the
+   accent, which a band or a pale accent would hide), and the button the
+   page's outlined one. */
+.l-template-bold .l-services {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 32px 40px;
+}
+
+.l-template-bold .l-service-head {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.l-template-bold .l-service-title {
+  font-size: 1.25em;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.l-template-bold .l-service-price {
+  color: var(--r-heading, var(--ink));
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.l-template-bold .l-service-text {
+  margin-top: 4px;
+}
+
+.l-template-bold .l-service-action {
+  margin-top: 14px;
+}
+
 /* Publications (issue #127): the title heavy, the outlet, date and kind
    in capitals at full strength in the text color (the shared line is
    faded), and a group's subheading heavy in the heading color over a rule
@@ -611,6 +649,39 @@
   border-color: var(--r-heading, var(--ink));
   color: var(--r-bg, var(--panel));
   background: var(--r-heading, var(--ink));
+}
+
+/* A media section (issue #121): square corners, and the play button drawn
+   like the primary button (the heading color, the background's for its
+   label, the accent only as the block behind it), so no text is on the
+   accent. The caption is at full strength. */
+.l-template-bold .l-media-facade,
+.l-template-bold .l-media-frame {
+  border-radius: 0;
+}
+
+.l-template-bold .l-media-play,
+.l-template-bold .l-media-play:hover {
+  border-radius: 0;
+  background: var(--r-heading, var(--ink));
+  color: var(--r-bg, var(--panel));
+  font-weight: 800;
+  box-shadow: 5px 5px 0 var(--r-accent, var(--ink));
+}
+
+.l-template-bold .l-media-note {
+  border-radius: 0;
+  font-weight: 600;
+}
+
+.l-template-bold .l-media-caption {
+  opacity: 1;
+  margin-top: 12px;
+  font-weight: 600;
+}
+
+.l-template-bold .l-media-transcript-toggle {
+  font-weight: 800;
 }
 
 /* A divider: a heavy rule, its label in heavy capitals. */

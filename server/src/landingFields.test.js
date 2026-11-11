@@ -757,6 +757,116 @@ test('an FAQ section is checked strictly, its answers as inline text, and an ent
   for (const input of bad) assert.equal(status(() => validateLanding(input, known())), 400, JSON.stringify(input).slice(0, 80));
 });
 
+test('a services section is checked strictly: inline text, a free-text price, and a button stored only when set', () => {
+  const services = (list) => ({ sections: [{ id: 'sv', kind: 'services', title: 'Services', services: list }] });
+  const message = (fn) => {
+    try {
+      fn();
+    } catch (err) {
+      return `${err.status} ${err.message}`;
+    }
+    return null;
+  };
+  const tutoring = {
+    title: 'Private tutoring',
+    text: 'One-to-one **maths** sessions. [Syllabus](https://jo.example/syllabus).',
+    price: 'From $60/hour',
+    action: { type: 'link', label: 'Book a session', url: 'mailto:jo@example.com?subject=Booking: tutoring', icon: 'calendar-days' },
+  };
+  const draft = validateLanding(services([tutoring, { title: 'Consultation' }, { text: 'No title.', action: null }, { price: 'Free' }]), known());
+  assert.deepEqual(draft.sections[0], {
+    id: 'sv',
+    kind: 'services',
+    title: 'Services',
+    services: [
+      tutoring,
+      { title: 'Consultation', text: '', price: '' },
+      { title: '', text: 'No title.', price: '' },
+      { title: '', text: '', price: 'Free' },
+    ],
+  });
+  // A button's type may be left out; it's always a link, and stored as one.
+  assert.deepEqual(validateLanding(services([{ title: 'T', action: { label: 'Call', url: 'tel:+15555550100' } }]), known()).sections[0].services[0].action, {
+    type: 'link',
+    label: 'Call',
+    url: 'tel:+15555550100',
+  });
+
+  // The text's links follow every other link's rules, read as a whole like
+  // an item's; the title and the price are plain text, never parsed.
+  assert.equal(
+    message(() => validateLanding(services([{ title: 'T', text: 'See\n\n[this](javascript:alert(1))' }]), known())),
+    '400 sections[0].services[0].text: the link "this" must be an http, https, mailto or tel link'
+  );
+  const plain = validateLanding(services([{ title: '[x](javascript:alert(1))', price: '*$5*' }]), known()).sections[0].services[0];
+  assert.deepEqual([plain.title, plain.price], ['[x](javascript:alert(1))', '*$5*']);
+  // The button's link follows a hero button's rules.
+  for (const url of ['javascript:alert(1)', 'java\tscript:x', 'data:text/html,x', 'sms:123']) {
+    assert.equal(
+      message(() => validateLanding(services([{ title: 'T', action: { type: 'link', label: 'Go', url } }]), known())),
+      '400 sections[0].services[0].action.url must be an http, https, mailto or tel link',
+      url
+    );
+  }
+  // The text's cap doesn't count an escaping backslash; the others count every character.
+  const atCap = `\\*${'a'.repeat(LANDING_LIMITS.serviceText - 1)}`;
+  assert.equal(validateLanding(services([{ text: atCap }]), known()).sections[0].services[0].text, atCap);
+  const longest = { title: 'x'.repeat(LANDING_LIMITS.serviceTitle), price: 'x'.repeat(LANDING_LIMITS.servicePrice) };
+  assert.deepEqual(validateLanding(services([longest]), known()).sections[0].services[0], { ...longest, text: '' });
+
+  const bad = [
+    services([{ title: 'x'.repeat(LANDING_LIMITS.serviceTitle + 1) }]),
+    services([{ text: 'x'.repeat(LANDING_LIMITS.serviceText + 1) }]),
+    services([{ price: 'x'.repeat(LANDING_LIMITS.servicePrice + 1) }]),
+    services([{ price: 60 }]),
+    services([{ title: 'T', image: null }]),
+    services([{ title: 'T', action: 'mailto:jo@example.com' }]),
+    services([{ title: 'T', action: { type: 'resume', resumeId: 'a', open: 'page' } }]),
+    services([{ title: 'T', action: { type: 'link', url: 'https://a.example', extra: 1 } }]),
+    services([{ title: 'T', action: { type: 'link', url: 'https://a.example', icon: 'skull' } }]),
+    services([{ title: 'T', action: { type: 'link', label: 'x'.repeat(LANDING_LIMITS.actionLabel + 1), url: 'https://a.example' } }]),
+    services(['T']),
+    services('T'),
+    services(Array.from({ length: LANDING_LIMITS.services + 1 }, () => ({ title: 'T' }))),
+    { sections: [{ id: 'sv', kind: 'services', items: [] }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, known('a'))), 400, JSON.stringify(input).slice(0, 80));
+});
+
+test('a service without a title or a text is dropped, then a section with none; a button only while its link is whole', () => {
+  const services = (list, extra = {}) => ({ sections: [{ id: 'sv', kind: 'services', title: 'Services', services: list, ...extra }] });
+  const resolve = (input) => resolveLanding(validateLanding(input, known()), { resumes: new Map() }).sections;
+  assert.deepEqual(
+    resolve(
+      services([
+        { title: 'Tutoring', text: 'Maths.', price: '$60/hour', action: { type: 'link', label: 'Book', url: 'https://cal.example/jo', icon: 'calendar-days' } },
+        { title: '', text: 'Just a description.', action: { type: 'link', label: '', url: 'mailto:jo@example.com?subject=Hello' } },
+        { title: 'Half typed', action: { type: 'link', label: 'Go', url: 'https://' } },
+        { title: 'Not yet', action: { type: 'link', label: 'Go', url: '' } },
+        { title: '  ', text: ' ', price: 'Free', action: { type: 'link', label: 'Book', url: 'https://cal.example/jo' } },
+      ])
+    ),
+    [
+      {
+        kind: 'services',
+        title: 'Services',
+        services: [
+          { title: 'Tutoring', text: 'Maths.', price: '$60/hour', action: { label: 'Book', href: 'https://cal.example/jo', icon: 'calendar-days' } },
+          { title: '', text: 'Just a description.', price: '', action: { label: 'mailto:jo@example.com?subject=Hello', href: 'mailto:jo@example.com?subject=Hello' } },
+          { title: 'Half typed', text: '', price: '' },
+          { title: 'Not yet', text: '', price: '' },
+        ],
+      },
+    ]
+  );
+  // A section with nothing but prices and buttons goes, heading and all, and so does an empty or hidden one.
+  assert.deepEqual(resolve(services([{ price: 'Free', action: { type: 'link', label: 'Book', url: 'https://cal.example' } }])), []);
+  assert.deepEqual(resolve(services([])), []);
+  assert.deepEqual(resolve(services([{ title: 'T' }], { hidden: true })), []);
+  // `column` goes along like any section's.
+  assert.deepEqual(resolve(services([{ title: 'T' }], { column: 'side' })), [{ kind: 'services', title: 'Services', column: 'side', services: [{ title: 'T', text: '', price: '' }] }]);
+});
+
 test('an experience section follows the reference rules of a card, with a count from 1 to 10', () => {
   const section = (extra) => ({ sections: [{ id: 'x', kind: 'experience', ...extra }] });
   assert.deepEqual(validateLanding(section({ resumeId: 'a' }), known('a')).sections[0], {
@@ -1323,6 +1433,123 @@ test('a gallery image the page would show needs a description to publish', () =>
   // One whose image is gone shows nothing; nor does a hidden gallery.
   assert.equal(fieldOf(gallery([entry('', IMG2)])), null);
   assert.equal(fieldOf(gallery([entry('')], { hidden: true })), null);
+});
+
+const YT_URL = 'https://youtu.be/dQw4w9WgXcQ?t=1m30s';
+
+test('a media section takes only a link the parser reads, and checks its caption, poster and transcript', () => {
+  const poster = { imageId: IMG, alt: 'On stage' };
+  const out = validateLanding(
+    { sections: [{ id: 'm', kind: 'media', title: 'My talk', url: YT_URL, caption: 'At PyCon', poster, transcript: 'Hello.\n\nThanks.' }] },
+    withImages(IMG)
+  );
+  assert.deepEqual(out.sections[0], { id: 'm', kind: 'media', title: 'My talk', url: YT_URL, caption: 'At PyCon', poster, transcript: 'Hello.\n\nThanks.' });
+  // A new one has no link yet; the poster is stored only when set.
+  assert.deepEqual(validateLanding({ sections: [{ id: 'm', kind: 'media' }] }, withImages()).sections[0], {
+    id: 'm',
+    kind: 'media',
+    title: '',
+    url: '',
+    caption: '',
+    transcript: '',
+  });
+  assert.equal(validateLanding({ sections: [{ kind: 'media', url: YT_URL, poster: null }] }, withImages()).sections[0].poster, undefined);
+  for (const url of ['https://vimeo.com/76979871', 'https://soundcloud.com/forss/flickermood', 'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC', '  ']) {
+    assert.equal(validateLanding({ sections: [{ kind: 'media', url }] }, withImages()).sections[0].url, url);
+  }
+
+  const bad = [
+    { sections: [{ kind: 'media', url: 'https://example.com/video.mp4' }] },
+    { sections: [{ kind: 'media', url: 'http://www.youtube.com/watch?v=dQw4w9WgXcQ' }] },
+    { sections: [{ kind: 'media', url: 'https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ' }] },
+    { sections: [{ kind: 'media', url: 'https://www.youtube.com/@someone' }] },
+    { sections: [{ kind: 'media', url: 'javascript:alert(1)' }] },
+    { sections: [{ kind: 'media', url: 'https://youtu' }] },
+    { sections: [{ kind: 'media', url: `https://youtu.be/dQw4w9WgXcQ?x=${'a'.repeat(LANDING_LIMITS.url)}` }] },
+    { sections: [{ kind: 'media', url: 3 }] },
+    { sections: [{ kind: 'media', url: YT_URL, caption: 'x'.repeat(LANDING_LIMITS.mediaCaption + 1) }] },
+    { sections: [{ kind: 'media', url: YT_URL, transcript: 'x'.repeat(LANDING_LIMITS.transcript + 1) }] },
+    { sections: [{ kind: 'media', url: YT_URL, transcript: ['x'] }] },
+    { sections: [{ kind: 'media', url: YT_URL, poster: { imageId: IMG } }] }, // alt is required
+    { sections: [{ kind: 'media', url: YT_URL, poster: { imageId: IMG2, alt: '' } }] }, // not stored
+    { sections: [{ kind: 'media', url: YT_URL, image: poster }] },
+    { sections: [{ kind: 'media', url: YT_URL, provider: 'youtube' }] },
+  ];
+  for (const input of bad) assert.equal(status(() => validateLanding(input, withImages(IMG))), 400, JSON.stringify(input).slice(0, 120));
+  assert.throws(
+    () => validateLanding({ sections: [{ kind: 'media', url: 'https://example.com/v' }] }, withImages()),
+    /sections\[0\]\.url must be an https link to a YouTube or Vimeo video/
+  );
+  // At its caps exactly, it's fine; the transcript is plain text, kept as written.
+  const transcript = `*[b](javascript:x)* ${'x'.repeat(LANDING_LIMITS.transcript - 20)}`;
+  const capped = validateLanding({ sections: [{ kind: 'media', url: YT_URL, caption: 'x'.repeat(LANDING_LIMITS.mediaCaption), transcript }] }, withImages());
+  assert.equal(capped.sections[0].transcript, transcript);
+
+  // A poster already in the draft may outlive its image, and every one counts as referenced.
+  const kept = validateLanding(
+    { sections: [{ kind: 'media', url: YT_URL, poster: { imageId: IMG2, alt: '' } }] },
+    { ...withImages(IMG), previousImageIds: new Set([IMG2]) }
+  );
+  assert.deepEqual([...referencedImageIds({ sections: [...out.sections, ...kept.sections] })].sort(), [IMG, IMG2]);
+});
+
+test('a media section resolves to the parsed link, never the link itself, and is left out without one', () => {
+  const src = `/api/public/landing/images/${IMG}`;
+  const context = { site: null, resumes: new Map(), images: new Map([[IMG, { src, width: 1600, height: 900 }]]) };
+  const landing = {
+    ...emptyLanding(),
+    sections: [
+      { id: 'm', kind: 'media', title: 'Demo lesson', column: 'side', url: YT_URL, caption: 'Grade 5', poster: { imageId: IMG, alt: 'A classroom' }, transcript: 'Good morning.' },
+      { id: 'v', kind: 'media', title: '', url: 'https://vimeo.com/76979871/8272103f6e#t=90s', caption: '', poster: { imageId: IMG2, alt: 'Gone' }, transcript: '' },
+      { id: 's', kind: 'media', title: 'Track', url: 'https://open.spotify.com/intl-de/album/4uLU6hMCjMI75M1A2tKUQC?si=x', caption: '', transcript: '' },
+      { id: 'none', kind: 'media', title: 'No link yet', url: '', caption: 'x', transcript: 'x' },
+      // Stored by hand, past the checks: still never shown.
+      { id: 'bad', kind: 'media', title: 'Elsewhere', url: 'https://evil.example/v.mp4', caption: '', transcript: '' },
+      { id: 'hid', kind: 'media', title: 'Hidden', hidden: true, url: YT_URL, caption: '', transcript: '' },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  assert.deepEqual(out.sections, [
+    {
+      kind: 'media',
+      title: 'Demo lesson',
+      column: 'side',
+      media: { provider: 'youtube', mediaId: 'dQw4w9WgXcQ', start: 90 },
+      caption: 'Grade 5',
+      transcript: 'Good morning.',
+      poster: { src, alt: 'A classroom', width: 1600, height: 900 },
+    },
+    { kind: 'media', title: '', media: { provider: 'vimeo', mediaId: '76979871', start: 90, hash: '8272103f6e' }, caption: '', transcript: '' },
+    { kind: 'media', title: 'Track', media: { provider: 'spotify', mediaId: '4uLU6hMCjMI75M1A2tKUQC', start: 0, type: 'album' }, caption: '', transcript: '' },
+  ]);
+  const sent = JSON.stringify(out);
+  for (const raw of ['youtu.be', 'vimeo.com', 'spotify.com', 'si=x', 'evil.example', '"url"', 'imageId']) assert.equal(sent.includes(raw), false, raw);
+  assert.deepEqual([...shownImageIds(out)], [IMG]);
+});
+
+test("a media section's poster needs a description to publish, while the section would show", () => {
+  const stored = new Set([IMG]);
+  const page = (section) => ({
+    ...emptyLanding(),
+    sections: [{ id: 't', kind: 'text', title: '', body: 'x' }, { id: 'm', kind: 'media', title: '', caption: '', transcript: '', ...section }],
+  });
+  const fieldOf = (landing) => {
+    try {
+      assertImagesDescribed(landing, stored);
+    } catch (err) {
+      assert.equal(err.status, 400);
+      assert.match(err.message, /the poster in section 2/);
+      return err.message.match(/\(([^)]*\.alt)\)/)[1];
+    }
+    return null;
+  };
+  assert.equal(fieldOf(page({ url: YT_URL, poster: { imageId: IMG, alt: ' ' } })), 'sections[1].poster.alt');
+  assert.equal(fieldOf(page({ url: YT_URL, poster: { imageId: IMG, alt: 'On stage' } })), null);
+  assert.equal(fieldOf(page({ url: YT_URL })), null);
+  // Nothing shows it: no link yet, a hidden section, or an image that's gone.
+  assert.equal(fieldOf(page({ url: '', poster: { imageId: IMG, alt: '' } })), null);
+  assert.equal(fieldOf(page({ url: YT_URL, hidden: true, poster: { imageId: IMG, alt: '' } })), null);
+  assert.equal(fieldOf(page({ url: YT_URL, poster: { imageId: IMG2, alt: '' } })), null);
 });
 
 test('publications are checked strictly, field by field, and stored whole', () => {

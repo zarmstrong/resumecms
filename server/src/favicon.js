@@ -148,7 +148,21 @@ function neutralMark(ink) {
     .join('');
 }
 
+// A hash of a body: an ETag's value, and an icon link's `?v=`.
+export function versionOf(body) {
+  return createHash('sha256').update(body).digest('hex').slice(0, 32);
+}
+
 // A strong ETag for a response body: a hash of exactly what's sent.
 export function etagOf(body) {
-  return `"${createHash('sha256').update(body).digest('hex').slice(0, 32)}"`;
+  return `"${versionOf(body)}"`;
+}
+
+// The `?v=` of the HTML shell's links to the two icons for `content`
+// (issue #108): /favicon.svg's is its ETag's value, and
+// /apple-touch-icon.png's the hash of the SVG it's rasterized from, so the
+// shell never has to draw a PNG to link it. Each changes exactly when what
+// its icon shows does.
+export function iconVersions(content) {
+  return { svg: versionOf(faviconSvg(content)), png: versionOf(faviconSvg(content, { forRaster: true })) };
 }

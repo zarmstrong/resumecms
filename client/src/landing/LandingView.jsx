@@ -7,6 +7,7 @@ import { dropStrayDividers } from './dividers.js';
 import { renderInline } from './renderInline.js';
 import { readDate } from './dateText.js';
 import { LandingGallery } from './LandingGallery.jsx';
+import { LandingMedia } from './LandingMedia.jsx';
 import { ActionIcon } from './ActionIcon.jsx';
 import './landing.css';
 
@@ -28,8 +29,9 @@ import './landing.css';
 // sees to that for a template without columns, and hands one with columns
 // `dropStrayDividers(sections, { atStart })` to apply to each column.
 // Everything is rendered as text,
-// apart from the links and emphasis a text section, an item's text or an
-// FAQ answer may hold (issue #91, renderInline.js), which become elements,
+// apart from the links and emphasis a text section, an item's text, an
+// FAQ answer or a service's text may hold (issue #91, renderInline.js),
+// which become elements,
 // never HTML; every href still goes through safeHref() (by way of
 // linkProps()) although the server only stores safe ones. `highlightIds`
 // (editor preview only) outlines the parts an AI suggestion is shown in:
@@ -37,7 +39,8 @@ import './landing.css';
 // preview resolves its draft `withIds`). A section marked `hidden` (only
 // the preview resolves those, `withHidden`) is dimmed and labelled, and so
 // is an expired credential (issue #119), or a credentials section with
-// nothing else (`expired`).
+// nothing else (`expired`). A media section (issue #121) is a facade until
+// a visitor presses play (LandingMedia.jsx), in the preview too.
 export function LandingView({ landing, preview = false, highlightIds = null, scheme = 'auto' }) {
   const template = getLandingTemplate(landing.template);
   const { colors, style } = landingPageStyle(landing.site, landing.darkColors);
@@ -344,6 +347,35 @@ function SectionBody({ section, preview }) {
       );
     case 'gallery':
       return <LandingGallery images={section.images} label={section.title} />;
+    case 'media':
+      return <LandingMedia section={section} />;
+    case 'services':
+      // What the person offers (issue #122): each one's name with its price
+      // beside it, where a visitor finds it at a glance, then what it is,
+      // then its button. The comma is for a screen reader ("Tutoring, From
+      // $60/hour"), as a stat's.
+      return (
+        <ul className="l-services">
+          {section.services.map((service, i) => (
+            <li key={i} className="l-service">
+              {(service.title || service.price) && (
+                <span className="l-service-head">
+                  {service.title && <span className="l-service-title">{service.title}</span>}
+                  {service.title && service.price && <span className="l-sr-only">, </span>}
+                  {service.price && <span className="l-service-price">{service.price}</span>}
+                </span>
+              )}
+              {service.text && <p className="l-service-text">{renderInline(service.text)}</p>}
+              {service.action && (
+                <a className="l-action l-service-action" {...hrefProps(service.action.href)}>
+                  {service.action.icon && <ActionIcon name={service.action.icon} />}
+                  {service.action.label}
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      );
     case 'publications':
       // Grouped (issue #127), each kind under a subheading of its own, and
       // then the kind isn't repeated on each entry's line.

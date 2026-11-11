@@ -216,8 +216,8 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/resumes/:id/cover-letters/:letterId/letter.pdf` | the letter as a PDF download, rendered on request and reused until the letter or its resume's header or site settings change. A render that waits more than 20 s behind another is a 503: it carries on, so asking again shortly gets the file |
 | `POST /api/resumes/:id/cover-letters/:letterId/rewrite` | `{ data?, target?, instruction?, brief? }` → `{ proposal }` for review; saves nothing. `target` is `{ kind: 'letter' }` (default: salutation, body and closing) or `{ kind: 'paragraph', index }`. A letter with an empty body is drafted without an instruction; otherwise an instruction or a `brief` is required. Shares `ai/rewrite`'s rate limits (a request with a `brief` counts as tailoring) |
 | `/api/resumes/:id/…` | every editor route in this table (`header`, `site`, `blocks…`, `publish…`, `discard-draft`, `ai/rewrite`, `ai/tailor-plan`) for that resume. The unprefixed ones act on whichever resume is the default |
-| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, availability, actions, photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel }`, `actions` being up to 3 buttons, each `{ type: 'link', label, url, icon? }` or `{ type: 'resume', label, resumeId, open: 'page' | 'pdf', icon? }` (`icon` a Font Awesome Free icon's name from a fixed list, such as `envelope`, `calendar-days`, `file-pdf` or `linkedin`, only there when set), `photo` one of `resume`, `custom` (`photoUrl`), `upload` (`photoImage`) or `none`, `seo` being `{ title, description, noindex, image? }`, each section `{ id, kind, title, hidden?, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url, meta?, image? }]`), `links` (`links`), `resumes` (`cards: [{ resumeId, label, blurb, showPdf }]`), `quotes` (`quotes: [{ text, name, role, url }]`), `experience` (`resumeId`, `count` 1–10, `showDates`), `image` (`image`, `caption`), `divider` (nothing but its `title`, a label on the line), `stats` (`stats: [{ value, label }]`, up to 6, both plain text), `faq` (`entries: [{ question, answer }]`, up to 15), `education` (`resumeId`, `count` 1–10, `showDates`), `skills` (`resumeId`), `credentials` (`credentials: [{ kind, name, issuer, number, issued, expires, url }]`, `kind` one of `license`, `certification`, `membership`, at most 20; one whose `expires` has passed isn't shown), `gallery` (`images: [{ image, caption }]`, at most 24, an entry's `image` `null` until one is uploaded) or `publications` (`order` `manual` or `newest`, `group`, `entries: [{ kind, title, outlet, date, url, doi, note }]`, `kind` one of `article`, `paper`, `book`, `chapter`, `talk`, `podcast`, `press`, at most 40, `doi` a bare DOI such as `10.1234/abcd`; one without a title isn't shown); `hidden`, `column` (`'side'`, for a template with a side column, such as `split`), `meta` and an item's `image` are only there when set, an image is referenced as `{ imageId, alt }`, `homeLink` (default `true`) whether resume pages show a "← Home" link back to it, `homeLinkLabel` (up to 40 characters, `''` for "Home") what it says, `template` a landing template's folder name (`classic`, `bold`, `centered`, `editorial`, `formal`, `split`; an unknown one is drawn as `classic`), and `style` its look, `{ source: 'resume' \| 'custom', colors: { accent, heading, text, background }, font, nameFont, darkColors? }`, each color `#rrggbb` or `''` for the default and each font a site font id or `''`), its `status`, its fields' caps (`limits`, the images' under `limits.images`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card, button or experience, education or skills section can link to (public and published), each with its PDF's link (`pdfHref`, `''` while it has none), the roles an experience section may show from it (`experience`), the entries an education section may (`education`: degree, institution, location, dates) and the skill groups a skills section shows (`skills`: `[{ category, items }]`, the items already split), and the uploaded images (`images: [{ id, src, width, height }]`). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links and its email an "Email me" button |
-| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL (or a `[label](url)` link inside a text section's `body`, an item's `text` or an FAQ `answer`) that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, an image reference without an `alt` string, a `style` color that isn't `#rrggbb` or `''`, a font that isn't one of the site settings', a `template` that isn't a lowercase kebab-case id, and a new card, button, experience, education or skills section or image reference for an unknown resume or image are all a 400. An image's `alt` may be empty in the draft. The editor sends `textFormat: 'inline'` with it (never stored); a body without it is taken as plain text, its text sections', items' and FAQ answers' markers escaped first, so an editor loaded before that syntax existed saves what it showed |
+| `GET /api/landing` | the [landing page](#a-landing-page-at-) draft (`{ headline, subheadline, availability, actions, photo, photoUrl, photoImage?, sections, seo, homeLink, homeLinkLabel }`, `actions` being up to 3 buttons, each `{ type: 'link', label, url, icon? }` or `{ type: 'resume', label, resumeId, open: 'page' | 'pdf', icon? }` (`icon` a Font Awesome Free icon's name from a fixed list, such as `envelope`, `calendar-days`, `file-pdf` or `linkedin`, only there when set), `photo` one of `resume`, `custom` (`photoUrl`), `upload` (`photoImage`) or `none`, `seo` being `{ title, description, noindex, image? }`, each section `{ id, kind, title, hidden?, … }` with `kind` one of `text` (`body`), `items` (`items: [{ title, text, url, meta?, image? }]`), `links` (`links`), `resumes` (`cards: [{ resumeId, label, blurb, showPdf }]`), `quotes` (`quotes: [{ text, name, role, url }]`), `experience` (`resumeId`, `count` 1–10, `showDates`), `image` (`image`, `caption`), `divider` (nothing but its `title`, a label on the line), `stats` (`stats: [{ value, label }]`, up to 6, both plain text), `faq` (`entries: [{ question, answer }]`, up to 15), `education` (`resumeId`, `count` 1–10, `showDates`), `skills` (`resumeId`), `credentials` (`credentials: [{ kind, name, issuer, number, issued, expires, url }]`, `kind` one of `license`, `certification`, `membership`, at most 20; one whose `expires` has passed isn't shown), `services` (`services: [{ title, text, price, action? }]`, at most 12, `price` free text and `action` an optional `{ type: 'link', label, url, icon? }` button), `gallery` (`images: [{ image, caption }]`, at most 24, an entry's `image` `null` until one is uploaded), `media` (`url`, an https link to one YouTube or Vimeo video or SoundCloud or Spotify clip, any other link refused, `caption`, `poster?`, `transcript`) or `publications` (`order` `manual` or `newest`, `group`, `entries: [{ kind, title, outlet, date, url, doi, note }]`, `kind` one of `article`, `paper`, `book`, `chapter`, `talk`, `podcast`, `press`, at most 40, `doi` a bare DOI such as `10.1234/abcd`; one without a title isn't shown); `hidden`, `column` (`'side'`, for a template with a side column, such as `split`), `meta` and an item's `image` are only there when set, an image is referenced as `{ imageId, alt }`, `homeLink` (default `true`) whether resume pages show a "← Home" link back to it, `homeLinkLabel` (up to 40 characters, `''` for "Home") what it says, `template` a landing template's folder name (`classic`, `bold`, `centered`, `editorial`, `formal`, `split`; an unknown one is drawn as `classic`), and `style` its look, `{ source: 'resume' \| 'custom', colors: { accent, heading, text, background }, font, nameFont, darkColors? }`, each color `#rrggbb` or `''` for the default and each font a site font id or `''`), its `status`, its fields' caps (`limits`, the images' under `limits.images`), and the `context` its preview resolves against: the default resume's published photo and site settings, and the resumes a card, button or experience, education or skills section can link to (public and published), each with its PDF's link (`pdfHref`, `''` while it has none), the roles an experience section may show from it (`experience`), the entries an education section may (`education`: degree, institution, location, dates) and the skill groups a skills section shows (`skills`: `[{ category, items }]`, the items already split), and the uploaded images (`images: [{ id, src, width, height }]`). Before the first save the draft is built from the default resume's published header, its email and phone becoming the first links and its email an "Email me" button |
+| `PUT /api/landing` | replace the landing page draft. Unknown keys, wrong types, values over their caps, a link or item URL (or a `[label](url)` link inside a text section's `body`, an item's `text`, an FAQ `answer` or a service's `text`) that isn't `http`/`https`/`mailto`/`tel`, a section field its `kind` doesn't have, a photo that isn't a base64 JPEG/PNG/WebP `data:` URL, an image reference without an `alt` string, a `style` color that isn't `#rrggbb` or `''`, a font that isn't one of the site settings', a `template` that isn't a lowercase kebab-case id, and a new card, button, experience, education or skills section or image reference for an unknown resume or image are all a 400. An image's `alt` may be empty in the draft. The editor sends `textFormat: 'inline'` with it (never stored); a body without it is taken as plain text, its text sections', items', FAQ answers' and services' text markers escaped first, so an editor loaded before that syntax existed saves what it showed |
 | `POST /api/landing/images` | upload an image for the landing page: the JPEG, PNG or WebP file itself as the body (at most 15 MB; its type is told from its bytes, not `Content-Type`, though a body sent as `application/json` is a 400). It's re-encoded, which drops all metadata (EXIF and GPS position included), and scaled down to 1600 px on its long side; responds `201` with `{ id, mime, width, height, src }`. A 413 when it's too large, a 409 when the store is full (100 images or 60 MB; an image nothing uses is removed at the first landing publish, restart or full-store upload once it's a week old) |
 | `GET /api/landing/images/:id` | a stored image, for the editor's preview |
 | `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
@@ -225,7 +225,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `POST /api/landing/discard-draft` | restore the landing page draft from its last published snapshot |
 | `POST /api/landing/apply-style` | copy the stored draft's own colors and fonts (`style.colors`, `font`, `nameFont`, empty ones as their defaults; never `darkColors`) into the default resume's site settings draft, merged so its other settings and colors stay. Nothing is published. A 400 while `style.source` is `'resume'`. Responds `{ resumeId, site }` |
 | `PUT /api/landing/enabled` | `{ enabled }`: takes effect at once, and only shows the page once it's been published |
-| `POST /api/landing/rewrite` | `{ landing?, target, instruction }` → `{ target, proposals: [{ target, before, after }], explanation }`: an AI rewrite of one spot on the landing page, for review; saves nothing. `target` is `{ kind: 'headline' }`, `{ kind: 'subheadline' }`, `{ kind: 'text', sectionId }`, `{ kind: 'item', sectionId, index }` (the item's text), `{ kind: 'card', sectionId, resumeId }` (the card's blurb), `{ kind: 'answer', sectionId, index }` (an FAQ entry's answer) or `{ kind: 'intro', sectionId }` (headline, subheadline and that text section at once; `instruction` may be empty). `landing` is the editor's copy of the draft, checked like a `PUT` (`textFormat` included); without it the stored draft is used. Counts against the same rate limit as `POST /api/ai/rewrite`. See [AI rewrites](#ai-rewrites) |
+| `POST /api/landing/rewrite` | `{ landing?, target, instruction }` → `{ target, proposals: [{ target, before, after }], explanation }`: an AI rewrite of one spot on the landing page, for review; saves nothing. `target` is `{ kind: 'headline' }`, `{ kind: 'subheadline' }`, `{ kind: 'text', sectionId }`, `{ kind: 'item', sectionId, index }` (the item's text), `{ kind: 'card', sectionId, resumeId }` (the card's blurb), `{ kind: 'answer', sectionId, index }` (an FAQ entry's answer), `{ kind: 'service', sectionId, index }` (a service's text) or `{ kind: 'intro', sectionId }` (headline, subheadline and that text section at once; `instruction` may be empty). `landing` is the editor's copy of the draft, checked like a `PUT` (`textFormat` included); without it the stored draft is used. Counts against the same rate limit as `POST /api/ai/rewrite`. See [AI rewrites](#ai-rewrites) |
 | `GET /api/ai/settings` | AI rewrite settings: provider, models, `allowBulletRestructure`, `tense` (with `tenses`, its options), the custom-block tense picker's `pickedTenseTypes`, `pickedTenses`, and `pickedTenseDefault`, `timeoutSeconds`, a tailoring brief's caps (`briefLimits`), and per-provider `{ hasKey, hint }` — never the key itself |
 | `PUT /api/ai/settings` | `{ enabled?, provider?, models?, allowBulletRestructure?, tense?, timeoutSeconds?, apiKeys?, removeKeys?, currentPassword? }` — `currentPassword` is required when adding or removing a key |
 | `POST /api/ai/rewrite` | `{ blockId, data, instruction, target?, tense?, brief? }` → `{ proposal }` for review; saves nothing. `brief` (`{ audience, posting?, guidance? }`, see [AI rewrites](#ai-rewrites)) tailors the rewrite; with one, `instruction` may be empty. `target` narrows the rewrite: `{ kind: 'block' }` (default), `{ kind: 'description' }` (experience), `{ kind: 'bullet', path: [i] \| [i, j] }` (experience), or `{ kind: 'item', index }` (custom); one that doesn't fit the block is a 400. `tense` (`auto`, `past`, or `present`) is only accepted for custom blocks and defaults from the tense setting |
@@ -237,8 +237,8 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/public/resumes/:slug/resume.pdf` | public, its PDF, on the same terms |
 | `GET /api/public/landing/images/:id` | public, an uploaded image the landing page shows; a 404 unless the landing page is shown and its published version uses it |
 | `GET /api/public/images/:key` | public, a link preview's image (a page's photo, or its PNG share card) by the key in that page's `og:image`; a 404 once no public, published page shows it. Sent with `X-Robots-Tag: noindex`. See [Search results and link previews](#search-results-and-link-previews) |
-| `GET /favicon.svg` | public, the site's icon: the initials of the name `/` shows on this domain (the landing page's, which is the default resume's, or this domain's resume), on its accent color, from what's published; a neutral mark before anything is. Switches to the landing page's dark accent under `prefers-color-scheme: dark` when it has a dark palette. Sent with `Cache-Control: no-cache`, `Vary: Host, X-Forwarded-Host` and an ETag of its content. See [Search results and link previews](#search-results-and-link-previews) |
-| `GET /apple-touch-icon.png` | public, the same icon as a 180×180 PNG in the light colors, for home screens and bookmarks; same headers |
+| `GET /favicon.svg` | public, the site's icon: the initials of the name `/` shows on this domain (the landing page's, which is the default resume's, or this domain's resume), on its accent color, from what's published; a neutral mark before anything is. Switches to the landing page's dark accent under `prefers-color-scheme: dark` when it has a dark palette. Sent with `Cache-Control: no-cache`, `Vary: Host, X-Forwarded-Host` and an ETag of its content. The HTML shell links it as `/favicon.svg?v=<version>`, a hash of what this domain's icon shows, so a published change is a new URL; the route ignores `?v=`. See [Search results and link previews](#search-results-and-link-previews) |
+| `GET /apple-touch-icon.png` | public, the same icon as a 180×180 PNG in the light colors, for home screens and bookmarks; same headers, and linked with a `?v=` the same way |
 | `GET /api/public/letter` | the PDF renderer's own: the cover letter its signed render cookie names; a 404 to anyone else |
 | `POST /mcp` | [MCP server](#mcp-server) endpoint (Streamable HTTP, JSON responses); bearer-token gated, 404 when `RESUMECMS_MCP_TOKEN` is unset |
 
@@ -444,7 +444,12 @@ short label ("15 years" over "in commercial kitchens"), written as text so
 questions and answers (up to 15, each answer collapsed under its
 question until a visitor opens it; the editor's preview shows them all
 open, and an entry missing its question or its answer isn't shown),
-and credentials: licenses, certifications and
+services (up to 12 things you offer, each with a name, a short
+description, a price line written as text, such as "From $60/hour",
+"Sliding scale" or "Free 15-minute consultation", and an optional button
+like the hero's, for example a `mailto:` link with `?subject=Booking`
+already filled in; one with neither a name nor a description isn't
+shown), and credentials: licenses, certifications and
 memberships, each with who issued it, an optional number, its dates and
 a **Verify** link to the issuer's lookup page. A credential's expiry date,
 written as a year (2027), a month (2027-12, 12/2027, Dec 2027 or
@@ -466,7 +471,16 @@ isn't shown. Awards belong in credentials.
 A gallery holds up to 24 images with optional captions, in a grid; a
 click, or Enter, opens one larger, where the arrow keys go through the
 rest and Escape closes it. **+ Add images** in a gallery takes several
-files at once. The experience timeline shows the latest roles (one to
+files at once. A video or audio section shows one clip from YouTube,
+Vimeo, SoundCloud or Spotify: paste its link (a start time in it, such as
+`t=1m30s`, is kept) and the editor only saves it once it reads as one of
+those. Visitors see a panel, or a poster image you upload, with a
+**Play** button, and nothing is loaded from the provider until they
+press it (YouTube then plays from youtube-nocookie.com, Vimeo with "do
+not track"). An optional caption goes under it, and an optional
+transcript under a **Transcript** disclosure; a captioned video and a
+transcript let everyone follow it. Media files themselves can't be
+uploaded. The experience timeline shows the latest roles (one to
 ten) of a resume you pick, as it's published and shown on the web: title,
 company, location and, if you like, dates, never descriptions or bullets,
 then a link to the full resume. Education works the same way with a
@@ -533,7 +547,7 @@ Its **Look** group picks how it's laid out and colored:
   whose device is set to dark mode, with either choice above. The
   preview has a Light/Dark switch while there is one.
 
-Images (a thumbnail, an image section, a gallery's images, the photo
+Images (a thumbnail, an image section, a gallery's images, a video's poster, the photo
 when you pick "An uploaded image", and the share image) are uploaded to the server, which
 keeps them in its database, so its backups include them. Every upload is
 re-encoded: anything the camera wrote into the file, its GPS position
@@ -556,7 +570,7 @@ What visitors see:
   same rules as a card.
 - Links (and a list item's or a button's link) must be `http`, `https`, `mailto` or
   `tel` (Email and Phone links make the last two for you).
-- A text section, a list item's text and an FAQ answer may hold `[a link](https://…)`,
+- A text section, a list item's text, an FAQ answer and a service's text may hold `[a link](https://…)`,
   `**bold**` and `*italic*`, and nothing more: no headings, lists, images
   or HTML. A link inside them follows the same rule as any other, and a
   `\` before `*`, `[`, `]` or `\` shows it as it is (that `\` doesn't
@@ -667,7 +681,9 @@ domain, with `Vary: Host, X-Forwarded-Host` too (as is
 `private, no-cache` (never stored by a shared cache), and the hashed bundles under `/assets/` as `immutable` for a year. The
 public page also refetches when it comes back into view, and the PDF link
 carries a `pdfVersion` (the rendered file's timestamp) as a query string so
-each render is a URL no cache has seen before.
+each render is a URL no cache has seen before. The page's links to the two
+icons do the same with a hash of what the icon shows, since Cloudflare
+caches `.svg` and `.png` by extension too.
 
 If you put a CDN in front of the app, let those headers through. Cloudflare
 in particular caches `.pdf`, `.js`, and `.css` by file extension and, with
@@ -890,21 +906,22 @@ characters. Adding or removing a key requires your current password.
 
 The [landing page](#a-landing-page-at-) editor has the same ✨ panels
 under the headline, the subheadline, each text section, each list item's
-text, each FAQ answer and each resume card's blurb, and **Draft headline and intro from my
+text, each FAQ answer, each service's description and each resume card's blurb, and **Draft headline and intro from my
 resume** at the top, which writes the headline, subheadline and first text
 section in one go. Each suggestion opens under its own field with a diff,
 shows outlined in the preview, and is accepted or discarded on its own (or
 all at once from the banner over the preview). Accepting saves a draft
 edit; publish the landing page to make it live. Item titles and short
-lines, FAQ questions, links, card titles, section headings, image and
-gallery captions and the images are never
+lines, FAQ questions, service names, prices and buttons, links, card
+titles, section headings, image and gallery captions, video and audio
+sections and the images are never
 rewritten, and neither are quotes (someone else's words), the
 experience timeline, education and skills (they come from the resume),
 stats (an AI mustn't make up figures), credentials or publications
 (facts, not prose). Hidden sections aren't
 shown to the AI, apart from the one it's rewriting, and the intro draft
-writes into the first visible text section. A text section's, item's or
-answer's suggestion may reword, move or drop the links already in it, and bold or
+writes into the first visible text section. A text section's, item's,
+answer's or service's suggestion may reword, move or drop the links already in it, and bold or
 italicize a few words, but never adds a link: the AI only sees a
 placeholder for each address, and an answer linking anywhere else is
 refused.

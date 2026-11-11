@@ -411,6 +411,35 @@
   font-variant-caps: all-small-caps;
 }
 
+/* Services (issue #122): like a list entry, the name on the left and its
+   price on the right, the text and the button under them. */
+.l-template-formal .l-services {
+  gap: 16px;
+}
+
+.l-template-formal .l-service {
+  align-items: stretch;
+}
+
+.l-template-formal .l-service-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(40%);
+  column-gap: 20px;
+}
+
+.l-template-formal .l-service-price {
+  grid-column: 2;
+  justify-self: end;
+  text-align: right;
+  color: var(--r-text, var(--ink));
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.l-template-formal .l-service-action {
+  align-self: flex-start;
+}
+
 /* Publications (issue #127): like a list entry, the title on the left,
    outlet, date and kind on the right, the note across both; a group's
    subheading in small capitals, untinted. */
@@ -501,6 +530,22 @@
 
 .l-template-formal .l-gallery-button {
   border-radius: 2px;
+}
+
+/* A media section (issue #121): square corners, no shadow, the caption in
+   italics. */
+.l-template-formal .l-media-facade,
+.l-template-formal .l-media-frame {
+  border-radius: 0;
+}
+
+.l-template-formal .l-media-play {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.l-template-formal .l-media-caption {
+  font-style: italic;
 }
 
 /* A phone (or the editor's preview): the photo over the name, and each

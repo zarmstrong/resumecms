@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { mountClient, shellWatcher, withHead } from './clientStatic.js';
+import { mountClient, shellWatcher, withHead, withIconVersions } from './clientStatic.js';
 import {
   IMMUTABLE,
   PDF,
@@ -243,4 +243,43 @@ test("the real index.html links the icons (issue #104), and a page's own title k
   assert.doesNotMatch(out, /<title>Resume<\/title>/);
   assert.match(out, /<link rel="icon" href="\/favicon\.svg" type="image\/svg\+xml" \/>/);
   assert.match(out, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png" \/>/);
+  // Versioned (issue #108), with the rest of each tag as it was.
+  const versioned = withIconVersions(out, { svg: 'aa11', png: 'bb22' });
+  assert.match(versioned, /<link rel="icon" href="\/favicon\.svg\?v=aa11" type="image\/svg\+xml" \/>/);
+  assert.match(versioned, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png\?v=bb22" \/>/);
+  assert.match(versioned, /<title>Jo Doe<\/title>/);
+});
+
+test('withIconVersions: null keeps the bare paths, and only the icon links change', () => {
+  const html = '<link rel="icon" href="/favicon.svg" /><link rel="apple-touch-icon" href="/apple-touch-icon.png" /><a href="/favicon.svgx">';
+  assert.equal(withIconVersions(html, null), html);
+  assert.equal(
+    withIconVersions(html, { svg: 'a&b', png: '' }),
+    '<link rel="icon" href="/favicon.svg?v=a%26b" /><link rel="apple-touch-icon" href="/apple-touch-icon.png" /><a href="/favicon.svgx">'
+  );
+});
+
+test('every shell gets the icon versions for its host, the generic ones too', async () => {
+  const iconDist = path.join(dotDir, 'icon-dist');
+  fs.mkdirSync(iconDist);
+  fs.copyFileSync(new URL('../../client/index.html', import.meta.url), path.join(iconDist, 'index.html'));
+  const iconApp = express();
+  mountClient(iconApp, iconDist, {
+    headFor: (req) => (req.path === '/' ? { head: '<title>Jo</title>', noindex: false } : null),
+    iconVersions: (req) => (req.hostname === 'broken.test' ? null : { svg: `s-${req.hostname}`, png: `p-${req.hostname}` }),
+  });
+  const iconServer = iconApp.listen(0);
+  after(() => iconServer.close());
+  const url = (p) => `http://127.0.0.1:${iconServer.address().port}${p}`;
+  for (const route of ['/', '/editor', '/print']) {
+    const { body, headers } = await rawGet(url(route), { Host: 'jo.example' });
+    assert.match(body, /href="\/favicon\.svg\?v=s-jo\.example"/, route);
+    assert.match(body, /href="\/apple-touch-icon\.png\?v=p-jo\.example"/, route);
+    assert.equal(headers.vary, 'Host, X-Forwarded-Host', route);
+  }
+  const other = await rawGet(url('/'), { Host: 'sales.example' });
+  assert.match(other.body, /href="\/favicon\.svg\?v=s-sales\.example"/);
+  const broken = await rawGet(url('/'), { Host: 'broken.test' });
+  assert.match(broken.body, /href="\/favicon\.svg" /);
+  assert.match(broken.body, /href="\/apple-touch-icon\.png" /);
 });

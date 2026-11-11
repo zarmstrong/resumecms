@@ -26,10 +26,17 @@ in prose; check the diff against the ones that apply, especially:
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing
-  page's style vs `siteColors.js`, the landing date reader `dateText.js`, the
-  publications rules `publications.js`,
+  page's style vs `siteColors.js`, the landing date reader `dateText.js`,
+  the media link parser `mediaUrl.js`, the publications rules
+  `publications.js`,
   `contrastTextFor()` vs the favicon's `inkFor()`, `GRADIENT_SHADE` vs
   resume.css's 55% gradient mix, …).
+- A landing media section (issue #121) embeds only what `parseMediaUrl()`
+  reads (exact hosts, https), `resolveLanding()` sends its parsed form and
+  never the raw `url`, and nothing loads from the provider before a
+  visitor presses play (no provider thumbnail, no iframe in the facade). A
+  Content-Security-Policy added for pages needs `frame-src` for its four
+  players.
 - `landing.css` holds only what every landing template shares; an
   arrangement belongs in a template's `style.css`, scoped under
   `.l-template-<id>`, so a change for one template can't move another
@@ -44,6 +51,8 @@ in prose; check the diff against the ones that apply, especially:
   `columns: true`.
 - New public routes set a `cacheHeaders.js` constant before any early
   return; host-resolved ones send `HOST_HEADERS`.
+- The shell's favicon `?v=` versions and the favicon routes both come from
+  `iconContentFor()`, so a change to what an icon shows changes its URL.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a

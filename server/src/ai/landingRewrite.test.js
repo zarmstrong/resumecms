@@ -290,6 +290,26 @@ test("a credential is never a target, and the page context shows the ones a visi
   for (const left of ['RN-0951', 'board.example', 'Lapsed cert', 'Old Board']) assert.ok(!user.includes(left), left);
 });
 
+test('a media section is never a target, and the page context gives it only its kind and title', () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      { id: 'reel', kind: 'media', title: 'My reel', url: 'https://youtu.be/dQw4w9WgXcQ', caption: 'Spring showcase', transcript: 'Spoken words.' },
+    ],
+  };
+  for (const target of [
+    { kind: 'media', sectionId: 'reel' },
+    { kind: 'text', sectionId: 'reel' },
+    { kind: 'item', sectionId: 'reel', index: 0 },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+  const { user } = buildLandingPrompt(page, { kind: 'text', sectionId: 'intro' }, 'Shorter', null, new Map());
+  assert.ok(user.includes('My reel'));
+  for (const left of ['youtu', 'dQw4w9WgXcQ', 'Spring showcase', 'Spoken words']) assert.ok(!user.includes(left), left);
+});
+
 test('a publication is never a target, and the page context shows the titled ones without their links or DOIs', () => {
   const entry = (title, extra = {}) => ({ kind: 'paper', title, outlet: '', date: '', url: '', doi: '', note: '', ...extra });
   const page = {
@@ -483,4 +503,89 @@ test('an FAQ answer is a target by index, its question never is, and only that a
   const escaped = `${'x'.repeat(LANDING_LIMITS.faqAnswer - 4)} \\*a\\*`;
   assert.equal(landingProposals(page, answer, { text: escaped })[0].after, escaped);
   assert.throws(() => landingProposals(page, answer, { text: `${escaped}x` }), { status: 502, message: /the answer allows/ });
+});
+
+test("a service's text is a target by index, its title, price and button never are, and only that text is written", async () => {
+  const page = {
+    ...landing,
+    sections: [
+      ...landing.sections,
+      {
+        id: 'sv',
+        kind: 'services',
+        title: 'Services',
+        services: [
+          {
+            title: 'Tutoring',
+            text: 'Weekly sessions, see [the syllabus](https://jo.example/syllabus).',
+            price: 'From $60/hour',
+            action: { type: 'link', label: 'Book a session', url: 'https://cal.example/jo' },
+          },
+          { title: 'Consultation', text: '', price: 'Free' },
+        ],
+      },
+      { id: 'secret', kind: 'services', title: '', hidden: true, services: [{ title: 'Ghostwriting', text: 'Quietly.', price: '$9000' }] },
+    ],
+  };
+  const service = { kind: 'service', sectionId: 'sv', index: 0 };
+  assert.deepEqual(normalizeLandingTarget(page, { ...service, extra: 1 }), service);
+  assert.equal(landingSlice(page, { kind: 'service', sectionId: 'sv', index: 1 }), '');
+  assert.equal(landingSlice(page, { kind: 'service', sectionId: 'sv', index: 2 }), null);
+  assert.equal(landingSlice(page, { kind: 'service', sectionId: 'proj', index: 0 }), null);
+  for (const target of [
+    { kind: 'service', sectionId: 'sv', index: 2 },
+    { kind: 'service', sectionId: 'sv', index: '0' },
+    { kind: 'service', sectionId: 'sv' },
+    { kind: 'service', sectionId: 'proj', index: 0 },
+    { kind: 'item', sectionId: 'sv', index: 0 },
+    { kind: 'price', sectionId: 'sv', index: 0 },
+    { kind: 'text', sectionId: 'sv' },
+  ]) {
+    assert.throws(() => normalizeLandingTarget(page, target), InvalidLandingTargetError, JSON.stringify(target));
+  }
+  // Its schema holds to the strict structured-output rules, like the others'.
+  const rewrite = landingOutputSchema(service);
+  for (const schema of [rewrite, rewrite.properties.rewrite]) {
+    assert.equal(schema.additionalProperties, false);
+    assert.deepEqual([...schema.required].sort(), Object.keys(schema.properties).sort());
+  }
+  assert.deepEqual(Object.keys(landingOutputSchema(service).properties.rewrite.properties), ['text']);
+
+  // The text's link is a placeholder; the title and price are facts the
+  // model is told not to change; the button shows by its label, never its
+  // link; a hidden section isn't read.
+  assert.deepEqual([...linkPlaceholders(page, service)], [['https://jo.example/syllabus', '#L1']]);
+  const { system, user } = buildLandingPrompt(page, service, 'Shorter', null);
+  assert.match(system, /its name is "Tutoring" and its price is "From \$60\/hour", which you don't change/);
+  assert.match(system, /keep its #L target exactly as it is/);
+  assert.ok(user.includes('"text": "Weekly sessions, see [the syllabus](#L1)."'));
+  assert.ok(user.includes('"button": "Book a session"'));
+  assert.ok(user.includes('"price": "Free"'));
+  assert.ok(user.includes('"text": "[the part being rewritten]"'));
+  for (const hidden of ['cal.example', 'jo.example', 'Ghostwriting', '$9000']) assert.ok(!user.includes(hidden), hidden);
+  // Another service, outside the target, shows its link's label only.
+  const second = buildLandingPrompt(page, { kind: 'service', sectionId: 'sv', index: 1 }, 'Write one', null);
+  assert.ok(second.user.includes('"text": "Weekly sessions, see the syllabus."'));
+  assert.match(second.system, /its name is "Consultation" and its price is "Free"/);
+
+  const result = await rewriteLanding({
+    landing: page,
+    target: service,
+    instruction: 'Shorter',
+    settings,
+    // Whatever else the model sends back, only the text is read.
+    callModel: async () => ({ explanation: 'Shorter.', rewrite: { text: 'Weekly, with [a syllabus](#L1).', title: 'Lessons', price: '$1' } }),
+  });
+  assert.deepEqual(result.proposals, [
+    { target: service, before: page.sections[4].services[0].text, after: 'Weekly, with [a syllabus](https://jo.example/syllabus).' },
+  ]);
+
+  // A link the text didn't have is refused, as for any other target.
+  for (const written of ['Book [here](https://evil.example).', 'See [here](#L2).', 'Fine.\n\n[x](/r/secret)', '[Book](https://cal.example/jo)']) {
+    assert.throws(() => landingProposals(page, service, { text: written }), { status: 502, message: /added a link/ }, written);
+  }
+  // Its cap counts as the field's does.
+  const escaped = `${'x'.repeat(LANDING_LIMITS.serviceText - 4)} \\*a\\*`;
+  assert.equal(landingProposals(page, service, { text: escaped })[0].after, escaped);
+  assert.throws(() => landingProposals(page, service, { text: `${escaped}x` }), { status: 502, message: /the service allows/ });
 });
