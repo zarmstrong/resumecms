@@ -1027,7 +1027,7 @@ go in turn into an `.l-main`. `landing.css` holds only what every
 template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
 pixel-identical to it. `bold`, `centered`, `cover`, `editorial` (issue #130, pure
-CSS), `formal` and `split` size themselves with container queries (and
+CSS), `directory`, `formal` and `split` size themselves with container queries (and
 `bold` its type with container units) on the page root, so the editor's
 narrower preview matches a phone. `bold`
 (issue #130) bands every other *shown* section with
@@ -1045,6 +1045,49 @@ readable. A template must render every section kind
 as a `role="separator"` rather than a `<section>`; the template only
 arranges).
 
+The Look group picks a landing template from thumbnails (issue #130,
+`client/src/editor/LandingTemplatePicker.jsx`, pure parts in
+`templateThumbnails.js`): a native radio group over `LANDING_TEMPLATES`,
+each option the real `LandingView` of the preview's draft (AI
+suggestions included) and context, resolved as published (no
+`withHidden`, so nothing dimmed), drawn 1280 × 800 and scaled into its
+frame, in the preview's light/dark choice. The frame is `inert` and
+`aria-hidden`, so its links, gallery buttons and media facades can't be
+reached (no player or dialog ever opens), and it lives outside the
+radio's `<label>`. Thumbnails are drawn only while the group is open and
+each only near the screen, from a `useDeferredValue` copy keyed by
+`pageKey()` so an edit that changes nothing they draw doesn't redraw
+them. No per-template code: a new template folder gets a thumbnail, so a
+template's root must stay inside the box it's given (no `position:
+fixed`, no effects on `document`).
+
+`directory` (issue #130) is for a long page: the hero across the top,
+then a sticky table of contents beside the sections, marking the one in
+view (`aria-current`), folded into a "Jump to" bar on a narrow page. A
+section's `id` never leaves the server, so its anchors are made on the
+client from the resolved sections by `withAnchors()`
+(`client/src/landing/sectionAnchors.js`, pure, tested): a slug of each
+titled section's title (never a divider's, a hidden or a stray one's),
+deduplicated, after a `section-` prefix no other id on the page uses (the
+preview's add a `useId()` prefix). A template hands a section an anchor
+as `{ ...section, anchor }`, and `renderSection` puts it on the
+`<section>` as its `id` (with `tabIndex={-1}`, so a jump moves focus);
+no other template sets one, so they render exactly as before.
+`useSectionSpy.js` finds what scrolls the page (`scrollParent()`: the
+window, the editor's preview pane, or the nearest box that clips it with
+`overflow: hidden|clip`), drives the highlight with
+IntersectionObservers on that, and scrolls a jump inside it (smoothly
+only under `prefers-reduced-motion: no-preference`), so the preview
+scrolls only itself; on the public page a jump replaces the URL's hash,
+in the preview it never touches the editor's URL. A jump's entry stays
+current through its own scroll (`createJumpPin()`) and is released by
+the visitor's next one. Inside an `[inert]` ancestor (the editor's
+template thumbnails, drawn with `preview` false) the template is only a
+picture: its ids prefixed like the preview's, and no observers,
+listeners, hash jump or URL change. A modified or middle click on an
+entry is left to the browser (`isPlainClick()`), and an anchored
+section is named by its heading (`aria-labelledby`, `anchorTitleId()`).
+
 `client/src/resume/templateRegistry.js` builds the registry at **build
 time** via `import.meta.glob` (eager, one glob per kind — the glob path
 must be a static literal, so headers, layouts and landing templates can't
@@ -1055,7 +1098,8 @@ the built client + JSON APIs — so there is no matching runtime scan.
 
 A contributed component imports shared rendering helpers via the `@resume`
 Vite alias (e.g. `@resume/safeUrl.js`) rather than a relative path, since
-templates live outside `client/src`. `client/vite.config.js` also sets
+templates live outside `client/src`; a landing template reaches
+`client/src/landing/` the same way through `@landing`. `client/vite.config.js` also sets
 `server.fs.allow: ['..']` so the dev server can resolve `templates/` at all
 (a Vite dev-server restriction that `vite build` doesn't have).
 

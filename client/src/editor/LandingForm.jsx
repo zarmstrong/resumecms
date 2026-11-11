@@ -319,7 +319,8 @@ function AiField({ ai, ...props }) {
 // `onUploadImage` its image upload (issue #92, see LandingImageField),
 // `onUploadFile` its document upload (issue #128, see LandingFileField),
 // `look` its "Apply to the default resume" ({ onApply, applyState }, issue
-// #93, see LandingLookFields).
+// #93) and what its preview draws ({ preview: { draft, context, scheme } },
+// for the template thumbnails, issue #130; see LandingLookFields).
 export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage, onUploadFile, look }) {
   const set = (patch) => onChange({ ...landing, ...patch });
   // Each field passes its own target to the upload (landingImages.js).
@@ -475,7 +476,14 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
         </span>
       </div>
 
-      <LandingLookFields landing={landing} site={context.site} onChange={set} onApply={look?.onApply} applyState={look?.applyState} />
+      <LandingLookFields
+        landing={landing}
+        site={context.site}
+        onChange={set}
+        onApply={look?.onApply}
+        applyState={look?.applyState}
+        preview={look?.preview ?? { draft: landing, context }}
+      />
 
       <LandingSeoFields landing={landing} context={context} limits={limits} onChange={(seo) => set({ seo })} imageProps={imageProps} />
     </div>
