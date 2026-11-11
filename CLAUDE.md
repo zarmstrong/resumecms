@@ -1003,10 +1003,16 @@ dropStrayDividers, colors, darkColors, preview }`; without one the hero and the 
 go in turn into an `.l-main`. `landing.css` holds only what every
 template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
-pixel-identical to it. `bold`, `centered`, `editorial` (issue #130, pure
-CSS), `formal` and `split` size themselves with container queries (and
-`bold` its type with container units) on the page root, so the editor's
-narrower preview matches a phone. `bold`
+pixel-identical to it. `bold`, `card`, `centered`, `editorial` (issue
+#130, pure CSS), `formal` and `split` size themselves with container
+queries (and `bold` and `card` their type with container units) on the
+page root, so the editor's narrower preview matches a phone. `card`
+(issue #130, pure CSS) is a business card for one phone screen: the hero
+centered on a panel, its buttons and a links section's rows full width
+and at least 44 px tall (as is everything else a visitor taps, a
+standalone link through padding its negative margin takes back), and
+"Save contact" drawn as its primary button; like `bold` it draws no text
+in the accent or on it. `bold`
 (issue #130) bands every other *shown* section with
 `:nth-child(odd of section.l-section:not(.l-section-hidden))`: dividers
 are `<div>`s and the preview's hidden sections are skipped, so the
