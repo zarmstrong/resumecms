@@ -223,6 +223,46 @@ test('FAQ sections resolve exactly like the server, dropping an entry without bo
   assert.deepEqual(preview.sections.map((s) => s.id), ['f', 'f3']);
 });
 
+test('services resolve exactly like the server: one without a title or a text is dropped, a button only while its link is whole', () => {
+  const book = { type: 'link', label: 'Book', url: 'https://cal.example/jo', icon: 'calendar-days' };
+  const landing = {
+    ...draft,
+    sections: [
+      {
+        id: 'sv',
+        kind: 'services',
+        title: 'Services',
+        column: 'side',
+        services: [
+          { title: 'Tutoring', text: 'Weekly, **one to one**.', price: 'From $60/hour', action: book },
+          { title: '', text: 'Just words.', price: '', action: { type: 'link', label: '', url: 'mailto:jo@example.com?subject=Hi' } },
+          { title: 'Half typed', text: '', price: '', action: { type: 'link', label: 'Go', url: 'https://' } },
+          { title: ' ', text: '', price: 'Free', action: book },
+        ],
+      },
+      { id: 'sv2', kind: 'services', title: 'Only prices', services: [{ title: '', text: '', price: '$5', action: book }] },
+      { id: 'sv3', kind: 'services', title: 'Later', hidden: true, services: [{ title: 'T', text: '', price: '' }] },
+    ],
+  };
+  const out = resolveLanding(landing, context);
+  const fromServer = server.resolveLanding(landing, { ...context, resumes: new Map() });
+  assert.deepEqual(out.sections, fromServer.sections);
+  assert.deepEqual(out.sections, [
+    {
+      kind: 'services',
+      title: 'Services',
+      column: 'side',
+      services: [
+        { title: 'Tutoring', text: 'Weekly, **one to one**.', price: 'From $60/hour', action: { label: 'Book', href: 'https://cal.example/jo', icon: 'calendar-days' } },
+        { title: '', text: 'Just words.', price: '', action: { label: 'mailto:jo@example.com?subject=Hi', href: 'mailto:jo@example.com?subject=Hi' } },
+        { title: 'Half typed', text: '', price: '' },
+      ],
+    },
+  ]);
+  const preview = resolveLanding(landing, context, { withIds: true, withHidden: true });
+  assert.deepEqual(preview.sections.map((s) => s.id), ['sv', 'sv3']);
+});
+
 test('education and skills sections resolve exactly like the server', () => {
   const education = [
     { degree: 'BSc Nursing', institution: 'State U', location: 'Ohio', startDate: '2010', endDate: '2014' },

@@ -62,15 +62,20 @@ import { parseMediaUrl } from './mediaUrl.js';
 //                there's none yet), drawn behind a click-to-load facade;
 //                `poster` an optional image reference shown on it, the
 //                caption and transcript plain text
+//   services   — services: [{ title, text, price, action? }] (issue #122),
+//                what the person offers: `price` is free text ("From
+//                $60/hour", "Sliding scale"), never a number, and `action`
+//                an optional button with a hero link action's shape
+//                ({ type: 'link', label, url, icon? }), stored only when set
 // Any section may also be `hidden: true` (issue #90): kept in the draft,
 // never shown, and `column: 'side'`: drawn in the side column by a
 // template that has one (template.json's `columns`, e.g. split's column
 // under the hero) and in the main flow by every other. `hidden`, `column`
 // and an item's `meta` are only stored when set.
-// A text section's body, an item's text and an FAQ answer may hold links
-// and emphasis (issue #91, inlineText.js); every other string, a quote's
-// text, an item's meta, a stat and an FAQ question included, is plain
-// text.
+// A text section's body, an item's text, an FAQ answer and a service's
+// text may hold links and emphasis (issue #91, inlineText.js); every other
+// string, a quote's text, an item's meta, a stat, an FAQ question and a
+// service's title and price included, is plain text.
 // `id` only tells sections apart in the editor; it never leaves the server
 // publicly. `seo` is { title, description, noindex } (issue #87): what
 // the page's <title>, description and link previews say instead of the
@@ -134,6 +139,10 @@ export const LANDING_LIMITS = {
   mediaCaption: 300,
   // About a twenty-minute talk.
   transcript: 20_000,
+  services: 12,
+  serviceTitle: 120,
+  serviceText: 1000,
+  servicePrice: 80,
   // About what a search result shows before cutting it off.
   seoTitle: 70,
   seoDescription: 200,
@@ -160,7 +169,7 @@ export const LINK_TYPES = [
   'custom',
 ];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'media'];
+export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'media', 'services'];
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -193,6 +202,7 @@ const SECTION_FIELDS = {
   credentials: ['id', 'kind', 'title', 'hidden', 'column', 'credentials'],
   gallery: ['id', 'kind', 'title', 'hidden', 'column', 'images'],
   media: ['id', 'kind', 'title', 'hidden', 'column', 'url', 'caption', 'poster', 'transcript'],
+  services: ['id', 'kind', 'title', 'hidden', 'column', 'services'],
 };
 const ITEM_FIELDS = ['title', 'text', 'url', 'meta', 'image'];
 const QUOTE_FIELDS = ['text', 'name', 'role', 'url'];
@@ -200,6 +210,7 @@ const STAT_FIELDS = ['value', 'label'];
 const FAQ_FIELDS = ['question', 'answer'];
 const CREDENTIAL_FIELDS = ['kind', 'name', 'issuer', 'number', 'issued', 'expires', 'url'];
 const GALLERY_ENTRY_FIELDS = ['image', 'caption'];
+const SERVICE_FIELDS = ['title', 'text', 'price', 'action'];
 // What a credential is; only picks the label it's shown with.
 export const CREDENTIAL_KINDS = ['license', 'certification', 'membership'];
 // What an experience section shows when it's added without saying.
@@ -502,6 +513,26 @@ function checkGalleryEntry(entry, label, refs) {
   };
 }
 
+// A service (issue #122): its title and price are plain text, its text
+// takes links and emphasis like an item's, and its button, when it has
+// one, is a hero link action (checkAction()'s rules, a `type` other than
+// 'link' refused) stored only when set.
+function checkService(service, label, refs) {
+  checkKeys(service, SERVICE_FIELDS, label);
+  const out = {
+    title: checkString(service.title ?? '', LANDING_LIMITS.serviceTitle, `${label}.title`),
+    text: checkInlineText(service.text ?? '', LANDING_LIMITS.serviceText, `${label}.text`),
+    price: checkString(service.price ?? '', LANDING_LIMITS.servicePrice, `${label}.price`),
+  };
+  if (service.action != null) {
+    const action = service.action;
+    if (!isPlainObject(action)) throw httpError(400, `${label}.action must be an object`);
+    if ((action.type ?? 'link') !== 'link') throw httpError(400, `${label}.action.type must be link`);
+    out.action = checkAction({ ...action, type: 'link' }, `${label}.action`, refs);
+  }
+  return out;
+}
+
 // One section, with the fields of its kind and nothing else. A section
 // without an id (an MCP client adding one) gets a new one.
 function checkSection(section, i, refs, ids) {
@@ -591,6 +622,11 @@ function checkSection(section, i, refs, ids) {
       out.caption = checkString(section.caption ?? '', LANDING_LIMITS.mediaCaption, `${label}.caption`);
       if (section.poster != null) out.poster = checkImageRef(section.poster, `${label}.poster`, refs);
       out.transcript = checkString(section.transcript ?? '', LANDING_LIMITS.transcript, `${label}.transcript`);
+      break;
+    case 'services':
+      out.services = checkList(section.services, LANDING_LIMITS.services, `${label}.services`).map((service, j) =>
+        checkService(service, `${label}.services[${j}]`, refs)
+      );
       break;
   }
   return out;
@@ -737,7 +773,8 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // is { label, href }. A section
 // left with nothing to show (no text, no item, every link half typed, every
 // card's resume hidden, every quote empty, no stat with a value, no FAQ
-// entry with both a question and an answer) is left out, title and all, and
+// entry with both a question and an answer, no service with a title or a
+// text) is left out, title and all, and
 // so is a hidden one; sections lose their ids, and keep `column` when set
 // (a divider always goes along: whether it has anything to divide depends
 // on how the template arranges the sections, so the client decides, in
@@ -758,6 +795,9 @@ export function initialLanding(defaultResumeId, publishedHeader) {
 // caption, transcript, poster? }: `media` is parseMediaUrl()'s reading of
 // its link, never the link itself, and one whose link doesn't read (none
 // yet) is left out. An uploaded hero photo is `photoUrl`
+// gallery with no entry left. A service resolves to { title, text, price },
+// plus its button as a resolved link action ({ label, href, icon? }) while
+// its URL is safe. An uploaded hero photo is `photoUrl`
 // (its src), with its alt as `photoAlt`. Its look (landingStyle.js) is
 // `template` (an id the client may not know, and then draws as classic),
 // `site` (context.site, or the page's own colors and fonts in the site
@@ -905,6 +945,16 @@ function resolveSection(section, context) {
       if (!media) return null;
       const poster = resolveImage(section.poster, context.images);
       return { media, caption: section.caption, transcript: section.transcript, ...(poster ? { poster } : {}) };
+    }
+    case 'services': {
+      // A price or a button alone says nothing about what's offered.
+      const services = section.services
+        .filter((service) => service.title.trim() || service.text.trim())
+        .map((service) => {
+          const action = service.action ? resolveAction(service.action, context) : null;
+          return { title: service.title, text: service.text, price: service.price, ...(action ? { action } : {}) };
+        });
+      return services.length ? { services } : null;
     }
     default:
       return null;

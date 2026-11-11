@@ -512,6 +512,43 @@
   font-weight: 700;
 }
 
+/* Services (issue #122) in a grid like the list entries: the name heavy,
+   the price in capitals in the heading color (the shared one is in the
+   accent, which a band or a pale accent would hide), and the button the
+   page's outlined one. */
+.l-template-bold .l-services {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 32px 40px;
+}
+
+.l-template-bold .l-service-head {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.l-template-bold .l-service-title {
+  font-size: 1.25em;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.l-template-bold .l-service-price {
+  color: var(--r-heading, var(--ink));
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.l-template-bold .l-service-text {
+  margin-top: 4px;
+}
+
+.l-template-bold .l-service-action {
+  margin-top: 14px;
+}
+
 /* A gallery: square corners, and nothing moves (the shared thumbnails
    grow on hover and the view fades in). Its view's buttons and text are
    in the heading and text colors, at full strength. */

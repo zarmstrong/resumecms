@@ -29,8 +29,9 @@ import './landing.css';
 // sees to that for a template without columns, and hands one with columns
 // `dropStrayDividers(sections, { atStart })` to apply to each column.
 // Everything is rendered as text,
-// apart from the links and emphasis a text section, an item's text or an
-// FAQ answer may hold (issue #91, renderInline.js), which become elements,
+// apart from the links and emphasis a text section, an item's text, an
+// FAQ answer or a service's text may hold (issue #91, renderInline.js),
+// which become elements,
 // never HTML; every href still goes through safeHref() (by way of
 // linkProps()) although the server only stores safe ones. `highlightIds`
 // (editor preview only) outlines the parts an AI suggestion is shown in:
@@ -348,6 +349,33 @@ function SectionBody({ section, preview }) {
       return <LandingGallery images={section.images} label={section.title} />;
     case 'media':
       return <LandingMedia section={section} />;
+    case 'services':
+      // What the person offers (issue #122): each one's name with its price
+      // beside it, where a visitor finds it at a glance, then what it is,
+      // then its button. The comma is for a screen reader ("Tutoring, From
+      // $60/hour"), as a stat's.
+      return (
+        <ul className="l-services">
+          {section.services.map((service, i) => (
+            <li key={i} className="l-service">
+              {(service.title || service.price) && (
+                <span className="l-service-head">
+                  {service.title && <span className="l-service-title">{service.title}</span>}
+                  {service.title && service.price && <span className="l-sr-only">, </span>}
+                  {service.price && <span className="l-service-price">{service.price}</span>}
+                </span>
+              )}
+              {service.text && <p className="l-service-text">{renderInline(service.text)}</p>}
+              {service.action && (
+                <a className="l-action l-service-action" {...hrefProps(service.action.href)}>
+                  {service.action.icon && <ActionIcon name={service.action.icon} />}
+                  {service.action.label}
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      );
     default:
       return null;
   }

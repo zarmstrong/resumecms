@@ -518,6 +518,21 @@ test('landing page tools: merge-update, publish, discard, enable', async (t) => 
   await call('update_landing_page', { sections: credentials });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: credentials }, { merge: true }]);
   assert.equal((await call('update_landing_page', { sections: [{ kind: 'credentials', credentials: [{ kind: 'degree', name: 'BSc' }] }] })).isError, true);
+  // a services section (issue #122) passes through; a price is text, a button only ever a link
+  const services = [
+    {
+      kind: 'services',
+      title: 'Services',
+      services: [
+        { title: 'Tutoring', text: 'Weekly, **one to one**.', price: 'From $60/hour', action: { type: 'link', label: 'Book', url: 'mailto:jo@example.com?subject=Booking', icon: 'calendar-days' } },
+        { title: 'Consultation', price: 'Free', action: null },
+      ],
+    },
+  ];
+  await call('update_landing_page', { sections: services });
+  assert.deepEqual(store.calls.at(-1), ['setLanding', { sections: services }, { merge: true }]);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'services', services: [{ title: 'T', price: 60 }] }] })).isError, true);
+  assert.equal((await call('update_landing_page', { sections: [{ kind: 'services', services: [{ title: 'T', action: { type: 'resume', url: 'x' } }] }] })).isError, true);
   // a resumeId isn't a landing page field (the page belongs to the install)
   await call('update_landing_page', { headline: 'Hi', resumeId: 'sales' });
   assert.deepEqual(store.calls.at(-1), ['setLanding', { headline: 'Hi' }, { merge: true }]);

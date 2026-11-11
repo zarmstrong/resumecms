@@ -411,6 +411,35 @@
   font-variant-caps: all-small-caps;
 }
 
+/* Services (issue #122): like a list entry, the name on the left and its
+   price on the right, the text and the button under them. */
+.l-template-formal .l-services {
+  gap: 16px;
+}
+
+.l-template-formal .l-service {
+  align-items: stretch;
+}
+
+.l-template-formal .l-service-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(40%);
+  column-gap: 20px;
+}
+
+.l-template-formal .l-service-price {
+  grid-column: 2;
+  justify-self: end;
+  text-align: right;
+  color: var(--r-text, var(--ink));
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.l-template-formal .l-service-action {
+  align-self: flex-start;
+}
+
 /* Questions: the heading's hairline already tops the list. */
 .l-template-formal .l-section-title + .l-faq {
   border-top: none;

@@ -243,6 +243,48 @@
   }
 }
 
+/* Services (issue #122): cards like the list entries, centered, the price
+   under the name and the button at the foot of its card. */
+.l-template-centered .l-services {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+}
+
+.l-template-centered .l-service {
+  flex: 1 1 250px;
+  max-width: 300px;
+  align-items: center;
+  text-align: center;
+  padding: 20px 22px;
+  border: 1px solid color-mix(in srgb, var(--r-text, var(--ink)) 14%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--r-text, var(--ink)) 3%, transparent);
+}
+
+.l-template-centered .l-service-head {
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Pushed down when a neighbouring card is taller, so the buttons in a row
+   line up; the space above it is the text's. */
+.l-template-centered .l-service-text {
+  margin-bottom: 8px;
+}
+
+.l-template-centered .l-service-action {
+  margin-top: auto;
+}
+
+@container (max-width: 600px) {
+  .l-template-centered .l-service {
+    max-width: none;
+  }
+}
+
 @container (max-width: 600px) {
   .l-template-centered .l-main {
     padding: 48px 18px 64px;

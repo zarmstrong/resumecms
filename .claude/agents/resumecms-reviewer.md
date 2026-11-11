@@ -50,6 +50,8 @@ in prose; check the diff against the ones that apply, especially:
   `columns: true`.
 - New public routes set a `cacheHeaders.js` constant before any early
   return; host-resolved ones send `HOST_HEADERS`.
+- The shell's favicon `?v=` versions and the favicon routes both come from
+  `iconContentFor()`, so a change to what an icon shows changes its URL.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a

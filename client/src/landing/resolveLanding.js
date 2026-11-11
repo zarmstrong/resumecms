@@ -73,7 +73,7 @@ export function resolveLanding(landing, context, { withIds = false, withHidden =
 // What a button without a label of its own says.
 export const ACTION_LABELS = { page: 'View my resume', pdf: 'Download my resume (PDF)' };
 
-// A hero button as a visitor sees it, { label, href }, or null when it
+// A hero button (or a service's, issue #122) as a visitor sees it, { label, href }, or null when it
 // isn't shown: a link that's half typed or unsafe, a resume a visitor
 // can't open, or a PDF it doesn't have.
 function resolveAction(action, targets) {
@@ -200,6 +200,15 @@ function resolveSection(section, targets, images, { today, withHidden }) {
       if (!media) return null;
       const poster = resolveImage(section.poster, images);
       return { media, caption: section.caption, transcript: section.transcript, ...(poster ? { poster } : {}) };
+    }
+    case 'services': {
+      const services = section.services
+        .filter((service) => service.title.trim() || service.text.trim())
+        .map((service) => {
+          const action = service.action ? resolveAction(service.action, targets) : null;
+          return { title: service.title, text: service.text, price: service.price, ...(action ? { action } : {}) };
+        });
+      return services.length ? { services } : null;
     }
     default:
       return null;

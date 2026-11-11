@@ -577,6 +577,36 @@ export const LANDING_SCHEMA = {
               transcript: { type: 'string', description: "Optional plain text, at most 20000 characters, under a 'Transcript' disclosure; a blank line starts a new paragraph" },
             },
           },
+          {
+            type: 'object',
+            description:
+              "What you offer, at most 12, each with a short description, an optional price line and an optional button; one without a title or a text isn't shown. Only a service's text is ever rewritten by AI",
+            properties: {
+              ...LANDING_SECTION_BASE,
+              kind: { const: 'services' },
+              services: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string', description: "Plain text, at most 120 characters, e.g. 'Private tutoring'" },
+                    text: { type: 'string', description: 'At most 1000 characters; text with [label](url) links (http, https, mailto or tel), **bold** and *italic*; a backslash before * or [ shows it as is' },
+                    price: { type: 'string', description: "Free text, not a number, at most 80 characters: 'From $60/hour', 'Free 15-minute consultation', 'Sliding scale'" },
+                    action: {
+                      type: 'object',
+                      description: 'Optional button (absent for none), a link like a hero button',
+                      properties: {
+                        type: { const: 'link' },
+                        label: { type: 'string', description: "e.g. 'Book a session'; '' shows the URL" },
+                        url: { type: 'string', description: 'An http, https, mailto or tel link (mailto:you@example.com?subject=Booking prefills a subject)' },
+                        icon: ACTION_ICON,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     },
