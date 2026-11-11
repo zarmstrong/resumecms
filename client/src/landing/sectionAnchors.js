@@ -15,17 +15,24 @@ export const ANCHOR_PREFIX = 'section-';
 const MAX_SLUG = 60;
 
 // Lowercase letters and digits of any script, accents dropped, everything
-// else one hyphen; 'section' when nothing is left (a title of emoji).
+// else one hyphen; 'section' when nothing is left (a title of emoji). Cut
+// by code points, so a letter outside the BMP is never split in two. A
+// slug never holds two hyphens in a row, which anchorTitleId() relies on.
 export function slugify(title) {
-  const slug = String(title ?? '')
+  const whole = String(title ?? '')
     .toLowerCase()
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
     .replace(/[^\p{L}\p{N}]+/gu, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, MAX_SLUG)
-    .replace(/-+$/, '');
+    .replace(/^-+|-+$/g, '');
+  const slug = Array.from(whole).slice(0, MAX_SLUG).join('').replace(/-+$/, '');
   return slug || 'section';
+}
+
+// The id of an anchored section's heading, for its aria-labelledby. The
+// double hyphen keeps it from ever being another section's anchor.
+export function anchorTitleId(anchor) {
+  return `${anchor}--title`;
 }
 
 function hasEntry(section) {
@@ -86,13 +93,56 @@ export function currentAnchor(entries, topOf, { line = 0, atEnd = false, pinned 
 }
 
 // The element whose scrolling moves `el`: the nearest ancestor that
-// scrolls (the editor's preview pane), or null for the window, which is
-// what an IntersectionObserver's `root` takes. `styleOf` is
-// getComputedStyle, passed in so this stays testable without a DOM.
+// scrolls (the editor's preview pane) or clips it (`hidden` or `clip`: a
+// box the page is drawn inside, whose outer scrolling it mustn't follow),
+// or null for the window, which is what an IntersectionObserver's `root`
+// takes. `styleOf` is getComputedStyle, passed in so this stays testable
+// without a DOM.
 export function scrollParent(el, styleOf) {
   for (let node = el?.parentElement; node; node = node.parentElement) {
     if (node.parentElement === null) return null; // <html>: the window
-    if (/(auto|scroll|overlay)/.test(styleOf(node).overflowY)) return node;
+    if (/^(auto|scroll|overlay|hidden|clip)$/.test(styleOf(node).overflowY)) return node;
   }
   return null;
+}
+
+// A click the page should handle as a jump: the primary button with no
+// modifier. Any other (Ctrl/Cmd/Shift/Alt, a middle click) is left to the
+// browser, so the entry's link can open in a new tab or window.
+export function isPlainClick(event) {
+  return !event.defaultPrevented && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+// A jump's hold on the current entry (useSectionSpy.js): set by a jump and
+// kept through the scroll the jump starts, then released by the next
+// scroll after one `settleMs` quiet (a scrollbar drag, find-in-page,
+// anything that isn't a wheel, touch, key or press). Times are passed in
+// (`now`), so it needs no timers and is testable.
+export function createJumpPin(settleMs = 150) {
+  let anchor = null;
+  let lastScroll = 0;
+  return {
+    get anchor() {
+      return anchor;
+    },
+    set(next, now) {
+      anchor = next;
+      lastScroll = now;
+    },
+    release() {
+      const had = anchor !== null;
+      anchor = null;
+      return had;
+    },
+    // Returns true when this scroll released it.
+    scrolled(now) {
+      if (anchor === null) return false;
+      if (now - lastScroll < settleMs) {
+        lastScroll = now;
+        return false;
+      }
+      anchor = null;
+      return true;
+    },
+  };
 }

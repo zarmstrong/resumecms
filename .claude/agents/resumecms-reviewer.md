@@ -47,7 +47,10 @@ in prose; check the diff against the ones that apply, especially:
   never its `id` (which never leaves the server); only a template that
   sets `anchor` gives a `<section>` an id. A jump in the editor's preview
   scrolls only the preview and never changes the editor's URL; smooth
-  scrolling only under `prefers-reduced-motion: no-preference`.
+  scrolling only under `prefers-reduced-motion: no-preference`. Inside an
+  `[inert]` ancestor (the editor's template thumbnails) a landing template
+  has no effect on the document: no listeners, no hash reads or writes,
+  no unprefixed ids.
 - A new landing section kind or section-wide field is in `SECTION_FIELDS`,
   `checkSection()`, both `resolveSection()`/`resolveLanding()` copies, the
   MCP union and `LANDING_SCHEMA`, `LandingForm` (its `SectionFields`, its

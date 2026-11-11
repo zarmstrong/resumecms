@@ -10,6 +10,7 @@ import { LandingGallery } from './LandingGallery.jsx';
 import { LandingMedia } from './LandingMedia.jsx';
 import { formatFileSize } from './documents.js';
 import { ActionIcon } from './ActionIcon.jsx';
+import { anchorTitleId } from './sectionAnchors.js';
 import './landing.css';
 
 // The landing page at `/` (issue #70), from the resolved shape the public
@@ -86,16 +87,23 @@ export function LandingView({ landing, preview = false, highlightIds = null, sch
     }
     // An `anchor` is only set by a template that links to its sections
     // (directory's contents, sectionAnchors.js); focusable so a jump there
-    // moves the keyboard too.
+    // moves the keyboard too, and named by its heading for whoever lands
+    // on it. Without one, neither the section nor its heading has an id.
+    const titleId = section.anchor && section.title ? anchorTitleId(section.anchor) : undefined;
     return (
       <section
         key={section.id ?? i}
         id={section.anchor}
         tabIndex={section.anchor ? -1 : undefined}
+        aria-labelledby={titleId}
         className={`l-section l-section-${section.kind}${hidden}${highlightIds?.has(section.id) ? ' l-ai-preview' : ''}`}
       >
         {section.hidden && <span className="l-hidden-label">{section.expired ? 'Not shown: every entry has expired' : 'Hidden'}</span>}
-        {section.title && <h2 className="l-section-title">{section.title}</h2>}
+        {section.title && (
+          <h2 id={titleId} className="l-section-title">
+            {section.title}
+          </h2>
+        )}
         <SectionBody section={section} preview={preview} />
       </section>
     );

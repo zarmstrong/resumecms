@@ -1035,11 +1035,19 @@ as `{ ...section, anchor }`, and `renderSection` puts it on the
 `<section>` as its `id` (with `tabIndex={-1}`, so a jump moves focus);
 no other template sets one, so they render exactly as before.
 `useSectionSpy.js` finds what scrolls the page (`scrollParent()`: the
-window, or the editor's preview pane), drives the highlight with
+window, the editor's preview pane, or the nearest box that clips it with
+`overflow: hidden|clip`), drives the highlight with
 IntersectionObservers on that, and scrolls a jump inside it (smoothly
 only under `prefers-reduced-motion: no-preference`), so the preview
 scrolls only itself; on the public page a jump replaces the URL's hash,
-in the preview it never touches the editor's URL.
+in the preview it never touches the editor's URL. A jump's entry stays
+current through its own scroll (`createJumpPin()`) and is released by
+the visitor's next one. Inside an `[inert]` ancestor (the editor's
+template thumbnails, drawn with `preview` false) the template is only a
+picture: its ids prefixed like the preview's, and no observers,
+listeners, hash jump or URL change. A modified or middle click on an
+entry is left to the browser (`isPlainClick()`), and an anchored
+section is named by its heading (`aria-labelledby`, `anchorTitleId()`).
 
 `client/src/resume/templateRegistry.js` builds the registry at **build
 time** via `import.meta.glob` (eager, one glob per kind — the glob path

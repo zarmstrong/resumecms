@@ -200,7 +200,12 @@ missing id is drawn as `classic`, which must always exist.
     //   A section given an `anchor` ({ ...section, anchor }) is drawn
     //   with that as its id, so the template can link to it
     // colors / darkColors: the normalized palettes (darkColors null if none)
-    // preview: true in the editor
+    // preview: true in the editor's preview. The editor may also draw the
+    //   page with preview false as a small thumbnail, inside an `inert`
+    //   box that clips it: a template that does anything beyond drawing
+    //   (listens to scrolling, reads location.hash, sets ids) checks for
+    //   an [inert] ancestor and stays a picture there, with no effect on
+    //   the document
     return (
       <main className="l-main">
         {renderHero()}
@@ -218,7 +223,8 @@ missing id is drawn as `classic`, which must always exist.
   page; pass a prefix of your own in the preview), and
   `@landing/useSectionSpy.js` tracks which section is in view and
   scrolls to one inside whatever holds the page, the editor's preview
-  pane included, without touching the editor's URL.
+  pane included, without touching the editor's URL, and does nothing
+  inside an `[inert]` ancestor.
 
 ## Validating
 

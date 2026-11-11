@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ANCHOR_PREFIX, anchorFromHash, currentAnchor, scrollParent, slugify, withAnchors } from './sectionAnchors.js';
+import {
+  ANCHOR_PREFIX,
+  anchorFromHash,
+  anchorTitleId,
+  createJumpPin,
+  currentAnchor,
+  isPlainClick,
+  scrollParent,
+  slugify,
+  withAnchors,
+} from './sectionAnchors.js';
 
 const text = (title, extra = {}) => ({ kind: 'text', title, body: 'x', ...extra });
 
@@ -19,6 +29,20 @@ test('a title slugs to lowercase letters and digits joined by single hyphens', (
   const long = slugify(`${'a'.repeat(59)} b c`);
   assert.equal(long, 'a'.repeat(59));
   assert.ok(slugify('word '.repeat(40)).length <= 60);
+  // Cut by code points: a letter outside the BMP is never split in half.
+  const astral = slugify(`a${'\u{20000}'.repeat(80)}`);
+  assert.equal(Array.from(astral).length, 60);
+  assert.equal(astral, `a${'\u{20000}'.repeat(59)}`);
+  assert.ok(astral.isWellFormed());
+  // Never two hyphens in a row, so a heading's id can't be an anchor.
+  for (const title of ['a -- b', 'a—–b', '-x-', 'x  - - y']) assert.ok(!slugify(title).includes('--'), title);
+});
+
+test("an anchored section's heading id is never another section's anchor", () => {
+  const { entries } = withAnchors([text('Talks'), text('Talks title'), text('Talks--title'), text('Talks - title')]);
+  const anchors = new Set(entries.map((e) => e.anchor));
+  for (const entry of entries) assert.ok(!anchors.has(anchorTitleId(entry.anchor)), entry.anchor);
+  assert.equal(anchorTitleId('section-talks'), 'section-talks--title');
 });
 
 test('every titled section gets a unique anchor, numbered on a repeat', () => {
@@ -111,4 +135,39 @@ test('the scroll parent is the nearest ancestor that scrolls, or the window', ()
   // <html> scrolls the window, whatever its style says.
   assert.equal(scrollParent(node('visible', node('scroll')), styleOf), null);
   assert.equal(scrollParent(null, styleOf), null);
+  // A box that clips it (a thumbnail's frame) is where it stops, not the
+  // scrolling pane around that box.
+  for (const overflowY of ['hidden', 'clip']) {
+    const box = node(overflowY, pane);
+    assert.equal(scrollParent(node('visible', node('visible', box)), styleOf), box, overflowY);
+  }
+});
+
+test('only a plain primary click is a jump; the rest are the browser’s', () => {
+  const click = (extra = {}) => ({ button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, defaultPrevented: false, ...extra });
+  assert.equal(isPlainClick(click()), true);
+  for (const extra of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }, { button: 2 }, { defaultPrevented: true }]) {
+    assert.equal(isPlainClick(click(extra)), false, JSON.stringify(extra));
+  }
+});
+
+test("a jump's hold lasts through its own scroll and ends at the next one after it settles", () => {
+  const pin = createJumpPin(150);
+  assert.equal(pin.anchor, null);
+  assert.equal(pin.scrolled(0), false);
+  pin.set('section-a', 1000);
+  // A smooth scroll: an event every frame keeps it.
+  for (let t = 1016; t < 1600; t += 16) assert.equal(pin.scrolled(t), false);
+  assert.equal(pin.anchor, 'section-a');
+  // Quiet, then a scrollbar drag or find-in-page: released.
+  assert.equal(pin.scrolled(2000), true);
+  assert.equal(pin.anchor, null);
+  assert.equal(pin.scrolled(2010), false);
+  // A jump that didn't need to scroll: the first later scroll releases it.
+  pin.set('section-b', 3000);
+  assert.equal(pin.scrolled(3400), true);
+  // A wheel, touch, key or press releases it at once.
+  pin.set('section-c', 4000);
+  assert.equal(pin.release(), true);
+  assert.equal(pin.release(), false);
 });
