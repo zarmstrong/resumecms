@@ -41,7 +41,9 @@ in prose; check the diff against the ones that apply, especially:
 - `landing.css` holds only what every landing template shares; an
   arrangement belongs in a template's `style.css`, scoped under
   `.l-template-<id>`, so a change for one template can't move another
-  (issue #93).
+  (issue #93). A landing template's root stays inside the box it's given
+  (no `position: fixed`, no effects on `document`), since the Look
+  group's picker draws every template as an `inert` thumbnail.
 - A new landing section kind or section-wide field is in `SECTION_FIELDS`,
   `checkSection()`, both `resolveSection()`/`resolveLanding()` copies, the
   MCP union and `LANDING_SCHEMA`, `LandingForm` (its `SectionFields`, its
