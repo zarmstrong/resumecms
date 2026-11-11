@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
+import { createDeflate } from 'node:zlib';
+import { PDFDocument, PDFName, PDFObjectStreamParser, PDFRawStream, PDFRef, PDFString, PDFXRefStreamParser, StandardFonts } from 'pdf-lib';
 import { stripPdf } from './pdfUpload.js';
 import { LANDING_FILE_LIMITS } from './landingFileFields.js';
 
@@ -94,4 +95,149 @@ test('a PDF pdf-lib cannot clean is a 400 saying why', async () => {
   doc.context.trailerInfo.Encrypt = doc.context.obj({ Filter: 'Standard', V: 1, R: 2 });
   const encrypted = Buffer.from(await doc.save());
   await assert.rejects(stripPdf(encrypted), (err) => err.status === 400 && /encrypted or password-protected/.test(err.message));
+});
+
+// A comment's author and dates, and every way a PDF carries another file,
+// go; the comment's text and a form field's name and value stay.
+test('annotation authors and dates and embedded files are removed, annotations and form fields kept', async () => {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 200]);
+  const { context } = doc;
+  const attached = (secret) => context.obj({
+    Type: 'Filespec',
+    F: PDFString.of(`${secret}.txt`),
+    EF: { F: context.register(context.stream(secret, { Type: 'EmbeddedFile' })) },
+  });
+  const date = PDFString.of('D:20200102030405Z');
+  const popup = context.register(context.obj({ Type: 'Annot', Subtype: 'Popup', Rect: [0, 0, 50, 50], T: PDFString.of('PopupReviewer'), M: date }));
+  const note = context.register(context.obj({
+    Type: 'Annot', Subtype: 'Text', Rect: [10, 10, 30, 30],
+    T: PDFString.of('ReviewerName'), M: date, CreationDate: date, Contents: PDFString.of('Visible note'), Popup: popup,
+  }));
+  const attachmentPopup = context.register(context.obj({ Type: 'Annot', Subtype: 'Popup', Rect: [0, 0, 50, 50], Contents: PDFString.of('AttachPopupText') }));
+  const attachment = context.register(context.obj({
+    Type: 'Annot', Subtype: 'FileAttachment', Rect: [40, 40, 60, 60], T: PDFString.of('AttacherName'),
+    FS: attached('AnnotAttachmentBytes'), Popup: attachmentPopup,
+  }));
+  const widget = context.register(context.obj({
+    Type: 'Annot', Subtype: 'Widget', FT: 'Tx', Rect: [80, 80, 150, 100], T: PDFString.of('FieldName'), V: PDFString.of('FieldValue'), M: date,
+  }));
+  page.node.set(PDFName.of('Annots'), context.obj([note, popup, attachment, attachmentPopup, widget]));
+  doc.catalog.set(PDFName.of('AcroForm'), context.obj({ Fields: [widget] }));
+  doc.catalog.set(PDFName.of('Names'), context.obj({ EmbeddedFiles: { Names: [PDFString.of('a.txt'), attached('NameTreeBytes')] } }));
+  doc.catalog.set(PDFName.of('AF'), context.obj([attached('AssociatedBytes')]));
+  page.node.set(PDFName.of('AF'), context.obj([attached('PageAssociatedBytes')]));
+  const input = Buffer.from(await doc.save({ useObjectStreams: false }));
+  const SECRETS = ['ReviewerName', 'PopupReviewer', 'AttacherName', 'AnnotAttachmentBytes', 'AttachPopupText', 'NameTreeBytes', 'AssociatedBytes', 'PageAssociatedBytes', 'D:2020'];
+  for (const secret of SECRETS) assert.ok(input.toString('latin1').includes(secret), `the fixture carries ${secret}`);
+
+  const { bytes } = await stripPdf(input);
+  const text = bytes.toString('latin1');
+  for (const secret of SECRETS) assert.equal(text.includes(secret), false, `${secret} is gone`);
+  for (const key of ['/EmbeddedFile', '/EmbeddedFiles', '/AF', '/EF', '/FileAttachment', '/CreationDate']) {
+    assert.equal(text.includes(key), false, `${key} is gone`);
+  }
+  for (const kept of ['Visible note', 'FieldName', 'FieldValue']) assert.ok(text.includes(kept), `${kept} is kept`);
+
+  const reread = await PDFDocument.load(bytes, { updateMetadata: false });
+  const annots = reread.getPage(0).node.Annots();
+  assert.deepEqual(annots.asArray().map((ref) => reread.context.lookup(ref).lookup(PDFName.of('Subtype')).asString()), ['/Text', '/Popup', '/Widget']);
+  assert.deepEqual(reread.getForm().getFields().map((field) => field.getName()), ['FieldName']);
+});
+
+// What pdf-lib saves with object streams on: several deflated /ObjStm (50
+// objects in each) and a deflated cross-reference stream, all decoded on
+// load.
+async function pdfWithObjectStreams() {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  for (let i = 0; i < 120; i += 1) doc.addPage([200, 200]).drawText(`Page ${i + 1}`, { x: 10, y: 100, size: 12, font });
+  return Buffer.from(await doc.save({ useObjectStreams: true }));
+}
+
+test('a PDF with several object streams and a cross-reference stream strips fine', async () => {
+  const input = await pdfWithObjectStreams();
+  const raw = input.toString('latin1');
+  assert.ok(raw.match(/\/Type \/ObjStm/g).length >= 3, 'the fixture has several object streams');
+  assert.ok(raw.includes('/Type /XRef'), 'and a cross-reference stream');
+  const { bytes } = await stripPdf(input);
+  const reread = await PDFDocument.load(bytes, { updateMetadata: false });
+  assert.equal(reread.getPageCount(), 120);
+  assert.equal(bytes.toString('latin1').includes('/ObjStm'), false, 'saved again without object streams');
+});
+
+test('every object and cross-reference stream is decoded through the bounded decoder', async () => {
+  // Fails if pdf-lib stops parsing them through these: the wrapper wouldn't
+  // see them, and the budget wouldn't hold.
+  assert.equal(typeof PDFObjectStreamParser.forStream, 'function');
+  assert.equal(typeof PDFXRefStreamParser.forStream, 'function');
+  const input = await pdfWithObjectStreams();
+  const warn = console.warn;
+  console.warn = () => {}; // pdf-lib's notes about the objects it couldn't read
+  try {
+    await assert.rejects(stripPdf(input, { maxDecodedBytes: 200 }), (err) => err.status === 413 && /expands to more than/.test(err.message));
+  } finally {
+    console.warn = warn;
+  }
+});
+
+// A one-page PDF with an object stream of `megabytes` MB of spaces, deflated
+// (about a thousand to one), made without holding them all at once.
+async function bomb(megabytes) {
+  const deflate = createDeflate({ level: 9 });
+  const chunks = [];
+  deflate.on('data', (chunk) => chunks.push(chunk));
+  const ended = new Promise((resolve) => deflate.on('end', resolve));
+  const spaces = Buffer.alloc(1024 * 1024, 0x20);
+  for (let i = 0; i < megabytes; i += 1) {
+    if (!deflate.write(spaces)) await new Promise((resolve) => deflate.once('drain', resolve));
+  }
+  deflate.end();
+  await ended;
+  const body = Buffer.concat(chunks);
+  const doc = await PDFDocument.create();
+  doc.addPage();
+  doc.context.register(PDFRawStream.of(doc.context.obj({ Type: 'ObjStm', N: 0, First: 0, Filter: 'FlateDecode', Length: body.length }), body));
+  return Buffer.from(await doc.save({ useObjectStreams: false }));
+}
+
+test('a decompression bomb is refused fast, without decoding it', async () => {
+  const input = await bomb(200);
+  assert.ok(input.length < LANDING_FILE_LIMITS.uploadBytes, 'small enough to be let in');
+  const warn = console.warn;
+  console.warn = () => {}; // pdf-lib's note about the object it couldn't read
+  try {
+    const started = performance.now();
+    await assert.rejects(stripPdf(input), (err) => err.status === 413 && /expands to more than 64 MB/.test(err.message));
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed < 1000, `refused in ${Math.round(elapsed)} ms`);
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test('object streams in other filters decode, within a bound told before decoding', async () => {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage();
+  const objects = '50 0 (HexObjectValue)';
+  const header = '50 0 ';
+  const hex = Buffer.from(Buffer.from(objects).toString('hex') + '>');
+  doc.context.register(PDFRawStream.of(doc.context.obj({ Type: 'ObjStm', N: 1, First: header.length, Filter: 'ASCIIHexDecode' }), hex));
+  page.node.set(PDFName.of('Extra'), PDFRef.of(50));
+  const { bytes } = await stripPdf(Buffer.from(await doc.save({ useObjectStreams: false })));
+  assert.ok(bytes.toString('latin1').includes('(HexObjectValue)'), 'the object it held is read and kept');
+
+  // An LZW stream could stand for thousands of times its size, so a big one
+  // is refused before it's decoded.
+  const lzw = await PDFDocument.create();
+  lzw.addPage();
+  const junk = Buffer.alloc(64 * 1024, 0x80);
+  lzw.context.register(PDFRawStream.of(lzw.context.obj({ Type: 'ObjStm', N: 0, First: 0, Filter: 'LZWDecode' }), junk));
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    await assert.rejects(stripPdf(Buffer.from(await lzw.save({ useObjectStreams: false }))), (err) => err.status === 413);
+  } finally {
+    console.warn = warn;
+  }
 });

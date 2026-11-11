@@ -18,6 +18,9 @@ export const LANDING_FILE_LIMITS = {
   // stored file may be once its metadata is stripped.
   uploadBytes: 10 * 1024 * 1024,
   storedBytes: 10 * 1024 * 1024,
+  // What reading one may decompress, all its object and cross-reference
+  // streams together (pdfUpload.js): a few MB of deflate can say gigabytes.
+  decodedBytes: 64 * 1024 * 1024,
   // A few documents, and the ones a draft has replaced but the snapshot
   // still shows. They live in SQLite with the images, and every backup
   // copies the database, so this is kept small.

@@ -503,11 +503,24 @@ can reference a stored file. `pdfUpload.js`, the only module that loads
 `pdf-lib` (pinned), refuses anything over `LANDING_FILE_LIMITS.uploadBytes`
 before parsing and anything not starting `%PDF-` (never the
 `Content-Type`), then *always* saves it again: the trailer's Info
-dictionary dropped, `/Metadata` (XMP) and `/PieceInfo` taken off every
-object, and only what the catalog still reaches written out, as one
-revision, so no earlier incremental save survives; the pages themselves
-are copied, never re-rendered. A PDF pdf-lib can't load, or an encrypted
-one, is a 400 saying so. The id is the sha256 of the stripped bytes, and
+dictionary dropped, `/Metadata` (XMP), `/PieceInfo`, `/AF` (associated
+files) and `/EF` (a file specification's embedded file) taken off every
+dictionary, the catalog's `/Names /EmbeddedFiles` and `/Collection`
+removed, a page's `FileAttachment` annotations (and their popups)
+removed and every other annotation's `/M` and `/CreationDate` and,
+except on a form widget (whose `/T` is the field's name), its `/T`
+author cleared, and only what the catalog still reaches written out, as
+one revision, so no earlier incremental save survives; the pages, the
+annotations' text and form field values are copied, never re-rendered.
+A PDF pdf-lib can't load, or an encrypted one, is a 400 saying so.
+Loading decodes every object and cross-reference stream at once, with no
+limit in pdf-lib, so `pdfUpload.js` wraps both parsers' exported
+`forStream()` and hands them the stream already decoded by its own
+`boundedDecode()` (zlib with `maxOutputLength` for Flate, a worst-case
+bound checked before any other filter runs), all of an upload's streams
+together held to `LANDING_FILE_LIMITS.decodedBytes` (64 MB) through an
+`AsyncLocalStorage`; past it, a 413. Its test fails if pdf-lib stops
+going through those, so keep it when bumping the pinned version. The id is the sha256 of the stripped bytes, and
 the caps (10 MB a file, 20 files and 30 MB in all, kept small because
 every backup copies the database) are `LANDING_FILE_LIMITS`. A reference
 is `{ fileId, name }` (`checkFileRef()`), `name` always a

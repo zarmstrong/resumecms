@@ -45,7 +45,9 @@ in prose; check the diff against the ones that apply, especially:
   return; host-resolved ones send `HOST_HEADERS`.
 - A landing upload (an image, or a documents section's PDF, issue #128) is
   stored only as cleaned bytes (re-encoded by `imageUpload.js`, or
-  metadata-stripped by `pdfUpload.js`, size capped before parsing), served
+  metadata-stripped by `pdfUpload.js`, size capped before parsing, its
+  annotation authors and attachments removed, its stream decoding held to
+  `LANDING_FILE_LIMITS.decodedBytes`), served
   publicly only while `shownImageIds()`/`shownFiles()` of the shown,
   resolved snapshot includes it, and pruned with its store
   (`referencedImageIds()`/`referencedFileIds()` of draft and snapshot).
