@@ -1,0 +1,68 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { resolveLanding } from '../landing/resolveLanding.js';
+import { THUMBNAIL_WIDTH, pageKey, thumbnailPage, thumbnailScale, withTemplate } from './templateThumbnails.js';
+
+const draft = {
+  headline: 'Jo',
+  subheadline: 'Engineer',
+  photo: 'none',
+  photoUrl: '',
+  template: 'classic',
+  sections: [
+    { id: 'intro', kind: 'text', title: '', body: 'Hi' },
+    { id: 'gone', kind: 'text', title: 'Draft only', body: 'Not yet', hidden: true },
+    { id: 'rule', kind: 'divider', title: '' },
+    {
+      id: 'creds',
+      kind: 'credentials',
+      title: 'Licenses',
+      credentials: [
+        { kind: 'license', name: 'RN', issuer: '', number: '', issued: '', expires: '2001-01', url: '' },
+        { kind: 'license', name: 'BLS', issuer: '', number: '', issued: '', expires: '', url: '' },
+      ],
+    },
+  ],
+};
+const context = { site: {}, resumes: [], today: '2026-11-10' };
+
+test('a thumbnail shows the page as it will be published, not the dimmed preview', () => {
+  const page = thumbnailPage(draft, context);
+  assert.deepEqual(page, resolveLanding(draft, context));
+  const titles = page.sections.map((s) => s.title);
+  assert.equal(titles.includes('Draft only'), false);
+  assert.equal(page.sections.some((s) => s.hidden || s.id), false);
+  const creds = page.sections.find((s) => s.kind === 'credentials');
+  assert.deepEqual(
+    creds.credentials.map((c) => c.name),
+    ['BLS'],
+  );
+});
+
+test('each thumbnail swaps in its own template and leaves the page alone', () => {
+  const page = thumbnailPage(draft, context);
+  const split = withTemplate(page, 'split');
+  assert.equal(split.template, 'split');
+  assert.equal(page.template, 'classic');
+  assert.equal(split.sections, page.sections);
+  // An id the registry doesn't know is passed through: LandingView draws it as classic.
+  assert.equal(withTemplate(page, 'not-a-template').template, 'not-a-template');
+});
+
+test('the page box is scaled to its frame, and not drawn before the frame is measured', () => {
+  assert.equal(thumbnailScale(THUMBNAIL_WIDTH), 1);
+  assert.equal(thumbnailScale(THUMBNAIL_WIDTH / 8), 1 / 8);
+  assert.equal(thumbnailScale(0), 0);
+  assert.equal(thumbnailScale(-5), 0);
+});
+
+test('two resolutions of an unchanged draft share a key; an edit changes it', () => {
+  const a = thumbnailPage(draft, context);
+  const b = thumbnailPage({ ...draft }, context);
+  assert.notEqual(a, b);
+  assert.equal(pageKey(a), pageKey(b));
+  assert.notEqual(pageKey(a), pageKey(thumbnailPage({ ...draft, headline: 'Jo Smith' }, context)));
+  // A hidden section's edits don't show, so they don't redraw.
+  const hiddenEdit = { ...draft, sections: draft.sections.map((s) => (s.id === 'gone' ? { ...s, body: 'Changed' } : s)) };
+  assert.equal(pageKey(a), pageKey(thumbnailPage(hiddenEdit, context)));
+});

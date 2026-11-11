@@ -535,7 +535,9 @@ published header.
 
 Its **Look** group picks how it's laid out and colored:
 
-- **Template**: *Classic* (one narrow column, the photo beside the
+- **Template**, picked from a small live picture of each, drawn with the
+  draft as it will be published (hidden sections left out), in the
+  preview's light or dark palette: *Classic* (one narrow column, the photo beside the
   headline), *Bold* (oversized headings and high contrast, every other
   section on a full-width band tinted with the accent color; made for
   performers, musicians, events, marketing and fitness), *Centered* (the

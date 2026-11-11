@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_SITE_COLORS, FONT_OPTIONS, normalizeResumeFont } from '../resume/siteColors.js';
-import { LANDING_TEMPLATES, getLandingTemplate } from '../resume/templateRegistry.js';
+import { getLandingTemplate } from '../resume/templateRegistry.js';
 import { DEFAULT_DARK_COLORS, LANDING_COLOR_KEYS, isHexColor, ownStyleFrom } from '../landing/landingStyle.js';
+import { LandingTemplatePicker } from './LandingTemplatePicker.jsx';
 
 const COLOR_FIELDS = {
   accent: { label: 'Accent', hint: 'Buttons, links and the subheadline' },
@@ -70,8 +71,12 @@ function ColorFields({ colors, defaults, onChange, what }) {
 // palette. `site` is the default resume's published site settings
 // (GET /api/landing's context). `onApply` copies the page's own colors and
 // fonts into that resume's draft (LandingEditorPage's handleApplyStyle),
-// `applyState` says how that went.
-export function LandingLookFields({ landing, site, onChange, onApply, applyState }) {
+// `applyState` says how that went. The template is picked from thumbnails
+// of the page (LandingTemplatePicker, issue #130), drawn from `preview`
+// ({ draft, context, scheme }: what the editor's preview draws) only while
+// the group is open.
+export function LandingLookFields({ landing, site, onChange, onApply, applyState, preview }) {
+  const [open, setOpen] = useState(false);
   const style = { ...EMPTY_STYLE, ...landing.style };
   const template = getLandingTemplate(landing.template);
   const own = style.source === 'custom';
@@ -79,22 +84,19 @@ export function LandingLookFields({ landing, site, onChange, onApply, applyState
   const summary = `${template?.label ?? 'Classic'} · ${own ? 'its own colors' : "the default resume's colors"}${style.darkColors ? ' · dark palette' : ''}`;
 
   return (
-    <details className="ed-collapsible">
+    <details className="ed-collapsible" onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>
         Look <span className="ed-collapsible-summary">{summary}</span>
       </summary>
       <div className="ed-collapsible-body">
-        <label className="ed-field">
-          <span>Template</span>
-          <select className="ed-input" value={template?.id ?? 'classic'} onChange={(e) => onChange({ template: e.target.value })}>
-            {LANDING_TEMPLATES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          {template?.description && <span className="ed-field-hint">{template.description}</span>}
-        </label>
+        <LandingTemplatePicker
+          value={template?.id ?? 'classic'}
+          onChange={(id) => onChange({ template: id })}
+          draft={preview?.draft ?? landing}
+          context={preview?.context}
+          scheme={preview?.scheme}
+          open={open}
+        />
 
         <label className="ed-field">
           <span>Colors and fonts</span>
