@@ -1026,7 +1026,9 @@ dropStrayDividers, colors, darkColors, preview }`; without one the hero and the 
 go in turn into an `.l-main`. `landing.css` holds only what every
 template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
-pixel-identical to it. `bold`, `centered`, `cover`, `editorial` (issue #130, pure
+pixel-identical to it (its one change, from the accessibility bar below,
+is a fix: a visitor who asks for reduced motion no longer gets the
+card's lift; for everyone else it's identical). `bold`, `centered`, `cover`, `editorial` (issue #130, pure
 CSS), `directory`, `formal` and `split` size themselves with container queries (and
 `bold` its type with container units) on the page root, so the editor's
 narrower preview matches a phone. `bold`
@@ -1088,6 +1090,19 @@ listeners, hash jump or URL change. A modified or middle click on an
 entry is left to the browser (`isPlainClick()`), and an anchored
 section is named by its heading (`aria-labelledby`, `anchorTitleId()`).
 
+Every landing template, and the shared `landing.css` under it, meets the
+accessibility bar in `templates/landing/README.md` (issue #130), which
+also spells out the contract above for contributors: AA text contrast
+against the template's own tints (stacked ones and faded text included)
+with the default palette and `DEFAULT_DARK_COLORS`, a visible focus ring,
+nothing broken at 320 px wide or at 200% zoom, motion only under
+`@media (prefers-reduced-motion: no-preference)` (colors, opacity, visibility and display may
+transition anywhere; `landing.css`'s card lift and gallery zoom and fade
+are inside one), one `<h1>` (the headline) and section titles as `<h2>`,
+and no text on the accent but `--r-on-accent` (see "Text on a color"). A
+new template, or a change to one, is checked against it (the reviewer's
+checklist lists the same bar; change the two together).
+
 `client/src/resume/templateRegistry.js` builds the registry at **build
 time** via `import.meta.glob` (eager, one glob per kind — the glob path
 must be a static literal, so headers, layouts and landing templates can't
@@ -1108,7 +1123,11 @@ checks folder naming (lowercase kebab-case), required `template.json`
 fields, and — for the `templates/presets/` kind (the resume presets, each
 a header and layout plus optional colors) — that a preset's `header`/`layout` references exist and its
 `colors` are recognized `#rrggbb` keys, and a landing template's scoped
-`style.css`. It takes an optional templates folder as its argument, which
+`style.css`, in which it also flags the two parts of the accessibility
+bar a linter can see (an outline removed without a `box-shadow` ring or a
+`:not(:focus-visible)` limit in the same rule, and an animation, smooth scrolling or a
+transition of anything but colors, opacity, visibility and display outside `prefers-reduced-motion:
+no-preference`; the exact rules are in `templates/landing/README.md`; the shared `landing.css` isn't linted, so review keeps its rules). It takes an optional templates folder as its argument, which
 `client/src/resume/validateTemplates.test.js` uses to run it over
 fixtures. Run it after adding or editing any
 template; CI runs it plus a client build on PRs touching `templates/**`.

@@ -57,6 +57,22 @@ in prose; check the diff against the ones that apply, especially:
   `[inert]` ancestor (the editor's template thumbnails) a landing template
   has no effect on the document: no listeners, no hash reads or writes,
   no unprefixed ids.
+- A new or changed landing template (or `landing.css`) meets the bar in
+  `templates/landing/README.md` (issue #130): AA text contrast (4.5:1,
+  3:1 for large text and for focus rings and control outlines) against the
+  template's own tints, stacked tints and faded text included, with the
+  default palette and `DEFAULT_DARK_COLORS`; a visible focus ring on every
+  link, button and `<summary>`; nothing breaks at 320 px wide or at 200%
+  zoom (640 × 400 and 960 × 540 windows; a sticky part fits its window);
+  motion (transforms, position or size changes, animations, smooth scrolling) only under
+  `@media (prefers-reduced-motion: no-preference)`, colors, opacity, visibility and display
+  may transition anywhere; one `<h1>` (the headline) and section titles
+  as `<h2>`, an `index.jsx` adding no heading; no text on an accent fill
+  unless it's `--r-on-accent` (hover through `--r-accent-hover-mix`), and
+  accent-colored text only on the background or a light tint of it
+  (CLAUDE.md, "Text on a color"). The
+  validator only catches the outline and motion rules, so check the rest
+  by reading the CSS and computing the ratios.
 - A new landing section kind or section-wide field is in `SECTION_FIELDS`,
   `checkSection()`, both `resolveSection()`/`resolveLanding()` copies, the
   MCP union and `LANDING_SCHEMA`, `LandingForm` (its `SectionFields`, its
