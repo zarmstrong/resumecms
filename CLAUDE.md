@@ -58,12 +58,35 @@ tests` for `server/**`; `client tests and build` for `client/**`,
 `server/**` (client tests import the server modules they mirror) or
 anything a template build reads; `templates`, the validator, for
 `templates/**`, `templateRegistry.js` or the validator itself; all of
-them when `.github/workflows/` changes). `ci-passed` gathers them and is
+them when `.github/workflows/` changes; `docker build`, an amd64 image
+build without a push, for the `Dockerfile`, `.dockerignore` or either
+package's `package.json`/lockfile; and `pr-title` on every PR). `ci-passed` gathers them and is
 the only check the ruleset on `main` requires, so a PR can't merge
 until it's green; a skipped job counts as passing. Keep a new job
 behind `changes` and in `ci-passed`'s `needs`, and never put a `paths:`
 filter on the workflow itself: a required check that never runs stays
-pending forever. When touching
+pending forever. The workflow also runs on `edited`, so a fixed title
+re-runs `pr-title`; every job still runs then, since a run with its tests
+skipped could cancel one in progress and leave a green check.
+
+Releases (`.github/workflows/release.yml`) come from release-please,
+reading the squash-merged PR titles (the repo's squash title is set to
+the PR title and the ruleset allows only squash, both GitHub settings
+outside the repo; the PR's commit messages become the squash body, where
+release-please still acts on `BREAKING CHANGE:`/`BREAKING-CHANGE:`
+(major release), `Release-As:` (forced version) and `type: text` lines in
+the last paragraph (extra changelog entries)), so a PR title must be a
+Conventional Commit (`feat:`, `fix(scope):`, `feat!:`; `pr-title`
+checks it, and Dependabot's are prefixed `fix(deps)`/`ci`). It keeps a
+release PR open (`release-please-config.json`, `simple` release type,
+bumping both `package.json`s and lockfiles; `.release-please-manifest.json`
+holds the current version). Merging it tags `vX.Y.Z` and the same
+workflow pushes a linux/amd64 + linux/arm64 image to Docker Hub as
+`zarmstrong/resumecms` (`X.Y.Z`, `X.Y`, `X`, `latest`; only the newest
+release moves the last three). A manual run with a tag publishes that
+tag's image again. The image installs with `npm ci` from the
+lockfiles. The production sites still build from this checkout, not
+from the published image. When touching
 templates, run both templates commands locally before considering the
 change done; when touching `server/src`, run `npm test` from `server/`;
 when touching `client/src`, run `npm test` from `client/`. There's no root

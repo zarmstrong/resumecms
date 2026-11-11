@@ -119,6 +119,8 @@ in prose; check the diff against the ones that apply, especially:
   (issue #105).
 - SPA routes contain no dot; CI jobs stay behind `changes` and in
   `ci-passed`'s `needs`.
+- The release workflow's Docker job publishes only release tags, and the
+  Dockerfile keeps installing with `npm ci` from the lockfiles.
 - CLAUDE.md/README.md prose still matches the behavior.
 
 Run the tests for the touched packages if they haven't been reported

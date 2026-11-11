@@ -1,8 +1,11 @@
 # ---- Stage 1: build the React client ----------------------------------
-FROM node:24-bookworm-slim AS client-build
+# The bundle is the same on every architecture, so a multi-platform build
+# makes it once on the builder's own platform instead of under emulation.
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS client-build
 WORKDIR /app/client
-COPY client/package.json ./
-RUN npm install
+# npm ci installs exactly the lockfile CI tested, never a fresh resolve.
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
 COPY client/ ./
 COPY templates/ /app/templates/
 RUN npm run build
@@ -30,8 +33,8 @@ ENV PUPPETEER_SKIP_DOWNLOAD=true \
     RESUMECMS_DATA_DIR=/data
 
 WORKDIR /app/server
-COPY server/package.json ./
-RUN npm install --omit=dev
+COPY server/package.json server/package-lock.json ./
+RUN npm ci --omit=dev
 
 COPY --chown=node:node server/ ./
 COPY --chown=node:node --from=client-build /app/client/dist /app/client/dist
