@@ -33,7 +33,9 @@ export function withTemplate(page, templateId) {
 // A key that's equal for two resolved pages exactly when they draw the
 // same, so the thumbnails can skip a render when the editor re-renders for
 // something else (a save finishing, a request settling) and hands down an
-// equal page as a new object. The resolved page is plain JSON.
+// equal page as a new object. The page's own `template` is left out: every
+// thumbnail draws its own (withTemplate), so picking another one mustn't
+// redraw them all. The resolved page is plain JSON.
 export function pageKey(page) {
-  return JSON.stringify(page);
+  return page ? JSON.stringify({ ...page, template: undefined }) : '';
 }

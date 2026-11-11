@@ -66,3 +66,13 @@ test('two resolutions of an unchanged draft share a key; an edit changes it', ()
   const hiddenEdit = { ...draft, sections: draft.sections.map((s) => (s.id === 'gone' ? { ...s, body: 'Changed' } : s)) };
   assert.equal(pageKey(a), pageKey(thumbnailPage(hiddenEdit, context)));
 });
+
+test("picking another template doesn't change the key, since every thumbnail draws its own", () => {
+  const a = thumbnailPage(draft, context);
+  const b = thumbnailPage({ ...draft, template: 'split' }, context);
+  assert.notEqual(a.template, b.template);
+  assert.equal(pageKey(a), pageKey(b));
+  // Its colors and fonts still count.
+  assert.notEqual(pageKey(a), pageKey(thumbnailPage({ ...draft, style: { source: 'custom', colors: { accent: '#ff0000', heading: '', text: '', background: '' }, font: '', nameFont: '' } }, context)));
+  assert.equal(pageKey(null), '');
+});

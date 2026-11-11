@@ -49,9 +49,11 @@ export function LandingTemplatePicker({ value, onChange, draft, context, scheme,
 
 // One template: its picture, then its radio and name, then its
 // description. The picture is outside the <label> (a label may hold no
-// links or buttons, even inert ones), so a click on it, which lands on the
-// card since nothing inert can be the target of one, picks the template
-// here instead.
+// links or buttons, even inert ones), so a click anywhere else on the card
+// (the picture, which can't be the target of one, lands on the card) picks
+// the template here; the label's own clicks already reach the radio. The
+// one already picked isn't picked again: that would save an unchanged
+// draft and count as an unpublished change.
 function TemplateOption({ template, name, checked, onChange, page, scheme }) {
   const radioRef = useRef(null);
   const descId = `${name}-${template.id}-desc`;
@@ -59,9 +61,9 @@ function TemplateOption({ template, name, checked, onChange, page, scheme }) {
     <div
       className={`ed-landing-template${checked ? ' is-selected' : ''}`}
       onClick={(e) => {
-        if (e.target !== e.currentTarget) return;
-        onChange(template.id);
+        if (e.target.closest('label')) return;
         radioRef.current?.focus();
+        if (!checked) onChange(template.id);
       }}
     >
       <Thumbnail page={page} templateId={template.id} scheme={scheme} />
@@ -122,16 +124,29 @@ const Thumbnail = memo(function Thumbnail({ page, templateId, scheme }) {
   );
 });
 
-// Whether an element is on the screen or close to it (inside a scrolled or
-// collapsed parent counts as off it); always true where it can't be told.
+// Whether an element is on the screen or close to it (inside a collapsed
+// parent counts as off it); always true where it can't be told. Measured
+// against the nearest scrolling ancestor (the editor's left pane), since
+// the margin of a viewport root never reaches past that pane's clipping.
 function useNearScreen(ref) {
   const [near, setNear] = useState(typeof IntersectionObserver === 'undefined');
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === 'undefined') return undefined;
-    const observer = new IntersectionObserver(([entry]) => setNear(entry.isIntersecting), { rootMargin: '200px 0px' });
+    const observer = new IntersectionObserver(([entry]) => setNear(entry.isIntersecting), {
+      root: scrollingAncestor(el),
+      rootMargin: '200px 0px',
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, [ref]);
   return near;
+}
+
+// The closest ancestor that scrolls vertically, or null (the viewport).
+function scrollingAncestor(el) {
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    if (/(auto|scroll|overlay)/.test(getComputedStyle(node).overflowY)) return node;
+  }
+  return null;
 }
