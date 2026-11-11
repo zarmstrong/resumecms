@@ -35,7 +35,8 @@ export function withTemplate(page, templateId) {
 // something else (a save finishing, a request settling) and hands down an
 // equal page as a new object. The page's own `template` is left out: every
 // thumbnail draws its own (withTemplate), so picking another one mustn't
-// redraw them all. The resolved page is plain JSON.
+// redraw them all. Nor is `seo`, which only the shell's tags read, never
+// LandingView. The resolved page is plain JSON.
 export function pageKey(page) {
-  return page ? JSON.stringify({ ...page, template: undefined }) : '';
+  return page ? JSON.stringify({ ...page, template: undefined, seo: undefined }) : '';
 }

@@ -76,3 +76,9 @@ test("picking another template doesn't change the key, since every thumbnail dra
   assert.notEqual(pageKey(a), pageKey(thumbnailPage({ ...draft, style: { source: 'custom', colors: { accent: '#ff0000', heading: '', text: '', background: '' }, font: '', nameFont: '' } }, context)));
   assert.equal(pageKey(null), '');
 });
+
+test("an SEO edit doesn't change the key, since no template draws it", () => {
+  const a = thumbnailPage(draft, context);
+  const b = { ...a, seo: { ...(a.seo || {}), title: 'Something else' } };
+  assert.equal(pageKey(a), pageKey(b));
+});

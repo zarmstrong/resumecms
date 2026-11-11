@@ -536,7 +536,8 @@ published header.
 Its **Look** group picks how it's laid out and colored:
 
 - **Template**, picked from a small live picture of each, drawn with the
-  draft as it will be published (hidden sections left out), in the
+  draft as it will be published (hidden sections left out, AI
+  suggestions you're still reviewing shown), in the
   preview's light or dark palette: *Classic* (one narrow column, the photo beside the
   headline), *Bold* (oversized headings and high contrast, every other
   section on a full-width band tinted with the accent color; made for

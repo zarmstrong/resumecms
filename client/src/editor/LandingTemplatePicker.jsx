@@ -133,7 +133,7 @@ function useNearScreen(ref) {
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === 'undefined') return undefined;
-    const observer = new IntersectionObserver(([entry]) => setNear(entry.isIntersecting), {
+    const observer = new IntersectionObserver((entries) => setNear(entries[entries.length - 1].isIntersecting), {
       root: scrollingAncestor(el),
       rootMargin: '200px 0px',
     });
