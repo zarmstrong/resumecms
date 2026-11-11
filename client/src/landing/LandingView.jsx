@@ -24,7 +24,9 @@ import './landing.css';
 // hero and then each section in an .l-main; either way its style.css,
 // scoped under .l-template-<id>, does the rest. A template whose
 // template.json says `columns: true` puts a section with `column: 'side'`
-// in its side column; the others ignore `column`. A divider is a
+// in its side column; the others ignore `column`. One whose template.json
+// says `cover: true` draws `landing.coverImage` (issue #130) itself; the
+// others ignore it. A divider is a
 // separator rather than a <section>, its title a label on the rule, and
 // is only drawn between two things it divides (dividers.js): LandingView
 // sees to that for a template without columns, and hands one with columns

@@ -77,7 +77,9 @@ for (const id of layoutIds) {
 // (issue #93). Every one ships a style.css scoped under .l-template-<id>;
 // one that changes the page's structure adds an index.jsx, and one whose
 // index.jsx draws a section with `column: 'side'` in a side column says
-// `columns: true`, so the editor offers the choice. `classic` is what an
+// `columns: true`, so the editor offers the choice. One whose index.jsx
+// draws the page's `coverImage` behind the hero says `cover: true`
+// (issue #130), so the editor offers that field. `classic` is what an
 // unknown or missing template is drawn as, so it must exist.
 const landingIds = dirsIn(path.join(TEMPLATES_DIR, 'landing'));
 for (const id of landingIds) {
@@ -85,12 +87,17 @@ for (const id of landingIds) {
   const label = `templates/landing/${id}`;
   checkId(id, label);
   const meta = readJson(path.join(dir, 'template.json'), label);
-  checkMeta(meta, label, ['columns']);
-  if (meta && 'columns' in meta && typeof meta.columns !== 'boolean') {
-    errors.push(`${label}: "columns" must be a boolean`);
+  checkMeta(meta, label, ['columns', 'cover']);
+  for (const flag of ['columns', 'cover']) {
+    if (meta && flag in meta && typeof meta[flag] !== 'boolean') {
+      errors.push(`${label}: "${flag}" must be a boolean`);
+    }
   }
   if (meta?.columns === true && !existsSync(path.join(dir, 'index.jsx'))) {
     errors.push(`${label}: "columns" needs an index.jsx that places the side column`);
+  }
+  if (meta?.cover === true && !existsSync(path.join(dir, 'index.jsx'))) {
+    errors.push(`${label}: "cover" needs an index.jsx that draws the cover image`);
   }
   const css = path.join(dir, 'style.css');
   if (!existsSync(css)) errors.push(`${label}: missing style.css`);

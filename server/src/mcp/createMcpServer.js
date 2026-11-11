@@ -48,7 +48,7 @@ Draft vs published: every write tool changes the DRAFT only, of one resume. Noth
 
 Cover letters: each resume can keep cover letters (list_cover_letters, create_cover_letter, update_cover_letter, ...; resumeId as for content). A letter is drawn under its resume's header in its look, and is private: no draft/publish, never on the public site. To write one for a job posting, read the resume (get_draft) and its tailoring (get_resume), and claim nothing the resume doesn't support.
 
-Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, services (what you offer, each with a short description, an optional price line and an optional button), a video or audio clip (media: one YouTube, Vimeo, SoundCloud or Spotify link, loaded only when a visitor presses play), publications (papers, articles, books, talks, podcasts and press, sorted newest first or grouped by kind if asked), one contact section (email, phone, service area, address, hours and a "Save contact" vCard), and documents (uploaded PDFs); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), an item's thumbnail, an image section, a gallery entry, a media section's poster, or seo.image for link previews. Its documents (PDFs) are uploaded only in the editor; a documents section can reference one already stored (get_landing_page's context.files) as { fileId, name }.`;
+Landing page: the install can also have a short home page at / (a headline, a photo, and a list of sections: text, items such as projects, links, quotes, a short timeline of a resume's latest roles, images, cards linking to some of the resumes, dividers, a row of large figures with labels, questions and answers (faq), a resume's latest education entries or its skill groups, credentials (licenses, certifications and memberships, each leaving the page once its expiry date passes), galleries of images, services (what you offer, each with a short description, an optional price line and an optional button), a video or audio clip (media: one YouTube, Vimeo, SoundCloud or Spotify link, loaded only when a visitor presses play), publications (papers, articles, books, talks, podcasts and press, sorted newest first or grouped by kind if asked), one contact section (email, phone, service area, address, hours and a "Save contact" vCard), and documents (uploaded PDFs); any section can be hidden, and with the split template put in its side column with column: 'side'), which moves the default resume to /resume. It has its own draft and publish: get_landing_page, update_landing_page and publish_landing_page, independent of every resume's. set_landing_page_enabled switches it on or off at once; it only shows once published, and never on a resume's own domain. Its images are uploaded with upload_landing_image and referenced by the id it returns, as { imageId, alt }: the hero photo (photo: 'upload' with photoImage), the cover template's wide image behind the headline (coverImage, whose alt may be ''), an item's thumbnail, an image section, a gallery entry, a media section's poster, or seo.image for link previews. Its documents (PDFs) are uploaded only in the editor; a documents section can reference one already stored (get_landing_page's context.files) as { fileId, name }.`;
 
 const BLOCK_TYPE_ENUM = z.enum(BLOCK_TYPES);
 const jsonObject = () => z.record(z.string(), z.unknown());
@@ -798,6 +798,12 @@ const LANDING_TOOLS = [
           .describe("'resume' uses the default resume's published header photo, 'custom' uses photoUrl, 'upload' uses photoImage, 'none' shows none."),
         photoUrl: z.string().nullable().optional().describe("A base64 data: URL of a JPEG, PNG or WebP image, for photo: 'custom'."),
         photoImage: landingImage().nullable().optional().describe("An uploaded image, for photo: 'upload'."),
+        coverImage: landingImage()
+          .nullable()
+          .optional()
+          .describe(
+            "A wide uploaded image drawn behind the headline by a template made for one (template 'cover'); every other template ignores it, but it's still published with the page. Its alt may be '' (the headline is real text over it). null removes it."
+          ),
         sections: z
           .array(landingSection())
           .nullable()
@@ -820,7 +826,7 @@ const LANDING_TOOLS = [
           .string()
           .nullable()
           .optional()
-          .describe("The landing template, a folder name under templates/landing/: 'classic' (default), 'bold', 'centered', 'editorial', 'formal' or 'split'. An unknown id is drawn as classic."),
+          .describe("The landing template, a folder name under templates/landing/: 'classic' (default), 'bold', 'centered', 'cover', 'editorial', 'formal' or 'split'. An unknown id is drawn as classic."),
         style: landingStyle()
           .nullable()
           .optional()

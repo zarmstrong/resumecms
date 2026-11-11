@@ -41,9 +41,10 @@ test('landing templates need template.json and a scoped style.css; index.jsx is 
   const ok = validate({
     classic,
     split: { 'template.json': { ...META, columns: true }, 'style.css': css('split'), 'index.jsx': 'export default () => null;' },
+    cover: { 'template.json': { ...META, cover: true }, 'style.css': css('cover'), 'index.jsx': 'export default () => null;' },
   });
   assert.equal(ok.ok, true, ok.out);
-  assert.match(ok.out, /2 landing template\(s\)/);
+  assert.match(ok.out, /3 landing template\(s\)/);
 
   const cases = [
     [{ classic, other: { 'template.json': META } }, /templates\/landing\/other: missing style\.css/],
@@ -53,6 +54,8 @@ test('landing templates need template.json and a scoped style.css; index.jsx is 
     [{ classic, other: { 'template.json': { ...META, skillsDisplay: 'pills' }, 'style.css': css('other') } }, /other: unrecognized field "skillsDisplay"/],
     [{ classic, other: { 'template.json': { ...META, columns: 'yes' }, 'style.css': css('other'), 'index.jsx': '' } }, /other: "columns" must be a boolean/],
     [{ classic, other: { 'template.json': { ...META, columns: true }, 'style.css': css('other') } }, /other: "columns" needs an index\.jsx/],
+    [{ classic, other: { 'template.json': { ...META, cover: 1 }, 'style.css': css('other'), 'index.jsx': '' } }, /other: "cover" must be a boolean/],
+    [{ classic, other: { 'template.json': { ...META, cover: true }, 'style.css': css('other') } }, /other: "cover" needs an index\.jsx/],
     [{ classic, Other_1: { 'template.json': META, 'style.css': css('Other_1') } }, /folder name "Other_1" must be lowercase kebab-case/],
     [{ split: { 'template.json': META, 'style.css': css('split') } }, /missing "classic"/],
   ];

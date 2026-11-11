@@ -11,8 +11,9 @@ const TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 // (into the draft as it is then: see landingImages.js), so nothing here
 // holds on to the draft across the wait. The server re-encodes the file (and
 // drops its metadata); here it's only checked enough to say what's wrong
-// before sending it.
-export function LandingImageField({ label, hint, value, images, limits, onUpload, onChange, altHint }) {
+// before sending it. With `altOptional` (the cover image, issue #130, which
+// publishing doesn't ask about) a blank description isn't flagged.
+export function LandingImageField({ label, hint, value, images, limits, onUpload, onChange, altHint, altOptional = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const stored = value ? images.find((image) => image.id === value.imageId) : null;
@@ -69,10 +70,10 @@ export function LandingImageField({ label, hint, value, images, limits, onUpload
             value={value.alt}
             maxLength={limits?.alt}
             onChange={(e) => onChange({ ...value, alt: e.target.value })}
-            placeholder="Describe the image (required)"
+            placeholder={altOptional ? 'Describe the image (optional)' : 'Describe the image (required)'}
             aria-label="Image description (alt text)"
           />
-          {!value.alt.trim() && (
+          {!altOptional && !value.alt.trim() && (
             <span className="ed-field-hint ed-landing-card-status">{altHint || 'Say what it shows, for visitors who use a screen reader.'}</span>
           )}
         </>
@@ -83,7 +84,7 @@ export function LandingImageField({ label, hint, value, images, limits, onUpload
 }
 
 // `obj` with `ref` under `key`, or without the key when there's none: a
-// thumbnail, the hero's photoImage and seo.image are only stored when set.
+// thumbnail, the hero's photoImage, coverImage and seo.image are only stored when set.
 export function withImageRef(obj, key, ref) {
   const { [key]: _removed, ...rest } = obj;
   return ref ? { ...rest, [key]: ref } : rest;
