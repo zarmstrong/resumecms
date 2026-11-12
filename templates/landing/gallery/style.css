@@ -104,7 +104,9 @@
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* The buttons' column takes what they need up to 45% of the bar, so
+     long labels wrap there instead of squeezing the headline. */
+  grid-template-columns: minmax(0, 1fr) fit-content(45%);
   column-gap: 32px;
   align-items: center;
 }
