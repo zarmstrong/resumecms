@@ -82,7 +82,7 @@ release PR open (`release-please-config.json`, `simple` release type,
 bumping both `package.json`s and lockfiles; `.release-please-manifest.json`
 holds the current version). Merging it tags `vX.Y.Z` and the same
 workflow pushes a linux/amd64 + linux/arm64 image to Docker Hub as
-`zarmstrong/resumecms` (`X.Y.Z`, `X.Y`, `X`, `latest`; only the newest
+`zacharmstrong/resumecms` (`X.Y.Z`, `X.Y`, `X`, `latest`; only the newest
 release moves the last three). A manual run with a tag publishes that
 tag's image again. The image installs with `npm ci` from the
 lockfiles. The production sites still build from this checkout, not

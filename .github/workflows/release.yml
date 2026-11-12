@@ -42,7 +42,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: docker.io/zarmstrong/resumecms
+  IMAGE: docker.io/zacharmstrong/resumecms
 
 jobs:
   release-please:
