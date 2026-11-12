@@ -1052,7 +1052,7 @@ is the pre-#93 layout moved out of it unchanged, and must stay
 pixel-identical to it (its one change, from the accessibility bar below,
 is a fix: a visitor who asks for reduced motion no longer gets the
 card's lift; for everyone else it's identical). `bold`, `card`, `centered`, `cover`, `editorial` (issue #130, pure
-CSS), `directory`, `formal` and `split` size themselves with container queries (and
+CSS), `directory`, `formal`, `gallery` and `split` size themselves with container queries (and
 `bold` and `card` their type with container units) on the page root, so the editor's
 narrower preview matches a phone. `card`
 (issue #130, pure CSS) is a business card for one phone screen: the hero
@@ -1072,7 +1072,16 @@ with the background's as its label, and the link badges are outlined,
 because `--r-on-accent` (`contrastTextFor()`, see "Text on a color" below)
 is only the better of white and near-black, and on a mid-tone accent
 neither reaches AA. So any accent the person picks keeps its text
-readable. A template must render every section kind
+readable; `gallery` (issue #130) follows the same rule. Its `index.jsx`
+(no `columns`) only wraps a run of consecutive image sections in an
+`.l-run` and puts each one's width over height on its wrapper
+(`--l-run-ratio`), so `style.css` can lay the run out as rows of one
+height without cropping (a shape past 4:1 or 1:4 is clamped and
+letterboxed, and a title goes under its picture so a row's pictures line
+up; a section the preview shows as hidden is drawn after its run, never
+in or between one, so the preview groups what the page will); its gallery section and thumbnailed items are
+CSS column masonries, the thumbnails at their stored shape
+(`aspect-ratio: revert-layer` undoes the shared 4:3 crop). A template must render every section kind
 (`LandingView`'s `renderSection` and `SectionBody` draw them, a divider
 as a `role="separator"` rather than a `<section>`; the template only
 arranges).
