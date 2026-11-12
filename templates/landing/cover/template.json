@@ -1,0 +1,6 @@
+{
+  "label": "Cover",
+  "description": "A wide cover image across the top of the page with the name and buttons over it, darkened so they stay readable on any picture, then the sections in one column. Without a cover image, the headline sits on a band of the heading color. For hospitality, real estate, trades, outdoor work, performers and chefs.",
+  "author": "resumecms",
+  "cover": true
+}

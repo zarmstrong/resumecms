@@ -9,7 +9,10 @@
 // Targets: { kind: 'photo' }, { kind: 'seo' }, { kind: 'section', sectionId }
 // and { kind: 'item', sectionId, index }, and a gallery's entry (issue #120),
 // { kind: 'gallery', sectionId, index }, known by its key like an item, and
-// a media section's poster (issue #121), { kind: 'poster', sectionId }.
+// a media section's poster (issue #121), { kind: 'poster', sectionId },
+// and the cover image (issue #130), { kind: 'cover' }, which like the share
+// image goes into the draft whatever else changed (the template included:
+// the field stays in the editor while one is set, so it can be removed).
 // A document upload (issue #128) works the same way, for a documents
 // section's entry, { kind: 'document', sectionId, index }, also known by
 // its key, and is applied by applyUploadedFile().
@@ -82,6 +85,8 @@ export function applyUploadedImage(landing, spot, imageId) {
       return landing.photo === 'upload' ? { ...landing, photoImage: ref(landing.photoImage) } : null;
     case 'seo':
       return { ...landing, seo: { ...landing.seo, image: ref(landing.seo?.image) } };
+    case 'cover':
+      return { ...landing, coverImage: ref(landing.coverImage) };
     case 'section': {
       const section = landing.sections.find((s) => s.id === target.sectionId);
       if (section?.kind !== 'image') return null;

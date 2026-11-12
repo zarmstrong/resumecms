@@ -36,6 +36,9 @@ const presetMeta = import.meta.glob('../../../templates/presets/*/template.json'
 // The landing page's templates (issue #93), templates/landing/<id>/: a
 // template.json, a style.css scoped under `.l-template-<id>` and an
 // optional index.jsx arranging the hero and sections (see LandingView.jsx).
+// Each entry carries its template.json's flags as they are: `columns` (it
+// has a side column) and `cover` (it draws the page's coverImage, issue
+// #130), which the editor reads to offer the matching fields.
 const landingMeta = import.meta.glob('../../../templates/landing/*/template.json', {
   eager: true,
   import: 'default',

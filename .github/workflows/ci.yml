@@ -6,10 +6,15 @@ name: CI
 # runs stays pending forever, so the workflow itself has no `paths:` filter
 # and a job that isn't needed is skipped instead, which the gate counts as
 # a pass.
+#
+# `edited` is there so fixing a PR's title re-runs the `pr-title` check.
+# Every job runs on it like on a push: skipping the tests on an edit would
+# let it cancel a test run in progress and leave a green `ci-passed` behind.
 
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -26,6 +31,7 @@ jobs:
       server: ${{ steps.diff.outputs.server }}
       client: ${{ steps.diff.outputs.client }}
       templates: ${{ steps.diff.outputs.templates }}
+      docker: ${{ steps.diff.outputs.docker }}
     steps:
       # A pull_request run checks out GitHub's merge of the PR into main, so
       # its first parent is main and the diff against it is the whole PR.
@@ -48,11 +54,15 @@ jobs:
           # shareImages.js today), so a server change runs them too.
           client=$(has '^"?(client|server)/')
           templates=$(has '^"?(templates/|client/src/resume/templateRegistry\.js"?$|scripts/validate-templates\.mjs"?$)')
-          [ "$all" = true ] && server=true client=true templates=true
+          # The image installs from the lockfiles, so a dependency bump
+          # builds it too.
+          docker=$(has '^"?(Dockerfile|\.dockerignore|(server|client)/package(-lock)?\.json)"?$')
+          [ "$all" = true ] && server=true client=true templates=true docker=true
           {
             echo "server=$server"
             echo "client=$client"
             echo "templates=$templates"
+            echo "docker=$docker"
           } >> "$GITHUB_OUTPUT"
 
   server:
@@ -125,12 +135,56 @@ jobs:
       - name: Validate templates/ metadata
         run: node scripts/validate-templates.mjs
 
+  # main only allows squash merges, whose title is the PR title (repo
+  # settings, not this file), and release-please
+  # builds versions and the changelog from those (see release.yml), so the
+  # title has to be a Conventional Commit. The title goes through env, never
+  # into the script itself.
+  pr-title:
+    name: pr-title
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|perf|revert|docs|refactor|test|build|ci|chore|style'
+          if printf '%s' "$TITLE" | grep -Eq "^($types)(\([a-z0-9._/-]+\))?!?: [^ ]"; then
+            echo "OK: $TITLE"
+            exit 0
+          fi
+          echo "::error::PR title isn't a Conventional Commit: $TITLE"
+          echo "Use <type>[(scope)][!]: <description>, where type is one of"
+          echo "${types//|/, }. feat makes a minor release, fix and perf a"
+          echo "patch, and a ! (or a BREAKING CHANGE: footer) a major one."
+          echo "Examples:"
+          echo "  feat: add a cover landing template (#130)"
+          echo "  fix(pdf): keep the queue moving after a timeout"
+          exit 1
+
+  # Builds the image for amd64 without pushing it, so a broken Dockerfile or
+  # lockfile shows up here rather than in a release.
+  docker:
+    name: docker build
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+
   # The one required check. It runs whatever happened above: a skipped job
   # passes, anything else that isn't a success (including `changes` itself
   # failing, or a cancelled job) fails it.
   ci-passed:
     name: ci-passed
-    needs: [changes, server, client, templates]
+    needs: [changes, server, client, templates, pr-title, docker]
     if: always()
     runs-on: ubuntu-latest
     steps:

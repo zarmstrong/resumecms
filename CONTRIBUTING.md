@@ -46,7 +46,25 @@ etc.), open a PR against `main` as usual. There's no formal issue process —
 just describe what changed and why, and how you tested it.
 
 A PR can only merge into `main` once CI's `ci-passed` check is green. CI
-runs the server tests, the client tests and build, and the template
-validator, each only when the PR touches its part. Run the same locally
+runs the server tests, the client tests and build, the template
+validator, and a Docker build, each only when the PR touches its part.
+
+PRs are squash-merged (the only merge method `main` allows), and the PR
+title becomes the commit's title, with the PR's commit messages as its
+body, so the title must be a [Conventional Commit](https://www.conventionalcommits.org/),
+e.g. `feat: add a cover landing template (#130)` or `fix(pdf): retry a
+timed-out render`. CI's `pr-title` check enforces it. Releases are built
+from these titles: release-please keeps a release PR open with the next
+version and changelog. `feat` makes a minor release, `fix` and `perf` a
+patch, and a `!` after the type (or a `BREAKING CHANGE:` footer) a major
+one. `docs`, `refactor`, `test`, `build`, `ci`, `chore` and `style`
+make no release on their own. Merging the release PR tags the release
+and publishes the Docker image (`.github/workflows/release.yml`). The
+commit messages inside a PR are free-form, but they land in the squash
+commit's body, where release-please still reads a few things: a
+`BREAKING CHANGE:` line or `BREAKING-CHANGE:` anywhere makes a major
+release, a `Release-As: x.y.z` line forces that version, and
+`type: text` lines in the last paragraph become extra changelog
+entries. Leave those out unless you mean them. Run the same locally
 first: `npm test` in `server/` and `client/`, and the two commands above
 for templates.
