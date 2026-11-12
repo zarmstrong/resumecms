@@ -1,0 +1,662 @@
+/* Card (issue #130): a digital business card, for a page shared by QR
+   code or in person (trades, real estate, sales, hairstylists, nurses at
+   job fairs). The hero is the card: the photo over a band tinted with the
+   accent, then the availability, the name and the title, centered, and the
+   buttons large and full width. A links section is a stacked list of rows
+   as large as the buttons, so a card followed by one is everything
+   important on one phone screen. The other sections follow in the same
+   narrow column. No index.jsx, so LandingView arranges it (the hero, then
+   the sections, in an .l-main). Sized by the page's own width (container
+   units and queries), so the editor's narrower preview shows what a phone
+   would.
+
+   Everything a visitor taps is at least 44 px tall: the buttons and link
+   rows (52; the hero's are 48 on a phone), the resume cards and documents
+   (the whole tile is the link), "Save contact" and a service's button (a
+   hero button's look),
+   the contact section's email, phone and "Directions", "Full resume", an
+   FAQ's questions, the gallery's and the media section's buttons, and a
+   standalone link (a list entry's or a publication's title, a quote's
+   name, a card's "PDF", "Verify"), whose padding reaches past its line.
+
+   No text is drawn in the accent or on it: what's accent-colored text
+   elsewhere (the title, the availability, a card's "View resume", "Full
+   resume", a stat's figure, a service's price, an FAQ's + and −, a
+   credential's kind and "Verify", the contact links, a document's "PDF"
+   tag, the gallery's and the media section's buttons) is in the heading
+   or text color here, and so are the focus rings and the link badges.
+   The primary button, "Save contact" and the play button are filled with
+   the heading color, with the background's as their label (the palette's
+   own pair), since --r-on-accent, the better of white and near-black,
+   isn't AA on every mid-tone accent. The accent only draws shapes: the
+   band behind the photo (a tint, which no text sits on), the strip on a
+   card without a photo, the availability's dot, the bars over section
+   titles and stats, a hovered button's ring and the timeline's dots.
+   Faded lines (meta, captions, labels) are a mix of the text and
+   background colors rather than an opacity. The only motion it adds is a
+   pressed button's, and that only under prefers-reduced-motion:
+   no-preference (the shared gallery's zoom and fade keep theirs).
+
+   Words break anywhere they must, so a long name, email address or label
+   wraps instead of widening its box past the page. */
+.l-template-card {
+  container-type: inline-size;
+  overflow-wrap: anywhere;
+  --l-card-line: color-mix(in srgb, var(--r-text, var(--ink)) 18%, transparent);
+  --l-card-muted: color-mix(in srgb, var(--r-text, var(--ink)) 85%, var(--r-bg, var(--panel)));
+}
+
+.l-template-card .l-main {
+  box-sizing: border-box;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: clamp(16px, 5cqi, 64px) 16px 72px;
+}
+
+/* A visible ring in the heading color on everything that takes focus (the
+   shared ones are in the accent, which may be pale). A resume card draws
+   its ring around the whole card, on the ::after the shared look already
+   moves it to; a document's is around its link, like any other. */
+.l-template-card a:not(.l-card-link):focus-visible,
+.l-template-card button:focus-visible,
+.l-template-card summary:focus-visible {
+  outline: 3px solid var(--r-heading, var(--ink));
+  outline-offset: 3px;
+}
+
+.l-template-card .l-card-link:focus-visible::after {
+  outline: 3px solid var(--r-heading, var(--ink));
+  outline-offset: 3px;
+}
+
+/* The card: centered, on a panel with a soft shadow, a strip of the
+   accent along its top edge. */
+.l-template-card .l-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 28px;
+  padding: 30px clamp(16px, 5cqi, 32px) clamp(20px, 5cqi, 28px);
+  border: 1px solid var(--l-card-line);
+  border-radius: 20px;
+  background: var(--r-bg, var(--panel));
+  box-shadow:
+    inset 0 6px 0 var(--r-accent, var(--ink)),
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 12px 32px rgb(0 0 0 / 0.08);
+}
+
+/* With a photo, a band tinted with the accent instead, the photo set
+   halfway over its lower edge; no text is on it. */
+.l-template-card .l-hero:has(> .l-photo) {
+  background: linear-gradient(color-mix(in srgb, var(--r-accent, var(--ink)) 24%, var(--r-bg, var(--panel))) 0 84px, var(--r-bg, var(--panel)) 84px);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 12px 32px rgb(0 0 0 / 0.08);
+}
+
+.l-template-card .l-photo {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 16px;
+  box-shadow: 0 0 0 5px var(--r-bg, var(--panel));
+}
+
+.l-template-card .l-hero-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+/* The availability as a status: a dot of the accent beside it, the words
+   in the text color. */
+.l-template-card .l-availability {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 12px;
+  padding: 4px 14px;
+  border: 1px solid var(--l-card-line);
+  border-radius: 999px;
+  background: none;
+  color: var(--r-text, var(--ink));
+  font-size: 0.85em;
+  font-weight: 600;
+  text-align: start;
+}
+
+.l-template-card .l-availability::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--r-accent, var(--ink));
+}
+
+.l-template-card .l-headline {
+  font-size: clamp(1.75em, 1.2em + 3cqi, 2.4em);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.l-template-card .l-subheadline {
+  margin-top: 6px;
+  font-size: 1.1em;
+  color: var(--r-text, var(--ink));
+}
+
+/* The buttons: stacked, full width, 52 px tall. */
+.l-template-card .l-actions {
+  flex-direction: column;
+  align-items: stretch;
+  align-self: stretch;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.l-template-card .l-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 12px 20px;
+  border: 2px solid var(--r-heading, var(--ink));
+  border-radius: 12px;
+  background: none;
+  color: var(--r-heading, var(--ink));
+  font-size: 1.05em;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  transition: none;
+}
+
+.l-template-card .l-action:hover,
+.l-template-card .l-action:focus-visible {
+  background: color-mix(in srgb, var(--r-heading, var(--ink)) 8%, transparent);
+}
+
+/* The heading color, with the background's as its label. Hovered, a ring
+   of the accent rather than another fill, so the label keeps its
+   contrast. "Save contact" (issue #124) is drawn the same way. */
+.l-template-card .l-action-primary,
+.l-template-card .l-action-primary:hover,
+.l-template-card .l-action-primary:focus-visible,
+.l-template-card .l-contact-save,
+.l-template-card .l-contact-save:hover,
+.l-template-card .l-contact-save:focus-visible {
+  background: var(--r-heading, var(--ink));
+  color: var(--r-bg, var(--panel));
+}
+
+.l-template-card .l-action:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--r-accent, var(--ink)) 50%, transparent);
+}
+
+/* Sections: one narrow column, each title over a short bar of the
+   accent. */
+.l-template-card .l-section {
+  margin: 0 0 40px;
+}
+
+.l-template-card .l-section:last-child {
+  margin-bottom: 0;
+}
+
+/* A links section straight under the card reads as part of it. */
+.l-template-card .l-hero + .l-section-links {
+  margin-top: -8px;
+}
+
+.l-template-card .l-section-title {
+  font-size: 1.2em;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: 14px;
+}
+
+.l-template-card .l-section-title::before {
+  content: '';
+  display: block;
+  width: 28px;
+  height: 4px;
+  margin-bottom: 10px;
+  border-radius: 2px;
+  background: var(--r-accent, var(--ink));
+}
+
+/* Every link underlined in its own color (the shared look underlines in
+   the accent, which a pale one would hide). */
+.l-template-card .l-inline-link,
+.l-template-card a.l-item-title,
+.l-template-card .l-card-pdf,
+.l-template-card a.l-quote-name,
+.l-template-card a.l-role-company,
+.l-template-card .l-roles-more,
+.l-template-card a.l-credential-verify,
+.l-template-card a.l-publication-title,
+.l-template-card a.l-contact-link {
+  border-bottom: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.l-template-card .l-inline-link:hover,
+.l-template-card a.l-item-title:hover,
+.l-template-card .l-card-pdf:hover,
+.l-template-card a.l-quote-name:hover,
+.l-template-card a.l-role-company:hover,
+.l-template-card .l-roles-more:hover,
+.l-template-card a.l-credential-verify:hover,
+.l-template-card a.l-publication-title:hover,
+.l-template-card a.l-contact-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* A link that stands on its own gets a 44 px tall target: padding that
+   reaches past its line, taken back by a margin so the text doesn't
+   move. */
+.l-template-card a.l-item-title,
+.l-template-card .l-card-pdf,
+.l-template-card a.l-quote-name,
+.l-template-card a.l-credential-verify,
+.l-template-card a.l-publication-title {
+  display: inline-block;
+  padding-block: 12px;
+  margin-block: -12px;
+}
+
+.l-template-card .l-card-pdf {
+  padding-inline: 8px;
+  margin-inline: -8px;
+}
+
+/* Faded lines in a mix of the text and background colors, never an
+   opacity. */
+.l-template-card .l-item-meta,
+.l-template-card .l-role-meta,
+.l-template-card .l-quote-by,
+.l-template-card .l-figure-caption,
+.l-template-card .l-gallery-caption,
+.l-template-card .l-gallery-bar,
+.l-template-card .l-gallery-view-alt,
+.l-template-card .l-media-caption,
+.l-template-card .l-stat-label,
+.l-template-card .l-credential-meta,
+.l-template-card .l-publication-meta,
+.l-template-card .l-document-meta,
+.l-template-card .l-contact-label {
+  opacity: 1;
+  color: var(--l-card-muted);
+}
+
+/* List entries a little apart, a thumbnail rounded like the card. */
+.l-template-card .l-items {
+  gap: 20px;
+}
+
+.l-template-card .l-item-image {
+  border-radius: 10px;
+}
+
+/* Links as a stacked list of rows as large as the buttons, each its badge,
+   its label and an arrow. */
+.l-template-card .l-links {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.l-template-card .l-links a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 8px 16px 8px 10px;
+  border: 1px solid var(--l-card-line);
+  border-radius: 12px;
+  color: var(--r-heading, var(--ink));
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.l-template-card .l-links a::after {
+  content: '\203A';
+  content: '\203A' / '';
+  flex: none;
+  margin-inline-start: auto;
+  font-size: 1.5em;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--r-text, var(--ink));
+}
+
+.l-template-card .l-links a:hover {
+  border-color: var(--r-heading, var(--ink));
+  background: color-mix(in srgb, var(--r-heading, var(--ink)) 5%, transparent);
+}
+
+/* The badge a tile tinted with the accent, its letter in the heading
+   color (the shared one is on-accent over the accent). */
+.l-template-card .r-link-badge {
+  flex: none;
+  box-sizing: border-box;
+  width: 2.6em;
+  height: 2.6em;
+  margin: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--r-accent, var(--ink)) 16%, var(--r-bg, var(--panel)));
+  color: var(--r-heading, var(--ink));
+  font-size: 0.75em;
+  opacity: 1;
+}
+
+/* Resume cards stacked, each a tile that's a link as a whole. */
+.l-template-card .l-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.l-template-card .l-card {
+  padding: 16px 18px;
+  border: 1px solid var(--l-card-line);
+  border-radius: 14px;
+  transition: none;
+}
+
+.l-template-card .l-card:hover,
+.l-template-card .l-card:focus-within {
+  border-color: var(--r-heading, var(--ink));
+  transform: none;
+}
+
+.l-template-card .l-card-cta {
+  color: var(--r-text, var(--ink));
+  font-weight: 600;
+}
+
+/* Quotes: the bar a little heavier. */
+.l-template-card .l-quotes {
+  gap: 26px;
+}
+
+.l-template-card .l-quote {
+  border-left-width: 4px;
+}
+
+/* Experience and education: "Full resume" a 44 px tall link in the
+   heading color. */
+.l-template-card .l-roles {
+  gap: 16px;
+}
+
+.l-template-card .l-roles-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--r-heading, var(--ink));
+  font-weight: 600;
+}
+
+.l-template-card .l-figure-image {
+  border-radius: 14px;
+}
+
+/* Skill chips a little larger. */
+.l-template-card .l-skill {
+  padding: 4px 12px;
+}
+
+/* Stats each on a tile, the figure in the heading color (the shared one
+   is in the accent). */
+.l-template-card .l-stats {
+  gap: 12px;
+}
+
+.l-template-card .l-stat {
+  padding: 14px 16px;
+  border: 1px solid var(--l-card-line);
+  border-radius: 14px;
+}
+
+.l-template-card .l-stat-value {
+  font-size: 2em;
+  font-weight: 700;
+  color: var(--r-heading, var(--ink));
+}
+
+/* Questions at least 44 px tall, their + and − in the heading color. */
+.l-template-card .l-faq-question {
+  padding: 13px 0;
+}
+
+.l-template-card .l-faq-question::after {
+  color: var(--r-heading, var(--ink));
+}
+
+/* Credentials, services and documents each on a tile. */
+.l-template-card .l-credentials,
+.l-template-card .l-services,
+.l-template-card .l-documents {
+  gap: 12px;
+}
+
+.l-template-card .l-credential,
+.l-template-card .l-service,
+.l-template-card .l-document {
+  padding: 14px 16px;
+  border: 1px solid var(--l-card-line);
+  border-radius: 14px;
+}
+
+/* A credential's kind and a document's "PDF" in the heading color inside
+   an outline of the accent (the shared tags are accent text on a tint). */
+.l-template-card .l-credential-kind,
+.l-template-card .l-document-type {
+  border: 1.5px solid var(--r-accent, var(--ink));
+  background: none;
+  color: var(--r-heading, var(--ink));
+}
+
+.l-template-card a.l-credential-verify {
+  color: var(--r-heading, var(--ink));
+  font-weight: 600;
+}
+
+/* A service: its price in the heading color, its button a hero button,
+   full width. */
+.l-template-card .l-service-price {
+  color: var(--r-heading, var(--ink));
+  font-weight: 700;
+}
+
+.l-template-card .l-service-action {
+  align-self: stretch;
+  margin-top: 10px;
+}
+
+/* A document: the whole tile opens it, like a resume card. */
+.l-template-card .l-document {
+  position: relative;
+}
+
+.l-template-card .l-document:hover,
+.l-template-card .l-document:focus-within {
+  border-color: var(--r-heading, var(--ink));
+}
+
+.l-template-card a.l-document-link {
+  border-bottom: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.l-template-card .l-document:hover a.l-document-link {
+  text-decoration-thickness: 2px;
+}
+
+.l-template-card a.l-document-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+}
+
+/* Publications: a group's subheading in the heading color. */
+.l-template-card .l-publications {
+  gap: 20px;
+}
+
+.l-template-card .l-publication-group-title {
+  color: var(--r-heading, var(--ink));
+}
+
+/* A contact section (issue #124): each line a row between hairlines, its
+   label over it, the email, phone and "Directions" 44 px tall links in
+   the heading color, and "Save contact" a full-width button. */
+.l-template-card .l-contact {
+  align-items: stretch;
+  gap: 18px;
+}
+
+.l-template-card .l-contact-lines {
+  display: block;
+  border-top: 1px solid var(--l-card-line);
+}
+
+.l-template-card .l-contact-line {
+  display: block;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--l-card-line);
+}
+
+.l-template-card .l-contact-label {
+  padding-top: 0;
+  margin-bottom: 2px;
+}
+
+.l-template-card a.l-contact-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--r-heading, var(--ink));
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+.l-template-card a.l-contact-link.l-contact-directions {
+  display: flex;
+  width: fit-content;
+  margin-top: 0;
+  font-size: 0.95em;
+}
+
+/* A gallery: two thumbnails a row on a phone, rounded like the card; its
+   view's buttons 44 px and in the heading color. */
+.l-template-card .l-gallery {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
+  gap: 10px;
+}
+
+.l-template-card .l-gallery-open {
+  border-radius: 12px;
+}
+
+.l-template-card .l-gallery-dialog {
+  border-radius: 16px;
+}
+
+.l-template-card .l-gallery-button {
+  min-width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.l-template-card .l-gallery-button:hover,
+.l-template-card .l-gallery-button:focus-visible {
+  border-color: var(--r-heading, var(--ink));
+  color: var(--r-heading, var(--ink));
+}
+
+/* A media section (issue #121): rounded like the card, the play button
+   filled like the primary one. */
+.l-template-card .l-media-facade,
+.l-template-card .l-media-frame {
+  border-radius: 14px;
+}
+
+.l-template-card .l-media-play,
+.l-template-card .l-media-play:hover {
+  min-height: 48px;
+  box-sizing: border-box;
+  background: var(--r-heading, var(--ink));
+  color: var(--r-bg, var(--panel));
+}
+
+.l-template-card .l-media-play:hover {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--r-accent, var(--ink)) 50%, transparent);
+}
+
+.l-template-card .l-media-transcript-toggle {
+  padding: 12px 0;
+}
+
+/* Motion: only a pressed button shrinks a little, and only for a visitor
+   who hasn't asked for less. */
+@media (prefers-reduced-motion: no-preference) {
+  .l-template-card .l-action,
+  .l-template-card .l-links a,
+  .l-template-card .l-media-play {
+    transition: transform 80ms ease;
+  }
+  .l-template-card a.l-action:active,
+  .l-template-card .l-links a:active,
+  .l-template-card .l-media-play:active {
+    transform: scale(0.98);
+  }
+}
+
+/* A phone: the column closer to the screen's edges, and the card a little
+   shorter (a smaller photo, the buttons 48 px), so a links section under
+   it starts on the first screen. */
+@container (max-width: 420px) {
+  .l-template-card .l-main {
+    padding: 12px 12px 56px;
+  }
+  .l-template-card .l-hero {
+    padding-top: 22px;
+    border-radius: 16px;
+    margin-bottom: 24px;
+  }
+  .l-template-card .l-photo {
+    width: 96px;
+    height: 96px;
+    margin-bottom: 12px;
+  }
+  .l-template-card .l-hero:has(> .l-photo) {
+    background: linear-gradient(color-mix(in srgb, var(--r-accent, var(--ink)) 24%, var(--r-bg, var(--panel))) 0 66px, var(--r-bg, var(--panel)) 66px);
+  }
+  .l-template-card .l-availability {
+    margin-bottom: 10px;
+  }
+  .l-template-card .l-actions {
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .l-template-card .l-hero .l-action {
+    min-height: 48px;
+    padding-block: 10px;
+  }
+}

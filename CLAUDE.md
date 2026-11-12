@@ -1051,10 +1051,17 @@ template shares (the look of each part), never the arrangement: `classic`
 is the pre-#93 layout moved out of it unchanged, and must stay
 pixel-identical to it (its one change, from the accessibility bar below,
 is a fix: a visitor who asks for reduced motion no longer gets the
-card's lift; for everyone else it's identical). `bold`, `centered`, `cover`, `editorial` (issue #130, pure
+card's lift; for everyone else it's identical). `bold`, `card`, `centered`, `cover`, `editorial` (issue #130, pure
 CSS), `directory`, `formal` and `split` size themselves with container queries (and
-`bold` its type with container units) on the page root, so the editor's
-narrower preview matches a phone. `bold`
+`bold` and `card` their type with container units) on the page root, so the editor's
+narrower preview matches a phone. `card`
+(issue #130, pure CSS) is a business card for one phone screen: the hero
+centered on a panel, its buttons and a links section's rows full width
+and at least 44 px tall (as is every other control and standalone link,
+the latter through padding its negative margin takes back; a link inside
+a line of text keeps its line's height), and
+"Save contact" drawn as its primary button; like `bold` it draws no text
+in the accent or on it. `bold`
 (issue #130) bands every other *shown* section with
 `:nth-child(odd of section.l-section:not(.l-section-hidden))`: dividers
 are `<div>`s and the preview's hidden sections are skipped, so the

@@ -826,7 +826,7 @@ const LANDING_TOOLS = [
           .string()
           .nullable()
           .optional()
-          .describe("The landing template, a folder name under templates/landing/: 'classic' (default), 'bold', 'centered', 'cover', 'directory', 'editorial', 'formal' or 'split'. An unknown id is drawn as classic."),
+          .describe("The landing template, a folder name under templates/landing/: 'classic' (default), 'bold', 'card', 'centered', 'cover', 'directory', 'editorial', 'formal' or 'split'. An unknown id is drawn as classic."),
         style: landingStyle()
           .nullable()
           .optional()
