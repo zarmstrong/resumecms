@@ -30,18 +30,20 @@ async function checkCode(secret, token) {
 // Replacing or turning off an active factor needs the current password and
 // a current code from that factor, not just the session, so a stolen
 // session cookie can't remove 2FA. A code already used (by login or an
-// earlier change) is refused like login refuses it. Returns the step to
-// record, or null.
+// earlier change) is refused like login refuses it, but said so: right
+// after a login the app still shows the code just used, and "incorrect"
+// would be untrue. Returns `{ step }` to record, or `{ error }`.
 async function checkActiveFactor(totp, credentials, { currentPassword, totpToken } = {}) {
   const passwordOk =
     typeof currentPassword === 'string' && !!credentials && verifyPassword(currentPassword, credentials.passwordHash);
   const step = await checkCode(totp.secret, totpToken);
-  if (!passwordOk || step === null) return null;
-  if (typeof totp.lastUsedStep === 'number' && step <= totp.lastUsedStep) return null;
-  return step;
+  if (!passwordOk || step === null) return { error: FACTOR_ERROR };
+  if (typeof totp.lastUsedStep === 'number' && step <= totp.lastUsedStep) return { error: CODE_USED_ERROR };
+  return { step };
 }
 
 const FACTOR_ERROR = 'Incorrect password or code';
+export const CODE_USED_ERROR = 'That code has already been used. Wait for the next one and try again.';
 
 export function createTotpRouter({ getSetting, setSetting }) {
   const router = Router();
@@ -69,9 +71,9 @@ export function createTotpRouter({ getSetting, setSetting }) {
     const totp = readTotp(getSetting('totp'));
     let lastUsedStep = totp.lastUsedStep;
     if (totp.enabled) {
-      const step = await checkActiveFactor(totp, getSetting('credentials'), req.body || {});
-      if (step === null) return res.status(401).json({ error: FACTOR_ERROR });
-      lastUsedStep = step;
+      const check = await checkActiveFactor(totp, getSetting('credentials'), req.body || {});
+      if (check.error) return res.status(401).json({ error: check.error });
+      lastUsedStep = check.step;
     }
     const secret = generateSecret();
     setSetting(
@@ -110,8 +112,8 @@ export function createTotpRouter({ getSetting, setSetting }) {
   router.post('/disable', limiter, async (req, res) => {
     const totp = readTotp(getSetting('totp'));
     if (totp.enabled) {
-      const step = await checkActiveFactor(totp, getSetting('credentials'), req.body || {});
-      if (step === null) return res.status(401).json({ error: FACTOR_ERROR });
+      const check = await checkActiveFactor(totp, getSetting('credentials'), req.body || {});
+      if (check.error) return res.status(401).json({ error: check.error });
     }
     setSetting('totp', null);
     res.json({ enabled: false });

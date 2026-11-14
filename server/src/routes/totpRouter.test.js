@@ -4,7 +4,7 @@ import express from 'express';
 import { generate, generateSecret } from 'otplib';
 import { hashPassword } from '../passwords.js';
 import { TOTP_STEP_SECONDS } from '../totpConfig.js';
-import { createTotpRouter, readTotp } from './totpRouter.js';
+import { CODE_USED_ERROR, createTotpRouter, readTotp } from './totpRouter.js';
 
 // Setting up, replacing and turning off 2FA (issue #173) over an in-memory
 // settings map, served on a real socket behind a logged-in session.
@@ -155,13 +155,18 @@ test('disable without the password and a current code is refused', async () => {
   }
 });
 
-test('disable refuses a code already used', async () => {
+test('disable refuses a code already used, and says so only with the right password', async () => {
   const active = generateSecret();
   const step = Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + 1;
   const app = await start({ enabled: true, secret: active, lastUsedStep: step });
   try {
     const res = await app.post('/disable', { currentPassword: PASSWORD, totpToken: await code(active) });
     assert.equal(res.status, 401);
+    // Not "incorrect": the code is right, just spent (e.g. by the login).
+    assert.equal(res.body.error, CODE_USED_ERROR);
+    const wrong = await app.post('/disable', { currentPassword: 'not it', totpToken: await code(active) });
+    assert.equal(wrong.status, 401);
+    assert.equal(wrong.body.error, 'Incorrect password or code');
     assert.equal(app.settings.get('totp').enabled, true);
   } finally {
     app.close();
