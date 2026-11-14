@@ -28,7 +28,8 @@ a scratch directory outside it.
    (not `&` inside the command that runs your test script, or that command
    never returns), with `PORT=<free port>`,
    `RESUMECMS_DATA_DIR=<fresh scratch dir>`, `RESUMECMS_ADMIN_USERNAME`,
-   `RESUMECMS_APP_PASSWORD` and `RESUMECMS_SESSION_SECRET` (any values).
+   `RESUMECMS_APP_PASSWORD` and `RESUMECMS_SESSION_SECRET` (any values, but the secret must be at least
+   32 characters and not a placeholder: `openssl rand -hex 32`).
 3. Wiping the data dir under a running server doesn't reset it (SQLite
    holds the file open): stop, wipe, restart for a clean run.
 
