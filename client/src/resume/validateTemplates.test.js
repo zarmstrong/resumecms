@@ -13,8 +13,12 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scripts/validate-templates.mjs');
 const META = { label: 'L', description: 'D', author: 'A' };
 
-function fixture(landing) {
+function fixture(landing, presets = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'resumecms-templates-'));
+  for (const [id, meta] of Object.entries(presets)) {
+    fs.mkdirSync(path.join(dir, 'landing-presets', id), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'landing-presets', id, 'template.json'), JSON.stringify(meta));
+  }
   for (const [id, files] of Object.entries(landing)) {
     fs.mkdirSync(path.join(dir, 'landing', id), { recursive: true });
     for (const [name, body] of Object.entries(files)) {
@@ -24,8 +28,8 @@ function fixture(landing) {
   return dir;
 }
 
-function validate(landing) {
-  const dir = fixture(landing);
+function validate(landing, presets) {
+  const dir = fixture(landing, presets);
   try {
     const run = spawnSync(process.execPath, [SCRIPT, dir], { encoding: 'utf8' });
     return { ok: run.status === 0, out: run.stdout + run.stderr };
@@ -213,6 +217,38 @@ test('a landing style.css moves things only under prefers-reduced-motion: no-pre
     const run = validate(withCss(body));
     assert.equal(run.ok, false, body);
     assert.match(run.out, message, body);
+  }
+});
+
+test('a landing preset names a landing template, a style the server accepts and sections by kind and title', () => {
+  const preset = (id, extra = {}) => ({
+    id,
+    ...META,
+    template: 'classic',
+    style: { source: 'custom', colors: { accent: '#123456' }, font: 'inter', nameFont: '' },
+    sections: [{ kind: 'text', title: 'About' }, { kind: 'contact', title: '' }],
+    ...extra,
+  });
+  const ok = validate({ classic }, { trades: preset('trades') });
+  assert.equal(ok.ok, true, ok.out);
+  assert.match(ok.out, /1 landing preset\(s\)/);
+
+  const cases = [
+    [preset('other', { id: 'else' }), /landing-presets\/other: "id" \(else\) must match its folder name/],
+    [preset('other', { template: 'nope' }), /other: "template" references unknown landing template "nope"/],
+    [preset('other', { style: { source: 'custom', colors: { accent: 'red' } } }), /other: style\.colors\.accent/],
+    [preset('other', { style: { source: 'custom', font: 'comic-sans' } }), /other: style\.font/],
+    [preset('other', { sections: [] }), /other: "sections" must be a non-empty list/],
+    [preset('other', { sections: [{ kind: 'poster', title: '' }] }), /other: sections\[0\]: unknown section kind "poster"/],
+    [preset('other', { sections: [{ kind: 'text', title: 'A', body: 'Hi' }] }), /other: sections\[0\]: unrecognized field "body"/],
+    [preset('other', { sections: [{ kind: 'text' }] }), /other: sections\[0\]: "title" must be a string/],
+    [preset('other', { sections: [{ kind: 'contact', title: '' }, { kind: 'contact', title: '' }] }), /other: at most one contact section/],
+    [preset('other', { extra: 1 }), /other: unrecognized field "extra"/],
+  ];
+  for (const [meta, message] of cases) {
+    const run = validate({ classic }, { other: meta });
+    assert.equal(run.ok, false, `${message} should fail`);
+    assert.match(run.out, message);
   }
 });
 

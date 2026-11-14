@@ -10,6 +10,9 @@ import { landingUnsavedWork } from './unsavedWork.js';
 import { LANDING_PAGE, landingShown } from './resumeLinks.js';
 import { applyUploadedFile, applyUploadedImage, uploadSpot } from './landingImages.js';
 import { createLimiter } from './uploadLimit.js';
+import { LANDING_PRESETS } from '../resume/templateRegistry.js';
+import { KEEP_STARTING_PAGE, LandingPresetPicker } from './LandingPresetPicker.jsx';
+import { applyPreset, offerPresetsOnOpen, presetQuestion } from './landingPresets.js';
 import {
   anchorFor,
   highlightIds,
@@ -39,6 +42,13 @@ const SAVE_DEBOUNCE_MS = 500;
 // wherever that spot is now), and
 // `aiProposals`, the suggestions that came back, until each is accepted or
 // discarded. Nothing reaches the server until an accept saves the draft.
+//
+// Presets by profession (issue #130, landingPresets.js) open in a dialog:
+// by themselves on a page never saved or published (offerPresetsOnOpen()),
+// where skipping keeps the starting page and saves it, so the dialog isn't
+// offered again; and from "Start from a preset", which asks first. Either
+// way a preset is an ordinary edit through handleChange(), on the draft as
+// it is then (landingRef).
 export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   const saves = useMemo(() => createSaveQueue({ delayMs: SAVE_DEBOUNCE_MS }), []);
   const [loaded, setLoaded] = useState(null); // { context, limits }
@@ -56,6 +66,9 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   const [previewScheme, setPreviewScheme] = useState('light');
   const [aiRequests, setAiRequests] = useState({});
   const [aiProposals, setAiProposals] = useState([]);
+  // The preset dialog: null, 'first' (opened by itself) or 'chosen' (from
+  // the "Start from a preset" button).
+  const [presetPicker, setPresetPicker] = useState(null);
   // The latest request per spot: a response to an older one (or one
   // cancelled since) is dropped.
   const aiLatestRef = useRef({});
@@ -79,6 +92,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
         setLanding(draft);
         setStatus(current);
         setLoaded({ context, limits });
+        if (offerPresetsOnOpen(current)) setPresetPicker('first');
       })
       .catch((err) => mountedRef.current && setLoadError(err.message));
     // Without them the ✨ buttons just stay hidden.
@@ -183,6 +197,23 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       return stored;
     });
     return saves.track(request);
+  }
+
+  // A choice from the preset dialog: KEEP_STARTING_PAGE (or skipping the
+  // one opened by itself) saves the starting page as it is, so the dialog
+  // isn't offered again; a preset is applied to the draft as it is now,
+  // after asking when it wasn't the dialog opened by itself.
+  function handlePresetPick(choice) {
+    const first = presetPicker === 'first';
+    if (choice !== KEEP_STARTING_PAGE && !first && !window.confirm(presetQuestion(choice))) return;
+    setPresetPicker(null);
+    const current = landingRef.current;
+    handleChange(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS));
+  }
+
+  function handlePresetClose() {
+    if (presetPicker === 'first') return handlePresetPick(KEEP_STARTING_PAGE);
+    setPresetPicker(null);
   }
 
   // Gets every edit to the server first, for what reads the stored draft
@@ -473,7 +504,14 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       <div className="ed-columns" style={{ gridTemplateColumns: '480px 1fr' }}>
         <div className="ed-left-pane">
           <section className="ed-panel">
-            <div className="ed-panel-label">Landing page</div>
+            <div className="ed-panel-label ed-landing-panel-label">
+              <span>Landing page</span>
+              {LANDING_PRESETS.length > 0 && (
+                <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={() => setPresetPicker('chosen')} disabled={busy}>
+                  Start from a preset…
+                </button>
+              )}
+            </div>
             <div className="ed-panel-body">
               <LandingForm
                 landing={landing}
@@ -528,6 +566,18 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
           </div>
         </div>
       </div>
+      {presetPicker && (
+        <LandingPresetPicker
+          presets={LANDING_PRESETS}
+          draft={landing}
+          context={loaded.context}
+          resumes={resumes}
+          scheme={previewScheme}
+          firstOpen={presetPicker === 'first'}
+          onPick={handlePresetPick}
+          onClose={handlePresetClose}
+        />
+      )}
     </div>
   );
 }

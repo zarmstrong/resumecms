@@ -237,6 +237,53 @@ also has the full contract.
   pane included, without touching the editor's URL, and does nothing
   inside an `[inert]` ancestor.
 
+## Landing page presets
+
+`templates/landing-presets/<id>/template.json` (issue #130) is a starting
+point for the landing page for one kind of work, which the landing
+editor offers when it's first opened and from **Start from a preset…**.
+No code: a landing template, its colors and fonts, and the sections the
+page starts with, each by its kind and title only.
+
+```json
+{
+  "id": "trades",
+  "label": "Trades and home services",
+  "description": "Who it's for and what it leads with.",
+  "author": "you",
+  "template": "card",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#b4410c", "heading": "#1c1917", "text": "#292524", "background": "#ffffff" },
+    "font": "inter",
+    "nameFont": "montserrat"
+  },
+  "sections": [
+    { "kind": "contact", "title": "Get in touch" },
+    { "kind": "services", "title": "Services" }
+  ]
+}
+```
+
+- `id` matches the folder name; `label`, `description` and `author` are
+  required strings.
+- `template` names a folder under `templates/landing/`.
+- `style` is the landing page's own `style` (`source`, `colors` as
+  `#rrggbb` or `''`, `font`, `nameFont`, optional `darkColors`), checked
+  by the server's own rules, so a font must be one of the site fonts.
+  Pick colors that keep the template's text at WCAG AA (4.5:1): the
+  accent on the background, and white or near-black on the accent.
+- `sections` lists `{ kind, title }` in order (any section kind, at most
+  20, at most one `contact`). Each starts empty, the way "+ Add section"
+  starts one; an experience or education section reads the default
+  resume, and a new contact section takes the page's email and phone
+  links.
+
+Applying a preset never removes what someone wrote: a section of a kind
+the preset has, with something in it, is kept in its place, the other
+sections with something in them follow, and the hero is untouched (see
+`client/src/editor/landingPresets.js`).
+
 ## Validating
 
 ```bash

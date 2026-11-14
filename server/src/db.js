@@ -10,6 +10,7 @@ import { DATA_DIR } from './dataDir.js';
 import { migrateToResumes, adoptLegacyRows } from './resumeMigration.js';
 import { LEGACY_PDF_PATH, PDF_DIR } from './pdfPaths.js';
 import { migrateLandingText } from './landingTextMigration.js';
+import { SAMPLE_BLOCKS, SAMPLE_HEADER, SAMPLE_SITE } from './sampleContent.js';
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -29,59 +30,10 @@ export { rowToBlock, orderBlocksHierarchically };
 
 // ---- Seed on first run -----------------------------------------------------
 
-const defaultHeader = {
-  name: 'Your Name',
-  title: 'Your Professional Title',
-  subtitle: '',
-  location: 'City, State, Country',
-  email: 'you@example.com',
-  phone: '',
-  links: [{ label: 'linkedin.com/in/you', url: 'https://linkedin.com/in/you' }],
-};
-
-// No title: an empty one is derived from the header ("Name – Title",
-// pageMeta.js), which a link preview shows (issue #87).
-const defaultSite = {
-  colors: {
-    accent: '#2f6f4e',
-    heading: '#14181c',
-    text: '#14181c',
-    background: '#ffffff',
-  },
-};
-
-const seedBlocks = [
-  { type: 'heading', data: { text: 'Technical Skills' } },
-  {
-    type: 'skills_group',
-    data: { category: 'Technologies', items: 'AWS, Docker, Ansible, Linux, PostgreSQL' },
-  },
-  { type: 'heading', data: { text: 'Professional Experience' } },
-  {
-    type: 'experience',
-    data: {
-      jobTitle: 'Senior Engineer',
-      company: 'Example Corp',
-      companyUrl: 'https://example.com',
-      location: 'Remote',
-      startDate: '2022',
-      endDate: 'Current',
-      tagline: 'A short description of what the company does.',
-      bullets: ['Describe an impactful accomplishment.', 'Add another bullet point here.'],
-    },
-  },
-  { type: 'heading', data: { text: 'Education' } },
-  {
-    type: 'education',
-    data: {
-      degree: 'B.S. in Your Field',
-      institution: 'Your University',
-      location: 'City, State',
-      startDate: '2010',
-      endDate: '2014',
-    },
-  },
-];
+// The placeholder header, site settings and blocks (sampleContent.js).
+const defaultHeader = SAMPLE_HEADER;
+const defaultSite = SAMPLE_SITE;
+const seedBlocks = SAMPLE_BLOCKS;
 
 // Builds the pre-variants, single-resume shape — global header/site
 // settings, blocks owned by no resume, and a published snapshot — which

@@ -1,0 +1,19 @@
+{
+  "id": "creative",
+  "label": "Creative work",
+  "description": "For photographers, designers, artists, musicians and makers: your work in pictures first, then a video or recording, kind words from people you've worked with, and where else to find you.",
+  "author": "resumecms",
+  "template": "gallery",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#9d174d", "heading": "#18181b", "text": "#27272a", "background": "#fafaf9" },
+    "font": "work-sans",
+    "nameFont": "playfair-display"
+  },
+  "sections": [
+    { "kind": "gallery", "title": "Selected work" },
+    { "kind": "media", "title": "Watch or listen" },
+    { "kind": "quotes", "title": "Kind words" },
+    { "kind": "links", "title": "Find me elsewhere" }
+  ]
+}

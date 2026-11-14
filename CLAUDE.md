@@ -57,7 +57,9 @@ builds the store over a `better-sqlite3` `:memory:` database via
 tests` for `server/**`; `client tests and build` for `client/**`,
 `server/**` (client tests import the server modules they mirror) or
 anything a template build reads; `templates`, the validator, for
-`templates/**`, `templateRegistry.js` or the validator itself; all of
+`templates/**`, `templateRegistry.js`, the validator itself or
+`server/src/**` (it checks the landing presets with the server's own
+landing rules); all of
 them when `.github/workflows/` changes; `docker build`, an amd64 image
 build without a push, for the `Dockerfile`, `.dockerignore` or either
 package's `package.json`/lockfile; and `pr-title` on every PR). `ci-passed` gathers them and is
@@ -262,6 +264,10 @@ it attaches the blocks, moves the settings rows, and moves
 `<RESUMECMS_DATA_DIR>/resume.pdf` to the new per-resume path. A fresh
 install goes through the same path: `db.js` seeds the old single-resume
 shape and migrates it, and none of that seeding runs once a resume exists.
+What it seeds is `server/src/sampleContent.js`: placeholder text for any
+line of work, not one profession (issue #130), which
+`client/src/resume/sampleResume.js` copies for the template previews
+(its test compares them).
 Every boot also runs `adoptLegacyRows()`: blocks with no `resume_id`
 (written by a rolled-back pre-variant image) are attached to the default
 resume, and per-resume keys back in the global `settings` table are only
@@ -410,6 +416,30 @@ education or skills section must name an existing resume, but one already in the
 (`referencedResumeIds()`), so a deletion doesn't make the draft unsavable. Publishing it is separate from
 publishing any resume, and `landing_enabled` isn't drafted: it takes
 effect at once, and does nothing until a snapshot exists.
+
+Presets by profession (issue #130) are a starting point for the whole
+page: `templates/landing-presets/<id>/template.json` (`{ id, label,
+description, author, template, style, sections: [{ kind, title }] }`,
+`LANDING_PRESETS` in the registry). They're client-only: the server never
+reads them, and applying one (`applyPreset()` in
+`client/src/editor/landingPresets.js`, pure and tested against the server's
+`validateLanding()`) is an ordinary edit through `handleChange()` and the
+save queue, so its checks and `touchLanding()` apply. It sets `template`
+and `style`, puts the preset's sections first (each new one as "+ Add
+section" starts it, from `landingSections.js`, shared with `LandingForm`),
+and keeps the hero, `seo` and every section with something in it
+(`sectionHasWork()`: a title counts unless it's a preset's title for that
+kind): one of a kind the preset has in that slot, the rest after them,
+never a second contact section. `LandingPresetPicker.jsx` shows them with
+the template picker's thumbnails; `LandingEditorPage` opens it by itself
+while `offerPresetsOnOpen(status)` (the status's `hasDraft`, false until
+`landing_draft` is first stored, and no `publishedAt`), where Skip or
+"Keep the starting page" saves the built draft so it isn't offered
+again, and from "Start from a preset…", which asks first
+(`presetQuestion()`). The validator checks a preset's style with the
+server's `checkStyle()` and its sections against `SECTION_KINDS` and
+`LANDING_LIMITS`, which is why `landingFields.js` and what it imports
+must stay free of npm packages.
 
 Its look (issue #93) is `template` and `style`, pure in
 `server/src/landingStyle.js`. `template` names a folder under
@@ -1146,7 +1176,7 @@ checklist lists the same bar; change the two together).
 time** via `import.meta.glob` (eager, one glob per kind — the glob path
 must be a static literal, so headers, layouts and landing templates can't
 share one call; `LANDING_TEMPLATES`, `getLandingTemplate()`). New
-templates become selectable just by adding files under `templates/`, no
+templates (and presets of either kind) become selectable just by adding files under `templates/`, no
 registration step. The server never renders resume markup — it only serves
 the built client + JSON APIs — so there is no matching runtime scan.
 
@@ -1161,7 +1191,8 @@ templates live outside `client/src`; a landing template reaches
 checks folder naming (lowercase kebab-case), required `template.json`
 fields, and — for the `templates/presets/` kind (the resume presets, each
 a header and layout plus optional colors) — that a preset's `header`/`layout` references exist and its
-`colors` are recognized `#rrggbb` keys, and a landing template's scoped
+`colors` are recognized `#rrggbb` keys, a landing preset's template,
+style and sections (see "Landing page"), and a landing template's scoped
 `style.css`, in which it also flags the two parts of the accessibility
 bar a linter can see (an outline removed without a `box-shadow` ring or a
 `:not(:focus-visible)` limit in the same rule, and an animation, smooth scrolling or a

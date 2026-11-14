@@ -53,7 +53,9 @@ jobs:
           # Client tests import server modules they mirror (pageMeta.js and
           # shareImages.js today), so a server change runs them too.
           client=$(has '^"?(client|server)/')
-          templates=$(has '^"?(templates/|client/src/resume/templateRegistry\.js"?$|scripts/validate-templates\.mjs"?$)')
+          # The validator checks the landing presets with the server's own
+          # landing rules (server/src/landingFields.js), so those run it too.
+          templates=$(has '^"?(templates/|client/src/resume/templateRegistry\.js"?$|scripts/validate-templates\.mjs"?$|server/src/)')
           # The image installs from the lockfiles, so a dependency bump
           # builds it too.
           docker=$(has '^"?(Dockerfile|\.dockerignore|(server|client)/package(-lock)?\.json)"?$')

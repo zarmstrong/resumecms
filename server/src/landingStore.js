@@ -125,11 +125,15 @@ export function createLandingStore({ db, defaultResumeId, pdfDir }) {
     return meta.lastEditedAt >= published.publishedAt;
   }
 
+  // `hasDraft` is false until a draft is first saved (getLanding() builds
+  // one from the default resume's header until then): with no publish
+  // either, the editor offers the presets as it opens (issue #130).
   function getLandingStatus() {
     return {
       enabled: getSetting('landing_enabled') === true,
       publishedAt: getSetting('landing_published')?.publishedAt ?? null,
       isDirty: isDirty(),
+      hasDraft: getSetting('landing_draft') != null,
     };
   }
 

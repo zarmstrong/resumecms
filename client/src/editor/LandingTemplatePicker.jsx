@@ -96,8 +96,9 @@ function TemplateOption({ template, name, checked, onChange, page, scheme }) {
 // One template's picture: the page at THUMBNAIL_WIDTH, scaled to the
 // frame's width (measured, since the Look group's column is as narrow as
 // a phone's screen or as wide as the editor's left pane). The frame keeps
-// its size while nothing is drawn in it, so the list doesn't jump.
-const Thumbnail = memo(function Thumbnail({ page, templateId, scheme }) {
+// its size while nothing is drawn in it, so the list doesn't jump. The
+// preset picker (LandingPresetPicker.jsx) draws its cards with it too.
+export const Thumbnail = memo(function Thumbnail({ page, templateId, scheme }) {
   const frameRef = useRef(null);
   const [width, setWidth] = useState(0);
   const near = useNearScreen(frameRef);
