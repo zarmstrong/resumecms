@@ -297,3 +297,34 @@ test('a code that is not six digits is a wrong code, not a 500', async () => {
     app.close();
   }
 });
+
+test('cancel drops the pending setup it names, so it can no longer be confirmed', async () => {
+  const active = generateSecret();
+  const app = await start({ enabled: true, secret: active, lastUsedStep: 5 });
+  try {
+    const setup = await app.post('/setup', { currentPassword: PASSWORD, totpToken: await code(active) });
+    const step = app.settings.get('totp').lastUsedStep;
+    // Another tab's (or a stale) secret leaves it alone.
+    assert.equal((await app.post('/cancel', { secret: generateSecret() })).status, 200);
+    assert.equal(app.settings.get('totp').pendingSecret, setup.body.secret);
+
+    const cancel = await app.post('/cancel', { secret: setup.body.secret });
+    assert.deepEqual(cancel.body, { enabled: true });
+    assert.deepEqual(app.settings.get('totp'), { enabled: true, secret: active, lastUsedStep: step });
+    assert.equal((await app.post('/confirm', { token: await code(setup.body.secret) })).status, 409);
+  } finally {
+    app.close();
+  }
+});
+
+test('cancel while 2FA is off clears the setup', async () => {
+  const app = await start(null);
+  try {
+    const setup = await app.post('/setup', { currentPassword: PASSWORD });
+    assert.deepEqual((await app.post('/cancel', { secret: setup.body.secret })).body, { enabled: false });
+    assert.equal(app.settings.get('totp'), null);
+    assert.equal((await app.post('/confirm', { token: await code(setup.body.secret) })).status, 409);
+  } finally {
+    app.close();
+  }
+});

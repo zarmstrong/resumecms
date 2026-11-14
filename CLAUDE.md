@@ -1649,7 +1649,9 @@ The 2FA routes (`routes/totpRouter.js`, a factory over `getSetting`/
 keep a setup apart from the active factor (issue #173): the `totp` row is
 `{ enabled, secret, pendingSecret?, lastUsedStep? }`, login checks only
 `secret`, and `/confirm` swaps `pendingSecret` in only once a code from it
-verifies, so starting or abandoning a setup never turns 2FA off. A row
+verifies, so starting or abandoning a setup never turns 2FA off, and
+`/cancel` (the editor's Cancel) drops the pending secret it names, so a
+cancelled setup can't be confirmed later. A row
 from before, `{ secret, enabled: false }`, reads as a pending setup
 (`readTotp()`, which reads `enabled` truthy as login does). `/setup`
 needs the current password (so a stolen session can't turn 2FA on with

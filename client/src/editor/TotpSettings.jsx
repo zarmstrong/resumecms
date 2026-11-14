@@ -61,10 +61,20 @@ export function TotpSettings() {
     }
   }
 
-  function handleCancel() {
-    setPending(null);
-    setToken('');
+  // The server forgets the pending setup too, so the app just scanned
+  // can't confirm it later.
+  async function handleCancel() {
+    setBusy(true);
     setError(null);
+    try {
+      await api.cancelTotp(pending.secret);
+      setPending(null);
+      setToken('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleDisable() {
@@ -115,11 +125,9 @@ export function TotpSettings() {
         <button type="submit" className="ed-btn ed-btn-primary" disabled={busy}>
           Confirm
         </button>
-        {enabled && (
-          <button type="button" className="ed-btn ed-btn-ghost" onClick={handleCancel} disabled={busy}>
-            Cancel
-          </button>
-        )}
+        <button type="button" className="ed-btn ed-btn-ghost" onClick={handleCancel} disabled={busy}>
+          Cancel
+        </button>
       </form>
     );
   }

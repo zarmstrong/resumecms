@@ -137,6 +137,20 @@ export function createTotpRouter({ getSetting, setSetting }) {
     res.json({ enabled: true });
   });
 
+  // Cancel drops the pending setup the editor shows (`secret`, so a tab
+  // left open can't cancel one started since in another), leaving any
+  // active factor as it is: a cancelled setup can't be confirmed later.
+  // It only removes something, so the session is enough, and it answers
+  // the same whether or not that secret was the pending one.
+  router.post('/cancel', (req, res) => {
+    const { secret } = req.body || {};
+    const totp = readTotp(getSetting('totp'));
+    if (typeof secret === 'string' && secret && totp.pendingSecret === secret) {
+      setSetting('totp', totp.enabled ? totpRow({ ...totp, pendingSecret: null }) : null);
+    }
+    res.json({ enabled: totp.enabled });
+  });
+
   router.post('/disable', limiter, async (req, res) => {
     const totp = readTotp(getSetting('totp'));
     if (totp.enabled) {
