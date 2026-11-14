@@ -11,6 +11,7 @@
 // Usage: node server/scripts/render-template-previews.mjs
 // (or via the isolated docker-compose "tools" profile — see docker-compose.yml)
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync, existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -81,6 +82,9 @@ async function main() {
       ...process.env,
       PORT,
       RESUMECMS_DATA_DIR: dataDir,
+      // The server refuses to start without one; nothing here logs in, so
+      // a random one per run.
+      RESUMECMS_SESSION_SECRET: randomBytes(32).toString('hex'),
       // No RESUMECMS_ADMIN_USERNAME/PASSWORD — the preview routes need no
       // auth, and this instance is torn down before anyone could log in.
     },
