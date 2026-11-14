@@ -16,10 +16,16 @@ const MESSAGES = {
   'entity.too.large': 'The request body is too large',
 };
 
+const FILE_HEADERS = ['Content-Type', 'Content-Disposition', 'ETag', 'Last-Modified'];
+
 export function errorHandler(err, req, res, next) {
   // Too late to answer: let Express close the connection.
   if (res.headersSent) return next(err);
   const status = err?.status ?? err?.statusCode;
+  // A static file's failure (a 416 for an unsatisfiable Range, a 412 for
+  // If-Match) arrives with that file's headers already set, and res.json()
+  // keeps a Content-Type it finds. They describe the file, not this reply.
+  for (const name of FILE_HEADERS) res.removeHeader(name);
   res.set('Cache-Control', ERROR);
   if (Number.isInteger(status) && status >= 400 && status < 500) {
     const message = MESSAGES[err.type] ?? (err.expose && err.message ? err.message : STATUS_CODES[status] ?? 'Bad request');

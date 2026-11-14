@@ -1,6 +1,9 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ERROR } from '../cacheHeaders.js';
 import { errorHandler } from './errorHandler.js';
 
@@ -25,6 +28,9 @@ app.get('/hidden-4xx', () => {
 app.get('/bad-gateway', () => {
   throw Object.assign(new Error('upstream said no'), { status: 502 });
 });
+const staticDir = mkdtempSync(join(tmpdir(), 'error-handler-'));
+writeFileSync(join(staticDir, 'app.js'), 'console.log(1);');
+app.use('/assets', express.static(staticDir));
 app.use(errorHandler);
 const server = app.listen(0);
 after(() => server.close());
@@ -86,4 +92,16 @@ test('once headers are sent it hands the error on untouched', () => {
   let passed;
   errorHandler(err, {}, res, (e) => { passed = e; });
   assert.equal(passed, err);
+});
+
+test("a static file's error is JSON, without the file's headers", async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const fileTag = (await fetch(`${base()}/assets/app.js`)).headers.get('etag');
+  const range = await fetch(`${base()}/assets/app.js`, { headers: { Range: 'bytes=99999-' } });
+  await assertJsonError(range, 416, 'Range Not Satisfiable');
+  // Express tags the JSON body itself; it mustn't carry the file's tag.
+  assert.notEqual(range.headers.get('etag'), fileTag);
+  assert.equal(range.headers.get('last-modified'), null);
+  const ifMatch = await fetch(`${base()}/assets/app.js`, { headers: { 'If-Match': '"nope"' } });
+  await assertJsonError(ifMatch, 412, 'Precondition Failed');
 });
