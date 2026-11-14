@@ -1,0 +1,20 @@
+{
+  "id": "software",
+  "label": "Software and tech",
+  "description": "For developers, designers, data and IT people: a short introduction beside your projects, then where you've worked, the tools you know and where to find your code.",
+  "author": "resumecms",
+  "template": "split",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#4338ca", "heading": "#0f172a", "text": "#1e293b", "background": "#ffffff" },
+    "font": "inter",
+    "nameFont": "ibm-plex-sans"
+  },
+  "sections": [
+    { "kind": "text", "title": "About" },
+    { "kind": "items", "title": "Projects" },
+    { "kind": "experience", "title": "Experience" },
+    { "kind": "skills", "title": "Skills" },
+    { "kind": "links", "title": "Code and profiles" }
+  ]
+}

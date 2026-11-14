@@ -1,0 +1,19 @@
+{
+  "id": "writing",
+  "label": "Writing and journalism",
+  "description": "For writers, journalists, editors and translators: a few words about what you write, your published work newest first, what editors and readers say and where to read more.",
+  "author": "resumecms",
+  "template": "editorial",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#9a3412", "heading": "#1c1917", "text": "#292524", "background": "#fffdf8" },
+    "font": "source-serif",
+    "nameFont": "playfair-display"
+  },
+  "sections": [
+    { "kind": "text", "title": "About" },
+    { "kind": "publications", "title": "Selected writing" },
+    { "kind": "quotes", "title": "Praise" },
+    { "kind": "links", "title": "Read more" }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "hospitality",
+  "label": "Food, hospitality and events",
+  "description": "For chefs, bakers, caterers, bartenders and event planners: a wide photo behind your name, then your story, what you offer, pictures of your work, reviews and how to book.",
+  "author": "resumecms",
+  "template": "cover",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#a63d17", "heading": "#2a1a12", "text": "#3b2a20", "background": "#fffaf3" },
+    "font": "lora",
+    "nameFont": "playfair-display"
+  },
+  "sections": [
+    { "kind": "text", "title": "Our story" },
+    { "kind": "services", "title": "What we offer" },
+    { "kind": "gallery", "title": "Gallery" },
+    { "kind": "quotes", "title": "Reviews" },
+    { "kind": "contact", "title": "Bookings" }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "consulting",
+  "label": "Business and consulting",
+  "description": "For consultants, freelancers, managers and small-business owners: what you do, a few results in numbers, how clients can work with you, what they say and your experience.",
+  "author": "resumecms",
+  "template": "bold",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#0e7490", "heading": "#0f172a", "text": "#1e293b", "background": "#ffffff" },
+    "font": "work-sans",
+    "nameFont": "montserrat"
+  },
+  "sections": [
+    { "kind": "text", "title": "What I do" },
+    { "kind": "stats", "title": "By the numbers" },
+    { "kind": "services", "title": "How I can help" },
+    { "kind": "quotes", "title": "What clients say" },
+    { "kind": "experience", "title": "Experience" }
+  ]
+}

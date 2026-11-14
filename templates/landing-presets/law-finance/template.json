@@ -1,0 +1,20 @@
+{
+  "id": "law-finance",
+  "label": "Law, finance and accounting",
+  "description": "A formal page for lawyers, accountants, financial advisers and paralegals: your practice in brief, your admissions and licenses, where you've worked, your education and how to reach you.",
+  "author": "resumecms",
+  "template": "formal",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#1e3a8a", "heading": "#111827", "text": "#1f2937", "background": "#ffffff" },
+    "font": "source-serif",
+    "nameFont": "libre-baskerville"
+  },
+  "sections": [
+    { "kind": "text", "title": "Practice" },
+    { "kind": "credentials", "title": "Admissions and licenses" },
+    { "kind": "experience", "title": "Experience" },
+    { "kind": "education", "title": "Education" },
+    { "kind": "contact", "title": "Contact" }
+  ]
+}

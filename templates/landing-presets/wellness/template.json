@@ -1,0 +1,21 @@
+{
+  "id": "wellness",
+  "label": "Fitness, wellness and coaching",
+  "description": "For personal trainers, yoga teachers, massage therapists and life coaches: your approach, sessions and prices, your certifications, client stories, common questions and how to book.",
+  "author": "resumecms",
+  "template": "centered",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#3f6212", "heading": "#1a2e05", "text": "#27272a", "background": "#fbfdf7" },
+    "font": "open-sans",
+    "nameFont": "lora"
+  },
+  "sections": [
+    { "kind": "text", "title": "My approach" },
+    { "kind": "services", "title": "Sessions and pricing" },
+    { "kind": "credentials", "title": "Certifications" },
+    { "kind": "quotes", "title": "Client stories" },
+    { "kind": "faq", "title": "Questions" },
+    { "kind": "contact", "title": "Book a session" }
+  ]
+}

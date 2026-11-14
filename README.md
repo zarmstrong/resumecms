@@ -666,8 +666,18 @@ template, with contact, services, credentials, a gallery and quotes),
 documents), **Creative work** (Gallery: a gallery, video or audio,
 quotes, links), **Healthcare** (Formal: credentials, experience,
 contact, questions and answers) and **Research and academia** (Directory:
-text, publications, education, documents), or the page made from your
-resume as it is. A preset sets the template, colors and fonts (a dark palette of your
+text, publications, education, documents), **Software and tech** (Split:
+text, projects, experience, skills, links), **Writing and journalism**
+(Editorial: text, publications, quotes, links), **Business and
+consulting** (Bold: text, stats, services, quotes, experience), **Food,
+hospitality and events** (Cover: text, services, a gallery, quotes,
+contact), **Fitness, wellness and coaching** (Centered: text, services,
+credentials, quotes, questions and answers, contact), **Law, finance and
+accounting** (Formal: text, credentials, experience, education,
+contact), **Real estate and sales** (Card: contact, stats, services,
+quotes, credentials) and **Students and early career** (Classic: text,
+education, experience, skills, a resume card), or the page made from
+your resume as it is. A preset sets the template, colors and fonts (a dark palette of your
 own stays unless the preset has one) and puts its sections first, empty and ready to fill in. Your headline, buttons
 and photo stay, and so does every section you've written in: one of a
 kind the preset has takes its place, the rest follow it, and only empty
