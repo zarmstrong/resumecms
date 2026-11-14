@@ -525,10 +525,13 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
               Not shown
             </span>
           )}
-          <button className="ed-btn ed-btn-ghost" onClick={handleLogout} disabled={busy}>
-            Log out
-          </button>
-          <AppVersion />
+          {/* Kept together so the version never wraps onto a line alone. */}
+          <span className="ed-topbar-end">
+            <button className="ed-btn ed-btn-ghost" onClick={handleLogout} disabled={busy}>
+              Log out
+            </button>
+            <AppVersion />
+          </span>
         </div>
       </header>
 

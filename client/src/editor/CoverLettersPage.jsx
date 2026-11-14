@@ -403,10 +403,13 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
           {error && <span className="ed-topbar-warning"> · {error}</span>}
         </div>
         <div className="ed-topbar-actions">
-          <button className="ed-btn ed-btn-ghost" onClick={handleLogout} disabled={busy}>
-            Log out
-          </button>
-          <AppVersion />
+          {/* Kept together so the version never wraps onto a line alone. */}
+          <span className="ed-topbar-end">
+            <button className="ed-btn ed-btn-ghost" onClick={handleLogout} disabled={busy}>
+              Log out
+            </button>
+            <AppVersion />
+          </span>
         </div>
       </header>
 

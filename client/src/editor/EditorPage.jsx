@@ -1064,10 +1064,13 @@ export function EditorPage({
           <button className="ed-btn ed-btn-ghost" onClick={() => setSettingsOpen(true)}>
             Account Settings
           </button>
-          <button className="ed-btn ed-btn-ghost" onClick={handleLogout}>
-            Log out
-          </button>
-          <AppVersion />
+          {/* Kept together so the version never wraps onto a line alone. */}
+          <span className="ed-topbar-end">
+            <button className="ed-btn ed-btn-ghost" onClick={handleLogout}>
+              Log out
+            </button>
+            <AppVersion />
+          </span>
         </div>
       </header>
 
