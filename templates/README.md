@@ -276,8 +276,10 @@ page starts with, each by its kind and title only.
 - `sections` lists `{ kind, title }` in order (any section kind, at most
   20, at most one `contact`). Each starts empty, the way "+ Add section"
   starts one; an experience or education section reads the default
-  resume, and a new contact section takes the page's email and phone
-  links.
+  resume, and a new contact section takes the email and phone of the
+  page's links that aren't hidden. If the page already has as many
+  sections as it may (20), the preset's new ones are left out from the
+  end.
 
 Applying a preset never removes what someone wrote: a section of a kind
 the preset has, with something in it, is kept in its place, the other

@@ -84,8 +84,10 @@ in prose; check the diff against the ones that apply, especially:
 - A landing preset (`templates/landing-presets/`, issue #130) is applied
   only on the client (`landingPresets.js`) as an ordinary draft edit
   through the save queue, never by a route of its own; it keeps the hero
-  and every section with something in it (`sectionHasWork()`), and never
-  leaves two contact sections. The validator checks presets with the
+  and every section with something in it or set up by the person
+  (`sectionHasWork()`: hidden, side column, a resume-backed section's
+  settings), never leaves two contact sections or more than the section
+  cap, and fills a contact section only from links that aren't hidden. The validator checks presets with the
   server's own `checkStyle()`/`SECTION_KINDS`/`LANDING_LIMITS`, so those
   stay free of npm imports, and CI's `templates` job runs for
   `server/src/`. The picker opens by itself only while

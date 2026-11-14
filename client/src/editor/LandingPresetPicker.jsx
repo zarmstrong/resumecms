@@ -22,7 +22,7 @@ export const KEEP_STARTING_PAGE = 'keep';
 //
 // Like the template picker, a native radio group: the arrow keys, tab stop
 // and focus ring are the browser's own, and the thumbnails are inert.
-export function LandingPresetPicker({ presets, draft, context, resumes, scheme, firstOpen = false, onPick, onClose }) {
+export function LandingPresetPicker({ presets, draft, context, resumes, limits, scheme, firstOpen = false, onPick, onClose }) {
   const name = useId();
   const titleId = `${name}-title`;
   const [chosen, setChosen] = useState(firstOpen ? KEEP_STARTING_PAGE : presets[0]?.id);
@@ -35,7 +35,7 @@ export function LandingPresetPicker({ presets, draft, context, resumes, scheme, 
       description: preset.description,
       sections: presetSectionLabels(preset),
       templateId: preset.template,
-      page: thumbnailPage(applyPreset(draft, preset, resumes, presets), context),
+      page: thumbnailPage(applyPreset(draft, preset, resumes, presets, limits), context),
     }));
     if (!firstOpen) return list;
     const page = thumbnailPage(draft, context);
@@ -50,7 +50,7 @@ export function LandingPresetPicker({ presets, draft, context, resumes, scheme, 
       },
       ...list,
     ];
-  }, [presets, draft, context, resumes, firstOpen]);
+  }, [presets, draft, context, resumes, limits, firstOpen]);
 
   useEffect(() => {
     firstRadioRef.current?.focus();

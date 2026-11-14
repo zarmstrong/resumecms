@@ -208,7 +208,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
     if (choice !== KEEP_STARTING_PAGE && !first && !window.confirm(presetQuestion(choice))) return;
     setPresetPicker(null);
     const current = landingRef.current;
-    handleChange(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS));
+    handleChange(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits));
   }
 
   function handlePresetClose() {
@@ -572,6 +572,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
           draft={landing}
           context={loaded.context}
           resumes={resumes}
+          limits={loaded.limits}
           scheme={previewScheme}
           firstOpen={presetPicker === 'first'}
           onPick={handlePresetPick}

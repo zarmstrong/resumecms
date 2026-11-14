@@ -101,8 +101,49 @@ test('a section the person titled themselves counts as written in, a preset titl
   assert.equal(sectionHasWork({ id: 'a', kind: 'services', title: 'Services', services: [{ title: '', text: '', price: '' }] }, PRESETS), false);
   assert.equal(sectionHasWork({ id: 'a', kind: 'services', title: 'What I do', services: [] }, PRESETS), true);
   assert.equal(sectionHasWork({ id: 'a', kind: 'text', title: '', body: 'Hi' }, PRESETS), true);
-  // An experience section reads a resume: nothing typed but its title.
-  assert.equal(sectionHasWork({ id: 'a', kind: 'experience', title: 'Experience', resumeId: 'r-main', count: 3, showDates: true }, PRESETS), false);
+  // An experience section reads a resume: nothing typed but its title,
+  // so it holds something only when it's set up otherwise than a new one.
+  const experience = { id: 'a', kind: 'experience', title: 'Experience', resumeId: 'r-main', count: 3, showDates: true };
+  assert.equal(sectionHasWork(experience, PRESETS, resumes), false);
+  assert.equal(sectionHasWork({ ...experience, resumeId: 'r-other' }, PRESETS, resumes), true);
+  assert.equal(sectionHasWork({ ...experience, count: 1 }, PRESETS, resumes), true);
+  assert.equal(sectionHasWork({ ...experience, showDates: false }, PRESETS, resumes), true);
+  assert.equal(sectionHasWork({ id: 's', kind: 'skills', title: '', resumeId: 'r-main' }, PRESETS, resumes), false);
+  assert.equal(sectionHasWork({ id: 's', kind: 'skills', title: '', resumeId: 'r-other' }, PRESETS, resumes), true);
+  // Hidden, or in the side column: set by the person, so kept.
+  assert.equal(sectionHasWork({ ...experience, hidden: true }, PRESETS, resumes), true);
+  assert.equal(sectionHasWork({ id: 'g', kind: 'gallery', title: 'Recent work', images: [], column: 'side' }, PRESETS, resumes), true);
+});
+
+test('a resume-backed section set up by the person is kept with its settings, in place or after', () => {
+  const draft = firstDraft();
+  const mine = { id: 'exp', kind: 'experience', title: 'Experience', resumeId: 'r-other', count: 1, showDates: false, hidden: true, column: 'side' };
+  draft.sections.push(mine);
+  const healthcare = applyPreset(draft, byId('healthcare'), resumes, PRESETS);
+  assert.equal(healthcare.sections.find((s) => s.kind === 'experience'), mine);
+  // A preset without the kind keeps it after its own.
+  const creative = applyPreset(draft, byId('creative'), resumes, PRESETS);
+  assert.ok(creative.sections.includes(mine));
+  assert.doesNotThrow(() => validateLanding(healthcare, refs));
+});
+
+test('a preset never takes the page past its section cap: its own new sections give way', () => {
+  const texts = (n) => Array.from({ length: n }, (_, i) => ({ id: `t${i}`, kind: 'text', title: '', body: `Para ${i}` }));
+  for (const n of [15, 16, 19, 20]) {
+    const draft = { ...firstDraft(), sections: texts(n) };
+    const next = applyPreset(draft, byId('trades'), resumes, PRESETS, { sections: 20 });
+    assert.ok(next.sections.length <= 20, `${n}: ${next.sections.length}`);
+    // Nothing written is lost.
+    assert.equal(next.sections.filter((s) => s.kind === 'text').length, n);
+    assert.doesNotThrow(() => validateLanding(next, refs), String(n));
+    // The preset's first sections are the ones kept.
+    const added = next.sections.filter((s) => s.kind !== 'text').map((s) => s.kind);
+    assert.deepEqual(added, ['contact', 'services', 'credentials', 'gallery', 'quotes'].slice(0, Math.max(0, 20 - n)));
+  }
+  // Education carries a text section in place, so it takes one slot fewer.
+  const next = applyPreset({ ...firstDraft(), sections: texts(20) }, byId('education'), resumes, PRESETS, { sections: 20 });
+  assert.equal(next.sections.length, 20);
+  assert.equal(next.sections[0].id, 't0');
 });
 
 test('new sections start like "+ Add section" ones, an experience section on the default resume', () => {
@@ -124,6 +165,38 @@ test('a new contact section takes the first draft email and phone', () => {
     contactFromLinks({ sections: [{ kind: 'links', links: [{ label: '', url: 'mailto:a%40b.example?subject=x' }, { label: '', url: 'tel:+15550100' }] }] }),
     { email: '', phone: '+15550100' },
   );
+});
+
+test('a contact section never takes its details from a hidden links section', () => {
+  const links = (hidden, list) => ({ id: `l${hidden}`, kind: 'links', title: '', ...(hidden ? { hidden: true } : {}), links: list });
+  const secret = [{ type: 'email', label: 'secret', url: 'mailto:secret@example.com' }, { type: 'phone', label: '', url: 'tel:+15550000001' }];
+  const open = [{ type: 'email', label: 'me', url: 'mailto:me@example.com' }];
+  assert.deepEqual(contactFromLinks({ sections: [links(true, secret)] }), { email: '', phone: '' });
+  assert.deepEqual(contactFromLinks({ sections: [links(true, secret), links(false, open)] }), { email: 'me@example.com', phone: '' });
+  const next = applyPreset({ ...firstDraft(), sections: [links(true, secret)] }, byId('trades'), resumes, PRESETS);
+  const contact = next.sections.find((s) => s.kind === 'contact');
+  assert.equal(contact.email, '');
+  assert.equal(contact.phone, '');
+  // The hidden section itself is kept, still hidden.
+  assert.equal(next.sections.find((s) => s.kind === 'links').hidden, true);
+});
+
+test("a contact section's phone is the number its link dials, its label only when that writes the same number", () => {
+  const phoneOf = (label, url) => contactFromLinks({ sections: [{ kind: 'links', links: [{ type: 'phone', label, url }] }] }).phone;
+  assert.equal(phoneOf('Call me', 'tel:+15550100199'), '+15550100199');
+  assert.equal(phoneOf('(555) 010-0199', 'tel:+15550100199'), '(555) 010-0199');
+  assert.equal(phoneOf('+1 555 010 0199', 'tel:+15550100199'), '+1 555 010 0199');
+  assert.equal(phoneOf('0199', 'tel:+15550100199'), '+15550100199');
+  assert.equal(phoneOf('555 010 0199 ext. 12', 'tel:+15550100199;ext=12'), '+15550100199;ext=12');
+  assert.equal(phoneOf('(555) 010-0199'.padEnd(45, ' 1'), 'tel:+15550100199'), '+15550100199');
+  // Too long, or not one line, for a contact field: left empty rather than failing the save.
+  assert.equal(phoneOf('', `tel:+1${'5'.repeat(45)}`), '');
+  assert.equal(phoneOf('', 'tel:+1555%0A0100'), '');
+  const longEmail = `mailto:${'a'.repeat(250)}@example.com`;
+  assert.equal(contactFromLinks({ sections: [{ kind: 'links', links: [{ label: '', url: longEmail }] }] }).email, '');
+  // Whatever the links, the draft the preset makes is one the server takes.
+  const draft = { ...firstDraft(), sections: [{ id: 'l', kind: 'links', title: '', links: [{ type: 'phone', label: 'x'.repeat(90), url: 'tel:+15550100199' }] }] };
+  assert.doesNotThrow(() => validateLanding(applyPreset(draft, byId('trades'), resumes, PRESETS), refs));
 });
 
 test('a contact section already on the page is the one kept, never a second', () => {
