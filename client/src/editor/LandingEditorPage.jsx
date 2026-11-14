@@ -13,6 +13,7 @@ import { createLimiter } from './uploadLimit.js';
 import { LANDING_PRESETS } from '../resume/templateRegistry.js';
 import { KEEP_STARTING_PAGE, LandingPresetPicker } from './LandingPresetPicker.jsx';
 import { applyPreset, offerPresetsOnOpen, presetMade, presetQuestion } from './landingPresets.js';
+import { AppVersion } from './AppVersion.jsx';
 import {
   anchorFor,
   highlightIds,
@@ -527,6 +528,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
           <button className="ed-btn ed-btn-ghost" onClick={handleLogout} disabled={busy}>
             Log out
           </button>
+          <AppVersion />
         </div>
       </header>
 

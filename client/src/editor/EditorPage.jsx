@@ -33,6 +33,7 @@ import {
   suggestedHiddenIds,
 } from './tailorPlan.js';
 import { PlanOrderBanner } from './PlanHidePanel.jsx';
+import { AppVersion } from './AppVersion.jsx';
 import {
   applyProposal,
   describeTarget,
@@ -1066,6 +1067,7 @@ export function EditorPage({
           <button className="ed-btn ed-btn-ghost" onClick={handleLogout}>
             Log out
           </button>
+          <AppVersion />
         </div>
       </header>
 

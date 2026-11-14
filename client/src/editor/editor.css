@@ -71,6 +71,10 @@
 .ed-topbar-actions {
   margin-left: auto;
   display: flex;
+  /* On a phone the resume editor's buttons outgrow the screen; wrap them
+     (right-aligned, like the row itself) rather than scroll the page. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -1794,4 +1798,11 @@ dialog.ed-preset-picker::backdrop {
 
 .ed-preset-preview-page > .l-page {
   flex: 1 0 auto;
+}
+
+.ed-app-version {
+  align-self: center;
+  font-size: 11px;
+  color: var(--slate-light);
+  white-space: nowrap;
 }
