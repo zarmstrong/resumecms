@@ -33,7 +33,7 @@ import {
   suggestedHiddenIds,
 } from './tailorPlan.js';
 import { PlanOrderBanner } from './PlanHidePanel.jsx';
-import { AppVersion } from './AppVersion.jsx';
+import { TopbarEnd } from './TopbarEnd.jsx';
 import {
   applyProposal,
   describeTarget,
@@ -1064,13 +1064,7 @@ export function EditorPage({
           <button className="ed-btn ed-btn-ghost" onClick={() => setSettingsOpen(true)}>
             Account Settings
           </button>
-          {/* Kept together so the version never wraps onto a line alone. */}
-          <span className="ed-topbar-end">
-            <button className="ed-btn ed-btn-ghost" onClick={handleLogout}>
-              Log out
-            </button>
-            <AppVersion />
-          </span>
+          <TopbarEnd onLogout={handleLogout} />
         </div>
       </header>
 
