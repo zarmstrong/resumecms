@@ -67,7 +67,9 @@ export function TotpSettings() {
     setBusy(true);
     setError(null);
     try {
-      await api.cancelTotp(pending.secret);
+      // 2FA may have been turned on or off in another tab meanwhile.
+      const status = await api.cancelTotp(pending.secret);
+      setEnabled(status.enabled);
       setPending(null);
       setToken('');
     } catch (err) {
