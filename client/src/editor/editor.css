@@ -71,8 +71,9 @@
 .ed-topbar-actions {
   margin-left: auto;
   display: flex;
-  /* On a phone the resume editor's buttons outgrow the screen; wrap them
-     (right-aligned, like the row itself) rather than scroll the page. */
+  /* Only once the buttons are wider than a whole row of their own (the
+     resume editor's, on a phone): wrap them, right-aligned like the row,
+     rather than scroll the page. Wider screens keep them on one line. */
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;

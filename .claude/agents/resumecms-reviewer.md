@@ -136,7 +136,7 @@ in prose; check the diff against the ones that apply, especially:
   `ci-passed`'s `needs`.
 - The release workflow's Docker job publishes only release tags, and the
   Dockerfile keeps installing with `npm ci` from the lockfiles.
-  release-please's `extra-files` keep bumping both `package.json`s: the
+- release-please's `extra-files` keep bumping both `package.json`s: the
   editor's top bar shows `client/package.json`'s version (`__APP_VERSION__`),
   and `appVersion.test.js` checks both against the manifest.
 - CLAUDE.md/README.md prose still matches the behavior.
