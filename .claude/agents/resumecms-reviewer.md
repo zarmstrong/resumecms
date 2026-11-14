@@ -118,6 +118,9 @@ in prose; check the diff against the ones that apply, especially:
   (`referencedImageIds()`/`referencedFileIds()` of draft and snapshot).
   A PDF is sent with `nosniff`, `Content-Security-Policy: sandbox` and a
   `Content-Disposition` from `contentDisposition()`, never a raw name.
+- 2FA: a setup is only `pendingSecret` until `/confirm` verifies a code
+  from it, and replacing or disabling an active factor needs the current
+  password and a current code, checked server-side and rate-limited.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a

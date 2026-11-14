@@ -30,9 +30,10 @@ export const api = {
   logout: () => request('/auth/logout', { method: 'POST' }),
 
   getTotpStatus: () => request('/auth/totp/status'),
-  setupTotp: () => request('/auth/totp/setup', { method: 'POST' }),
+  // While 2FA is on, replacing or disabling it takes `{ currentPassword, totpToken }`.
+  setupTotp: (payload = {}) => request('/auth/totp/setup', { method: 'POST', body: JSON.stringify(payload) }),
   confirmTotp: (token) => request('/auth/totp/confirm', { method: 'POST', body: JSON.stringify({ token }) }),
-  disableTotp: () => request('/auth/totp/disable', { method: 'POST' }),
+  disableTotp: (payload) => request('/auth/totp/disable', { method: 'POST', body: JSON.stringify(payload) }),
 
   getCredentials: () => request('/auth/credentials'),
   updateCredentials: (payload) => request('/auth/credentials', { method: 'POST', body: JSON.stringify(payload) }),
