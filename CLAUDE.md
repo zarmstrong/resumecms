@@ -431,12 +431,14 @@ and keeps the hero, `seo` and every section with something in it
 (`sectionHasWork()`: a title counts unless it's a preset's title for that
 kind, and so do `hidden`, `column` and any setting that isn't a list set
 otherwise than a new section of its kind starts, such as a contact
-section's `vcard`, or an entry's, such as a credential's `kind`; an
+section's `vcard`, or an entry's, such as a credential's `kind` or a
+service's button once added (a key left out counts as its default); an
 experience, education or skills section always counts, since it shows
 its resume's content, and so does one whose text is only on screen: a
-media link that doesn't parse yet, which `MediaFields` reports through
-`onTypedMedia` and the page passes as `typed`, so a field that holds
-text the draft doesn't must report it there too): one of a kind the preset has in that slot, the
+media link that doesn't parse yet (`MediaFields`) or an AI instruction
+typed or in flight (`LandingAiPanel`), reported through `onTyped` (also
+`ai.onTyped`), counted per section, and passed as `typed`, so a field
+that holds text the draft doesn't must report it there too): one of a kind the preset has in that slot, the
 rest after them, never a second contact section, and never more than
 `limits.sections` (the preset's new sections give way). A new contact
 section's email and phone come only from links sections that aren't

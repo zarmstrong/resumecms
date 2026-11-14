@@ -76,12 +76,15 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   const landingRef = useRef(landing);
   landingRef.current = landing;
   const mountedRef = useRef(true);
-  // The sections whose media link is typed but not saved (MediaFields holds
-  // it on screen until it's one it can show), so a preset keeps them.
-  const typedMediaRef = useRef(new Set());
-  const handleTypedMedia = useCallback((sectionId, typed) => {
-    if (typed) typedMediaRef.current.add(sectionId);
-    else typedMediaRef.current.delete(sectionId);
+  // The sections holding text that's only on screen (a media link that
+  // doesn't parse yet, an AI instruction typed or sent), counted per field,
+  // so a preset keeps them (applyPreset()'s `typed`).
+  const typedRef = useRef(new Map());
+  const handleTyped = useCallback((sectionId, typed) => {
+    const counts = typedRef.current;
+    const n = (counts.get(sectionId) || 0) + (typed ? 1 : -1);
+    if (n > 0) counts.set(sectionId, n);
+    else counts.delete(sectionId);
   }, []);
   const guard = useLeaveGuard({ saves, resumes, work: landingUnsavedWork({ landing, aiProposals }) });
 
@@ -222,7 +225,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       const current = landingRef.current;
       // The latest handleChange (not this render's), so it builds on the
       // status as it is after the wait, a "Show at /" switch included.
-      handleChangeRef.current(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits, { typed: typedMediaRef.current }));
+      handleChangeRef.current(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits, { typed: new Set(typedRef.current.keys()) }));
     });
   }
 
@@ -467,6 +470,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
     onAccept: handleAiAccept,
     onReject: (proposalId) => dropProposals(new Set([proposalId])),
     onCancel: (key) => handleAiCancel(aiRequestAt.get(key)?.key ?? key),
+    onTyped: handleTyped,
   };
 
   return (
@@ -537,7 +541,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
                 ai={ai}
                 onUploadImage={handleImageUpload}
                 onUploadFile={handleFileUpload}
-                onTypedMedia={handleTypedMedia}
+                onTyped={handleTyped}
                 look={{
                   onApply: handleApplyStyle,
                   applyState,

@@ -49,8 +49,8 @@ const FALLBACK_LIMITS = { sections: 20, contactEmail: 254, contactPhone: 40 };
 // of an entry's (a credential's kind a license). An experience, education
 // or skills section always counts: it shows what its resume holds, however
 // it was set up. So does one whose id is in `typed`: the editor's fields
-// that hold text only on screen until it's whole (a media link half
-// typed) name their section there.
+// that hold text only on screen (a media link half typed, an AI
+// instruction) name their section there.
 export function sectionHasWork(section, presets, resumes, typed = EMPTY_SET) {
   if (RESUME_KINDS.includes(section.kind) || typed.has(section.id)) return true;
   const title = section.title.trim();
@@ -72,16 +72,19 @@ export function sectionHasWork(section, presets, resumes, typed = EMPTY_SET) {
 const EMPTY_SET = new Set();
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-// A value that isn't a list or an object, set otherwise than it starts.
+// A value that isn't a list or an object, set otherwise than it starts
+// (one left out, as the server leaves out an empty item's `meta`, isn't).
 function scalarDiffers(start, now) {
-  if (start !== null && typeof start === 'object') return false;
+  if ((start !== null && typeof start === 'object') || now === undefined) return false;
   return typeof start === 'string' && typeof now === 'string' ? now.trim() !== start.trim() : now !== start;
 }
 
-// Whether an entry's own settings (not its lists or objects, which
-// hasContent() reads) are set otherwise than a new entry's.
+// Whether an entry's own settings (not its lists, which hasContent()
+// reads) are set otherwise than a new entry's, or it has one a new entry
+// doesn't (a service's button, stored only once added).
 function settingsDiffer(start, entry) {
-  return Object.entries(start).some(([key, value]) => !Array.isArray(value) && scalarDiffers(value, entry[key]));
+  const changed = Object.entries(start).some(([key, value]) => !Array.isArray(value) && scalarDiffers(value, entry[key]));
+  return changed || Object.keys(entry).some((key) => !(key in start) && entry[key] != null);
 }
 
 // `landing` started from `preset`, as described above. `resumes` is the

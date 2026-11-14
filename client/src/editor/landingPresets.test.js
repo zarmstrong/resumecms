@@ -183,6 +183,20 @@ test("an entry's own setting changed counts too: a credential made a license is 
   assert.equal(sectionHasWork(talk, PRESETS, resumes), true);
 });
 
+test("an entry's optional setting counts once it's there, a field the server leaves out doesn't", () => {
+  const trades = byId('trades');
+  const started = applyPreset(firstDraft(), trades, resumes, PRESETS);
+  const services = started.sections.find((s) => s.kind === 'services');
+  assert.equal(sectionHasWork(services, PRESETS, resumes), false);
+  const button = { ...services, services: [{ ...services.services[0], action: { type: 'link', label: '', url: '', icon: 'phone' } }] };
+  assert.equal(sectionHasWork(button, PRESETS, resumes), true);
+  const next = applyPreset({ ...started, sections: started.sections.map((s) => (s === services ? button : s)) }, byId('healthcare'), resumes, PRESETS);
+  assert.equal(next.sections.find((s) => s.kind === 'services')?.services[0].action.icon, 'phone');
+  // An empty item as stored (its blank `meta` left out) is still empty.
+  const items = { id: 'i', kind: 'items', title: '', items: [{ title: '', text: '', url: '' }] };
+  assert.equal(sectionHasWork(items, PRESETS, resumes), false);
+});
+
 test('a section whose text is typed only on screen (a media link half typed) is kept', () => {
   const creative = byId('creative');
   const started = applyPreset(firstDraft(), creative, resumes, PRESETS);

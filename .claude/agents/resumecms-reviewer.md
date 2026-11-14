@@ -87,7 +87,8 @@ in prose; check the diff against the ones that apply, especially:
   and every section with something in it or set up by the person
   (`sectionHasWork()`: hidden, side column, a section's or an entry's
   setting a new one doesn't start with, a resume-backed section, and one
-  whose text is only on screen, reported through `onTypedMedia`), waits for pending saves and uploads before
+  whose text is only on screen (a media link, an AI instruction), reported
+  through `onTyped`), waits for pending saves and uploads before
   it applies, never leaves two contact sections or more than the section
   cap, and fills a contact section only from links that aren't hidden. The validator checks presets with the
   server's own `checkStyle()`/`SECTION_KINDS`/`LANDING_LIMITS`, so those

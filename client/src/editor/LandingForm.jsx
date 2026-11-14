@@ -190,7 +190,7 @@ function AiField({ ai, ...props }) {
 // `look` its "Apply to the default resume" ({ onApply, applyState }, issue
 // #93) and what its preview draws ({ preview: { draft, context, scheme } },
 // for the template thumbnails, issue #130; see LandingLookFields).
-export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage, onUploadFile, onTypedMedia, look }) {
+export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage, onUploadFile, onTyped, look }) {
   const set = (patch) => onChange({ ...landing, ...patch });
   // Each field passes its own target to the upload (landingImages.js).
   const imageProps = (target) => ({ images: context.images || [], limits: limits?.images, onUpload: (file) => onUploadImage(file, target) });
@@ -311,7 +311,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
           ai={ai}
           imageProps={imageProps}
           fileProps={fileProps}
-          onTypedMedia={onTypedMedia}
+          onTyped={onTyped}
         />
         {(!limits || sections.length < limits.sections) && (
           <select className="ed-input" value="" onChange={(e) => e.target.value && addSection(e.target.value)} aria-label="Add a section">
@@ -484,7 +484,7 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
 // fields stay mounted, only hidden, so an upload in flight or an AI
 // instruction half typed is still there when it's opened again. Which ones
 // are collapsed is this browser's own convenience, kept in localStorage.
-function SectionList({ sections, onChange, hasColumns, resumes, context, limits, ai, imageProps, fileProps, onTypedMedia }) {
+function SectionList({ sections, onChange, hasColumns, resumes, context, limits, ai, imageProps, fileProps, onTyped }) {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [liveMessage, setLiveMessage] = useState('');
   const liveTimer = useRef(null);
@@ -638,7 +638,7 @@ function SectionList({ sections, onChange, hasColumns, resumes, context, limits,
           liveMessage={liveMessage}
           collapsed={collapsed}
           suggestions={suggestions}
-          rowProps={{ hasColumns, resumes, context, limits, ai, imageProps, fileProps, onTypedMedia, toggle, updateSection, removeSection, moveSection }}
+          rowProps={{ hasColumns, resumes, context, limits, ai, imageProps, fileProps, onTyped, toggle, updateSection, removeSection, moveSection }}
         />
       </DndContext>
     </>
@@ -686,7 +686,7 @@ function SectionRows({ sections, listRef, liveMessage, collapsed, suggestions, r
 // the shared props (rowProps) keep their identity.
 const SectionEditor = memo(function SectionEditor({
   section, index, count, collapsed, suggested, dragging, dropEdge, dropLabel,
-  hasColumns, resumes, context, limits, ai, imageProps, fileProps, onTypedMedia, toggle, updateSection, removeSection, moveSection,
+  hasColumns, resumes, context, limits, ai, imageProps, fileProps, onTyped, toggle, updateSection, removeSection, moveSection,
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, setActivatorNodeRef } = useDraggable({ id: section.id });
   const { setNodeRef: setDropRef } = useDroppable({ id: section.id });
@@ -785,7 +785,7 @@ const SectionEditor = memo(function SectionEditor({
           ai={ai}
           imageProps={imageProps}
           fileProps={fileProps}
-          onTypedMedia={onTypedMedia}
+          onTyped={onTyped}
         />
       </div>
     </div>
@@ -796,7 +796,7 @@ const SectionEditor = memo(function SectionEditor({
 // text take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
 
-function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps, fileProps, onTypedMedia }) {
+function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps, fileProps, onTyped }) {
   switch (section.kind) {
     case 'text':
       return (
@@ -871,7 +871,7 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
     case 'gallery':
       return <GalleryFields sectionId={section.id} images={section.images} onChange={(images) => onChange({ images })} limits={limits} imageProps={imageProps} />;
     case 'media':
-      return <MediaFields section={section} onChange={onChange} limits={limits} imageProps={imageProps} onTypedMedia={onTypedMedia} />;
+      return <MediaFields section={section} onChange={onChange} limits={limits} imageProps={imageProps} onTyped={onTyped} />;
     case 'services':
       return <ServicesFields sectionId={section.id} services={section.services} onChange={(services) => onChange({ services })} limits={limits} ai={ai} />;
     case 'publications':
@@ -1486,7 +1486,7 @@ function GalleryFields({ sectionId, images, onChange, limits, imageProps }) {
 // the draft once it does, or once it's cleared; until then the preview
 // shows the last one that did. No ✨: it's about a recording the AI can't
 // hear.
-function MediaFields({ section, onChange, limits, imageProps, onTypedMedia }) {
+function MediaFields({ section, onChange, limits, imageProps, onTyped }) {
   const [url, setUrl] = useState(section.url);
   const sent = useRef(section.url);
   // A link from elsewhere (Discard, an MCP edit seen on reload) replaces
@@ -1500,13 +1500,13 @@ function MediaFields({ section, onChange, limits, imageProps, onTypedMedia }) {
   const media = parseMediaUrl(url);
   const unreadable = url.trim() !== '' && !media;
   // A link typed but not saved yet is only here: the page is told, so a
-  // preset keeps its section (applyPreset()'s `typed`).
+  // preset keeps its section (applyPreset()'s `typed`; one call each way).
   const sectionId = section.id;
   useEffect(() => {
     if (!unreadable) return undefined;
-    onTypedMedia?.(sectionId, true);
-    return () => onTypedMedia?.(sectionId, false);
-  }, [unreadable, sectionId, onTypedMedia]);
+    onTyped?.(sectionId, true);
+    return () => onTyped?.(sectionId, false);
+  }, [unreadable, sectionId, onTyped]);
 
   function handleUrl(e) {
     const next = e.target.value;
