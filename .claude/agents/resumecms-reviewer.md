@@ -85,8 +85,8 @@ in prose; check the diff against the ones that apply, especially:
   only on the client (`landingPresets.js`) as an ordinary draft edit
   through the save queue, never by a route of its own; it keeps the hero
   and every section with something in it or set up by the person
-  (`sectionHasWork()`: any title but a preset's on a section a preset
-  made (`made`), hidden, side column, a section's or an entry's
+  (`sectionHasWork()`: any title but the one a preset gave a section it
+  made (`made`, id to title), hidden, side column, a section's or an entry's
   setting a new one doesn't start with, a resume-backed section, and one
   whose text is only on screen (a media link, an AI instruction), reported
   through `onTyped`), waits for pending saves and uploads before

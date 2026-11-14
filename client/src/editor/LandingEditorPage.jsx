@@ -12,7 +12,7 @@ import { applyUploadedFile, applyUploadedImage, uploadSpot } from './landingImag
 import { createLimiter } from './uploadLimit.js';
 import { LANDING_PRESETS } from '../resume/templateRegistry.js';
 import { KEEP_STARTING_PAGE, LandingPresetPicker } from './LandingPresetPicker.jsx';
-import { applyPreset, offerPresetsOnOpen, presetMadeIds, presetQuestion } from './landingPresets.js';
+import { applyPreset, offerPresetsOnOpen, presetMade, presetQuestion } from './landingPresets.js';
 import {
   anchorFor,
   highlightIds,
@@ -80,10 +80,10 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   // doesn't parse yet, an AI instruction typed or sent), counted per field,
   // so a preset keeps them (applyPreset()'s `typed`).
   const typedRef = useRef(new Map());
-  // The sections a preset made in this editor (by id): only their preset
-  // titles are placeholders a later preset may drop. Forgotten on reload,
-  // when every title counts as the person's.
-  const presetMadeRef = useRef(new Set());
+  // The sections a preset made in this editor, id to the title it gave
+  // them: only a title still that one is a placeholder a later preset may
+  // drop. Forgotten on reload, when every title counts as the person's.
+  const presetMadeRef = useRef(new Map());
   const handleTyped = useCallback((sectionId, typed) => {
     const counts = typedRef.current;
     const n = (counts.get(sectionId) || 0) + (typed ? 1 : -1);
@@ -234,7 +234,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
         typed: new Set(typedRef.current.keys()),
         made: presetMadeRef.current,
       });
-      for (const id of presetMadeIds(current, next)) presetMadeRef.current.add(id);
+      for (const [id, title] of presetMade(current, next)) presetMadeRef.current.set(id, title);
       handleChangeRef.current(next);
     });
   }

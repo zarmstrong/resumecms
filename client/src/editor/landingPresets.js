@@ -41,10 +41,10 @@ const EMPTY_STYLE = { source: 'resume', colors: { accent: '', heading: '', text:
 const FALLBACK_LIMITS = { sections: 20, contactEmail: 254, contactPhone: 40 };
 
 // Whether `section` holds anything the person wrote or set. A title
-// counts unless the section is one a preset made (its id in `made`, see
-// presetMadeIds()) and the title is a preset's for that kind, so switching
+// counts unless it's still the very title a preset gave a section it made
+// (`made`, id to title, see presetMade()), so switching
 // from one preset to another doesn't keep the first one's empty sections,
-// while a heading the person typed counts whatever it says; hiding it or
+// while a heading the person typed (or renamed) counts whatever it says; hiding it or
 // putting it in the side column counts, and so
 // does any setting set otherwise than a new section of its kind starts it:
 // one of the section's ("Save contact" off, publications newest first) or
@@ -53,10 +53,10 @@ const FALLBACK_LIMITS = { sections: 20, contactEmail: 254, contactPhone: 40 };
 // it was set up. So does one whose id is in `typed`: the editor's fields
 // that hold text only on screen (a media link half typed, an AI
 // instruction) name their section there.
-export function sectionHasWork(section, presets, resumes, { typed = EMPTY_SET, made = EMPTY_SET } = {}) {
+export function sectionHasWork(section, presets, resumes, { typed = EMPTY_SET, made = EMPTY_MAP } = {}) {
   if (RESUME_KINDS.includes(section.kind) || typed.has(section.id)) return true;
   const title = section.title.trim();
-  const presetTitle = made.has(section.id) && presets.some((preset) => preset.sections.some((s) => s.kind === section.kind && s.title === title));
+  const presetTitle = made.get(section.id) === title && presets.some((preset) => preset.sections.some((s) => s.kind === section.kind && s.title === title));
   if (title && !presetTitle) return true;
   if (section.hidden || section.column) return true;
   const fresh = SECTION_KINDS.find((k) => k.kind === section.kind)?.empty(resumes) ?? {};
@@ -72,6 +72,7 @@ export function sectionHasWork(section, presets, resumes, { typed = EMPTY_SET, m
 }
 
 const EMPTY_SET = new Set();
+const EMPTY_MAP = new Map();
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // A value that isn't a list or an object, set otherwise than it starts
@@ -94,7 +95,7 @@ function settingsDiffer(start, entry) {
 // (the default one); `presets` every preset, for sectionHasWork();
 // `limits` the editor's (GET /api/landing's), for the caps; `typed` and
 // `made` sectionHasWork()'s.
-export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK_LIMITS, { typed = EMPTY_SET, made = EMPTY_SET } = {}) {
+export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK_LIMITS, { typed = EMPTY_SET, made = EMPTY_MAP } = {}) {
   const caps = { ...FALLBACK_LIMITS, ...limits };
   const current = landing.sections || [];
   const worked = current.filter((section) => sectionHasWork(section, presets, resumes, { typed, made }));
@@ -139,11 +140,12 @@ export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK
   };
 }
 
-// The ids of the sections applyPreset() made going from `before` to
-// `after`, for the editor to keep as `made` (by id, which an edit keeps).
-export function presetMadeIds(before, after) {
+// The sections applyPreset() made going from `before` to `after`, as
+// [id, title] pairs, for the editor to keep as `made` (by id, which an
+// edit keeps; the title, so renaming one makes it the person's).
+export function presetMade(before, after) {
   const had = new Set((before.sections || []).map((section) => section.id));
-  return (after.sections || []).filter((section) => !had.has(section.id)).map((section) => section.id);
+  return (after.sections || []).filter((section) => !had.has(section.id)).map((section) => [section.id, section.title.trim()]);
 }
 
 function newSection(kind, title, landing, resumes, caps) {
@@ -187,8 +189,12 @@ export function contactFromLinks(landing, limits = FALLBACK_LIMITS) {
     // extension as " x12", which telHref() reads back as ;ext=12), and
     // the link that field makes: the page has to dial what the link did.
     const ext = dialled.match(/;ext=(\d+)$/i);
-    const written = ext ? `${dialled.slice(0, ext.index)} x${ext[1]}` : dialled;
-    const target = telHref(written);
+    const number = ext ? dialled.slice(0, ext.index) : dialled;
+    const written = ext ? `${number} x${ext[1]}` : dialled;
+    // Only a number the field can hold as it is: digits, a leading + and
+    // the usual punctuation. A *, #, pause or letter would be dropped from
+    // the field's link, dialling something else, so then it's left empty.
+    const target = /^\+?[\d\s().\-]+$/.test(number) ? telHref(written) : undefined;
     const label = tel.label.trim();
     phone = !target ? '' : label && telHref(label) === target ? label : written;
   }

@@ -8,19 +8,19 @@ import {
   applyPreset as applyPresetTo,
   contactFromLinks,
   offerPresetsOnOpen,
-  presetMadeIds,
+  presetMade,
   presetQuestion,
   presetSectionLabels,
   sectionHasWork as hasWork,
 } from './landingPresets.js';
 
 // As LandingEditorPage does: every section a preset made is remembered (by
-// id, unique per section), so only those sections' preset titles are
-// placeholders. Sections built by hand here were never made by one.
-const MADE = new Set();
+// id, unique per section, with the title it was given), so only those
+// titles are placeholders. Sections built by hand here were never made by one.
+const MADE = new Map();
 function applyPreset(landing, preset, resumes, presets, limits, options = {}) {
   const next = applyPresetTo(landing, preset, resumes, presets, limits, { made: MADE, ...options });
-  for (const id of presetMadeIds(landing, next)) MADE.add(id);
+  for (const [id, title] of presetMade(landing, next)) MADE.set(id, title);
   return next;
 }
 const sectionHasWork = (section, presets, resumes, options = {}) => hasWork(section, presets, resumes, { made: MADE, ...options });
@@ -120,7 +120,7 @@ test('switching presets drops the empty sections the first one added', () => {
 test('a section the person titled themselves counts as written in, a preset title does not', () => {
   const services = { id: 'a', kind: 'services', title: 'Services', services: [{ title: '', text: '', price: '' }] };
   // A preset's own title on a section a preset made is a placeholder...
-  assert.equal(hasWork(services, PRESETS, resumes, { made: new Set(['a']) }), false);
+  assert.equal(hasWork(services, PRESETS, resumes, { made: new Map([['a', 'Services']]) }), false);
   // ...but typed by the person, the same words are theirs (or after a
   // reload, when the editor no longer knows which sections a preset made).
   assert.equal(hasWork(services, PRESETS, resumes), true);
@@ -229,10 +229,14 @@ test("a heading the person typed is kept even when it's a preset's title", () =>
   const next = applyPresetTo(draft, byId('creative'), resumes, PRESETS);
   assert.ok(next.sections.some((s) => s.id === 'mine' && s.title === 'About me'));
   // The same section made by the Education preset, still empty, goes.
-  const made = new Set(['mine']);
+  const made = new Map([['mine', 'About me']]);
   const switched = applyPresetTo(draft, byId('creative'), resumes, PRESETS, undefined, { made });
   assert.ok(!switched.sections.some((s) => s.id === 'mine'));
-  assert.deepEqual(presetMadeIds(draft, switched), switched.sections.filter((s) => s.id !== 'mine' && !draft.sections.some((d) => d.id === s.id)).map((s) => s.id));
+  // Renamed, even to another preset's title, it's the person's.
+  const renamed = { ...draft, sections: [{ ...draft.sections[0], title: 'Research' }] };
+  assert.ok(applyPresetTo(renamed, byId('creative'), resumes, PRESETS, undefined, { made }).sections.some((s) => s.id === 'mine'));
+  const ids = new Set(draft.sections.map((d) => d.id));
+  assert.deepEqual(presetMade(draft, switched), switched.sections.filter((s) => !ids.has(s.id)).map((s) => [s.id, s.title]));
 });
 
 test('a section whose text is typed only on screen (a media link half typed) is kept', () => {
@@ -338,6 +342,11 @@ test("a contact section's phone is the number its link dials, its label only whe
   ]) {
     assert.equal(telHref(phoneOf(label, url)), url.includes('%') ? 'tel:+15550100199' : url, `${label} ${url}`);
   }
+  // A number the field can't hold as it is (a *, #, pause or letter) is left out.
+  assert.equal(phoneOf('*67 555 010 0199', 'tel:*675550100199'), '');
+  assert.equal(phoneOf('', 'tel:+15550100199,,12'), '');
+  assert.equal(phoneOf('', 'tel:1-800-FLOWERS'), '');
+  assert.equal(phoneOf('', 'tel:%2A675550100199'), '');
   // Too long, or not one line, for a contact field: left empty rather than failing the save.
   assert.equal(phoneOf('', `tel:+1${'5'.repeat(45)}`), '');
   assert.equal(phoneOf('', 'tel:+1555%0A0100'), '');

@@ -428,10 +428,10 @@ save queue, so its checks and `touchLanding()` apply. It sets `template`
 and `style` (keeping the draft's `darkColors` when the preset has none), puts the preset's sections first (each new one as "+ Add
 section" starts it, from `landingSections.js`, shared with `LandingForm`),
 and keeps the hero, `seo` and every section with something in it
-(`sectionHasWork()`: a title counts unless the section is one a preset
-made in this editor (`made`, the ids `presetMadeIds()` collects in
-`LandingEditorPage`, forgotten on reload) and it's a preset's title for
-that kind, and so do `hidden`, `column` and any setting that isn't a list set
+(`sectionHasWork()`: a title counts unless it's still the one a preset
+gave a section it made in this editor (`made`, id to title, which
+`presetMade()` collects in `LandingEditorPage`, forgotten on reload), and
+so do `hidden`, `column` and any setting that isn't a list set
 otherwise than a new section of its kind starts, such as a contact
 section's `vcard`, or an entry's, such as a credential's `kind` or a
 service's button once added (a key left out counts as its default); an
@@ -444,7 +444,7 @@ that holds text the draft doesn't must report it there too): one of a kind the p
 rest after them, never a second contact section, and never more than
 `limits.sections` (the preset's new sections give way). A new contact
 section's email and phone come only from links sections that aren't
-hidden, the phone as its link dials it (its label only when `telHref()` of it is that same link, an extension written ` x12`), so nothing hidden turns public and the page dials what the link did. `LandingPresetPicker.jsx` shows them with
+hidden, the phone as its link dials it (its label only when `telHref()` of it is that same link, an extension written ` x12`, and nothing for a number the field can't hold as it is, such as one with a `*`), so nothing hidden turns public and the page dials what the link did. `LandingPresetPicker.jsx` shows them with
 the template picker's thumbnails; `LandingEditorPage` opens it by itself
 while `offerPresetsOnOpen(status)` (the status's `hasDraft`, false until
 `landing_draft` is first stored, and no `publishedAt`), where Skip or
