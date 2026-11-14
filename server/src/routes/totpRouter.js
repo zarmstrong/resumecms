@@ -105,7 +105,10 @@ export function createTotpRouter({ getSetting, setSetting }) {
     if (current.pendingSecret !== totp.pendingSecret) {
       return res.status(409).json({ error: 'No 2FA setup in progress' });
     }
-    setSetting('totp', { enabled: true, secret: totp.pendingSecret, lastUsedStep: step });
+    // No lastUsedStep: the confirm code isn't a login, and recording it
+    // would refuse the first login with the new app in the same 30 s (with
+    // login's "incorrect" message).
+    setSetting('totp', { enabled: true, secret: totp.pendingSecret });
     res.json({ enabled: true });
   });
 

@@ -134,7 +134,9 @@ test('confirm with a code from the pending secret swaps it in', async () => {
     assert.equal(row.enabled, true);
     assert.equal(row.secret, setup.body.secret);
     assert.equal(row.pendingSecret, undefined);
-    assert.equal(typeof row.lastUsedStep, 'number');
+    // The confirm code isn't recorded as a login's, so the first login with
+    // the new app can use the code still on screen.
+    assert.equal(row.lastUsedStep, undefined);
     assert.equal((await app.post('/confirm', { token: await code(setup.body.secret) })).status, 409);
   } finally {
     app.close();
