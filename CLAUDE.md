@@ -1641,5 +1641,7 @@ config. `server/src/middleware/requireAuth.js` gates everything under
 `/api` except `/api/auth/*` and `/api/public/*`; `/mcp` is gated separately
 by its bearer token (see "MCP server"). Login is rate-limited
 (10 failed attempts / IP / 15 min) and optionally captcha-gated
-(`RESUMECMS_CAPTCHA_PROVIDER`); see README.md for the full auth/security
+(`RESUMECMS_CAPTCHA_PROVIDER`; off only when unset: an unknown provider
+or a missing key refuses to start, `readCaptchaConfig()` in
+`captchaConfig.js`); see README.md for the full auth/security
 notes, including manual TOTP recovery via direct SQLite access.

@@ -184,7 +184,7 @@ the server.
 | `PORT` | no | Server port. Defaults to `4000`. |
 | `RESUMECMS_DATA_DIR` | no | Where the SQLite file (`resume.sqlite3`) and the rendered PDFs (`pdf/`) live. Defaults to `/data`. |
 | `RESUMECMS_TRUST_PROXY` | behind a reverse proxy | Express `trust proxy` value: the proxy's IP/subnet (e.g. `172.18.0.1`, `loopback`), or a hop count if the app port is only reachable through the proxy. Unset trusts no proxy. See the login rate-limiting notes below. |
-| `RESUMECMS_CAPTCHA_PROVIDER` | no | `turnstile` or `recaptcha` to require a captcha on login. Unset disables it. |
+| `RESUMECMS_CAPTCHA_PROVIDER` | no | `turnstile` or `recaptcha` to require a captcha on login. Unset disables it. Any other value, or a provider without both of its keys, makes the server refuse to start. |
 | `RESUMECMS_TURNSTILE_SITE_KEY` / `RESUMECMS_TURNSTILE_SECRET_KEY` | if using Turnstile | From the [Cloudflare Turnstile dashboard](https://dash.cloudflare.com/?to=/:account/turnstile). |
 | `RESUMECMS_RECAPTCHA_SITE_KEY` / `RESUMECMS_RECAPTCHA_SECRET_KEY` | if using reCAPTCHA | From the [Google reCAPTCHA admin console](https://www.google.com/recaptcha/admin) (v2 "I'm not a robot" checkbox type). |
 | `RESUMECMS_MCP_TOKEN` | no | Enables the [MCP server](#mcp-server) at `POST /mcp`; the bearer token MCP clients must send. Unset disables the endpoint. Must be at least 32 characters (`openssl rand -hex 32`). |
@@ -372,7 +372,10 @@ password brute-forcing. Set `RESUMECMS_CAPTCHA_PROVIDER` to `turnstile` or
 require solving a captcha before the password is even checked — the login
 form loads the provider's widget dynamically and the server verifies the
 token server-side on every attempt. Leaving it unset disables the captcha
-entirely; rate limiting alone still applies either way.
+entirely; rate limiting alone still applies either way. A misconfigured
+captcha never falls back to off: an unknown provider, or a missing site or
+secret key, makes the server refuse to start with an error naming the
+variable.
 
 If you run this behind a reverse proxy, set `RESUMECMS_TRUST_PROXY` so
 rate limiting (and the access log) keys on the real client IP instead of
