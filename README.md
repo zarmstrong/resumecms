@@ -205,7 +205,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/auth/totp/status` | `{ enabled }` (auth-gated) |
 | `POST /api/auth/totp/setup` | generates a new pending secret, returns `{ secret, otpauthUrl, qrDataUrl }` (auth-gated). Needs `{ currentPassword }`, and while 2FA is on also `totpToken` (an unused code from the current app), 401 otherwise; the current factor keeps working until the new one is confirmed |
 | `POST /api/auth/totp/confirm` | `{ token }` (a code from the pending secret) → verifies it and enables 2FA, replacing any current factor (auth-gated) |
-| `POST /api/auth/totp/disable` | `{ currentPassword, totpToken }` → turns 2FA off (auth-gated; 401 without both). Setup, confirm and disable are rate-limited like login (10 failed attempts / IP / 15 min) |
+| `POST /api/auth/totp/disable` | `{ currentPassword, totpToken }` → turns 2FA off (auth-gated; while 2FA is on, 401 without both; with it off it only clears a pending setup). Setup, confirm and disable are rate-limited like login (10 failed attempts / IP / 15 min) |
 | `GET/PUT /api/header` | header/contact fields |
 | `GET/PUT /api/site` | site settings (title and description for search results and link previews, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
@@ -810,7 +810,8 @@ same SQLite database as your content, not in an env var — nothing to
 configure ahead of time, and it's off by default.
 
 **If you lose access to your authenticator app**, there's no in-app
-recovery (turning 2FA off requires being logged in). Recover by deleting
+recovery (turning 2FA off requires being logged in, your password and a
+code from the app). Recover by deleting
 the `totp` row directly from the settings table on the host running the
 container:
 
