@@ -234,7 +234,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/landing/images/:id` | a stored image, for the editor's preview |
 | `POST /api/landing/files?name=<file name>` | upload a PDF for a documents section: the file itself as the body (at most 10 MB; it's told to be a PDF from its bytes, not `Content-Type`, though a body sent as `application/json` is a 400). It's loaded and saved again without its metadata (the Info dictionary's title, author, subject, keywords, creator, producer and dates, its XMP, an app's private data with the last-modified dates pages and forms carry beside it, and every earlier saved revision), without its comments' author names and dates, and without any file attached to it (embedded files, associated files, file attachment annotations); its pages, the comments' text and form field values (a digital signature's name and date included) are kept as they are. A PDF that can't be read that way (encrypted, password-protected or damaged) is a 400 saying so; one that would decompress to more than 64 MB while being read is a 413, and so is one too complex to read safely (its streams declaring more than a million objects, or reading it taking more than 15 seconds or 256 MB of memory). Responds `201` with `{ id, size, name, src }`, `name` the cleaned file name (no folders, quotes or control characters, ending in `.pdf`) to reference it by as `{ fileId: id, name }`. A 413 when it's too large, a 409 when the store is full (20 files or 30 MB; a file nothing uses is removed at the first landing publish, restart or full-store upload once it's a week old) |
 | `GET /api/landing/files/:id[/:name]` | a stored PDF, for the editor |
-| `GET /api/landing/status` | `{ enabled, publishedAt, isDirty }` |
+| `GET /api/landing/status` | `{ enabled, publishedAt, isDirty, hasDraft }`, `hasDraft` false until the draft is first saved (the editor offers the presets while it's false and nothing is published) |
 | `POST /api/landing/publish` | snapshot the landing page draft to the public site (no resume is published with it). A 400 naming the field (e.g. `sections[2].image.alt`) while an image the page would show has an empty description |
 | `POST /api/landing/discard-draft` | restore the landing page draft from its last published snapshot |
 | `POST /api/landing/apply-style` | copy the stored draft's own colors and fonts (`style.colors`, `font`, `nameFont`, empty ones as their defaults; never `darkColors`) into the default resume's site settings draft, merged so its other settings and colors stay. Nothing is published. A 400 while `style.source` is `'resume'`. Responds `{ resumeId, site }` |
@@ -657,6 +657,25 @@ What visitors see:
 - A domain mapped to a resume keeps showing that resume, landing page or
   not. The landing page only replaces the default resume on hosts that
   aren't one of a resume's domains.
+
+**Presets by profession.** The first time you open the landing page
+editor (before it has been saved or published), it offers a starting
+point for your kind of work: **Trades and home services** (the Card
+template, with contact, services, credentials, a gallery and quotes),
+**Teaching and education** (Classic: text, credentials, experience,
+documents), **Creative work** (Gallery: a gallery, video or audio,
+quotes, links), **Healthcare** (Formal: credentials, experience,
+contact, questions and answers) and **Research and academia** (Directory:
+text, publications, education, documents), or the page made from your
+resume as it is. A preset sets the template, colors and fonts (a dark palette of your
+own stays unless the preset has one) and puts its sections first, empty and ready to fill in. Your headline, buttons
+and photo stay, and so does every section you've written in: one of a
+kind the preset has takes its place, the rest follow it, and only empty
+sections are removed. **Start from a preset…** above the form offers
+them again at any time, and asks first. Nothing is published until you
+publish. Presets are files under
+[`templates/landing-presets/`](templates/landing-presets/) (see
+[`templates/README.md`](templates/README.md#landing-page-presets)).
 
 Its **Search & sharing** group sets the title and description search
 results and link previews use (otherwise the headline, and the

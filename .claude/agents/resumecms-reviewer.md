@@ -81,6 +81,21 @@ in prose; check the diff against the ones that apply, especially:
   `LandingView`; a
   section's `column` is read only by a template whose `template.json` says
   `columns: true`.
+- A landing preset (`templates/landing-presets/`, issue #130) is applied
+  only on the client (`landingPresets.js`) as an ordinary draft edit
+  through the save queue, never by a route of its own; it keeps the hero
+  and every section with something in it or set up by the person
+  (`sectionHasWork()`: any title but the one a preset gave a section it
+  made (`made`, id to title), hidden, side column, a section's or an entry's
+  setting a new one doesn't start with, a resume-backed section, and one
+  whose text is only on screen (a media link, an AI instruction), reported
+  through `onTyped`), waits for pending saves and uploads before
+  it applies, never leaves two contact sections or more than the section
+  cap, and fills a contact section only from links that aren't hidden. The validator checks presets with the
+  server's own `checkStyle()`/`SECTION_KINDS`/`LANDING_LIMITS`, so those
+  stay free of npm imports, and CI's `templates` job runs for
+  `server/src/`. The picker opens by itself only while
+  `offerPresetsOnOpen()` (no saved draft, never published).
 - New public routes set a `cacheHeaders.js` constant before any early
   return; host-resolved ones send `HOST_HEADERS`.
 - The shell's favicon `?v=` versions and the favicon routes both come from

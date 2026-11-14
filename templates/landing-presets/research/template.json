@@ -1,0 +1,19 @@
+{
+  "id": "research",
+  "label": "Research and academia",
+  "description": "A long page with a table of contents, for researchers, academics and consultants: your research in brief, your publications and talks, your education and papers or a CV to download.",
+  "author": "resumecms",
+  "template": "directory",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#3730a3", "heading": "#111827", "text": "#1f2937", "background": "#fdfcf9" },
+    "font": "ibm-plex-sans",
+    "nameFont": "merriweather"
+  },
+  "sections": [
+    { "kind": "text", "title": "Research" },
+    { "kind": "publications", "title": "Publications and talks" },
+    { "kind": "education", "title": "Education" },
+    { "kind": "documents", "title": "CV and papers" }
+  ]
+}

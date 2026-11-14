@@ -51,7 +51,19 @@ test('before anything is saved, the draft comes from the published header', asyn
   assert.equal(draft.headline, 'Jo');
   assert.equal(draft.subheadline, 'Engineer');
   assert.deepEqual(cardsOf(draft), [{ resumeId: defaultId, label: '', blurb: '', showPdf: false }]);
-  assert.deepEqual(store.getLandingStatus(), { enabled: false, publishedAt: null, isDirty: false });
+  assert.deepEqual(store.getLandingStatus(), { enabled: false, publishedAt: null, isDirty: false, hasDraft: false });
+});
+
+test('hasDraft turns true with the first save and stays so (the editor offers presets until then)', async () => {
+  const { store } = await makeStore();
+  assert.equal(store.getLandingStatus().hasDraft, false);
+  store.getLanding(); // reading the built draft doesn't store it
+  assert.equal(store.getLandingStatus().hasDraft, false);
+  store.setLanding(store.getLanding());
+  assert.equal(store.getLandingStatus().hasDraft, true);
+  assert.equal(store.publishLanding().hasDraft, true);
+  store.discardLandingDraft();
+  assert.equal(store.getLandingStatus().hasDraft, true);
 });
 
 test('saving marks the landing page dirty, publishing clears it, and neither touches the resume', async () => {

@@ -1,0 +1,19 @@
+{
+  "id": "education",
+  "label": "Teaching and education",
+  "description": "For teachers, tutors, coaches and trainers: a few words about how you teach, your certifications, where you've taught and materials to download, such as a teaching philosophy or a sample lesson plan.",
+  "author": "resumecms",
+  "template": "classic",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#1d4ed8", "heading": "#172554", "text": "#1f2937", "background": "#ffffff" },
+    "font": "source-serif",
+    "nameFont": "lora"
+  },
+  "sections": [
+    { "kind": "text", "title": "About me" },
+    { "kind": "credentials", "title": "Certifications" },
+    { "kind": "experience", "title": "Experience" },
+    { "kind": "documents", "title": "Teaching materials" }
+  ]
+}

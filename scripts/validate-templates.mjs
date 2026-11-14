@@ -2,10 +2,14 @@
 // Validates the shape of everything under templates/ so a broken
 // contribution fails fast in CI instead of silently breaking the build or
 // showing up empty in the gallery. Dependency-free — only Node builtins —
-// so it runs with no `npm install` step.
+// so it runs with no `npm install` step. The landing presets are checked
+// against the server's own rules (landingFields.js and landingStyle.js,
+// which load nothing but Node builtins either).
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LANDING_LIMITS, SECTION_KINDS } from '../server/src/landingFields.js';
+import { checkStyle } from '../server/src/landingStyle.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // The repo's templates/, or the folder given (validateTemplates.test.js
@@ -460,6 +464,54 @@ for (const id of presetIds) {
   }
 }
 
+// ---- landing presets (issue #130): a landing template, its colors and
+// fonts, and the sections a page starts with, by kind and title only (the
+// editor fills each in as "+ Add section" would, landingPresets.js).
+const landingPresetIds = dirsIn(path.join(TEMPLATES_DIR, 'landing-presets'));
+for (const id of landingPresetIds) {
+  const dir = path.join(TEMPLATES_DIR, 'landing-presets', id);
+  const label = `templates/landing-presets/${id}`;
+  checkId(id, label);
+  const meta = readJson(path.join(dir, 'template.json'), label);
+  checkMeta(meta, label, ['id', 'template', 'style', 'sections']);
+  if (!meta) continue;
+  if (meta.id !== id) errors.push(`${label}: "id" (${meta.id}) must match its folder name`);
+  if (!landingIds.includes(meta.template)) {
+    errors.push(`${label}: "template" references unknown landing template "${meta.template}"`);
+  }
+  if (meta.style !== undefined) {
+    try {
+      checkStyle(meta.style);
+    } catch (err) {
+      errors.push(`${label}: ${err.message}`);
+    }
+  }
+  if (!Array.isArray(meta.sections) || meta.sections.length === 0) {
+    errors.push(`${label}: "sections" must be a non-empty list`);
+    continue;
+  }
+  if (meta.sections.length > LANDING_LIMITS.sections) {
+    errors.push(`${label}: at most ${LANDING_LIMITS.sections} sections`);
+  }
+  meta.sections.forEach((section, i) => {
+    const at = `${label}: sections[${i}]`;
+    if (typeof section !== 'object' || section === null || Array.isArray(section)) {
+      errors.push(`${at} must be an object`);
+      return;
+    }
+    for (const key of Object.keys(section)) {
+      if (key !== 'kind' && key !== 'title') errors.push(`${at}: unrecognized field "${key}" (only kind and title)`);
+    }
+    if (!SECTION_KINDS.includes(section.kind)) errors.push(`${at}: unknown section kind "${section.kind}"`);
+    if (typeof section.title !== 'string' || section.title.length > LANDING_LIMITS.sectionTitle) {
+      errors.push(`${at}: "title" must be a string of at most ${LANDING_LIMITS.sectionTitle} characters`);
+    }
+  });
+  if (meta.sections.filter((s) => s?.kind === 'contact').length > 1) {
+    errors.push(`${label}: at most one contact section`);
+  }
+}
+
 if (errors.length) {
   console.error(`✗ templates/ validation failed (${errors.length} issue${errors.length === 1 ? '' : 's'}):\n`);
   for (const err of errors) console.error(`  - ${err}`);
@@ -467,5 +519,5 @@ if (errors.length) {
 }
 
 console.log(
-  `✓ templates/ OK — ${headerIds.length} header(s), ${layoutIds.length} layout(s), ${landingIds.length} landing template(s), ${presetIds.length} preset(s)`
+  `✓ templates/ OK — ${headerIds.length} header(s), ${layoutIds.length} layout(s), ${landingIds.length} landing template(s), ${presetIds.length} preset(s), ${landingPresetIds.length} landing preset(s)`
 );

@@ -1675,3 +1675,49 @@
   font-size: 11px;
   color: var(--slate-light);
 }
+
+/* ---- Landing page presets (issue #130, LandingPresetPicker.jsx) --------- */
+.ed-landing-panel-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ed-preset-intro {
+  margin: -6px 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--slate);
+}
+
+.ed-preset-options {
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.ed-preset-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.ed-preset-sections {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+}
+
+/* A native <dialog> (showModal()), so the editor behind it is inert and
+   focus stays inside; it takes the .ed-modal look, centered, over the same
+   dimmed page as .ed-modal-backdrop. */
+dialog.ed-preset-picker {
+  border: 0;
+  color: var(--ink);
+  max-width: calc(100% - 40px);
+}
+
+dialog.ed-preset-picker::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}

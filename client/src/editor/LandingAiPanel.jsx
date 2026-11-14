@@ -18,6 +18,17 @@ export function LandingAiPanel({ ai, target, current = '', label = '✨ Rewrite 
   const [open, setOpen] = useState(Boolean(request || placed));
   const [instruction, setInstruction] = useState(request?.instruction || '');
 
+  // An instruction typed, or sent and not answered yet, is only here: the
+  // page is told, so a preset keeps its section (applyPreset()'s `typed`).
+  const sectionId = target.sectionId;
+  const onTyped = ai.onTyped;
+  const typed = Boolean(instruction.trim()) || request?.status === 'loading';
+  useEffect(() => {
+    if (!typed || !sectionId || !onTyped) return undefined;
+    onTyped(sectionId, true);
+    return () => onTyped(sectionId, false);
+  }, [typed, sectionId, onTyped]);
+
   // A suggestion this panel didn't ask for (an intro's) opens it, so it
   // isn't left unseen behind the closed button.
   const placedId = placed?.proposal.id;

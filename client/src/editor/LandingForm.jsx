@@ -20,64 +20,20 @@ import { MEDIA_PROVIDER_LABELS, parseMediaUrl } from '../landing/mediaUrl.js';
 import { cleanDoi, isDoi } from '../landing/publications.js';
 import { mailtoHref, telHref } from '../resume/safeUrl.js';
 import { applySectionDrop, liveCollapsedIds, moveSectionBy, projectSectionDrop } from './sectionDrag.js';
-
-// The kinds of section the landing page can hold (server/src/landingFields.js's
-// SECTION_KINDS), what each is called here, and what a new one starts with
-// (given the editor's list of resumes).
-const SECTION_KINDS = [
-  { kind: 'text', label: 'Text', addLabel: 'Text', empty: () => ({ body: '' }) },
-  { kind: 'items', label: 'List', addLabel: 'List (e.g. projects)', empty: () => ({ items: [emptyItem()] }) },
-  { kind: 'links', label: 'Links', addLabel: 'Links', empty: () => ({ links: [] }) },
-  { kind: 'resumes', label: 'Resume cards', addLabel: 'Resume cards', empty: () => ({ cards: [] }) },
-  { kind: 'quotes', label: 'Quotes', addLabel: 'Quotes (testimonials)', empty: () => ({ quotes: [emptyQuote()] }) },
-  {
-    kind: 'experience',
-    label: 'Experience',
-    addLabel: 'Experience (latest roles from a resume)',
-    empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id, count: 3, showDates: true }),
-  },
-  { kind: 'image', label: 'Image', addLabel: 'Image', empty: () => ({ image: null, caption: '' }) },
-  { kind: 'divider', label: 'Divider', addLabel: 'Divider (a line between sections)', empty: () => ({}) },
-  { kind: 'stats', label: 'Stats', addLabel: 'Stats (by the numbers)', empty: () => ({ stats: [emptyStat()] }) },
-  { kind: 'faq', label: 'Questions and answers', addLabel: 'Questions and answers (FAQ)', empty: () => ({ entries: [emptyFaqEntry()] }) },
-  {
-    kind: 'education',
-    label: 'Education',
-    addLabel: 'Education (latest entries from a resume)',
-    empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id, count: 3, showDates: true }),
-  },
-  {
-    kind: 'skills',
-    label: 'Skills',
-    addLabel: 'Skills (skill groups from a resume)',
-    empty: (resumes) => ({ resumeId: (resumes.find((r) => r.isDefault) ?? resumes[0])?.id }),
-  },
-  {
-    kind: 'credentials',
-    label: 'Credentials',
-    addLabel: 'Credentials (licenses, certifications, memberships)',
-    empty: () => ({ credentials: [emptyCredential()] }),
-  },
-  { kind: 'gallery', label: 'Gallery', addLabel: 'Gallery (several images in a grid)', empty: () => ({ images: [] }) },
-  { kind: 'media', label: 'Video or audio', addLabel: 'Video or audio (YouTube, Vimeo, SoundCloud, Spotify)', empty: () => ({ url: '', caption: '', transcript: '' }) },
-  { kind: 'services', label: 'Services', addLabel: 'Services (what you offer, with prices)', empty: () => ({ services: [emptyService()] }) },
-  {
-    kind: 'publications',
-    label: 'Publications',
-    addLabel: 'Publications (papers, articles, books, talks, press)',
-    empty: () => ({ order: 'manual', group: false, entries: [emptyPublication()] }),
-  },
-  // At most one per page (issue #124), so it's left out of the menu once there is one.
-  {
-    kind: 'contact',
-    label: 'Contact',
-    addLabel: 'Contact (email, phone, area, hours, "Save contact")',
-    empty: () => ({ email: '', phone: '', area: '', address: '', hours: [], vcard: true }),
-    once: true,
-  },
-  { kind: 'documents', label: 'Documents', addLabel: 'Documents (PDFs: a portfolio, writing samples)', empty: () => ({ documents: [] }) },
-];
-const kindLabel = (kind) => SECTION_KINDS.find((k) => k.kind === kind)?.label || kind;
+import {
+  SECTION_KINDS,
+  emptyCredential,
+  emptyFaqEntry,
+  emptyHours,
+  emptyItem,
+  emptyPublication,
+  emptyQuote,
+  emptyService,
+  emptyStat,
+  hasContent,
+  kindLabel,
+  newSectionId,
+} from './landingSections.js';
 
 const COLLAPSED_KEY = 'resumecms-landing-collapsed-sections';
 // How far above or below the section list a drag may wander and still
@@ -88,93 +44,6 @@ const LIVE_MESSAGE_MS = 2000;
 const SCREEN_READER_INSTRUCTIONS = {
   draggable: 'Press Up or Down to move this section. With a pointer, drag it to a new position.',
 };
-
-function emptyItem() {
-  return { title: '', text: '', url: '', meta: '' };
-}
-
-function emptyQuote() {
-  return { text: '', name: '', role: '', url: '' };
-}
-
-function emptyStat() {
-  return { value: '', label: '' };
-}
-
-function emptyFaqEntry() {
-  return { question: '', answer: '' };
-}
-
-function emptyService() {
-  return { title: '', text: '', price: '' };
-}
-
-function emptyHours() {
-  return { days: '', time: '' };
-}
-
-function emptyCredential() {
-  return { kind: 'certification', name: '', issuer: '', number: '', issued: '', expires: '', url: '' };
-}
-
-function emptyPublication() {
-  return { kind: 'article', title: '', outlet: '', date: '', url: '', doi: '', note: '' };
-}
-
-// Only tells sections apart (React keys, and the server keeps it); not
-// crypto.randomUUID(), which a plain-http install's browser doesn't have.
-function newSectionId() {
-  return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function hasContent(section) {
-  if (section.title.trim()) return true;
-  switch (section.kind) {
-    case 'text':
-      return Boolean(section.body.trim());
-    case 'items':
-      return section.items.some(
-        (item) => item.title.trim() || item.text.trim() || item.url.trim() || item.meta?.trim() || Boolean(item.image)
-      );
-    case 'links':
-      return section.links.length > 0;
-    case 'resumes':
-      return section.cards.length > 0;
-    case 'quotes':
-      return section.quotes.some((quote) => quote.text.trim() || quote.name.trim() || quote.role.trim() || quote.url.trim());
-    case 'experience':
-      // Nothing typed but its heading: its roles come from the resume.
-      return false;
-    case 'image':
-      return Boolean(section.image) || Boolean(section.caption.trim());
-    case 'stats':
-      return section.stats.some((stat) => stat.value.trim() || stat.label.trim());
-    case 'faq':
-      return section.entries.some((entry) => entry.question.trim() || entry.answer.trim());
-    case 'education':
-    case 'skills':
-      // Like experience: what they show comes from the resume.
-      return false;
-    case 'credentials':
-      return section.credentials.some((c) => [c.name, c.issuer, c.number, c.issued, c.expires, c.url].some((value) => value.trim()));
-    case 'gallery':
-      return section.images.some((entry) => Boolean(entry.image) || Boolean(entry.caption.trim()));
-    case 'media':
-      return Boolean(section.url.trim() || section.poster || section.caption.trim() || section.transcript.trim());
-    case 'services':
-      return section.services.some(
-        (service) => service.title.trim() || service.text.trim() || service.price.trim() || service.action?.label.trim() || service.action?.url.trim()
-      );
-    case 'publications':
-      return section.entries.some((e) => [e.title, e.outlet, e.date, e.url, e.doi, e.note].some((value) => value.trim()));
-    case 'contact':
-      return [section.email, section.phone, section.area, section.address].some((value) => value.trim()) || section.hours.some((h) => h.days.trim() || h.time.trim());
-    case 'documents':
-      return section.documents.some((entry) => Boolean(entry.file) || Boolean(entry.label.trim()) || Boolean(entry.description.trim()));
-    default:
-      return false;
-  }
-}
 
 // What a section's header says next to its kind: its heading, or a hint of
 // what's in it while it has none.
@@ -321,7 +190,7 @@ function AiField({ ai, ...props }) {
 // `look` its "Apply to the default resume" ({ onApply, applyState }, issue
 // #93) and what its preview draws ({ preview: { draft, context, scheme } },
 // for the template thumbnails, issue #130; see LandingLookFields).
-export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage, onUploadFile, look }) {
+export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage, onUploadFile, onTyped, look }) {
   const set = (patch) => onChange({ ...landing, ...patch });
   // Each field passes its own target to the upload (landingImages.js).
   const imageProps = (target) => ({ images: context.images || [], limits: limits?.images, onUpload: (file) => onUploadImage(file, target) });
@@ -442,6 +311,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
           ai={ai}
           imageProps={imageProps}
           fileProps={fileProps}
+          onTyped={onTyped}
         />
         {(!limits || sections.length < limits.sections) && (
           <select className="ed-input" value="" onChange={(e) => e.target.value && addSection(e.target.value)} aria-label="Add a section">
@@ -614,7 +484,7 @@ function ActionsFields({ actions, onChange, resumes, context, limits }) {
 // fields stay mounted, only hidden, so an upload in flight or an AI
 // instruction half typed is still there when it's opened again. Which ones
 // are collapsed is this browser's own convenience, kept in localStorage.
-function SectionList({ sections, onChange, hasColumns, resumes, context, limits, ai, imageProps, fileProps }) {
+function SectionList({ sections, onChange, hasColumns, resumes, context, limits, ai, imageProps, fileProps, onTyped }) {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [liveMessage, setLiveMessage] = useState('');
   const liveTimer = useRef(null);
@@ -768,7 +638,7 @@ function SectionList({ sections, onChange, hasColumns, resumes, context, limits,
           liveMessage={liveMessage}
           collapsed={collapsed}
           suggestions={suggestions}
-          rowProps={{ hasColumns, resumes, context, limits, ai, imageProps, fileProps, toggle, updateSection, removeSection, moveSection }}
+          rowProps={{ hasColumns, resumes, context, limits, ai, imageProps, fileProps, onTyped, toggle, updateSection, removeSection, moveSection }}
         />
       </DndContext>
     </>
@@ -816,7 +686,7 @@ function SectionRows({ sections, listRef, liveMessage, collapsed, suggestions, r
 // the shared props (rowProps) keep their identity.
 const SectionEditor = memo(function SectionEditor({
   section, index, count, collapsed, suggested, dragging, dropEdge, dropLabel,
-  hasColumns, resumes, context, limits, ai, imageProps, fileProps, toggle, updateSection, removeSection, moveSection,
+  hasColumns, resumes, context, limits, ai, imageProps, fileProps, onTyped, toggle, updateSection, removeSection, moveSection,
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, setActivatorNodeRef } = useDraggable({ id: section.id });
   const { setNodeRef: setDropRef } = useDroppable({ id: section.id });
@@ -915,6 +785,7 @@ const SectionEditor = memo(function SectionEditor({
           ai={ai}
           imageProps={imageProps}
           fileProps={fileProps}
+          onTyped={onTyped}
         />
       </div>
     </div>
@@ -925,7 +796,7 @@ const SectionEditor = memo(function SectionEditor({
 // text take (issue #91).
 const INLINE_HINT = '**bold**, *italic* and [a link](https://…) work; put a \\ before * or [ to show it as it is.';
 
-function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps, fileProps }) {
+function SectionFields({ section, onChange, resumes, context, limits, ai, imageProps, fileProps, onTyped }) {
   switch (section.kind) {
     case 'text':
       return (
@@ -1000,7 +871,7 @@ function SectionFields({ section, onChange, resumes, context, limits, ai, imageP
     case 'gallery':
       return <GalleryFields sectionId={section.id} images={section.images} onChange={(images) => onChange({ images })} limits={limits} imageProps={imageProps} />;
     case 'media':
-      return <MediaFields section={section} onChange={onChange} limits={limits} imageProps={imageProps} />;
+      return <MediaFields section={section} onChange={onChange} limits={limits} imageProps={imageProps} onTyped={onTyped} />;
     case 'services':
       return <ServicesFields sectionId={section.id} services={section.services} onChange={(services) => onChange({ services })} limits={limits} ai={ai} />;
     case 'publications':
@@ -1615,7 +1486,7 @@ function GalleryFields({ sectionId, images, onChange, limits, imageProps }) {
 // the draft once it does, or once it's cleared; until then the preview
 // shows the last one that did. No ✨: it's about a recording the AI can't
 // hear.
-function MediaFields({ section, onChange, limits, imageProps }) {
+function MediaFields({ section, onChange, limits, imageProps, onTyped }) {
   const [url, setUrl] = useState(section.url);
   const sent = useRef(section.url);
   // A link from elsewhere (Discard, an MCP edit seen on reload) replaces
@@ -1628,6 +1499,14 @@ function MediaFields({ section, onChange, limits, imageProps }) {
   }, [section.url]);
   const media = parseMediaUrl(url);
   const unreadable = url.trim() !== '' && !media;
+  // A link typed but not saved yet is only here: the page is told, so a
+  // preset keeps its section (applyPreset()'s `typed`; one call each way).
+  const sectionId = section.id;
+  useEffect(() => {
+    if (!unreadable) return undefined;
+    onTyped?.(sectionId, true);
+    return () => onTyped?.(sectionId, false);
+  }, [unreadable, sectionId, onTyped]);
 
   function handleUrl(e) {
     const next = e.target.value;

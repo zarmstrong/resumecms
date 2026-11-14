@@ -1,0 +1,19 @@
+{
+  "id": "healthcare",
+  "label": "Healthcare",
+  "description": "A formal page for nurses, therapists, pharmacists, physicians and caregivers: your licenses and certifications first, then where you've worked, how to reach you and answers to the questions you're asked most.",
+  "author": "resumecms",
+  "template": "formal",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#0f6e6e", "heading": "#0b2a3a", "text": "#1e293b", "background": "#ffffff" },
+    "font": "pt-serif",
+    "nameFont": "libre-baskerville"
+  },
+  "sections": [
+    { "kind": "credentials", "title": "Licenses and certifications" },
+    { "kind": "experience", "title": "Experience" },
+    { "kind": "contact", "title": "Contact" },
+    { "kind": "faq", "title": "Questions" }
+  ]
+}

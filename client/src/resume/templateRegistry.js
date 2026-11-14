@@ -6,8 +6,8 @@
 // the static client build + JSON APIs), so there's no matching runtime scan.
 //
 // import.meta.glob requires a static string literal per call, so headers,
-// layouts and landing page templates each need their own glob (can't
-// parametrize the path).
+// layouts, landing page templates and both kinds of preset each need their
+// own glob (can't parametrize the path).
 const headerMeta = import.meta.glob('../../../templates/headers/*/template.json', {
   eager: true,
   import: 'default',
@@ -48,6 +48,16 @@ const landingComponents = import.meta.glob('../../../templates/landing/*/index.j
   import: 'default',
 });
 
+// Starting points for the landing page by profession (issue #130),
+// templates/landing-presets/<id>/template.json: a landing template, its
+// colors and fonts, and the sections to start with (kind and title), which
+// client/src/editor/landingPresets.js applies to a draft. Like the resume
+// presets they carry their own `id`.
+const landingPresetMeta = import.meta.glob('../../../templates/landing-presets/*/template.json', {
+  eager: true,
+  import: 'default',
+});
+
 function idFromPath(path) {
   const match = path.match(/\/([^/]+)\/[^/]+$/);
   return match ? match[1] : null;
@@ -70,6 +80,9 @@ export const HEADER_TEMPLATES = buildRegistry(headerMeta, headerComponents);
 export const LAYOUT_TEMPLATES = buildRegistry(layoutMeta, layoutComponents);
 export const LANDING_TEMPLATES = buildRegistry(landingMeta, landingComponents);
 export const PRESETS = Object.values(presetMeta).sort((a, b) => a.label.localeCompare(b.label));
+
+// In the order of their labels; the editor's picker lists them that way.
+export const LANDING_PRESETS = Object.values(landingPresetMeta).sort((a, b) => a.label.localeCompare(b.label));
 
 export function getPreset(id) {
   return PRESETS.find((p) => p.id === id);
