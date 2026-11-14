@@ -1721,3 +1721,58 @@ dialog.ed-preset-picker {
 dialog.ed-preset-picker::backdrop {
   background: rgba(0, 0, 0, 0.6);
 }
+
+/* A preset's page full size, in place of the list (LandingPresetPicker). */
+.ed-preset-preview-btn {
+  align-self: flex-start;
+}
+
+.ed-preset-preview {
+  margin: 0 0 16px;
+}
+
+.ed-preset-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.ed-preset-preview-title {
+  margin-right: auto;
+  font-size: 14px;
+}
+
+.ed-preset-preview-note {
+  margin: 8px 0 10px;
+  font-size: 13px;
+  color: var(--slate);
+}
+
+.ed-preset-preview-frame {
+  height: min(60vh, 720px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--line);
+}
+
+.ed-preset-preview-frame:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.ed-preset-preview-page {
+  min-height: 100%;
+  margin: 0 auto;
+  background: var(--paper);
+}
+
+.ed-preset-preview-page.is-phone {
+  width: min(390px, 100%);
+}
+
+.ed-preset-preview-page > .l-page {
+  min-height: 100%;
+}

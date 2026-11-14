@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveLanding } from '../landing/resolveLanding.js';
-import { THUMBNAIL_WIDTH, pageKey, thumbnailPage, thumbnailScale, withTemplate } from './templateThumbnails.js';
+import { THUMBNAIL_WIDTH, pageKey, presetPreviewPage, thumbnailPage, thumbnailScale, withTemplate } from './templateThumbnails.js';
 
 const draft = {
   headline: 'Jo',
@@ -81,4 +81,33 @@ test("an SEO edit doesn't change the key, since no template draws it", () => {
   const a = thumbnailPage(draft, context);
   const b = { ...a, seo: { ...(a.seo || {}), title: 'Something else' } };
   assert.equal(pageKey(a), pageKey(b));
+});
+
+test('the preset preview draws an empty section as a note in its place, and leaves hidden ones out', () => {
+  const withEmpty = {
+    ...draft,
+    sections: [
+      ...draft.sections.slice(0, 1),
+      { id: 'faq', kind: 'faq', title: 'Questions', entries: [{ question: '', answer: '' }], column: 'side' },
+      { id: 'hiddenEmpty', kind: 'stats', title: 'Numbers', stats: [], hidden: true },
+      ...draft.sections.slice(1),
+    ],
+  };
+  const page = presetPreviewPage(withEmpty, context);
+  assert.deepEqual(
+    page.sections.map((s) => [s.id, s.kind, s.title]),
+    [
+      ['intro', 'text', ''],
+      ['faq', 'text', 'Questions'],
+      ['rule', 'divider', ''],
+      ['creds', 'credentials', 'Licenses'],
+    ],
+  );
+  const note = page.sections[1];
+  assert.equal(note.body, '*Questions and answers: empty until you fill it in.*');
+  assert.equal(note.column, 'side');
+  // Everything else is the page as published.
+  const published = resolveLanding(withEmpty, context, { withIds: true });
+  assert.deepEqual({ ...page, sections: undefined }, { ...published, sections: undefined });
+  assert.deepEqual(page.sections[3], published.sections.find((s) => s.id === 'creds'));
 });
