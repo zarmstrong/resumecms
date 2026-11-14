@@ -86,7 +86,7 @@ in prose; check the diff against the ones that apply, especially:
   through the save queue, never by a route of its own; it keeps the hero
   and every section with something in it or set up by the person
   (`sectionHasWork()`: hidden, side column, any non-list setting a new
-  section doesn't start with), waits for pending saves and uploads before
+  section doesn't start with, and always a resume-backed section), waits for pending saves and uploads before
   it applies, never leaves two contact sections or more than the section
   cap, and fills a contact section only from links that aren't hidden. The validator checks presets with the
   server's own `checkStyle()`/`SECTION_KINDS`/`LANDING_LIMITS`, so those

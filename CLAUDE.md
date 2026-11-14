@@ -430,8 +430,9 @@ section" starts it, from `landingSections.js`, shared with `LandingForm`),
 and keeps the hero, `seo` and every section with something in it
 (`sectionHasWork()`: a title counts unless it's a preset's title for that
 kind, and so do `hidden`, `column` and any setting that isn't a list set
-otherwise than a new section of its kind starts, such as an experience
-section's resume or a contact section's `vcard`): one of a kind the preset has in that slot, the
+otherwise than a new section of its kind starts, such as a contact
+section's `vcard`; an experience, education or skills section always
+counts, since it shows its resume's content): one of a kind the preset has in that slot, the
 rest after them, never a second contact section, and never more than
 `limits.sections` (the preset's new sections give way). A new contact
 section's email and phone come only from links sections that aren't

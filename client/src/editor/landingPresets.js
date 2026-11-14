@@ -27,6 +27,14 @@ import { SECTION_KINDS, hasContent, newSectionId } from './landingSections.js';
 // email and phone links in a section that isn't hidden (a first draft
 // has them, from the resume's header), so nothing hidden is made public.
 
+// The kinds whose content comes from a resume (nothing typed in them but
+// a title), so they're never empty on the page.
+const RESUME_KINDS = ['experience', 'education', 'skills'];
+// What a style starts with, so one a preset gives only in part (the
+// validator allows that, as the server does) is whole in the draft, as
+// the Look fields expect.
+const EMPTY_STYLE = { source: 'resume', colors: { accent: '', heading: '', text: '', background: '' }, font: '', nameFont: '' };
+
 // What a page may hold when the editor's limits don't say (the server's
 // LANDING_LIMITS, which GET /api/landing sends as `limits`).
 const FALLBACK_LIMITS = { sections: 20, contactEmail: 254, contactPhone: 40 };
@@ -36,9 +44,11 @@ const FALLBACK_LIMITS = { sections: 20, contactEmail: 254, contactPhone: 40 };
 // switching from one preset to another doesn't keep the first one's empty
 // sections; hiding it or putting it in the side column counts, and so
 // does any setting (a value that isn't a list) set otherwise than a new
-// section of its kind starts: another resume, a count or dates off for an
-// experience section, "Save contact" off, publications newest first.
+// section of its kind starts: "Save contact" off, publications newest
+// first. An experience, education or skills section always counts: it
+// shows what its resume holds, however it was set up.
 export function sectionHasWork(section, presets, resumes) {
+  if (RESUME_KINDS.includes(section.kind)) return true;
   const title = section.title.trim();
   const presetTitle = presets.some((preset) => preset.sections.some((s) => s.kind === section.kind && s.title === title));
   if (title && !presetTitle) return true;
@@ -90,7 +100,8 @@ export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK
   }
   // The preset's look; a dark palette of the person's own stays unless the
   // preset brings one.
-  const style = structuredClone(preset.style ?? { source: 'resume', colors: {}, font: '', nameFont: '' });
+  const given = structuredClone(preset.style ?? {});
+  const style = { ...structuredClone(EMPTY_STYLE), ...given, colors: { ...EMPTY_STYLE.colors, ...given.colors } };
   if (!style.darkColors && landing.style?.darkColors) style.darkColors = structuredClone(landing.style.darkColors);
   return {
     ...landing,
@@ -165,12 +176,17 @@ function contactLine(value, max) {
 
 // What the person is asked before a preset replaces a page they've worked
 // on: what changes, and that nothing they wrote is lost.
-export function presetQuestion(preset) {
+// `suggestions` is how many AI suggestions are open: one for a section the
+// preset removes is dropped with it.
+export function presetQuestion(preset, { suggestions = 0 } = {}) {
   return (
     `Start from the “${preset.label}” preset?\n\n` +
     "Its template, colors and fonts replace this page's (a dark palette of your own stays), and its sections go first. " +
     'Sections you have written in are kept (after them, unless the preset has one of that kind), and empty ones are removed. ' +
-    'Your headline, buttons and photo stay as they are. Nothing is published until you publish.'
+    'Your headline, buttons and photo stay as they are. Nothing is published until you publish.' +
+    (suggestions > 0
+      ? `\n\n${suggestions === 1 ? 'An AI suggestion is' : `${suggestions} AI suggestions are`} still open: one for a section that's removed goes with it.`
+      : '')
   );
 }
 

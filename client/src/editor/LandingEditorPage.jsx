@@ -208,7 +208,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   // as it is then (landingRef); a failed save stops it, its error shown.
   function handlePresetPick(choice) {
     const first = presetPicker === 'first';
-    if (choice !== KEEP_STARTING_PAGE && !first && !window.confirm(presetQuestion(choice))) return;
+    if (choice !== KEEP_STARTING_PAGE && !first && !window.confirm(presetQuestion(choice, { suggestions: aiProposals.length }))) return;
     setPresetPicker(null);
     afterSaving(async () => {
       if (!mountedRef.current) return;

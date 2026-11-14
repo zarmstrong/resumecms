@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initialLanding, validateLanding } from '../../../server/src/landingFields.js';
-import { applyPreset, contactFromLinks, offerPresetsOnOpen, presetSectionLabels, sectionHasWork } from './landingPresets.js';
+import { applyPreset, contactFromLinks, offerPresetsOnOpen, presetQuestion, presetSectionLabels, sectionHasWork } from './landingPresets.js';
 
 // The presets as the registry loads them (it uses import.meta.glob, which
 // node:test can't run).
@@ -101,15 +101,12 @@ test('a section the person titled themselves counts as written in, a preset titl
   assert.equal(sectionHasWork({ id: 'a', kind: 'services', title: 'Services', services: [{ title: '', text: '', price: '' }] }, PRESETS), false);
   assert.equal(sectionHasWork({ id: 'a', kind: 'services', title: 'What I do', services: [] }, PRESETS), true);
   assert.equal(sectionHasWork({ id: 'a', kind: 'text', title: '', body: 'Hi' }, PRESETS), true);
-  // An experience section reads a resume: nothing typed but its title,
-  // so it holds something only when it's set up otherwise than a new one.
+  // An experience, education or skills section shows its resume's roles,
+  // degrees or skills, so it's never empty, set up as new or not.
   const experience = { id: 'a', kind: 'experience', title: 'Experience', resumeId: 'r-main', count: 3, showDates: true };
-  assert.equal(sectionHasWork(experience, PRESETS, resumes), false);
-  assert.equal(sectionHasWork({ ...experience, resumeId: 'r-other' }, PRESETS, resumes), true);
-  assert.equal(sectionHasWork({ ...experience, count: 1 }, PRESETS, resumes), true);
-  assert.equal(sectionHasWork({ ...experience, showDates: false }, PRESETS, resumes), true);
-  assert.equal(sectionHasWork({ id: 's', kind: 'skills', title: '', resumeId: 'r-main' }, PRESETS, resumes), false);
-  assert.equal(sectionHasWork({ id: 's', kind: 'skills', title: '', resumeId: 'r-other' }, PRESETS, resumes), true);
+  assert.equal(sectionHasWork(experience, PRESETS, resumes), true);
+  assert.equal(sectionHasWork({ id: 'e', kind: 'education', title: 'Education', resumeId: 'r-main', count: 3, showDates: true }, PRESETS, resumes), true);
+  assert.equal(sectionHasWork({ id: 's', kind: 'skills', title: '', resumeId: 'r-main' }, PRESETS, resumes), true);
   // Any other setting a new section doesn't start with is the person's too.
   const contact = { id: 'c', kind: 'contact', title: 'Contact', email: '', phone: '', area: '', address: '', hours: [], vcard: true };
   assert.equal(sectionHasWork(contact, PRESETS, resumes), false);
@@ -135,6 +132,27 @@ test('a resume-backed section set up by the person is kept with its settings, in
   const creative = applyPreset(draft, byId('creative'), resumes, PRESETS);
   assert.ok(creative.sections.includes(mine));
   assert.doesNotThrow(() => validateLanding(healthcare, refs));
+});
+
+test('switching to a preset without them keeps the experience and education sections another added', () => {
+  const healthcare = applyPreset(firstDraft(), byId('healthcare'), resumes, PRESETS);
+  const creative = applyPreset(applyPreset(healthcare, byId('research'), resumes, PRESETS), byId('creative'), resumes, PRESETS);
+  const kinds = creative.sections.map((s) => s.kind);
+  assert.ok(kinds.includes('experience') && kinds.includes('education'), kinds.join());
+  assert.doesNotThrow(() => validateLanding(creative, refs));
+});
+
+test('a preset style given only in part is whole in the draft', () => {
+  const partial = { ...byId('trades'), style: { source: 'custom', colors: { accent: '#123456' } } };
+  const next = applyPreset(firstDraft(), partial, resumes, PRESETS);
+  assert.deepEqual(next.style, { source: 'custom', colors: { accent: '#123456', heading: '', text: '', background: '' }, font: '', nameFont: '' });
+  assert.deepEqual(applyPreset(firstDraft(), { ...partial, style: undefined }, resumes, PRESETS).style.colors, { accent: '', heading: '', text: '', background: '' });
+});
+
+test('the confirm says when open AI suggestions may go', () => {
+  assert.ok(!presetQuestion(byId('trades')).includes('AI'));
+  assert.match(presetQuestion(byId('trades'), { suggestions: 1 }), /An AI suggestion is still open/);
+  assert.match(presetQuestion(byId('trades'), { suggestions: 3 }), /3 AI suggestions are still open/);
 });
 
 test('a section that only has a setting changed is kept, setting and all', () => {
