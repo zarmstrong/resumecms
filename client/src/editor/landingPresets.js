@@ -30,26 +30,26 @@ import { SECTION_KINDS, hasContent, newSectionId } from './landingSections.js';
 // What a page may hold when the editor's limits don't say (the server's
 // LANDING_LIMITS, which GET /api/landing sends as `limits`).
 const FALLBACK_LIMITS = { sections: 20, contactEmail: 254, contactPhone: 40 };
-// The kinds whose content is read from a resume: nothing typed in them
-// but their title, so they hold something when they differ from how a
-// new one starts (another resume, a count, dates off).
-const RESUME_KINDS = ['experience', 'education', 'skills'];
 
 // Whether `section` holds anything the person wrote or set. A title
 // counts unless it's one a preset gives a section of that kind, so
 // switching from one preset to another doesn't keep the first one's empty
 // sections; hiding it or putting it in the side column counts, and so
-// does a resume-backed section set up otherwise than a new one starts.
+// does any setting (a value that isn't a list) set otherwise than a new
+// section of its kind starts: another resume, a count or dates off for an
+// experience section, "Save contact" off, publications newest first.
 export function sectionHasWork(section, presets, resumes) {
   const title = section.title.trim();
   const presetTitle = presets.some((preset) => preset.sections.some((s) => s.kind === section.kind && s.title === title));
   if (title && !presetTitle) return true;
   if (section.hidden || section.column) return true;
-  if (RESUME_KINDS.includes(section.kind)) {
-    const fresh = SECTION_KINDS.find((k) => k.kind === section.kind).empty(resumes);
-    return Object.entries(fresh).some(([key, value]) => section[key] !== value);
-  }
-  return hasContent({ ...section, title: '' });
+  const fresh = SECTION_KINDS.find((k) => k.kind === section.kind)?.empty(resumes) ?? {};
+  const differs = Object.entries(fresh).some(([key, value]) => {
+    if (Array.isArray(value) || (value !== null && typeof value === 'object')) return false;
+    const now = section[key];
+    return typeof value === 'string' && typeof now === 'string' ? now.trim() !== value.trim() : now !== value;
+  });
+  return differs || hasContent({ ...section, title: '' });
 }
 
 // `landing` started from `preset`, as described above. `resumes` is the

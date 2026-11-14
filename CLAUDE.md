@@ -429,8 +429,9 @@ and `style`, puts the preset's sections first (each new one as "+ Add
 section" starts it, from `landingSections.js`, shared with `LandingForm`),
 and keeps the hero, `seo` and every section with something in it
 (`sectionHasWork()`: a title counts unless it's a preset's title for that
-kind, and so do `hidden`, `column` and a resume-backed section set up
-otherwise than a new one): one of a kind the preset has in that slot, the
+kind, and so do `hidden`, `column` and any setting that isn't a list set
+otherwise than a new section of its kind starts, such as an experience
+section's resume or a contact section's `vcard`): one of a kind the preset has in that slot, the
 rest after them, never a second contact section, and never more than
 `limits.sections` (the preset's new sections give way). A new contact
 section's email and phone come only from links sections that aren't
@@ -440,7 +441,9 @@ while `offerPresetsOnOpen(status)` (the status's `hasDraft`, false until
 `landing_draft` is first stored, and no `publishedAt`), where Skip or
 "Keep the starting page" saves the built draft so it isn't offered
 again, and from "Start from a preset…", which asks first
-(`presetQuestion()`). The validator checks a preset's style with the
+(`presetQuestion()`). Applying waits for the save queue (`afterSaving()`),
+uploads included, so an image or document on its way lands in its section
+before the preset decides what's kept. The validator checks a preset's style with the
 server's `checkStyle()` and its sections against `SECTION_KINDS` and
 `LANDING_LIMITS`, which is why `landingFields.js` and what it imports
 must stay free of npm packages.

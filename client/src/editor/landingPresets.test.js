@@ -110,6 +110,16 @@ test('a section the person titled themselves counts as written in, a preset titl
   assert.equal(sectionHasWork({ ...experience, showDates: false }, PRESETS, resumes), true);
   assert.equal(sectionHasWork({ id: 's', kind: 'skills', title: '', resumeId: 'r-main' }, PRESETS, resumes), false);
   assert.equal(sectionHasWork({ id: 's', kind: 'skills', title: '', resumeId: 'r-other' }, PRESETS, resumes), true);
+  // Any other setting a new section doesn't start with is the person's too.
+  const contact = { id: 'c', kind: 'contact', title: 'Contact', email: '', phone: '', area: '', address: '', hours: [], vcard: true };
+  assert.equal(sectionHasWork(contact, PRESETS, resumes), false);
+  assert.equal(sectionHasWork({ ...contact, vcard: false }, PRESETS, resumes), true);
+  const pubs = { id: 'p', kind: 'publications', title: 'Publications and talks', order: 'manual', group: false, entries: [] };
+  assert.equal(sectionHasWork(pubs, PRESETS, resumes), false);
+  assert.equal(sectionHasWork({ ...pubs, order: 'newest' }, PRESETS, resumes), true);
+  assert.equal(sectionHasWork({ ...pubs, group: true }, PRESETS, resumes), true);
+  // An image section with no image yet is still empty.
+  assert.equal(sectionHasWork({ id: 'i', kind: 'image', title: '', image: null, caption: '' }, PRESETS, resumes), false);
   // Hidden, or in the side column: set by the person, so kept.
   assert.equal(sectionHasWork({ ...experience, hidden: true }, PRESETS, resumes), true);
   assert.equal(sectionHasWork({ id: 'g', kind: 'gallery', title: 'Recent work', images: [], column: 'side' }, PRESETS, resumes), true);
@@ -125,6 +135,17 @@ test('a resume-backed section set up by the person is kept with its settings, in
   const creative = applyPreset(draft, byId('creative'), resumes, PRESETS);
   assert.ok(creative.sections.includes(mine));
   assert.doesNotThrow(() => validateLanding(healthcare, refs));
+});
+
+test('a section that only has a setting changed is kept, setting and all', () => {
+  const draft = firstDraft();
+  const contact = { id: 'c', kind: 'contact', title: 'Contact', email: '', phone: '', area: '', address: '', hours: [], vcard: false };
+  draft.sections.push(contact);
+  const next = applyPreset(draft, byId('trades'), resumes, PRESETS);
+  const kept = next.sections.filter((s) => s.kind === 'contact');
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].vcard, false);
+  assert.equal(kept[0].id, 'c');
 });
 
 test('a preset never takes the page past its section cap: its own new sections give way', () => {

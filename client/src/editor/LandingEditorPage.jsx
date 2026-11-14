@@ -201,14 +201,20 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
 
   // A choice from the preset dialog: KEEP_STARTING_PAGE (or skipping the
   // one opened by itself) saves the starting page as it is, so the dialog
-  // isn't offered again; a preset is applied to the draft as it is now,
-  // after asking when it wasn't the dialog opened by itself.
+  // isn't offered again; a preset is applied after asking, when it wasn't
+  // the dialog opened by itself. Either waits for every save and upload
+  // first (afterSaving), so an image or document on its way lands in its
+  // section before the preset decides what's kept, and goes to the draft
+  // as it is then (landingRef); a failed save stops it, its error shown.
   function handlePresetPick(choice) {
     const first = presetPicker === 'first';
     if (choice !== KEEP_STARTING_PAGE && !first && !window.confirm(presetQuestion(choice))) return;
     setPresetPicker(null);
-    const current = landingRef.current;
-    handleChange(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits));
+    afterSaving(async () => {
+      if (!mountedRef.current) return;
+      const current = landingRef.current;
+      handleChange(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits));
+    });
   }
 
   function handlePresetClose() {
