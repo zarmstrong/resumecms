@@ -44,33 +44,55 @@ const FALLBACK_LIMITS = { sections: 20, contactEmail: 254, contactPhone: 40 };
 // counts unless it's one a preset gives a section of that kind, so
 // switching from one preset to another doesn't keep the first one's empty
 // sections; hiding it or putting it in the side column counts, and so
-// does any setting (a value that isn't a list) set otherwise than a new
-// section of its kind starts: "Save contact" off, publications newest
-// first. An experience, education or skills section always counts: it
-// shows what its resume holds, however it was set up.
-export function sectionHasWork(section, presets, resumes) {
-  if (RESUME_KINDS.includes(section.kind)) return true;
+// does any setting set otherwise than a new section of its kind starts it:
+// one of the section's ("Save contact" off, publications newest first) or
+// of an entry's (a credential's kind a license). An experience, education
+// or skills section always counts: it shows what its resume holds, however
+// it was set up. So does one whose id is in `typed`: the editor's fields
+// that hold text only on screen until it's whole (a media link half
+// typed) name their section there.
+export function sectionHasWork(section, presets, resumes, typed = EMPTY_SET) {
+  if (RESUME_KINDS.includes(section.kind) || typed.has(section.id)) return true;
   const title = section.title.trim();
   const presetTitle = presets.some((preset) => preset.sections.some((s) => s.kind === section.kind && s.title === title));
   if (title && !presetTitle) return true;
   if (section.hidden || section.column) return true;
   const fresh = SECTION_KINDS.find((k) => k.kind === section.kind)?.empty(resumes) ?? {};
   const differs = Object.entries(fresh).some(([key, value]) => {
-    if (Array.isArray(value) || (value !== null && typeof value === 'object')) return false;
-    const now = section[key];
-    return typeof value === 'string' && typeof now === 'string' ? now.trim() !== value.trim() : now !== value;
+    if (Array.isArray(value)) {
+      // Each entry against a new one (a list starts with one, or none).
+      const start = value[0];
+      return isRecord(start) && Array.isArray(section[key]) && section[key].some((entry) => isRecord(entry) && settingsDiffer(start, entry));
+    }
+    return value === null || typeof value !== 'object' ? scalarDiffers(value, section[key]) : false;
   });
   return differs || hasContent({ ...section, title: '' });
+}
+
+const EMPTY_SET = new Set();
+const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// A value that isn't a list or an object, set otherwise than it starts.
+function scalarDiffers(start, now) {
+  if (start !== null && typeof start === 'object') return false;
+  return typeof start === 'string' && typeof now === 'string' ? now.trim() !== start.trim() : now !== start;
+}
+
+// Whether an entry's own settings (not its lists or objects, which
+// hasContent() reads) are set otherwise than a new entry's.
+function settingsDiffer(start, entry) {
+  return Object.entries(start).some(([key, value]) => !Array.isArray(value) && scalarDiffers(value, entry[key]));
 }
 
 // `landing` started from `preset`, as described above. `resumes` is the
 // editor's list, for the resume an experience or education section reads
 // (the default one); `presets` every preset, for sectionHasWork();
-// `limits` the editor's (GET /api/landing's), for the caps.
-export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK_LIMITS) {
+// `limits` the editor's (GET /api/landing's), for the caps; `typed` the ids
+// of sections holding text only on screen (sectionHasWork()).
+export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK_LIMITS, { typed = EMPTY_SET } = {}) {
   const caps = { ...FALLBACK_LIMITS, ...limits };
   const current = landing.sections || [];
-  const worked = current.filter((section) => sectionHasWork(section, presets, resumes));
+  const worked = current.filter((section) => sectionHasWork(section, presets, resumes, typed));
   // `used`: the draft's sections taken into the preset's slots; `created`:
   // the new ones, the only ones the cap below may leave out (a carried one
   // may be a copy, given the preset's title, so it's never told apart by

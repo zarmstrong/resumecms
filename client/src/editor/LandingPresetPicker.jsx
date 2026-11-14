@@ -4,7 +4,9 @@ import { thumbnailPage } from './templateThumbnails.js';
 import { applyPreset, presetSectionLabels } from './landingPresets.js';
 
 // What the "Keep the starting page" choice is called in the picker.
-export const KEEP_STARTING_PAGE = 'keep';
+// Not a folder name a preset can have (the validator takes only lowercase
+// kebab-case), so no preset is ever taken for it.
+export const KEEP_STARTING_PAGE = ':keep';
 
 // The landing page's presets by profession (issue #130), as a dialog:
 // every preset as a card with a thumbnail of the page it would make

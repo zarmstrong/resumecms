@@ -167,6 +167,36 @@ test('a section that only has a setting changed is kept, setting and all', () =>
   assert.equal(kept[0].id, 'c');
 });
 
+test("an entry's own setting changed counts too: a credential made a license is kept", () => {
+  const healthcare = byId('healthcare');
+  const started = applyPreset(firstDraft(), healthcare, resumes, PRESETS);
+  const credentials = started.sections.find((s) => s.kind === 'credentials');
+  // As it starts, it's the preset's empty section, which switching drops.
+  assert.equal(sectionHasWork(credentials, PRESETS, resumes), false);
+  const license = { ...credentials, credentials: [{ ...credentials.credentials[0], kind: 'license' }] };
+  assert.equal(sectionHasWork(license, PRESETS, resumes), true);
+  const next = applyPreset({ ...started, sections: started.sections.map((s) => (s === credentials ? license : s)) }, healthcare, resumes, PRESETS);
+  assert.equal(next.sections.find((s) => s.kind === 'credentials').credentials[0].kind, 'license');
+  const publications = applyPreset(firstDraft(), byId('research'), resumes, PRESETS).sections.find((s) => s.kind === 'publications');
+  assert.equal(sectionHasWork(publications, PRESETS, resumes), false);
+  const talk = { ...publications, entries: [{ ...publications.entries[0], kind: 'talk' }] };
+  assert.equal(sectionHasWork(talk, PRESETS, resumes), true);
+});
+
+test('a section whose text is typed only on screen (a media link half typed) is kept', () => {
+  const creative = byId('creative');
+  const started = applyPreset(firstDraft(), creative, resumes, PRESETS);
+  const media = started.sections.find((s) => s.kind === 'media');
+  assert.equal(sectionHasWork(media, PRESETS, resumes), false);
+  const typed = new Set([media.id]);
+  assert.equal(sectionHasWork(media, PRESETS, resumes, typed), true);
+  const again = applyPreset(started, creative, resumes, PRESETS, undefined, { typed });
+  // The same section (so the same field, still holding what was typed), not a new one.
+  assert.equal(again.sections.find((s) => s.kind === 'media').id, media.id);
+  const elsewhere = applyPreset(started, byId('trades'), resumes, PRESETS, undefined, { typed });
+  assert.ok(elsewhere.sections.some((s) => s.id === media.id));
+});
+
 test('a preset never takes the page past its section cap: its own new sections give way', () => {
   const texts = (n) => Array.from({ length: n }, (_, i) => ({ id: `t${i}`, kind: 'text', title: '', body: `Para ${i}` }));
   for (const n of [15, 16, 19, 20]) {

@@ -431,8 +431,12 @@ and keeps the hero, `seo` and every section with something in it
 (`sectionHasWork()`: a title counts unless it's a preset's title for that
 kind, and so do `hidden`, `column` and any setting that isn't a list set
 otherwise than a new section of its kind starts, such as a contact
-section's `vcard`; an experience, education or skills section always
-counts, since it shows its resume's content): one of a kind the preset has in that slot, the
+section's `vcard`, or an entry's, such as a credential's `kind`; an
+experience, education or skills section always counts, since it shows
+its resume's content, and so does one whose text is only on screen: a
+media link that doesn't parse yet, which `MediaFields` reports through
+`onTypedMedia` and the page passes as `typed`, so a field that holds
+text the draft doesn't must report it there too): one of a kind the preset has in that slot, the
 rest after them, never a second contact section, and never more than
 `limits.sections` (the preset's new sections give way). A new contact
 section's email and phone come only from links sections that aren't
@@ -440,7 +444,8 @@ hidden, the phone as its link dials it (its label only when `telHref()` of it is
 the template picker's thumbnails; `LandingEditorPage` opens it by itself
 while `offerPresetsOnOpen(status)` (the status's `hasDraft`, false until
 `landing_draft` is first stored, and no `publishedAt`), where Skip or
-"Keep the starting page" saves the built draft so it isn't offered
+"Keep the starting page" (`KEEP_STARTING_PAGE`, `:keep`, never a
+preset's kebab-case id) saves the built draft so it isn't offered
 again, and from "Start from a preset…", which asks first
 (`presetQuestion()`). Applying waits for the save queue (`afterSaving()`),
 uploads included, so an image or document on its way lands in its section

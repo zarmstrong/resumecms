@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { LandingView } from '../landing/LandingView.jsx';
 import { resolveLanding } from '../landing/resolveLanding.js';
@@ -76,6 +76,13 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   const landingRef = useRef(landing);
   landingRef.current = landing;
   const mountedRef = useRef(true);
+  // The sections whose media link is typed but not saved (MediaFields holds
+  // it on screen until it's one it can show), so a preset keeps them.
+  const typedMediaRef = useRef(new Set());
+  const handleTypedMedia = useCallback((sectionId, typed) => {
+    if (typed) typedMediaRef.current.add(sectionId);
+    else typedMediaRef.current.delete(sectionId);
+  }, []);
   const guard = useLeaveGuard({ saves, resumes, work: landingUnsavedWork({ landing, aiProposals }) });
 
   function setStatus(next) {
@@ -215,7 +222,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       const current = landingRef.current;
       // The latest handleChange (not this render's), so it builds on the
       // status as it is after the wait, a "Show at /" switch included.
-      handleChangeRef.current(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits));
+      handleChangeRef.current(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits, { typed: typedMediaRef.current }));
     });
   }
 
@@ -530,6 +537,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
                 ai={ai}
                 onUploadImage={handleImageUpload}
                 onUploadFile={handleFileUpload}
+                onTypedMedia={handleTypedMedia}
                 look={{
                   onApply: handleApplyStyle,
                   applyState,
