@@ -140,6 +140,16 @@ test('a preset never takes the page past its section cap: its own new sections g
     const added = next.sections.filter((s) => s.kind !== 'text').map((s) => s.kind);
     assert.deepEqual(added, ['contact', 'services', 'credentials', 'gallery', 'quotes'].slice(0, Math.max(0, 20 - n)));
   }
+  // An untitled section carried into a later slot (copied to take the
+  // preset's title) is the person's, and never the one the cap leaves out.
+  const faq = { id: 'faq', kind: 'faq', title: '', entries: [{ question: 'Do you take walk-ins?', answer: 'Yes.' }] };
+  const full = applyPreset({ ...firstDraft(), sections: [...texts(19), faq] }, byId('healthcare'), resumes, PRESETS, { sections: 20 });
+  assert.equal(full.sections.length, 20);
+  const carried = full.sections.find((s) => s.id === 'faq');
+  assert.ok(carried, 'the FAQ is kept');
+  assert.deepEqual(carried.entries, faq.entries);
+  assert.equal(full.sections.filter((s) => s.kind === 'text').length, 19);
+  assert.ok(!full.sections.some((s) => s.kind === 'credentials'));
   // Education carries a text section in place, so it takes one slot fewer.
   const next = applyPreset({ ...firstDraft(), sections: texts(20) }, byId('education'), resumes, PRESETS, { sections: 20 });
   assert.equal(next.sections.length, 20);

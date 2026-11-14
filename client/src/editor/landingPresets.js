@@ -60,14 +60,21 @@ export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK
   const caps = { ...FALLBACK_LIMITS, ...limits };
   const current = landing.sections || [];
   const worked = current.filter((section) => sectionHasWork(section, presets, resumes));
+  // `used`: the draft's sections taken into the preset's slots; `created`:
+  // the new ones, the only ones the cap below may leave out (a carried one
+  // may be a copy, given the preset's title, so it's never told apart by
+  // identity with the draft's).
   const used = new Set();
+  const created = new Set();
   const sections = preset.sections.map(({ kind, title }) => {
     const carried = worked.find((section) => section.kind === kind && !used.has(section));
     if (carried) {
       used.add(carried);
       return carried.title.trim() ? carried : { ...carried, title };
     }
-    return newSection(kind, title, landing, resumes, caps);
+    const section = newSection(kind, title, landing, resumes, caps);
+    created.add(section);
+    return section;
   });
   // Already a contact section among the preset's? Then one carried below
   // would be a second, which the server refuses.
@@ -76,7 +83,7 @@ export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK
   // Over the cap: the preset's new sections go, last first.
   let over = sections.length + rest.length - caps.sections;
   for (let i = sections.length - 1; over > 0 && i >= 0; i--) {
-    if (!used.has(sections[i])) {
+    if (created.has(sections[i])) {
       sections.splice(i, 1);
       over--;
     }

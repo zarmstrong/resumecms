@@ -1708,3 +1708,16 @@
   margin-top: 4px;
   color: var(--ink);
 }
+
+/* A native <dialog> (showModal()), so the editor behind it is inert and
+   focus stays inside; it takes the .ed-modal look, centered, over the same
+   dimmed page as .ed-modal-backdrop. */
+dialog.ed-preset-picker {
+  border: 0;
+  color: var(--ink);
+  max-width: calc(100% - 40px);
+}
+
+dialog.ed-preset-picker::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}

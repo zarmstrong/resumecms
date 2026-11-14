@@ -21,12 +21,18 @@ export const KEEP_STARTING_PAGE = 'keep';
 // keeps it).
 //
 // Like the template picker, a native radio group: the arrow keys, tab stop
-// and focus ring are the browser's own, and the thumbnails are inert.
+// and focus ring are the browser's own, and the thumbnails are inert. The
+// dialog itself is a native <dialog> opened with showModal(), as the
+// landing gallery's is, so the browser keeps focus inside it and makes the
+// editor behind it inert; Escape reaches `onClose` through its cancel
+// event, and closing gives focus back to what had it before (the "Start
+// from a preset…" button).
 export function LandingPresetPicker({ presets, draft, context, resumes, limits, scheme, firstOpen = false, onPick, onClose }) {
   const name = useId();
   const titleId = `${name}-title`;
   const [chosen, setChosen] = useState(firstOpen ? KEEP_STARTING_PAGE : presets[0]?.id);
   const firstRadioRef = useRef(null);
+  const dialogRef = useRef(null);
 
   const options = useMemo(() => {
     const list = presets.map((preset) => ({
@@ -53,13 +59,21 @@ export function LandingPresetPicker({ presets, draft, context, resumes, limits, 
   }, [presets, draft, context, resumes, limits, firstOpen]);
 
   useEffect(() => {
+    const dialog = dialogRef.current;
+    const opener = document.activeElement;
+    if (dialog && !dialog.open) dialog.showModal?.();
     firstRadioRef.current?.focus();
-    function onKey(e) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    return () => {
+      if (dialog?.open) dialog.close();
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, []);
+
+  // Escape: the browser would close the dialog itself; the page decides.
+  function handleCancel(e) {
+    e.preventDefault();
+    onClose();
+  }
 
   function handleUse(e) {
     e.preventDefault();
@@ -69,8 +83,8 @@ export function LandingPresetPicker({ presets, draft, context, resumes, limits, 
   }
 
   return (
-    <div className="ed-modal-backdrop">
-      <form className="ed-modal ed-modal-wide ed-preset-picker" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={handleUse}>
+    <dialog ref={dialogRef} className="ed-modal ed-modal-wide ed-preset-picker" aria-labelledby={titleId} onCancel={handleCancel}>
+      <form onSubmit={handleUse}>
         <div className="ed-modal-header">
           <h2 id={titleId}>{firstOpen ? 'How should your landing page start?' : 'Start from a preset'}</h2>
         </div>
@@ -130,6 +144,6 @@ export function LandingPresetPicker({ presets, draft, context, resumes, limits, 
           </button>
         </div>
       </form>
-    </div>
+    </dialog>
   );
 }
