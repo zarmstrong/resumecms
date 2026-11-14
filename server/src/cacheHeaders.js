@@ -24,6 +24,11 @@ export const PDF = 'private, no-cache';
 // /api/public/letter, which only ever serves the renderer a cover letter.
 export const RENDER = 'private, no-store';
 
+// An error answered by the final error handler (middleware/errorHandler.js):
+// it says nothing about the URL's content, so no cache, shared or the
+// browser's, may keep it and serve it in place of a later success.
+export const ERROR = 'no-store';
+
 // Not a cache policy, but sent alongside one on every unlisted public
 // response (a resume's /r/<slug> page, its JSON and PDF) as X-Robots-Tag:
 // only the default resume and resumes mapped to a domain are meant to be
