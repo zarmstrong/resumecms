@@ -1,7 +1,7 @@
 {
   "id": "early-career",
   "label": "Students and early career",
-  "description": "For students, recent graduates and anyone changing careers: a short introduction, your education first, the experience you have, your skills and a link to your full resume.",
+  "description": "For students, recent graduates and anyone changing careers: a short introduction, your education first, the experience you have, your skills and a card linking to your full resume.",
   "author": "resumecms",
   "template": "classic",
   "style": {

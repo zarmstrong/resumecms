@@ -1,7 +1,7 @@
 {
   "id": "software",
   "label": "Software and tech",
-  "description": "For developers, designers, data and IT people: a short introduction beside your projects, then where you've worked, the tools you know and where to find your code.",
+  "description": "For developers, designers, data and IT people: your name and links in a column beside a short introduction and your projects, then where you've worked, the tools you know and where to find your code.",
   "author": "resumecms",
   "template": "split",
   "style": {

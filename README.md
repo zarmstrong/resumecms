@@ -665,7 +665,7 @@ template, with contact, services, credentials, a gallery and quotes),
 **Teaching and education** (Classic: text, credentials, experience,
 documents), **Creative work** (Gallery: a gallery, video or audio,
 quotes, links), **Healthcare** (Formal: credentials, experience,
-contact, questions and answers) and **Research and academia** (Directory:
+contact, questions and answers), **Research and academia** (Directory:
 text, publications, education, documents), **Software and tech** (Split:
 text, projects, experience, skills, links), **Writing and journalism**
 (Editorial: text, publications, quotes, links), **Business and

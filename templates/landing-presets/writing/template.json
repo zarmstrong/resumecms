@@ -1,7 +1,7 @@
 {
   "id": "writing",
   "label": "Writing and journalism",
-  "description": "For writers, journalists, editors and translators: a few words about what you write, your published work newest first, what editors and readers say and where to read more.",
+  "description": "For writers, journalists, editors and translators: a few words about what you write, a list of your published work, what editors and readers say and where to read more.",
   "author": "resumecms",
   "template": "editorial",
   "style": {
