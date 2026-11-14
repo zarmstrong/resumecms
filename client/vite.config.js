@@ -1,9 +1,18 @@
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
+import { readFileSync } from 'node:fs';
 import react from '@vitejs/plugin-react';
+
+// The release the editor's top bar shows (TopbarEnd.jsx). release-please
+// bumps client/package.json with every release; appVersion.test.js checks it
+// against the manifest the image is tagged from.
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   resolve: {
     alias: {
       // Lets contributed templates (which live outside client/src, so they

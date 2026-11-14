@@ -17,6 +17,7 @@ import { ResumeSelect } from './ResumeSelect.jsx';
 import { createSaveQueue } from './saveQueue.js';
 import { useLeaveGuard } from './useLeaveGuard.js';
 import { lettersUnsavedWork } from './unsavedWork.js';
+import { TopbarEnd } from './TopbarEnd.jsx';
 
 const SAVE_DEBOUNCE_MS = 500;
 // A download stuck behind another render is a 503 after the server's wait
@@ -402,9 +403,7 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
           {error && <span className="ed-topbar-warning"> · {error}</span>}
         </div>
         <div className="ed-topbar-actions">
-          <button className="ed-btn ed-btn-ghost" onClick={handleLogout} disabled={busy}>
-            Log out
-          </button>
+          <TopbarEnd onLogout={handleLogout} disabled={busy} />
         </div>
       </header>
 
