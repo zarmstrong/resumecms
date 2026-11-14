@@ -112,7 +112,7 @@ test('the preset preview draws an empty section as a note in its place, and leav
   assert.deepEqual(page.sections[3], published.sections.find((s) => s.id === 'creds'));
 });
 
-test("the preset preview doesn't call a section with something in it empty", () => {
+test("the preset preview doesn't call a section with something in it empty, and does call a blank one empty", () => {
   const page = presetPreviewPage(
     {
       ...draft,
@@ -124,6 +124,7 @@ test("the preset preview doesn't call a section with something in it empty", () 
           credentials: [{ kind: 'license', name: 'RN', issuer: '', number: '', issued: '', expires: '2001-01', url: '' }],
         },
         { id: 'roles', kind: 'experience', title: 'Experience', resumeId: 'gone', count: 3, showDates: true },
+        { id: 'blankLinks', kind: 'links', title: 'Profiles', links: [{ type: 'website', label: '', url: '' }] },
       ],
     },
     context,
@@ -131,6 +132,10 @@ test("the preset preview doesn't call a section with something in it empty", () 
   // Only expired credentials: left out, as published.
   assert.deepEqual(
     page.sections.map((s) => [s.id, s.body]),
-    [['roles', '*Experience: shown from your resume once it has some to show.*']],
+    [
+      ['roles', '*Experience: shown from your resume once it has some to show.*'],
+      // A blank row is still empty.
+      ['blankLinks', '*Links: empty until you fill it in.*'],
+    ],
   );
 });

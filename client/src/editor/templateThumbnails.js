@@ -65,7 +65,7 @@ export function presetPreviewPage(draft, context) {
     const label = kindLabel(section.kind);
     let body;
     if (FROM_RESUME.has(section.kind)) body = `*${label}: shown from your resume once it has some to show.*`;
-    else if (!hasContent({ ...section, title: '' })) body = `*${label}: empty until you fill it in.*`;
+    else if (isBlank(section)) body = `*${label}: empty until you fill it in.*`;
     else return [];
     return [
       {
@@ -78,4 +78,12 @@ export function presetPreviewPage(draft, context) {
     ];
   });
   return { ...page, sections };
+}
+
+// Nothing typed in it but maybe its title. hasContent() counts a links
+// section's blank rows (it keeps them while they're typed), so they're
+// checked here.
+function isBlank(section) {
+  if (section.kind === 'links') return section.links.every((link) => !link.label?.trim() && !link.url?.trim());
+  return !hasContent({ ...section, title: '' });
 }
