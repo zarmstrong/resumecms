@@ -1,3 +1,4 @@
+import { telHref } from '../resume/safeUrl.js';
 import { SECTION_KINDS, hasContent, newSectionId } from './landingSections.js';
 
 // Starting the landing page from a preset by profession (issue #130). A
@@ -148,25 +149,16 @@ export function contactFromLinks(landing, limits = FALLBACK_LIMITS) {
     } catch {
       // kept as written
     }
+    // The link's number written the way a contact field takes it (an
+    // extension as " x12", which telHref() reads back as ;ext=12), and
+    // the link that field makes: the page has to dial what the link did.
+    const ext = dialled.match(/;ext=(\d+)$/i);
+    const written = ext ? `${dialled.slice(0, ext.index)} x${ext[1]}` : dialled;
+    const target = telHref(written);
     const label = tel.label.trim();
-    phone = label && sameNumber(label, dialled) ? label : dialled;
+    phone = !target ? '' : label && telHref(label) === target ? label : written;
   }
   return { email: contactLine(email, caps.contactEmail), phone: contactLine(phone, caps.contactPhone) };
-}
-
-// Whether a label writes out the number a tel: link dials: the same digits,
-// nothing in it but digits and the usual punctuation, and at most the
-// dialled number's international country code left out ("(555) 010-0199"
-// for tel:+15550100199), never an area code ("010-0199").
-function sameNumber(label, dialled) {
-  if (!/^[+\d\s().\-]+$/.test(label)) return false;
-  const digits = (text) => text.replace(/\D/g, '');
-  const a = digits(label);
-  const b = digits(dialled);
-  if (!a) return false;
-  if (a === b) return true;
-  const missing = b.length - a.length;
-  return dialled.trim().startsWith('+') && !label.trim().startsWith('+') && missing >= 1 && missing <= 3 && b.endsWith(a);
 }
 
 // Fits a contact section's single-line field of `max` characters, else ''.

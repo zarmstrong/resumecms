@@ -436,7 +436,7 @@ counts, since it shows its resume's content): one of a kind the preset has in th
 rest after them, never a second contact section, and never more than
 `limits.sections` (the preset's new sections give way). A new contact
 section's email and phone come only from links sections that aren't
-hidden, the phone as its link dials it, so nothing hidden turns public. `LandingPresetPicker.jsx` shows them with
+hidden, the phone as its link dials it (its label only when `telHref()` of it is that same link, an extension written ` x12`), so nothing hidden turns public and the page dials what the link did. `LandingPresetPicker.jsx` shows them with
 the template picker's thumbnails; `LandingEditorPage` opens it by itself
 while `offerPresetsOnOpen(status)` (the status's `hasDraft`, false until
 `landing_draft` is first stored, and no `publishedAt`), where Skip or

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initialLanding, validateLanding } from '../../../server/src/landingFields.js';
 import { applyPreset, contactFromLinks, offerPresetsOnOpen, presetQuestion, presetSectionLabels, sectionHasWork } from './landingPresets.js';
+import { telHref } from '../resume/safeUrl.js';
 
 // The presets as the registry loads them (it uses import.meta.glob, which
 // node:test can't run).
@@ -233,16 +234,28 @@ test('a contact section never takes its details from a hidden links section', ()
 test("a contact section's phone is the number its link dials, its label only when that writes the same number", () => {
   const phoneOf = (label, url) => contactFromLinks({ sections: [{ kind: 'links', links: [{ type: 'phone', label, url }] }] }).phone;
   assert.equal(phoneOf('Call me', 'tel:+15550100199'), '+15550100199');
-  assert.equal(phoneOf('(555) 010-0199', 'tel:+15550100199'), '(555) 010-0199');
+  assert.equal(phoneOf('+1 (555) 010-0199', 'tel:+15550100199'), '+1 (555) 010-0199');
   assert.equal(phoneOf('+1 555 010 0199', 'tel:+15550100199'), '+1 555 010 0199');
+  assert.equal(phoneOf('(555) 010-0199', 'tel:5550100199'), '(555) 010-0199');
+  // A label without the country code would dial another number.
+  assert.equal(phoneOf('(555) 010-0199', 'tel:+15550100199'), '+15550100199');
+  assert.equal(phoneOf('20 7946 0018', 'tel:+442079460018'), '+442079460018');
   assert.equal(phoneOf('0199', 'tel:+15550100199'), '+15550100199');
-  // Leaving out the area code isn't the same number; only the country code may go.
-  assert.equal(phoneOf('010-0199', 'tel:+15550100199'), '+15550100199');
   assert.equal(phoneOf('555 0100', 'tel:5550100199'), '5550100199');
-  assert.equal(phoneOf('020 7946 0018', 'tel:+442079460018'), '+442079460018');
-  assert.equal(phoneOf('20 7946 0018', 'tel:+442079460018'), '20 7946 0018');
-  assert.equal(phoneOf('555 010 0199 ext. 12', 'tel:+15550100199;ext=12'), '+15550100199;ext=12');
+  // An extension is written so the field's link keeps it.
+  assert.equal(phoneOf('+1 555 010 0199 ext. 12', 'tel:+15550100199;ext=12'), '+1 555 010 0199 ext. 12');
+  assert.equal(phoneOf('555 010 0199 ext. 12', 'tel:+15550100199;ext=12'), '+15550100199 x12');
   assert.equal(phoneOf('(555) 010-0199'.padEnd(45, ' 1'), 'tel:+15550100199'), '+15550100199');
+  // Whatever it picks, the field's link is the one the links section had.
+  for (const [label, url] of [
+    ['Call me', 'tel:+15550100199'],
+    ['(555) 010-0199', 'tel:+15550100199'],
+    ['20 7946 0018', 'tel:+442079460018'],
+    ['555 010 0199 ext. 12', 'tel:+15550100199;ext=12'],
+    ['', 'tel:+1%20555%20010%200199'],
+  ]) {
+    assert.equal(telHref(phoneOf(label, url)), url.includes('%') ? 'tel:+15550100199' : url, `${label} ${url}`);
+  }
   // Too long, or not one line, for a contact field: left empty rather than failing the save.
   assert.equal(phoneOf('', `tel:+1${'5'.repeat(45)}`), '');
   assert.equal(phoneOf('', 'tel:+1555%0A0100'), '');
