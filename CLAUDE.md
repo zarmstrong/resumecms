@@ -1651,7 +1651,14 @@ keep a setup apart from the active factor (issue #173): the `totp` row is
 `secret`, and `/confirm` swaps `pendingSecret` in only once a code from it
 verifies, so starting or abandoning a setup never turns 2FA off. A row
 from before, `{ secret, enabled: false }`, reads as a pending setup
-(`readTotp()`). While 2FA is on, `/setup` (replacing it) and `/disable`
-need the current password and an unused code from the active factor,
-checked server-side, never just the session; `/setup`, `/confirm` and
-`/disable` share a limiter with login's settings (failed attempts only).
+(`readTotp()`, which reads `enabled` truthy as login does). `/setup`
+needs the current password (so a stolen session can't turn 2FA on with
+its own app), and while 2FA is on `/setup` (replacing it) and `/disable`
+also need an unused code from the active factor, checked server-side,
+never just the session, with one message for any failure so it never
+confirms the password. Every route that checks a code (login included)
+reads the row again after its awaits and writes only if the factor it
+checked is still the active one and the code still unspent, so no code
+is spent twice and a late write can't restore a changed row; keep that if
+you add one. `/setup`, `/confirm` and `/disable` share a limiter with
+login's settings (failed attempts only).

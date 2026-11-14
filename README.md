@@ -203,7 +203,7 @@ authenticated editor session (cookie set by `/api/auth/login`).
 | `GET /api/auth/status` | `{ authenticated }` |
 | `GET /api/auth/captcha-config` | `{ provider, siteKey, totpRequired }` — `provider` is `null` if captcha is disabled |
 | `GET /api/auth/totp/status` | `{ enabled }` (auth-gated) |
-| `POST /api/auth/totp/setup` | generates a new pending secret, returns `{ secret, otpauthUrl, qrDataUrl }` (auth-gated). While 2FA is on it needs `{ currentPassword, totpToken }` (a code from the current app, 401 otherwise), and the current factor keeps working until the new one is confirmed |
+| `POST /api/auth/totp/setup` | generates a new pending secret, returns `{ secret, otpauthUrl, qrDataUrl }` (auth-gated). Needs `{ currentPassword }`, and while 2FA is on also `totpToken` (an unused code from the current app), 401 otherwise; the current factor keeps working until the new one is confirmed |
 | `POST /api/auth/totp/confirm` | `{ token }` (a code from the pending secret) → verifies it and enables 2FA, replacing any current factor (auth-gated) |
 | `POST /api/auth/totp/disable` | `{ currentPassword, totpToken }` → turns 2FA off (auth-gated; 401 without both). Setup, confirm and disable are rate-limited like login (10 failed attempts / IP / 15 min) |
 | `GET/PUT /api/header` | header/contact fields |
@@ -800,7 +800,8 @@ respected.
 From the editor's "Two-Factor Authentication" panel you can enable
 app-based 2FA (Google Authenticator, 1Password, Authy, etc.): it shows a QR
 code (and the raw key as a manual-entry fallback) and asks you to confirm
-with a code before turning enforcement on. Once enabled, login requires
+with a code before turning enforcement on. Turning it on asks for your
+current password. Once enabled, login requires
 that code in addition to the username and password. Moving it to a new
 app or turning it off asks for your current password and a code from your
 current app; while you set up a new app, the old one keeps working until

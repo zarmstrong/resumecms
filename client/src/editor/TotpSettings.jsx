@@ -5,8 +5,9 @@ export function TotpSettings() {
   const [enabled, setEnabled] = useState(null);
   const [pending, setPending] = useState(null); // { secret, qrDataUrl } while enrolling
   const [token, setToken] = useState('');
-  // While 2FA is on, replacing or disabling it needs the password and a
-  // code from the current app; the server checks both.
+  // Turning 2FA on needs the password; while it's on, replacing or
+  // disabling it needs the password and a code from the current app. The
+  // server checks both.
   const [currentPassword, setCurrentPassword] = useState('');
   const [currentCode, setCurrentCode] = useState('');
   const [error, setError] = useState(null);
@@ -26,10 +27,14 @@ export function TotpSettings() {
       setError('Enter your current password and a code from your current app.');
       return;
     }
+    if (!enabled && !currentPassword) {
+      setError('Enter your current password.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const setup = await api.setupTotp(enabled ? { currentPassword, totpToken: currentCode } : {});
+      const setup = await api.setupTotp(enabled ? { currentPassword, totpToken: currentCode } : { currentPassword });
       setPending(setup);
       setToken('');
       clearFactorFields();
@@ -160,6 +165,16 @@ export function TotpSettings() {
   return (
     <div className="ed-form">
       <p>Two-factor authentication is not enabled.</p>
+      <div className="ed-field">
+        <label>Current password</label>
+        <input
+          type="password"
+          autoComplete="current-password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          className="ed-input"
+        />
+      </div>
       <button className="ed-btn ed-btn-primary" onClick={handleEnable} disabled={busy}>
         Enable two-factor authentication
       </button>

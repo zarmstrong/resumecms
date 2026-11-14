@@ -4,7 +4,7 @@ import express from 'express';
 import { generate, generateSecret } from 'otplib';
 import { hashPassword } from '../passwords.js';
 import { TOTP_STEP_SECONDS } from '../totpConfig.js';
-import { CODE_USED_ERROR, createTotpRouter, readTotp } from './totpRouter.js';
+import { FACTOR_ERROR, PASSWORD_ERROR, createTotpRouter, readTotp } from './totpRouter.js';
 
 // Setting up, replacing and turning off 2FA (issue #173) over an in-memory
 // settings map, served on a real socket behind a logged-in session.
@@ -12,8 +12,11 @@ import { CODE_USED_ERROR, createTotpRouter, readTotp } from './totpRouter.js';
 const PASSWORD = 'correct horse battery';
 const credentials = { username: 'admin', passwordHash: hashPassword(PASSWORD) };
 
-async function start(totp) {
+// `hooks.onTotpRead(n)` runs before the n-th read of the totp row (0
+// first), to change it under a request between its check and its write.
+async function start(totp, hooks = {}) {
   const settings = new Map([['credentials', credentials]]);
+  let totpReads = 0;
   if (totp) settings.set('totp', totp);
   const app = express();
   app.use(express.json());
@@ -24,7 +27,10 @@ async function start(totp) {
   app.use(
     '/totp',
     createTotpRouter({
-      getSetting: (key) => settings.get(key) ?? null,
+      getSetting: (key) => {
+        if (key === 'totp') hooks.onTotpRead?.(totpReads++, settings);
+        return settings.get(key) ?? null;
+      },
       setSetting: (key, value) => settings.set(key, value),
     }),
   );
@@ -44,15 +50,31 @@ async function start(totp) {
 const code = (secret) => generate({ secret });
 
 test('an old-shape row with a secret and enabled: false reads as a pending setup', () => {
-  assert.deepEqual(readTotp({ secret: 'S', enabled: false }), { enabled: false, secret: null, pendingSecret: 'S' });
-  assert.deepEqual(readTotp({ secret: 'S', enabled: true }), { secret: 'S', enabled: true, pendingSecret: null });
-  assert.deepEqual(readTotp(null), { enabled: false, secret: null, pendingSecret: null });
+  const none = { lastUsedStep: null };
+  assert.deepEqual(readTotp({ secret: 'S', enabled: false }), { enabled: false, secret: null, pendingSecret: 'S', ...none });
+  assert.deepEqual(readTotp({ secret: 'S', enabled: true }), { enabled: true, secret: 'S', pendingSecret: null, ...none });
+  assert.deepEqual(readTotp(null), { enabled: false, secret: null, pendingSecret: null, ...none });
 });
 
-test('setup while 2FA is off needs only the session, and confirm turns it on', async () => {
+test('enabled reads as login reads it (truthy), keeping only the known fields', () => {
+  assert.deepEqual(readTotp({ secret: 'S', enabled: 'true', stray: 1, lastUsedStep: 7 }), {
+    enabled: true,
+    secret: 'S',
+    pendingSecret: null,
+    lastUsedStep: 7,
+  });
+});
+
+test('setup while 2FA is off needs the password, and confirm turns it on', async () => {
   const app = await start(null);
   try {
-    const setup = await app.post('/setup');
+    for (const body of [{}, { currentPassword: 'wrong' }]) {
+      const refused = await app.post('/setup', body);
+      assert.equal(refused.status, 401);
+      assert.equal(refused.body.error, PASSWORD_ERROR);
+    }
+    assert.equal(app.settings.get('totp'), undefined);
+    const setup = await app.post('/setup', { currentPassword: PASSWORD });
     assert.equal(setup.status, 200);
     assert.equal(app.settings.get('totp').enabled, false);
     assert.equal(app.settings.get('totp').pendingSecret, setup.body.secret);
@@ -157,18 +179,19 @@ test('disable without the password and a current code is refused', async () => {
   }
 });
 
-test('disable refuses a code already used, and says so only with the right password', async () => {
+test('disable refuses a code already used, with the same message as a wrong password', async () => {
   const active = generateSecret();
   const step = Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + 1;
   const app = await start({ enabled: true, secret: active, lastUsedStep: step });
   try {
     const res = await app.post('/disable', { currentPassword: PASSWORD, totpToken: await code(active) });
     assert.equal(res.status, 401);
-    // Not "incorrect": the code is right, just spent (e.g. by the login).
-    assert.equal(res.body.error, CODE_USED_ERROR);
+    // One message, so it never confirms the password; it says a code
+    // works only once.
+    assert.equal(res.body.error, FACTOR_ERROR);
     const wrong = await app.post('/disable', { currentPassword: 'not it', totpToken: await code(active) });
     assert.equal(wrong.status, 401);
-    assert.equal(wrong.body.error, 'Incorrect password or code');
+    assert.equal(wrong.body.error, FACTOR_ERROR);
     assert.equal(app.settings.get('totp').enabled, true);
   } finally {
     app.close();
@@ -198,6 +221,59 @@ test('failed attempts are rate-limited like login', async () => {
     const limited = await app.post('/disable', { currentPassword: PASSWORD, totpToken: await code(active) });
     assert.equal(limited.status, 429);
     assert.equal(app.settings.get('totp').enabled, true);
+  } finally {
+    app.close();
+  }
+});
+
+test('disable writes nothing if the factor changed while it was checking', async () => {
+  const active = generateSecret();
+  const replaced = { enabled: true, secret: generateSecret() };
+  const app = await start({ enabled: true, secret: active }, {
+    onTotpRead: (n, settings) => {
+      if (n === 1) settings.set('totp', replaced);
+    },
+  });
+  try {
+    const res = await app.post('/disable', { currentPassword: PASSWORD, totpToken: await code(active) });
+    assert.equal(res.status, 409);
+    assert.equal(app.settings.get('totp'), replaced);
+  } finally {
+    app.close();
+  }
+});
+
+test('a code spent by another request while checking is refused, and nothing is written', async () => {
+  const active = generateSecret();
+  const spent = { enabled: true, secret: active, lastUsedStep: Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + 1 };
+  for (const path of ['/disable', '/setup']) {
+    const app = await start({ enabled: true, secret: active }, {
+      onTotpRead: (n, settings) => {
+        if (n === 1) settings.set('totp', spent);
+      },
+    });
+    try {
+      const res = await app.post(path, { currentPassword: PASSWORD, totpToken: await code(active) });
+      assert.equal(res.status, 401, path);
+      assert.equal(res.body.error, FACTOR_ERROR, path);
+      assert.equal(app.settings.get('totp'), spent, path);
+    } finally {
+      app.close();
+    }
+  }
+});
+
+test('setup writes nothing if the row changed while it was checking (2FA turned on elsewhere)', async () => {
+  const other = { enabled: true, secret: generateSecret() };
+  const app = await start(null, {
+    onTotpRead: (n, settings) => {
+      if (n === 1) settings.set('totp', other);
+    },
+  });
+  try {
+    const res = await app.post('/setup', { currentPassword: PASSWORD });
+    assert.equal(res.status, 409);
+    assert.equal(app.settings.get('totp'), other);
   } finally {
     app.close();
   }

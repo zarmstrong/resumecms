@@ -13,11 +13,26 @@ import { TOTP_STEP_SECONDS, TOTP_EPOCH_TOLERANCE_SECONDS } from '../totpConfig.j
 // `secret` is the active factor (what login checks, only while `enabled`)
 // and `pendingSecret` a setup not yet confirmed (issue #173). A row stored
 // before that, `{ secret, enabled: false }`, was a setup in progress, so
-// it reads as a pending secret with no active one.
+// it reads as a pending secret with no active one. `enabled` is read as
+// login reads it (truthy), so the two never disagree about whether 2FA is
+// on, and only the known fields are kept.
 export function readTotp(row) {
-  if (!row) return { enabled: false, secret: null, pendingSecret: null };
-  if (row.enabled === true) return { ...row, pendingSecret: row.pendingSecret ?? null };
-  return { enabled: false, secret: null, pendingSecret: row.pendingSecret ?? row.secret ?? null };
+  if (!row) return { enabled: false, secret: null, pendingSecret: null, lastUsedStep: null };
+  const lastUsedStep = typeof row.lastUsedStep === 'number' ? row.lastUsedStep : null;
+  if (row.enabled) {
+    return { enabled: true, secret: row.secret ?? null, pendingSecret: row.pendingSecret ?? null, lastUsedStep };
+  }
+  return { enabled: false, secret: null, pendingSecret: row.pendingSecret ?? row.secret ?? null, lastUsedStep };
+}
+
+// The row to store for `totp`, optional fields only when set.
+function totpRow({ enabled, secret, pendingSecret, lastUsedStep }) {
+  return {
+    enabled,
+    ...(enabled ? { secret } : {}),
+    ...(pendingSecret ? { pendingSecret } : {}),
+    ...(typeof lastUsedStep === 'number' ? { lastUsedStep } : {}),
+  };
 }
 
 async function checkCode(secret, token) {
@@ -27,23 +42,37 @@ async function checkCode(secret, token) {
   return Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + result.delta;
 }
 
-// Replacing or turning off an active factor needs the current password and
-// a current code from that factor, not just the session, so a stolen
-// session cookie can't remove 2FA. A code already used (by login or an
-// earlier change) is refused like login refuses it, but said so: right
-// after a login the app still shows the code just used, and "incorrect"
-// would be untrue. Returns `{ step }` to record, or `{ error }`.
-async function checkActiveFactor(totp, credentials, { currentPassword, totpToken } = {}) {
+// One message for a wrong password, a wrong code and a code already used,
+// so the reply never says which part was right (a "code already used"
+// would confirm the password). It says why a right code can fail: right
+// after a login the app still shows the code just used.
+export const FACTOR_ERROR =
+  'Incorrect password or code. Each code works only once: if you just used this one, wait for the next.';
+export const PASSWORD_ERROR = 'Incorrect password';
+
+// Any change to 2FA needs the current password, and while it's on a code
+// from the active factor that hasn't been used, never just the session:
+// a stolen session cookie can't remove 2FA, replace it, or turn it on with
+// an app of its own and lock the owner out. Returns `{ step }` (the code's
+// step while 2FA is on, else null) or `{ error }`.
+async function checkFactor(totp, credentials, { currentPassword, totpToken } = {}) {
   const passwordOk =
     typeof currentPassword === 'string' && !!credentials && verifyPassword(currentPassword, credentials.passwordHash);
+  if (!totp.enabled) return passwordOk ? { step: null } : { error: PASSWORD_ERROR };
   const step = await checkCode(totp.secret, totpToken);
-  if (!passwordOk || step === null) return { error: FACTOR_ERROR };
-  if (typeof totp.lastUsedStep === 'number' && step <= totp.lastUsedStep) return { error: CODE_USED_ERROR };
+  if (!passwordOk || step === null || isSpent(totp, step)) return { error: FACTOR_ERROR };
   return { step };
 }
 
-const FACTOR_ERROR = 'Incorrect password or code';
-export const CODE_USED_ERROR = 'That code has already been used. Wait for the next one and try again.';
+const isSpent = (totp, step) => totp.lastUsedStep !== null && step <= totp.lastUsedStep;
+
+// Every check above awaits, so before writing, each route reads the row
+// again and goes on only if the factor it checked is still the one stored
+// (and, for a code, that it still isn't spent), then writes with nothing
+// awaited in between. Two requests can then never both spend one code, and
+// a slow one can't write back a row another has changed since.
+const sameFactor = (a, b) => a.enabled === b.enabled && a.secret === b.secret;
+const CHANGED_ERROR = 'Two-factor settings changed meanwhile. Reload and try again.';
 
 export function createTotpRouter({ getSetting, setSetting }) {
   const router = Router();
@@ -66,27 +95,30 @@ export function createTotpRouter({ getSetting, setSetting }) {
   });
 
   // While 2FA is on, the new secret is only pending: the active one keeps
-  // working until /confirm verifies a code from the new one.
+  // working until /confirm verifies a code from the new one. The QR code
+  // is drawn before anything is stored, so a setup that fails changes
+  // nothing and spends no code.
   router.post('/setup', limiter, async (req, res) => {
     const totp = readTotp(getSetting('totp'));
-    let lastUsedStep = totp.lastUsedStep;
-    if (totp.enabled) {
-      const check = await checkActiveFactor(totp, getSetting('credentials'), req.body || {});
-      if (check.error) return res.status(401).json({ error: check.error });
-      lastUsedStep = check.step;
-    }
-    const secret = generateSecret();
-    setSetting(
-      'totp',
-      totp.enabled
-        ? { enabled: true, secret: totp.secret, pendingSecret: secret, lastUsedStep }
-        : { enabled: false, pendingSecret: secret },
-    );
+    const check = await checkFactor(totp, getSetting('credentials'), req.body || {});
+    if (check.error) return res.status(401).json({ error: check.error });
 
+    const secret = generateSecret();
     const username = process.env.RESUMECMS_ADMIN_USERNAME || 'admin';
     const otpauthUrl = generateURI({ issuer: 'ResumeCMS', label: username, secret });
     const qrDataUrl = await QRCode.toDataURL(otpauthUrl);
 
+    const now = readTotp(getSetting('totp'));
+    if (!sameFactor(now, totp)) return res.status(409).json({ error: CHANGED_ERROR });
+    if (check.step !== null && isSpent(now, check.step)) return res.status(401).json({ error: FACTOR_ERROR });
+    setSetting(
+      'totp',
+      totpRow(
+        now.enabled
+          ? { enabled: true, secret: now.secret, pendingSecret: secret, lastUsedStep: check.step }
+          : { enabled: false, pendingSecret: secret },
+      ),
+    );
     res.json({ secret, otpauthUrl, qrDataUrl });
   });
 
@@ -100,23 +132,24 @@ export function createTotpRouter({ getSetting, setSetting }) {
     if (step === null) {
       return res.status(400).json({ error: 'Incorrect code' });
     }
-    // Re-read: another request may have changed the row while verifying.
-    const current = readTotp(getSetting('totp'));
-    if (current.pendingSecret !== totp.pendingSecret) {
+    const now = readTotp(getSetting('totp'));
+    if (now.pendingSecret !== totp.pendingSecret) {
       return res.status(409).json({ error: 'No 2FA setup in progress' });
     }
     // No lastUsedStep: the confirm code isn't a login, and recording it
-    // would refuse the first login with the new app in the same 30 s (with
-    // login's "incorrect" message).
-    setSetting('totp', { enabled: true, secret: totp.pendingSecret });
+    // would refuse the first login with the new app in the same 30 s.
+    setSetting('totp', totpRow({ enabled: true, secret: totp.pendingSecret }));
     res.json({ enabled: true });
   });
 
   router.post('/disable', limiter, async (req, res) => {
     const totp = readTotp(getSetting('totp'));
     if (totp.enabled) {
-      const check = await checkActiveFactor(totp, getSetting('credentials'), req.body || {});
+      const check = await checkFactor(totp, getSetting('credentials'), req.body || {});
       if (check.error) return res.status(401).json({ error: check.error });
+      const now = readTotp(getSetting('totp'));
+      if (!sameFactor(now, totp)) return res.status(409).json({ error: CHANGED_ERROR });
+      if (isSpent(now, check.step)) return res.status(401).json({ error: FACTOR_ERROR });
     }
     setSetting('totp', null);
     res.json({ enabled: false });

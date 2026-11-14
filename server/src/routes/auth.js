@@ -92,10 +92,18 @@ router.post('/login', loginLimiter, async (req, res) => {
     // captured request (e.g. via a MITM'd network hop) can't be replayed to
     // start a second session with the same one-time code.
     const step = Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + result.delta;
-    if (typeof totp.lastUsedStep === 'number' && step <= totp.lastUsedStep) {
+    // Read the row again after the await: write back only the step, onto
+    // the row as it is now, and only if the factor checked is still the
+    // active one, so a login finishing late can't restore a replaced or
+    // disabled factor, drop a pending setup, or spend a code twice.
+    const current = getSetting('totp');
+    if (!current?.enabled || current.secret !== totp.secret) {
       return res.status(401).json({ error: authError });
     }
-    setSetting('totp', { ...totp, lastUsedStep: step });
+    if (typeof current.lastUsedStep === 'number' && step <= current.lastUsedStep) {
+      return res.status(401).json({ error: authError });
+    }
+    setSetting('totp', { ...current, lastUsedStep: step });
   }
 
   req.session.authenticated = true;
