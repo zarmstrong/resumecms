@@ -448,7 +448,7 @@ hidden, the phone as its link dials it (its label only when `telHref()` of it is
 the template picker's thumbnails, and its Preview shows one's applied page
 full size in the dialog (inert like a thumbnail, desktop or phone width;
 both draw a still-empty section as a note, `presetPreviewPage()`),
-so nothing is applied or saved before "Use this preset"; `LandingEditorPage` opens it by itself
+so nothing is applied before "Use this preset"; `LandingEditorPage` opens it by itself
 while `offerPresetsOnOpen(status)` (the status's `hasDraft`, false until
 `landing_draft` is first stored, and no `publishedAt`), where Skip or
 "Keep the starting page" (`KEEP_STARTING_PAGE`, `:keep`, never a

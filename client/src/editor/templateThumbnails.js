@@ -1,5 +1,5 @@
 import { resolveLanding } from '../landing/resolveLanding.js';
-import { kindLabel } from './landingSections.js';
+import { hasContent, kindLabel } from './landingSections.js';
 
 // The landing template picker's thumbnails (issue #130): each template drawn
 // with the draft by the real LandingView, at a desktop width and scaled
@@ -42,13 +42,19 @@ export function pageKey(page) {
   return page ? JSON.stringify({ ...page, template: undefined, seo: undefined }) : '';
 }
 
+// Kinds whose content comes from a resume, never typed in the section.
+const FROM_RESUME = new Set(['experience', 'education', 'skills']);
+
 // What the preset picker draws (its thumbnails and full-size preview): the
 // page as published, except that a section with nothing in it yet (one a
 // preset just added, mostly) isn't left out but drawn in its place as a
 // short note naming it, so the preview shows every section picking the
-// preset gives. A hidden section stays out, as published, and so does an
-// empty divider. The note is a text section (italic), so every template
-// draws it without knowing about it; only the editor ever makes one.
+// preset gives. One read from a resume that has nothing for it says so
+// instead. A section left out for any other reason (hidden, or holding
+// only what a visitor isn't shown, such as expired credentials) stays out,
+// as published, and so does a divider. The note is a text section
+// (italic), so every template draws it without knowing about it; only the
+// editor ever makes one.
 export function presetPreviewPage(draft, context) {
   const page = resolveLanding(draft, context, { withIds: true });
   const shown = new Map(page.sections.map((section) => [section.id, section]));
@@ -56,12 +62,17 @@ export function presetPreviewPage(draft, context) {
     const resolved = shown.get(section.id);
     if (resolved) return [resolved];
     if (section.hidden || section.kind === 'divider') return [];
+    const label = kindLabel(section.kind);
+    let body;
+    if (FROM_RESUME.has(section.kind)) body = `*${label}: shown from your resume once it has some to show.*`;
+    else if (!hasContent({ ...section, title: '' })) body = `*${label}: empty until you fill it in.*`;
+    else return [];
     return [
       {
         id: section.id,
         kind: 'text',
         title: section.title,
-        body: `*${kindLabel(section.kind)}: empty until you fill it in.*`,
+        body,
         ...(section.column ? { column: section.column } : {}),
       },
     ];

@@ -37,7 +37,7 @@ export const KEEP_STARTING_PAGE = ':keep';
 // "Preview" on a card shows that same page full size in place of the
 // list (at the dialog's width or a phone's, light or dark when the page
 // has a dark palette), so a preset can be looked at properly without
-// applying it: nothing is saved or changed until "Use this preset", which
+// applying it: the draft isn't changed until "Use this preset", which
 // then uses the one previewed. It's a picture like the thumbnails (inert,
 // so no link leaves the editor and no player loads) in a frame that
 // scrolls by wheel, touch or keyboard. "Back to presets" and Escape
@@ -209,7 +209,9 @@ export function LandingPresetPicker({ presets, draft, context, resumes, limits, 
 
 // One option's page at full size, in place of the list. Desktop is the
 // dialog's own width, so a template's container queries give what a
-// window that wide would; Phone is 390 px.
+// window that wide would; Phone is 390 px. The page box is also the
+// `landing-preview` container, for a template whose narrow rules are a
+// window @media query (classic): it repeats them for that container.
 function PresetPreview({ option, scheme, backRef, onBack }) {
   const [width, setWidth] = useState('desktop');
   const [previewScheme, setPreviewScheme] = useState(scheme === 'dark' ? 'dark' : 'light');
@@ -242,7 +244,7 @@ function PresetPreview({ option, scheme, backRef, onBack }) {
           />
         )}
       </div>
-      <p className="ed-preset-preview-note">Nothing is changed or saved until you use this preset.</p>
+      <p className="ed-preset-preview-note">Your page isn't changed until you use this preset.</p>
       {/* Focusable so the keyboard can scroll it; the page in it is inert. */}
       <div className="ed-preset-preview-frame" tabIndex={0} role="region" aria-label={`${option.label}, as your page would look`}>
         <div className={`ed-preset-preview-page${width === 'phone' ? ' is-phone' : ''}`} inert aria-hidden="true">
