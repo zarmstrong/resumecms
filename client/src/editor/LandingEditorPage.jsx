@@ -12,7 +12,7 @@ import { applyUploadedFile, applyUploadedImage, uploadSpot } from './landingImag
 import { createLimiter } from './uploadLimit.js';
 import { LANDING_PRESETS } from '../resume/templateRegistry.js';
 import { KEEP_STARTING_PAGE, LandingPresetPicker } from './LandingPresetPicker.jsx';
-import { applyPreset, offerPresetsOnOpen, presetQuestion } from './landingPresets.js';
+import { applyPreset, offerPresetsOnOpen, presetMadeIds, presetQuestion } from './landingPresets.js';
 import {
   anchorFor,
   highlightIds,
@@ -80,6 +80,10 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   // doesn't parse yet, an AI instruction typed or sent), counted per field,
   // so a preset keeps them (applyPreset()'s `typed`).
   const typedRef = useRef(new Map());
+  // The sections a preset made in this editor (by id): only their preset
+  // titles are placeholders a later preset may drop. Forgotten on reload,
+  // when every title counts as the person's.
+  const presetMadeRef = useRef(new Set());
   const handleTyped = useCallback((sectionId, typed) => {
     const counts = typedRef.current;
     const n = (counts.get(sectionId) || 0) + (typed ? 1 : -1);
@@ -225,7 +229,13 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       const current = landingRef.current;
       // The latest handleChange (not this render's), so it builds on the
       // status as it is after the wait, a "Show at /" switch included.
-      handleChangeRef.current(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits, { typed: new Set(typedRef.current.keys()) }));
+      if (choice === KEEP_STARTING_PAGE) return handleChangeRef.current(current);
+      const next = applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits, {
+        typed: new Set(typedRef.current.keys()),
+        made: presetMadeRef.current,
+      });
+      for (const id of presetMadeIds(current, next)) presetMadeRef.current.add(id);
+      handleChangeRef.current(next);
     });
   }
 
@@ -593,6 +603,7 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
           context={loaded.context}
           resumes={resumes}
           limits={loaded.limits}
+          keep={{ typed: new Set(typedRef.current.keys()), made: presetMadeRef.current }}
           scheme={previewScheme}
           firstOpen={presetPicker === 'first'}
           onPick={handlePresetPick}

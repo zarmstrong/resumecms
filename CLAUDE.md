@@ -428,8 +428,10 @@ save queue, so its checks and `touchLanding()` apply. It sets `template`
 and `style` (keeping the draft's `darkColors` when the preset has none), puts the preset's sections first (each new one as "+ Add
 section" starts it, from `landingSections.js`, shared with `LandingForm`),
 and keeps the hero, `seo` and every section with something in it
-(`sectionHasWork()`: a title counts unless it's a preset's title for that
-kind, and so do `hidden`, `column` and any setting that isn't a list set
+(`sectionHasWork()`: a title counts unless the section is one a preset
+made in this editor (`made`, the ids `presetMadeIds()` collects in
+`LandingEditorPage`, forgotten on reload) and it's a preset's title for
+that kind, and so do `hidden`, `column` and any setting that isn't a list set
 otherwise than a new section of its kind starts, such as a contact
 section's `vcard`, or an entry's, such as a credential's `kind` or a
 service's button once added (a key left out counts as its default); an

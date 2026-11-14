@@ -41,9 +41,11 @@ const EMPTY_STYLE = { source: 'resume', colors: { accent: '', heading: '', text:
 const FALLBACK_LIMITS = { sections: 20, contactEmail: 254, contactPhone: 40 };
 
 // Whether `section` holds anything the person wrote or set. A title
-// counts unless it's one a preset gives a section of that kind, so
-// switching from one preset to another doesn't keep the first one's empty
-// sections; hiding it or putting it in the side column counts, and so
+// counts unless the section is one a preset made (its id in `made`, see
+// presetMadeIds()) and the title is a preset's for that kind, so switching
+// from one preset to another doesn't keep the first one's empty sections,
+// while a heading the person typed counts whatever it says; hiding it or
+// putting it in the side column counts, and so
 // does any setting set otherwise than a new section of its kind starts it:
 // one of the section's ("Save contact" off, publications newest first) or
 // of an entry's (a credential's kind a license). An experience, education
@@ -51,10 +53,10 @@ const FALLBACK_LIMITS = { sections: 20, contactEmail: 254, contactPhone: 40 };
 // it was set up. So does one whose id is in `typed`: the editor's fields
 // that hold text only on screen (a media link half typed, an AI
 // instruction) name their section there.
-export function sectionHasWork(section, presets, resumes, typed = EMPTY_SET) {
+export function sectionHasWork(section, presets, resumes, { typed = EMPTY_SET, made = EMPTY_SET } = {}) {
   if (RESUME_KINDS.includes(section.kind) || typed.has(section.id)) return true;
   const title = section.title.trim();
-  const presetTitle = presets.some((preset) => preset.sections.some((s) => s.kind === section.kind && s.title === title));
+  const presetTitle = made.has(section.id) && presets.some((preset) => preset.sections.some((s) => s.kind === section.kind && s.title === title));
   if (title && !presetTitle) return true;
   if (section.hidden || section.column) return true;
   const fresh = SECTION_KINDS.find((k) => k.kind === section.kind)?.empty(resumes) ?? {};
@@ -90,12 +92,12 @@ function settingsDiffer(start, entry) {
 // `landing` started from `preset`, as described above. `resumes` is the
 // editor's list, for the resume an experience or education section reads
 // (the default one); `presets` every preset, for sectionHasWork();
-// `limits` the editor's (GET /api/landing's), for the caps; `typed` the ids
-// of sections holding text only on screen (sectionHasWork()).
-export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK_LIMITS, { typed = EMPTY_SET } = {}) {
+// `limits` the editor's (GET /api/landing's), for the caps; `typed` and
+// `made` sectionHasWork()'s.
+export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK_LIMITS, { typed = EMPTY_SET, made = EMPTY_SET } = {}) {
   const caps = { ...FALLBACK_LIMITS, ...limits };
   const current = landing.sections || [];
-  const worked = current.filter((section) => sectionHasWork(section, presets, resumes, typed));
+  const worked = current.filter((section) => sectionHasWork(section, presets, resumes, { typed, made }));
   // `used`: the draft's sections taken into the preset's slots; `created`:
   // the new ones, the only ones the cap below may leave out (a carried one
   // may be a copy, given the preset's title, so it's never told apart by
@@ -135,6 +137,13 @@ export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK
     style,
     sections: [...sections, ...rest],
   };
+}
+
+// The ids of the sections applyPreset() made going from `before` to
+// `after`, for the editor to keep as `made` (by id, which an edit keeps).
+export function presetMadeIds(before, after) {
+  const had = new Set((before.sections || []).map((section) => section.id));
+  return (after.sections || []).filter((section) => !had.has(section.id)).map((section) => section.id);
 }
 
 function newSection(kind, title, landing, resumes, caps) {

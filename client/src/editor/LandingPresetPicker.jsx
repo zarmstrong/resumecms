@@ -29,7 +29,9 @@ export const KEEP_STARTING_PAGE = ':keep';
 // editor behind it inert; Escape reaches `onClose` through its cancel
 // event, and closing gives focus back to what had it before (the "Start
 // from a preset…" button).
-export function LandingPresetPicker({ presets, draft, context, resumes, limits, scheme, firstOpen = false, onPick, onClose }) {
+// `keep` is applyPreset()'s `{ typed, made }`, so a thumbnail shows what
+// picking it does.
+export function LandingPresetPicker({ presets, draft, context, resumes, limits, keep, scheme, firstOpen = false, onPick, onClose }) {
   const name = useId();
   const titleId = `${name}-title`;
   const [chosen, setChosen] = useState(firstOpen ? KEEP_STARTING_PAGE : presets[0]?.id);
@@ -43,7 +45,7 @@ export function LandingPresetPicker({ presets, draft, context, resumes, limits, 
       description: preset.description,
       sections: presetSectionLabels(preset),
       templateId: preset.template,
-      page: thumbnailPage(applyPreset(draft, preset, resumes, presets, limits), context),
+      page: thumbnailPage(applyPreset(draft, preset, resumes, presets, limits, keep), context),
     }));
     if (!firstOpen) return list;
     const page = thumbnailPage(draft, context);
@@ -58,6 +60,9 @@ export function LandingPresetPicker({ presets, draft, context, resumes, limits, 
       },
       ...list,
     ];
+    // `keep` is read as it is when the draft changes: behind the modal the
+    // editor is inert, so nothing it holds changes while it's open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presets, draft, context, resumes, limits, firstOpen]);
 
   useEffect(() => {

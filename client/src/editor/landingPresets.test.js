@@ -4,7 +4,26 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initialLanding, validateLanding } from '../../../server/src/landingFields.js';
-import { applyPreset, contactFromLinks, offerPresetsOnOpen, presetQuestion, presetSectionLabels, sectionHasWork } from './landingPresets.js';
+import {
+  applyPreset as applyPresetTo,
+  contactFromLinks,
+  offerPresetsOnOpen,
+  presetMadeIds,
+  presetQuestion,
+  presetSectionLabels,
+  sectionHasWork as hasWork,
+} from './landingPresets.js';
+
+// As LandingEditorPage does: every section a preset made is remembered (by
+// id, unique per section), so only those sections' preset titles are
+// placeholders. Sections built by hand here were never made by one.
+const MADE = new Set();
+function applyPreset(landing, preset, resumes, presets, limits, options = {}) {
+  const next = applyPresetTo(landing, preset, resumes, presets, limits, { made: MADE, ...options });
+  for (const id of presetMadeIds(landing, next)) MADE.add(id);
+  return next;
+}
+const sectionHasWork = (section, presets, resumes, options = {}) => hasWork(section, presets, resumes, { made: MADE, ...options });
 import { telHref } from '../resume/safeUrl.js';
 
 // The presets as the registry loads them (it uses import.meta.glob, which
@@ -99,7 +118,13 @@ test('switching presets drops the empty sections the first one added', () => {
 });
 
 test('a section the person titled themselves counts as written in, a preset title does not', () => {
-  assert.equal(sectionHasWork({ id: 'a', kind: 'services', title: 'Services', services: [{ title: '', text: '', price: '' }] }, PRESETS), false);
+  const services = { id: 'a', kind: 'services', title: 'Services', services: [{ title: '', text: '', price: '' }] };
+  // A preset's own title on a section a preset made is a placeholder...
+  assert.equal(hasWork(services, PRESETS, resumes, { made: new Set(['a']) }), false);
+  // ...but typed by the person, the same words are theirs (or after a
+  // reload, when the editor no longer knows which sections a preset made).
+  assert.equal(hasWork(services, PRESETS, resumes), true);
+  assert.equal(sectionHasWork({ ...services, title: '' }, PRESETS, resumes), false);
   assert.equal(sectionHasWork({ id: 'a', kind: 'services', title: 'What I do', services: [] }, PRESETS), true);
   assert.equal(sectionHasWork({ id: 'a', kind: 'text', title: '', body: 'Hi' }, PRESETS), true);
   // An experience, education or skills section shows its resume's roles,
@@ -109,10 +134,10 @@ test('a section the person titled themselves counts as written in, a preset titl
   assert.equal(sectionHasWork({ id: 'e', kind: 'education', title: 'Education', resumeId: 'r-main', count: 3, showDates: true }, PRESETS, resumes), true);
   assert.equal(sectionHasWork({ id: 's', kind: 'skills', title: '', resumeId: 'r-main' }, PRESETS, resumes), true);
   // Any other setting a new section doesn't start with is the person's too.
-  const contact = { id: 'c', kind: 'contact', title: 'Contact', email: '', phone: '', area: '', address: '', hours: [], vcard: true };
+  const contact = { id: 'c', kind: 'contact', title: '', email: '', phone: '', area: '', address: '', hours: [], vcard: true };
   assert.equal(sectionHasWork(contact, PRESETS, resumes), false);
   assert.equal(sectionHasWork({ ...contact, vcard: false }, PRESETS, resumes), true);
-  const pubs = { id: 'p', kind: 'publications', title: 'Publications and talks', order: 'manual', group: false, entries: [] };
+  const pubs = { id: 'p', kind: 'publications', title: '', order: 'manual', group: false, entries: [] };
   assert.equal(sectionHasWork(pubs, PRESETS, resumes), false);
   assert.equal(sectionHasWork({ ...pubs, order: 'newest' }, PRESETS, resumes), true);
   assert.equal(sectionHasWork({ ...pubs, group: true }, PRESETS, resumes), true);
@@ -197,13 +222,26 @@ test("an entry's optional setting counts once it's there, a field the server lea
   assert.equal(sectionHasWork(items, PRESETS, resumes), false);
 });
 
+test("a heading the person typed is kept even when it's a preset's title", () => {
+  // "About me" is the Education preset's title, typed here on a section no
+  // preset made.
+  const draft = { ...firstDraft(), sections: [{ id: 'mine', kind: 'text', title: 'About me', body: '' }] };
+  const next = applyPresetTo(draft, byId('creative'), resumes, PRESETS);
+  assert.ok(next.sections.some((s) => s.id === 'mine' && s.title === 'About me'));
+  // The same section made by the Education preset, still empty, goes.
+  const made = new Set(['mine']);
+  const switched = applyPresetTo(draft, byId('creative'), resumes, PRESETS, undefined, { made });
+  assert.ok(!switched.sections.some((s) => s.id === 'mine'));
+  assert.deepEqual(presetMadeIds(draft, switched), switched.sections.filter((s) => s.id !== 'mine' && !draft.sections.some((d) => d.id === s.id)).map((s) => s.id));
+});
+
 test('a section whose text is typed only on screen (a media link half typed) is kept', () => {
   const creative = byId('creative');
   const started = applyPreset(firstDraft(), creative, resumes, PRESETS);
   const media = started.sections.find((s) => s.kind === 'media');
   assert.equal(sectionHasWork(media, PRESETS, resumes), false);
   const typed = new Set([media.id]);
-  assert.equal(sectionHasWork(media, PRESETS, resumes, typed), true);
+  assert.equal(sectionHasWork(media, PRESETS, resumes, { typed }), true);
   const again = applyPreset(started, creative, resumes, PRESETS, undefined, { typed });
   // The same section (so the same field, still holding what was typed), not a new one.
   assert.equal(again.sections.find((s) => s.kind === 'media').id, media.id);
