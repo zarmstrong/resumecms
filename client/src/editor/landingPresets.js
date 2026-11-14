@@ -88,10 +88,14 @@ export function applyPreset(landing, preset, resumes, presets, limits = FALLBACK
       over--;
     }
   }
+  // The preset's look; a dark palette of the person's own stays unless the
+  // preset brings one.
+  const style = structuredClone(preset.style ?? { source: 'resume', colors: {}, font: '', nameFont: '' });
+  if (!style.darkColors && landing.style?.darkColors) style.darkColors = structuredClone(landing.style.darkColors);
   return {
     ...landing,
     template: preset.template,
-    style: structuredClone(preset.style ?? { source: 'resume', colors: {}, font: '', nameFont: '' }),
+    style,
     sections: [...sections, ...rest],
   };
 }
@@ -140,16 +144,18 @@ export function contactFromLinks(landing, limits = FALLBACK_LIMITS) {
 }
 
 // Whether a label writes out the number a tel: link dials: the same digits,
-// the label's leading country code aside (a link's "+1" the label may
-// leave out), and nothing in it but digits and the usual punctuation.
+// nothing in it but digits and the usual punctuation, and at most the
+// dialled number's international country code left out ("(555) 010-0199"
+// for tel:+15550100199), never an area code ("010-0199").
 function sameNumber(label, dialled) {
   if (!/^[+\d\s().\-]+$/.test(label)) return false;
   const digits = (text) => text.replace(/\D/g, '');
   const a = digits(label);
   const b = digits(dialled);
-  // A country code left out of the label: the rest still has to be a
-  // whole number, not a few of its last digits.
-  return a.length > 0 && (a === b || (a.length >= 7 && b.endsWith(a)));
+  if (!a) return false;
+  if (a === b) return true;
+  const missing = b.length - a.length;
+  return dialled.trim().startsWith('+') && !label.trim().startsWith('+') && missing >= 1 && missing <= 3 && b.endsWith(a);
 }
 
 // Fits a contact section's single-line field of `max` characters, else ''.
@@ -162,7 +168,7 @@ function contactLine(value, max) {
 export function presetQuestion(preset) {
   return (
     `Start from the “${preset.label}” preset?\n\n` +
-    "Its template, colors and fonts replace this page's, and its sections go first. " +
+    "Its template, colors and fonts replace this page's (a dark palette of your own stays), and its sections go first. " +
     'Sections you have written in are kept (after them, unless the preset has one of that kind), and empty ones are removed. ' +
     'Your headline, buttons and photo stay as they are. Nothing is published until you publish.'
   );

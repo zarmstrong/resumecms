@@ -425,7 +425,7 @@ reads them, and applying one (`applyPreset()` in
 `client/src/editor/landingPresets.js`, pure and tested against the server's
 `validateLanding()`) is an ordinary edit through `handleChange()` and the
 save queue, so its checks and `touchLanding()` apply. It sets `template`
-and `style`, puts the preset's sections first (each new one as "+ Add
+and `style` (keeping the draft's `darkColors` when the preset has none), puts the preset's sections first (each new one as "+ Add
 section" starts it, from `landingSections.js`, shared with `LandingForm`),
 and keeps the hero, `seo` and every section with something in it
 (`sectionHasWork()`: a title counts unless it's a preset's title for that

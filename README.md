@@ -667,8 +667,8 @@ documents), **Creative work** (Gallery: a gallery, video or audio,
 quotes, links), **Healthcare** (Formal: credentials, experience,
 contact, questions and answers) and **Research and academia** (Directory:
 text, publications, education, documents), or the page made from your
-resume as it is. A preset sets the template, colors and fonts and puts
-its sections first, empty and ready to fill in. Your headline, buttons
+resume as it is. A preset sets the template, colors and fonts (a dark palette of your
+own stays unless the preset has one) and puts its sections first, empty and ready to fill in. Your headline, buttons
 and photo stay, and so does every section you've written in: one of a
 kind the preset has takes its place, the rest follow it, and only empty
 sections are removed. **Start from a preset…** above the form offers

@@ -213,7 +213,9 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
     afterSaving(async () => {
       if (!mountedRef.current) return;
       const current = landingRef.current;
-      handleChange(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits));
+      // The latest handleChange (not this render's), so it builds on the
+      // status as it is after the wait, a "Show at /" switch included.
+      handleChangeRef.current(choice === KEEP_STARTING_PAGE ? current : applyPreset(current, choice, resumes, LANDING_PRESETS, loaded.limits));
     });
   }
 

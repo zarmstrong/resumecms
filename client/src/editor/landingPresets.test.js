@@ -218,6 +218,11 @@ test("a contact section's phone is the number its link dials, its label only whe
   assert.equal(phoneOf('(555) 010-0199', 'tel:+15550100199'), '(555) 010-0199');
   assert.equal(phoneOf('+1 555 010 0199', 'tel:+15550100199'), '+1 555 010 0199');
   assert.equal(phoneOf('0199', 'tel:+15550100199'), '+15550100199');
+  // Leaving out the area code isn't the same number; only the country code may go.
+  assert.equal(phoneOf('010-0199', 'tel:+15550100199'), '+15550100199');
+  assert.equal(phoneOf('555 0100', 'tel:5550100199'), '5550100199');
+  assert.equal(phoneOf('020 7946 0018', 'tel:+442079460018'), '+442079460018');
+  assert.equal(phoneOf('20 7946 0018', 'tel:+442079460018'), '20 7946 0018');
   assert.equal(phoneOf('555 010 0199 ext. 12', 'tel:+15550100199;ext=12'), '+15550100199;ext=12');
   assert.equal(phoneOf('(555) 010-0199'.padEnd(45, ' 1'), 'tel:+15550100199'), '+15550100199');
   // Too long, or not one line, for a contact field: left empty rather than failing the save.
@@ -237,6 +242,17 @@ test('a contact section already on the page is the one kept, never a second', ()
   const contacts = next.sections.filter((s) => s.kind === 'contact');
   assert.equal(contacts.length, 1);
   assert.equal(contacts[0].id, 'c');
+  assert.doesNotThrow(() => validateLanding(next, refs));
+});
+
+test("a dark palette of the person's own stays when the preset has none", () => {
+  const draft = { ...firstDraft(), style: { source: 'custom', colors: {}, font: '', nameFont: '', darkColors: { accent: '#aabbcc' } } };
+  const next = applyPreset(draft, byId('trades'), resumes, PRESETS);
+  assert.deepEqual(next.style.darkColors, { accent: '#aabbcc' });
+  assert.equal(next.style.colors.accent, byId('trades').style.colors.accent);
+  next.style.darkColors.accent = '#000000';
+  assert.equal(draft.style.darkColors.accent, '#aabbcc');
+  assert.equal(applyPreset(firstDraft(), byId('trades'), resumes, PRESETS).style.darkColors, undefined);
   assert.doesNotThrow(() => validateLanding(next, refs));
 });
 
