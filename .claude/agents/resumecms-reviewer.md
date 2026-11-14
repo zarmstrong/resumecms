@@ -118,6 +118,10 @@ in prose; check the diff against the ones that apply, especially:
   (`referencedImageIds()`/`referencedFileIds()` of draft and snapshot).
   A PDF is sent with `nosniff`, `Content-Security-Policy: sandbox` and a
   `Content-Disposition` from `contentDisposition()`, never a raw name.
+- `RESUMECMS_SESSION_SECRET` never gets a default (in `index.js`,
+  `docker-compose.yml` or an example): the boot refuses a missing, short or
+  placeholder one through `checkSessionSecret()`, before `db.js` loads; a
+  new example value goes in `PLACEHOLDER_SECRETS`.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a

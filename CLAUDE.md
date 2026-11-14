@@ -1643,3 +1643,7 @@ by its bearer token (see "MCP server"). Login is rate-limited
 (10 failed attempts / IP / 15 min) and optionally captcha-gated
 (`RESUMECMS_CAPTCHA_PROVIDER`); see README.md for the full auth/security
 notes, including manual TOTP recovery via direct SQLite access.
+`RESUMECMS_SESSION_SECRET` has no default: `requireSessionSecret.js`, imported
+first by `index.js` so it runs before `db.js` opens the database, exits unless
+`checkSessionSecret()` (`sessionSecret.js`) accepts it (set, at least 32
+characters, none of `PLACEHOLDER_SECRETS`; issue #171).

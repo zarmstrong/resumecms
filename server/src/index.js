@@ -1,3 +1,6 @@
+// First, so a missing or placeholder session secret stops the boot before
+// db.js opens the database (see sessionSecret.js).
+import { SESSION_SECRET } from './requireSessionSecret.js';
 import express from 'express';
 import cookieSession from 'cookie-session';
 import path from 'node:path';
@@ -27,7 +30,6 @@ import totpRoutes from './routes/totp.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 4000;
-const SESSION_SECRET = process.env.RESUMECMS_SESSION_SECRET || 'dev-secret-change-me';
 
 // Behind a reverse proxy every request arrives from the proxy's IP, so the
 // login rate limiter would lump all clients into one bucket. Set before any
