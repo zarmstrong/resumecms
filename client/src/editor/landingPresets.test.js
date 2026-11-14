@@ -57,8 +57,11 @@ const firstDraft = () =>
     links: [{ label: 'Instagram', url: 'https://instagram.com/sam' }],
   });
 
-test('the five presets from issue #130 exist', () => {
-  assert.deepEqual(PRESETS.map((p) => p.id).sort(), ['creative', 'education', 'healthcare', 'research', 'trades']);
+test('every preset ships', () => {
+  assert.deepEqual(PRESETS.map((p) => p.id).sort(), [
+    'consulting', 'creative', 'early-career', 'education', 'healthcare', 'hospitality',
+    'law-finance', 'real-estate', 'research', 'software', 'trades', 'wellness', 'writing',
+  ]);
 });
 
 test('every preset, applied to a first draft, is a draft the server accepts', () => {

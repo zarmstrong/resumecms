@@ -1,0 +1,20 @@
+{
+  "id": "real-estate",
+  "label": "Real estate and sales",
+  "description": "A digital business card for real estate agents, brokers and salespeople: how to reach you first, then your results, what you do for clients, what they say and your license.",
+  "author": "resumecms",
+  "template": "card",
+  "style": {
+    "source": "custom",
+    "colors": { "accent": "#155e75", "heading": "#0c1a22", "text": "#1f2937", "background": "#ffffff" },
+    "font": "open-sans",
+    "nameFont": "montserrat"
+  },
+  "sections": [
+    { "kind": "contact", "title": "Get in touch" },
+    { "kind": "stats", "title": "Recent results" },
+    { "kind": "services", "title": "How I help" },
+    { "kind": "quotes", "title": "What clients say" },
+    { "kind": "credentials", "title": "Licensed" }
+  ]
+}
