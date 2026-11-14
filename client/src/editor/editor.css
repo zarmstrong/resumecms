@@ -1764,6 +1764,11 @@ dialog.ed-preset-picker::backdrop {
 }
 
 .ed-preset-preview-page {
+  /* A column, so a short page still fills the frame in its own
+     background (a percentage min-height can't resolve through this box's
+     auto height). */
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
   margin: 0 auto;
   background: var(--paper);
@@ -1788,5 +1793,5 @@ dialog.ed-preset-picker::backdrop {
 }
 
 .ed-preset-preview-page > .l-page {
-  min-height: 100%;
+  flex: 1 0 auto;
 }

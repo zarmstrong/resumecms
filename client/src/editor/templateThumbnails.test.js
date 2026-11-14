@@ -130,10 +130,16 @@ test("the preset preview doesn't call a section with something in it empty, and 
     context,
   );
   // Only expired credentials: left out, as published.
+  const empty = presetPreviewPage(
+    { ...draft, sections: [{ id: 'roles', kind: 'skills', title: 'Skills', resumeId: 'main' }] },
+    { ...context, resumes: [{ id: 'main', href: '/resume', skills: [] }] },
+  );
+  assert.equal(empty.sections[0].body, '*Skills: shown from your resume once it has some to show.*');
   assert.deepEqual(
     page.sections.map((s) => [s.id, s.body]),
     [
-      ['roles', '*Experience: shown from your resume once it has some to show.*'],
+      // 'gone' isn't a resume a visitor can see.
+      ['roles', "*Experience: shown from your resume once it's published and public.*"],
       // A blank row is still empty.
       ['blankLinks', '*Links: empty until you fill it in.*'],
     ],
