@@ -11,8 +11,8 @@
     "nameFont": "playfair-display"
   },
   "sections": [
-    { "kind": "text", "title": "Our story" },
-    { "kind": "services", "title": "What we offer" },
+    { "kind": "text", "title": "My story" },
+    { "kind": "services", "title": "What I offer" },
     { "kind": "gallery", "title": "Gallery" },
     { "kind": "quotes", "title": "Reviews" },
     { "kind": "contact", "title": "Bookings" }
