@@ -984,7 +984,15 @@ of all, even ahead of the app-wide `express.json()` and the cookie session:
 its bearer check runs before its own body parser, so an unauthenticated
 request never gets 2 MB of JSON parsed on its behalf. Because of that the
 router answers every method and sub-path itself (405/404) — anything it let
-through would reach the SPA catch-all.
+through would reach the SPA catch-all. Its own error middleware answers
+body-parser errors as JSON-RPC; anything else, there or anywhere, reaches
+`middleware/errorHandler.js`, registered last of all (after
+`mountClient()`, issue #176): an error with a 4xx `status`/`statusCode`
+keeps it (body-parser's 400 for bad JSON, 413 past the 2 MB limit) with a
+message of its own, never the parser's (which quotes the body), anything
+else is logged and a generic 500, both as `{ error }` with `ERROR`
+(`no-store`) as their `Cache-Control`, and once headers are sent it only
+passes the error on. Keep it the last `app.use()`.
 
 ### Block nesting
 
