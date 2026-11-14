@@ -130,7 +130,7 @@ export function TotpSettings() {
         <p>Two-factor authentication is enabled.</p>
         <p>To move it to a new app or turn it off, enter your current password and a code from your app.</p>
         <div className="ed-field">
-          <label>Current password</label>
+          <label>Your password (to change 2FA)</label>
           <input
             type="password"
             autoComplete="current-password"
@@ -166,7 +166,7 @@ export function TotpSettings() {
     <div className="ed-form">
       <p>Two-factor authentication is not enabled.</p>
       <div className="ed-field">
-        <label>Current password</label>
+        <label>Your password (to change 2FA)</label>
         <input
           type="password"
           autoComplete="current-password"

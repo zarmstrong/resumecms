@@ -278,3 +278,22 @@ test('setup writes nothing if the row changed while it was checking (2FA turned 
     app.close();
   }
 });
+
+test('a code that is not six digits is a wrong code, not a 500', async () => {
+  const active = generateSecret();
+  const app = await start({ enabled: true, secret: active, pendingSecret: generateSecret() });
+  try {
+    // Three tokens x three routes = 9 failures, under the limiter's 10.
+    for (const totpToken of ['12345', 'abcdef', '123 45']) {
+      for (const path of ['/disable', '/setup']) {
+        const res = await app.post(path, { currentPassword: PASSWORD, totpToken });
+        assert.equal(res.status, 401, `${path} ${JSON.stringify(totpToken)}`);
+        assert.equal(res.body.error, FACTOR_ERROR);
+      }
+      assert.equal((await app.post('/confirm', { token: totpToken })).status, 400);
+    }
+    assert.equal(app.settings.get('totp').secret, active);
+  } finally {
+    app.close();
+  }
+});

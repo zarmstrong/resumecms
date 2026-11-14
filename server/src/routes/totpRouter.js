@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { generateSecret, generateURI, verify } from 'otplib';
+import { generateSecret, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import { verifyPassword } from '../passwords.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { TOTP_STEP_SECONDS, TOTP_EPOCH_TOLERANCE_SECONDS } from '../totpConfig.js';
+import { verifyCode } from '../totpCode.js';
 
 // The 2FA routes over an injected `getSetting`/`setSetting` (the global
 // settings table in totp.js), so totpRouter.test.js runs without db.js.
@@ -35,12 +35,7 @@ function totpRow({ enabled, secret, pendingSecret, lastUsedStep }) {
   };
 }
 
-async function checkCode(secret, token) {
-  if (typeof token !== 'string' || !secret) return null;
-  const result = await verify({ secret, token, epochTolerance: TOTP_EPOCH_TOLERANCE_SECONDS });
-  if (!result.valid) return null;
-  return Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + result.delta;
-}
+const checkCode = verifyCode;
 
 // One message for a wrong password, a wrong code and a code already used,
 // so the reply never says which part was right (a "code already used"

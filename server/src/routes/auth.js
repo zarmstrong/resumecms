@@ -1,12 +1,11 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { timingSafeEqual, createHash } from 'node:crypto';
-import { verify } from 'otplib';
 import { publicCaptchaConfig, verifyCaptcha } from '../captcha.js';
 import { getSetting, setSetting } from '../db.js';
 import { hashPassword, verifyPassword } from '../passwords.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { TOTP_STEP_SECONDS, TOTP_EPOCH_TOLERANCE_SECONDS } from '../totpConfig.js';
+import { verifyCode } from '../totpCode.js';
 
 const router = Router();
 
@@ -81,17 +80,10 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 
   if (totp?.enabled) {
-    const result =
-      typeof totpToken === 'string'
-        ? await verify({ secret: totp.secret, token: totpToken, epochTolerance: TOTP_EPOCH_TOLERANCE_SECONDS })
-        : { valid: false };
-    if (!result.valid) {
+    const step = await verifyCode(totp.secret, totpToken);
+    if (step === null) {
       return res.status(401).json({ error: authError });
     }
-    // Reject a code already used for this or an earlier time step, so a
-    // captured request (e.g. via a MITM'd network hop) can't be replayed to
-    // start a second session with the same one-time code.
-    const step = Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + result.delta;
     // Read the row again after the await: write back only the step, onto
     // the row as it is now, and only if the factor checked is still the
     // active one, so a login finishing late can't restore a replaced or
