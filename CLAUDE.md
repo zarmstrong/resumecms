@@ -82,7 +82,12 @@ Conventional Commit (`feat:`, `fix(scope):`, `feat!:`; `pr-title`
 checks it, and Dependabot's are prefixed `fix(deps)`/`ci`). It keeps a
 release PR open (`release-please-config.json`, `simple` release type,
 bumping both `package.json`s and lockfiles; `.release-please-manifest.json`
-holds the current version). Merging it tags `vX.Y.Z` and the same
+holds the current version). The editor's top bar shows that version
+(`TopbarEnd.jsx`, from `client/package.json` via `vite.config.js`'s
+`__APP_VERSION__` define), so keep `client/package.json` in its
+`extra-files`; `client/src/editor/appVersion.test.js` fails if either
+`package.json` differs from the manifest. A build between releases still
+shows the last release. Merging it tags `vX.Y.Z` and the same
 workflow pushes a linux/amd64 + linux/arm64 image to Docker Hub as
 `zacharmstrong/resumecms` (`X.Y.Z`, `X.Y`, `X`, `latest`; only the newest
 release moves the last three). A manual run with a tag publishes that
