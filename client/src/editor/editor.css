@@ -1721,3 +1721,77 @@ dialog.ed-preset-picker {
 dialog.ed-preset-picker::backdrop {
   background: rgba(0, 0, 0, 0.6);
 }
+
+/* A preset's page full size, in place of the list (LandingPresetPicker). */
+.ed-preset-preview-btn {
+  align-self: flex-start;
+}
+
+.ed-preset-preview {
+  margin: 0 0 16px;
+}
+
+.ed-preset-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.ed-preset-preview-title {
+  margin-right: auto;
+  font-size: 14px;
+}
+
+.ed-preset-preview-note {
+  margin: 8px 0 10px;
+  font-size: 13px;
+  color: var(--slate);
+}
+
+.ed-preset-preview-frame {
+  height: min(60vh, 720px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--line);
+}
+
+.ed-preset-preview-frame:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.ed-preset-preview-page {
+  /* A column, so a short page still fills the frame in its own
+     background (a percentage min-height can't resolve through this box's
+     auto height). */
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  margin: 0 auto;
+  background: var(--paper);
+  /* Named for a template whose narrow rules are a window @media query:
+     classic repeats them for this container (see its style.css). */
+  container: landing-preview / inline-size;
+}
+
+/* A part a template keeps in view and caps at the window's height,
+   scrolling inside itself past that (split's hero, directory's
+   contents), scrolls with the page here instead: the preview is shorter
+   than the window and inert, so its own scroller couldn't be reached. */
+.ed-preset-preview-page .l-template-split .l-split-sticky,
+.ed-preset-preview-page .l-template-directory .l-directory-toc {
+  position: static;
+  max-height: none;
+  overflow: visible;
+}
+
+.ed-preset-preview-page.is-phone {
+  width: min(390px, 100%);
+}
+
+.ed-preset-preview-page > .l-page {
+  flex: 1 0 auto;
+}

@@ -49,5 +49,23 @@
   }
 }
 
+/* The same in the editor's preset preview at phone width (a box in a
+   desktop window, so the @media query above can't see it). Only the
+   editor names a container `landing-preview`, so the public page never
+   matches this and draws as above. */
+@container landing-preview (max-width: 560px) {
+  .l-template-classic .l-main {
+    padding: 40px 16px 64px;
+  }
+  .l-template-classic .l-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .l-template-classic .l-headline {
+    font-size: 2em;
+  }
+}
+
 /* A media section (issue #121) needs nothing of its own here: the clip
    takes the column's width in landing.css's shared look. */

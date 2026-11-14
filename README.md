@@ -681,7 +681,8 @@ your resume as it is. A preset sets the template, colors and fonts (a dark palet
 own stays unless the preset has one) and puts its sections first, empty and ready to fill in. Your headline, buttons
 and photo stay, and so does every section you've written in: one of a
 kind the preset has takes its place, the rest follow it, and only empty
-sections are removed. **Start from a preset…** above the form offers
+sections are removed. **Preview** on a preset shows your page with it
+applied, full size and at desktop or phone width, without changing it; **Use this preset** from there applies it. **Start from a preset…** above the form offers
 them again at any time, and asks first. Nothing is published until you
 publish. Presets are files under
 [`templates/landing-presets/`](templates/landing-presets/) (see

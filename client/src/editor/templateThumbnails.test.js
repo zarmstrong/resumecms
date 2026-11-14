@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveLanding } from '../landing/resolveLanding.js';
-import { THUMBNAIL_WIDTH, pageKey, thumbnailPage, thumbnailScale, withTemplate } from './templateThumbnails.js';
+import { THUMBNAIL_WIDTH, pageKey, presetPreviewPage, thumbnailPage, thumbnailScale, withTemplate } from './templateThumbnails.js';
 
 const draft = {
   headline: 'Jo',
@@ -81,4 +81,67 @@ test("an SEO edit doesn't change the key, since no template draws it", () => {
   const a = thumbnailPage(draft, context);
   const b = { ...a, seo: { ...(a.seo || {}), title: 'Something else' } };
   assert.equal(pageKey(a), pageKey(b));
+});
+
+test('the preset preview draws an empty section as a note in its place, and leaves hidden ones out', () => {
+  const withEmpty = {
+    ...draft,
+    sections: [
+      ...draft.sections.slice(0, 1),
+      { id: 'faq', kind: 'faq', title: 'Questions', entries: [{ question: '', answer: '' }], column: 'side' },
+      { id: 'hiddenEmpty', kind: 'stats', title: 'Numbers', stats: [], hidden: true },
+      ...draft.sections.slice(1),
+    ],
+  };
+  const page = presetPreviewPage(withEmpty, context);
+  assert.deepEqual(
+    page.sections.map((s) => [s.id, s.kind, s.title]),
+    [
+      ['intro', 'text', ''],
+      ['faq', 'text', 'Questions'],
+      ['rule', 'divider', ''],
+      ['creds', 'credentials', 'Licenses'],
+    ],
+  );
+  const note = page.sections[1];
+  assert.equal(note.body, '*Questions and answers: empty until you fill it in.*');
+  assert.equal(note.column, 'side');
+  // Everything else is the page as published.
+  const published = resolveLanding(withEmpty, context, { withIds: true });
+  assert.deepEqual({ ...page, sections: undefined }, { ...published, sections: undefined });
+  assert.deepEqual(page.sections[3], published.sections.find((s) => s.id === 'creds'));
+});
+
+test("the preset preview doesn't call a section with something in it empty, and does call a blank one empty", () => {
+  const page = presetPreviewPage(
+    {
+      ...draft,
+      sections: [
+        {
+          id: 'lapsed',
+          kind: 'credentials',
+          title: 'Licenses',
+          credentials: [{ kind: 'license', name: 'RN', issuer: '', number: '', issued: '', expires: '2001-01', url: '' }],
+        },
+        { id: 'roles', kind: 'experience', title: 'Experience', resumeId: 'gone', count: 3, showDates: true },
+        { id: 'blankLinks', kind: 'links', title: 'Profiles', links: [{ type: 'website', label: '', url: '' }] },
+      ],
+    },
+    context,
+  );
+  // Only expired credentials: left out, as published.
+  const empty = presetPreviewPage(
+    { ...draft, sections: [{ id: 'roles', kind: 'skills', title: 'Skills', resumeId: 'main' }] },
+    { ...context, resumes: [{ id: 'main', href: '/resume', skills: [] }] },
+  );
+  assert.equal(empty.sections[0].body, '*Skills: shown from your resume once it has some to show.*');
+  assert.deepEqual(
+    page.sections.map((s) => [s.id, s.body]),
+    [
+      // 'gone' isn't a resume a visitor can see.
+      ['roles', "*Experience: shown from your resume once it's published and public.*"],
+      // A blank row is still empty.
+      ['blankLinks', '*Links: empty until you fill it in.*'],
+    ],
+  );
 });

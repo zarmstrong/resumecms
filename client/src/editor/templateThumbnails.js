@@ -1,4 +1,5 @@
 import { resolveLanding } from '../landing/resolveLanding.js';
+import { hasContent, kindLabel } from './landingSections.js';
 
 // The landing template picker's thumbnails (issue #130): each template drawn
 // with the draft by the real LandingView, at a desktop width and scaled
@@ -39,4 +40,56 @@ export function withTemplate(page, templateId) {
 // LandingView. The resolved page is plain JSON.
 export function pageKey(page) {
   return page ? JSON.stringify({ ...page, template: undefined, seo: undefined }) : '';
+}
+
+// Kinds whose content comes from a resume, never typed in the section.
+const FROM_RESUME = new Set(['experience', 'education', 'skills']);
+
+// What the preset picker draws (its thumbnails and full-size preview): the
+// page as published, except that a section with nothing in it yet (one a
+// preset just added, mostly) isn't left out but drawn in its place as a
+// short note naming it, so the preview shows every section picking the
+// preset gives. One read from a resume says why it shows nothing: the
+// resume has nothing for it, or a visitor can't see the resume (private,
+// unpublished or deleted: the context lists only the ones they can). A section left out for any other reason (hidden, or holding
+// only what a visitor isn't shown, such as expired credentials) stays out,
+// as published, and so does a divider. The note is a text section
+// (italic), so every template draws it without knowing about it; only the
+// editor ever makes one.
+export function presetPreviewPage(draft, context) {
+  const page = resolveLanding(draft, context, { withIds: true });
+  const visible = new Set((context?.resumes ?? []).map((resume) => resume.id));
+  const shown = new Map(page.sections.map((section) => [section.id, section]));
+  const sections = draft.sections.flatMap((section) => {
+    const resolved = shown.get(section.id);
+    if (resolved) return [resolved];
+    if (section.hidden || section.kind === 'divider') return [];
+    const label = kindLabel(section.kind);
+    let body;
+    if (FROM_RESUME.has(section.kind)) {
+      body = visible.has(section.resumeId)
+        ? `*${label}: shown from your resume once it has some to show.*`
+        : `*${label}: shown from your resume once it's published and public.*`;
+    }
+    else if (isBlank(section)) body = `*${label}: empty until you fill it in.*`;
+    else return [];
+    return [
+      {
+        id: section.id,
+        kind: 'text',
+        title: section.title,
+        body,
+        ...(section.column ? { column: section.column } : {}),
+      },
+    ];
+  });
+  return { ...page, sections };
+}
+
+// Nothing typed in it but maybe its title. hasContent() counts a links
+// section's blank rows (it keeps them while they're typed), so they're
+// checked here.
+function isBlank(section) {
+  if (section.kind === 'links') return section.links.every((link) => !link.label?.trim() && !link.url?.trim());
+  return !hasContent({ ...section, title: '' });
 }
