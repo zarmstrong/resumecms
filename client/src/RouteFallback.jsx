@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useRouteError } from 'react-router-dom';
+import { isRouteErrorResponse, useRouteError } from 'react-router-dom';
 import { ChunkLoadError, claimReload, sessionStore } from './lazyRoute.js';
 
 // What a lazily loaded route (App.jsx) shows around its chunk. A
@@ -49,13 +49,19 @@ export function RouteError() {
       return undefined;
     }
     window.location.reload();
-    const timer = setTimeout(() => setReloading(false), RELOAD_GIVE_UP_MS);
-    return () => clearTimeout(timer);
+    // Not cleared on cleanup: StrictMode's dev re-run skips the body above
+    // (tried), so a cleared timer would never be set again. A late call
+    // after unmount does nothing.
+    setTimeout(() => setReloading(false), RELOAD_GIVE_UP_MS);
+    return undefined;
   }, [chunk]);
 
   if (reloading) return null;
   if (!chunk) {
-    return <div style={PAGE_STYLE}>Something went wrong: {error?.message ?? String(error)}</div>;
+    const message = isRouteErrorResponse(error)
+      ? `${error.status} ${error.statusText}`.trim()
+      : (error?.message ?? String(error));
+    return <div style={PAGE_STYLE}>Something went wrong: {message}</div>;
   }
   return (
     <div style={PAGE_STYLE} role="alert">
