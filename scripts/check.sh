@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs the local checks for the checkout this script is in (never
-# /opt/resumecms unless that's where it lives): the template validator, both
+# Runs the local checks for the worktree this script is in: the template
+# validator, both
 # packages' tests and the client build, stopping at the first failure. It
 # never touches Docker or a running service; to deploy, see
 # scripts/deploy-host.sh.
@@ -8,7 +8,14 @@
 # Needs `npm ci` in server/ and client/ first.
 set -euo pipefail
 
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+
+# The client build writes client/dist, and production builds from
+# /opt/resumecms, which is never worked in: run this from a worktree.
+if [[ "$root" == "$(realpath -e /opt/resumecms 2>/dev/null || echo /opt/resumecms)" ]]; then
+  echo "check: not in /opt/resumecms (production builds from it); run it from a worktree" >&2
+  exit 1
+fi
 
 for pkg in server client; do
   [[ -d "$root/$pkg/node_modules" ]] \

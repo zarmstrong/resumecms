@@ -113,17 +113,21 @@ built from that checkout, so whatever is in it ships on the next rebuild.
 Keep it on a clean `main`. A fresh worktree has no `node_modules`: run
 `npm ci` in `server/` and `client/` before their tests.
 
-`scripts/check.sh` runs every local check for the checkout it's in (the
+`scripts/check.sh` runs every local check for the worktree it's in (the
 template validator, both packages' tests, the client build; it stops if
-either package has no `node_modules`, so run `npm ci` in both first) and
-never touches Docker. `scripts/deploy-host.sh` is the
-deploy step, not a build step: it rebuilds this host's live services
-(`docker compose up -d --build` in `/opt/docker`) from `/opt/resumecms`,
-whichever checkout runs it, so run it only on purpose. It refuses unless
-that checkout is a clean `main` (nothing modified, staged or untracked)
-at exactly `origin/main` (checked again after the question), names the
-services first (pass some to rebuild only those) and asks unless given
-`--yes`; `--dry-run` stops before Docker.
+either package has no `node_modules`, so run `npm ci` in both first),
+refuses to run in `/opt/resumecms`, and never touches Docker.
+`scripts/deploy-host.sh` is the deploy step, not a build step: it rebuilds
+this host's live services (`docker compose up -d --build` in
+`/opt/docker`) from `/opt/resumecms`, so run it only on purpose, and only
+as `/opt/resumecms/scripts/deploy-host.sh` (a worktree's copy refuses). It
+refuses unless that checkout is a clean `main` (nothing modified, staged
+or untracked, and no ignored file under `server/`, `client/` or
+`templates/` but `node_modules` and `dist`) at exactly origin's `main`
+(by `git ls-remote`, so it writes nothing to the checkout), checked again
+right before building; names the services first (pass some to rebuild
+only those), asks unless given `--yes`, and runs one at a time.
+`--dry-run` stops before Docker.
 
 Subagents follow the same rule. Agents that write code run with
 `isolation: worktree`, and the project's own agents are in
