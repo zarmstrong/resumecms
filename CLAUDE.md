@@ -113,6 +113,16 @@ built from that checkout, so whatever is in it ships on the next rebuild.
 Keep it on a clean `main`. A fresh worktree has no `node_modules`: run
 `npm ci` in `server/` and `client/` before their tests.
 
+`scripts/check.sh` runs every local check for the checkout it's in (the
+template validator, both packages' tests, the client build; `npm ci` in
+both first) and never touches Docker. `scripts/deploy-host.sh` is the
+deploy step, not a build step: it rebuilds this host's live services
+(`docker compose up -d --build` in `/opt/docker`) from `/opt/resumecms`,
+whichever checkout runs it, so run it only on purpose. It refuses unless
+that checkout is on a clean `main` not behind `origin/main`, names the
+services first (pass some to rebuild only those) and asks unless given
+`--yes`; `--dry-run` stops before Docker.
+
 Subagents follow the same rule. Agents that write code run with
 `isolation: worktree`, and the project's own agents are in
 `.claude/agents/`:

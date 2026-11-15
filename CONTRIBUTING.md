@@ -67,4 +67,5 @@ release, a `Release-As: x.y.z` line forces that version, and
 `type: text` lines in the last paragraph become extra changelog
 entries. Leave those out unless you mean them. Run the same locally
 first: `npm test` in `server/` and `client/`, and the two commands above
-for templates.
+for templates, or `scripts/check.sh`, which runs all four (after `npm ci`
+in both packages).
