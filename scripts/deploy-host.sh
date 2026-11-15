@@ -12,8 +12,6 @@ set -euo pipefail
 CHECKOUT=/opt/resumecms
 COMPOSE_DIR=/opt/docker
 SERVICES=(resumecmsedbalseiro resumecmszacharyarmstrong)
-# The host port each publishes (personal-sites.yml), to check it came up.
-declare -A PORTS=([resumecmsedbalseiro]=55340 [resumecmszacharyarmstrong]=55330)
 READY_SECONDS=90
 
 # Tests point the checks at a scratch repo. The build context stays
@@ -185,17 +183,27 @@ cd "$COMPOSE_DIR"
 # them has started; a server that refuses to boot (a missing session
 # secret, a bad captcha setting) restarts in a loop. Wait for each site to
 # answer before calling it deployed.
+# One deadline for all of them, from here. The port is asked of compose
+# (personal-sites.yml sets it from .env), never assumed.
+deadline=$((SECONDS + READY_SECONDS))
+waiting=("${chosen[@]}")
 failed=()
-for service in "${chosen[@]}"; do
-  port=${PORTS[$service]}
-  deadline=$((SECONDS + READY_SECONDS))
-  until curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$port/api/auth/status"; do
-    if ((SECONDS >= deadline)); then
-      failed+=("$service")
-      break
+while ((${#waiting[@]})); do
+  still=()
+  for service in "${waiting[@]}"; do
+    address=$(docker compose port "$service" 4000 2>/dev/null | tail -1 || true)
+    port=${address##*:}
+    if [[ -z "$port" ]] || ! curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$port/api/auth/status"; then
+      still+=("$service")
     fi
-    sleep 3
   done
+  waiting=("${still[@]}")
+  ((${#waiting[@]})) || break
+  if ((SECONDS >= deadline)); then
+    failed=("${waiting[@]}")
+    break
+  fi
+  sleep 3
 done
 if ((${#failed[@]})); then
   echo "deploy-host: not answering after ${READY_SECONDS}s: ${failed[*]}" >&2
