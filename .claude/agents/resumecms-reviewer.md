@@ -128,6 +128,10 @@ in prose; check the diff against the ones that apply, especially:
   `docker-compose.yml` or an example): the boot refuses a missing, short or
   placeholder one through `checkSessionSecret()`, before `db.js` loads; a
   new example value goes in `PLACEHOLDER_SECRETS`.
+- Public pages never import editor code: the editor, login, template
+  previews and the letter/card print routes stay lazy routes in
+  `App.jsx`, the editor's CSS loads from its own entry, and a route
+  rendered for a PDF or card sets `__PDF_READY__` only once drawn.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a
