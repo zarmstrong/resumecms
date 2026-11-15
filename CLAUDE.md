@@ -122,7 +122,8 @@ release-please still acts on `BREAKING CHANGE:`/`BREAKING-CHANGE:`
 (major release), `Release-As:` (forced version) and `type: text` lines in
 the last paragraph (extra changelog entries)), so a PR title must be a
 Conventional Commit (`feat:`, `fix(scope):`, `feat!:`; `pr-title`
-checks it, and Dependabot's are prefixed `fix(deps)`/`ci`). It keeps a
+checks it, and Dependabot's are prefixed `fix(deps)`/`ci`, a server
+devDependency's `chore(deps)` since it never ships). It keeps a
 release PR open (`release-please-config.json`, `simple` release type,
 bumping both `package.json`s and lockfiles; `.release-please-manifest.json`
 holds the current version). The editor's top bar shows that version

@@ -1,7 +1,9 @@
 version: 2
 # PR titles must be Conventional Commits (CI's pr-title job, see
 # release.yml). An npm bump ships in the image, so it's a fix and makes a
-# patch release; an Actions bump doesn't, so it's ci.
+# patch release; an Actions bump doesn't, so it's ci. The server's
+# devDependencies (lint, type checks) never reach the image (`npm ci
+# --omit=dev`), so they're chore; the client's do (Vite builds the bundle).
 updates:
   - package-ecosystem: "npm"
     directory: "/client"
@@ -16,6 +18,7 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "fix(deps)"
+      prefix-development: "chore(deps)"
 
   - package-ecosystem: "github-actions"
     directory: "/"

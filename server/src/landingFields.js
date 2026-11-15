@@ -216,10 +216,14 @@ export const LINK_TYPES = [
 ];
 
 export const SECTION_KINDS = /** @type {const} */ (['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'media', 'services', 'publications', 'contact', 'documents']);
-// Type-only: fails the typecheck when a SectionKind is missing above.
+// Type-only: fails the typecheck when a SectionKind is missing above, or
+// when one above isn't a SectionKind.
 /** @type {Exclude<SectionKind, (typeof SECTION_KINDS)[number]> extends never ? true : never} */
 const EVERY_KIND_LISTED = true;
+/** @type {Exclude<(typeof SECTION_KINDS)[number], SectionKind> extends never ? true : never} */
+const ONLY_KINDS_LISTED = true;
 void EVERY_KIND_LISTED;
+void ONLY_KINDS_LISTED;
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
