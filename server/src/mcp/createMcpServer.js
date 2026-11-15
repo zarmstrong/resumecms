@@ -929,10 +929,12 @@ export function createMcpServer({ store, log = console }) {
         if (err && err.status) {
           audit({ tool: name, resumeId, ok: false, status: err.status, error: err.message, durationMs: Date.now() - startedAt });
           if (err.cause) log.error(`MCP tool ${name}:`, err.cause); // e.g. the Chromium error behind a failed publish
+          // eslint-disable-next-line preserve-caught-error -- the client gets the status and message only; the cause is logged above
           throw new Error(`[${err.status}] ${err.message}`);
         }
         audit({ tool: name, resumeId, ok: false, status: 500, error: 'internal', durationMs: Date.now() - startedAt });
         log.error(`MCP tool ${name} failed:`, err);
+        // eslint-disable-next-line preserve-caught-error -- deliberately generic; err is logged above
         throw new Error('[500] Internal server error');
       }
     });

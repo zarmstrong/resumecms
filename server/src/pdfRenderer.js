@@ -115,6 +115,7 @@ export function renderShareCard({ signal, content }) {
     async prepare(page) {
       await page.setViewport({ width: CARD_WIDTH, height: CARD_HEIGHT, deviceScaleFactor: 1 });
       await page.evaluateOnNewDocument((card) => {
+        // eslint-disable-next-line no-undef -- runs in the page, not in Node
         window.__SHARE_CARD__ = card;
       }, content);
     },

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { generateSecret, generateURI } from 'otplib';
 import QRCode from 'qrcode';
+import { isAuthenticated, revokeOtherSessions } from '../authSessions.js';
 import { verifyPassword } from '../passwords.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { verifyCode } from '../totpCode.js';
@@ -69,6 +70,19 @@ const isSpent = (totp, step) => totp.lastUsedStep !== null && step <= totp.lastU
 const sameFactor = (a, b) => a.enabled === b.enabled && a.secret === b.secret;
 const CHANGED_ERROR = 'Two-factor settings changed meanwhile. Reload and try again.';
 
+// Turning 2FA on, replacing the factor (both at /confirm) and turning it
+// off sign out every other session (issue #172); the request's own stays,
+// so the tab that made the change isn't logged out. A setup or a cancel
+// changes no factor, so it revokes nothing. The others go *before* the
+// write: if signing them out fails, nothing has changed, and if the write
+// fails, they're signed out over a factor that didn't change, which is the
+// safe way round.
+//
+// The session itself is checked again after the awaits too: one signed out
+// meanwhile (another tab's new password) mustn't go on to change the
+// factor, nor, holding no session of its own, sign out the one that
+// signed it out.
+const STALE_SESSION = { error: 'Not authenticated' };
 export function createTotpRouter({ getSetting, setSetting }) {
   const router = Router();
 
@@ -106,6 +120,7 @@ export function createTotpRouter({ getSetting, setSetting }) {
     const now = readTotp(getSetting('totp'));
     if (!sameFactor(now, totp)) return res.status(409).json({ error: CHANGED_ERROR });
     if (check.step !== null && isSpent(now, check.step)) return res.status(401).json({ error: FACTOR_ERROR });
+    if (!isAuthenticated(req)) return res.status(401).json(STALE_SESSION);
     setSetting(
       'totp',
       totpRow(
@@ -131,6 +146,8 @@ export function createTotpRouter({ getSetting, setSetting }) {
     if (now.pendingSecret !== totp.pendingSecret) {
       return res.status(409).json({ error: 'No 2FA setup in progress' });
     }
+    if (!isAuthenticated(req)) return res.status(401).json(STALE_SESSION);
+    revokeOtherSessions(req);
     // No lastUsedStep: the confirm code isn't a login, and recording it
     // would refuse the first login with the new app in the same 30 s.
     setSetting('totp', totpRow({ enabled: true, secret: totp.pendingSecret }));
@@ -159,6 +176,8 @@ export function createTotpRouter({ getSetting, setSetting }) {
       const now = readTotp(getSetting('totp'));
       if (!sameFactor(now, totp)) return res.status(409).json({ error: CHANGED_ERROR });
       if (isSpent(now, check.step)) return res.status(401).json({ error: FACTOR_ERROR });
+      if (!isAuthenticated(req)) return res.status(401).json(STALE_SESSION);
+      revokeOtherSessions(req);
     }
     setSetting('totp', null);
     res.json({ enabled: false });

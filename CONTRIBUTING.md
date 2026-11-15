@@ -30,10 +30,11 @@ Before opening a PR:
 
 ```bash
 node scripts/validate-templates.mjs   # metadata/schema check
-cd client && npm run build            # catches broken components
+(cd client && npm run lint)           # React hooks and correctness rules
+(cd client && npm run build)          # catches broken components
 ```
 
-Both also run in CI on any PR touching `templates/**`. If your change is
+All three also run in CI on any PR touching `templates/**`. If your change is
 worth a thumbnail for docs, regenerate one via
 `docker compose --profile tools run --rm resume-preview` (see
 `templates/README.md`) and include it in the PR — this runs in an isolated,
@@ -46,9 +47,10 @@ etc.), open a PR against `main` as usual. There's no formal issue process —
 just describe what changed and why, and how you tested it.
 
 A PR can only merge into `main` once CI's `ci-passed` check is green. CI
-runs the server tests, the client tests and build, a browser suite that
-drives the editor in headless Chromium, the template validator, and a
-Docker build, each only when the PR touches its part.
+runs the server tests, the client tests and build, each package's lint
+and type check, a browser suite that drives the editor in headless
+Chromium, the template validator, and a Docker build, each only when the
+PR touches its part.
 
 PRs are squash-merged (the only merge method `main` allows), and the PR
 title becomes the commit's title, with the PR's commit messages as its
@@ -67,6 +69,8 @@ commit's body, where release-please still reads a few things: a
 release, a `Release-As: x.y.z` line forces that version, and
 `type: text` lines in the last paragraph become extra changelog
 entries. Leave those out unless you mean them. Run the same locally
-first: `npm test` in `server/` and `client/`, `npm run test:browser` in
-`server/` (after `npm run build` in `client/`), and the two commands above
-for templates.
+first: `npm test`, `npm run lint` and `npm run typecheck` in `server/`
+and `client/`, `npm run test:browser` in `server/` (after `npm run build`
+in `client/`), and the commands above for templates, or
+`scripts/check.sh`, which runs them all (after `npm ci` in both
+packages).

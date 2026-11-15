@@ -1,3 +1,4 @@
+// @ts-check
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { httpError } from './httpError.js';
@@ -126,8 +127,9 @@ function withTimeout(fn, ms, message) {
 }
 
 // The operations forResume() returns, which the store also carries bound
-// to the default resume.
-const RESUME_METHODS = [
+// to the default resume. Typed so a name forResume()'s store lacks fails
+// `npm run typecheck` (see `delegates` below).
+const RESUME_METHODS = /** @type {const} */ ([
   'getHeader',
   'setHeader',
   'getSite',
@@ -152,7 +154,14 @@ const RESUME_METHODS = [
   'deleteCoverLetter',
   'coverLetterPdf',
   'coverLetterRenderContent',
-];
+]);
+
+/**
+ * The store createResumeStore() returns, and the one forResume() returns
+ * for a single resume (also what a content MCP tool's run() is handed).
+ * @typedef {ReturnType<typeof createResumeStore>} ResumeStore
+ * @typedef {ReturnType<ResumeStore['forResume']>} ScopedResumeStore
+ */
 
 // `pdfDir` holds one rendered PDF per resume (pdfPathFor), and the cover
 // letters' under letters/ (letterPdfPathFor). `renderPdf` is called as
@@ -247,6 +256,10 @@ export function createResumeStore({
     return row;
   }
 
+  /**
+   * @param {string} slug
+   * @param {string | null} [exceptId]
+   */
   function slugTaken(slug, exceptId = null) {
     return !!db.prepare('SELECT 1 FROM resumes WHERE slug = ? AND id IS NOT ?').get(slug, exceptId);
   }
@@ -397,6 +410,10 @@ export function createResumeStore({
   // `tailoring` replaces the brief it was tailored for (brief.js), null
   // removes it. It's a note about the draft, not part of it, so it isn't a
   // draft change and is never published.
+  /**
+   * @param {string} resumeId
+   * @param {Record<string, any>} patch
+   */
   function updateResume(resumeId, patch = {}) {
     const row = existingResumeRow(resumeId);
     patch = assertObject(patch ?? {}, 'resume');
@@ -429,6 +446,7 @@ export function createResumeStore({
       throw httpError(409, 'Publish this resume before making it the default: the public site shows its published version');
     }
     // null: leave the domains as they are.
+    /** @type {string[] | null} */
     let hostnames = null;
     if ('hostnames' in patch) {
       hostnames = normalizeHostnames(patch.hostnames);
@@ -497,6 +515,7 @@ export function createResumeStore({
   // than rebuilt on every call through the default-bound delegates. (forResume
   // checks the id exists before reaching this, but whatever deletes a resume
   // should still drop its entry.)
+  /** @type {Map<string, ReturnType<typeof createScopedStore>>} */
   const scopedStores = new Map();
   function scopedStore(resumeId) {
     let scoped = scopedStores.get(resumeId);
@@ -536,8 +555,8 @@ export function createResumeStore({
     return scopedStore(row.resume_id).coverLetterRenderContent(letterId);
   }
 
-  const delegates = Object.fromEntries(
-    RESUME_METHODS.map((name) => [name, (...args) => scopedStore(defaultResumeId())[name](...args)])
+  const delegates = /** @type {Pick<ReturnType<typeof createScopedStore>, typeof RESUME_METHODS[number]>} */ (
+    Object.fromEntries(RESUME_METHODS.map((name) => [name, (...args) => scopedStore(defaultResumeId())[name](...args)]))
   );
 
   // The install's landing page (issue #70), see landingStore.js.

@@ -1,3 +1,4 @@
+// @ts-check
 import { httpError } from '../httpError.js';
 
 // AI tailoring (issue #53): a brief says who a resume is for, and rewrites
@@ -11,17 +12,24 @@ import { httpError } from '../httpError.js';
 // Each has its own cap, separate from rewrite.js's MAX_INSTRUCTION_LENGTH.
 export const BRIEF_LIMITS = { audience: 200, posting: 12000, guidance: 2000 };
 
-const BRIEF_FIELDS = Object.keys(BRIEF_LIMITS);
+/** @typedef {{ audience: string, posting: string, guidance: string }} Brief */
+
+const BRIEF_FIELDS = /** @type {(keyof Brief)[]} */ (Object.keys(BRIEF_LIMITS));
 
 // The brief, trimmed and checked, or a 400 naming what's wrong. `label` is
 // the field it came in as (`brief` on a rewrite, `tailoring` on a resume).
+/**
+ * @param {unknown} raw
+ * @param {string} [label]
+ * @returns {Brief}
+ */
 export function normalizeBrief(raw, label = 'brief') {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     throw httpError(400, `${label} must be an object like { "audience": "security engineering roles" }`);
   }
-  const unknown = Object.keys(raw).find((key) => !BRIEF_FIELDS.includes(key));
+  const unknown = Object.keys(raw).find((key) => !(/** @type {string[]} */ (BRIEF_FIELDS)).includes(key));
   if (unknown) throw httpError(400, `Unknown ${label} field: ${unknown}`);
-  const brief = {};
+  const brief = /** @type {Brief} */ ({});
   for (const field of BRIEF_FIELDS) {
     const value = raw[field] ?? '';
     if (typeof value !== 'string') throw httpError(400, `${label}.${field} must be a string`);
@@ -41,6 +49,11 @@ export function normalizeBrief(raw, label = 'brief') {
 // whole resume, and its outline also has each job's accomplishments
 // (tagline, description, bullets), which is what its highlights are made
 // of.
+/**
+ * @param {string} type
+ * @param {boolean} hasBrief
+ * @returns {{ accomplishments: boolean } | null}
+ */
 export function outlineScope(type, hasBrief) {
   if (type === 'executive_summary') return { accomplishments: true };
   if (type === 'summary' && hasBrief) return { accomplishments: false };
@@ -58,10 +71,21 @@ export function outlineScope(type, hasBrief) {
 // wherever its parent is). A summary hidden everywhere counts as shown
 // everywhere: it's most likely a draft about to be unhidden, text and
 // all. Null when there's nothing to show.
+/**
+ * @typedef {{ jobTitle: string, company: string, dates: string, tagline?: string, description?: string, bullets?: string[] }} OutlineJob
+ * @typedef {{ experience?: OutlineJob[], skills?: { category: string, items: string }[], education?: { degree: string, institution: string }[] }} ResumeOutline
+ */
+/**
+ * @param {import('../blockRows.js').Block[]} blocks
+ * @param {import('../blockRows.js').Block} summary
+ * @param {{ accomplishments?: boolean }} [options]
+ * @returns {ResumeOutline | null}
+ */
 export function resumeOutline(blocks, summary, { accomplishments = false } = {}) {
   const hiddenEverywhere = !summary.visibleWeb && !summary.visiblePrint;
   const shows = { web: hiddenEverywhere || summary.visibleWeb, print: hiddenEverywhere || summary.visiblePrint };
   const shownWherever = (block) => (!shows.web || block.visibleWeb) && (!shows.print || block.visiblePrint);
+  /** @type {Required<ResumeOutline>} */
   const outline = { experience: [], skills: [], education: [] };
   for (const block of blocks) {
     if (block.id === summary.id || !shownWherever(block)) continue;

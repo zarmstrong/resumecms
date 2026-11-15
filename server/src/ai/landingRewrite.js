@@ -1,3 +1,4 @@
+// @ts-check
 import { LANDING_LIMITS } from '../landingFields.js';
 import { AiError, callProvider } from './providers.js';
 import { inlineLength, mapLinks } from '../inlineText.js';
@@ -68,6 +69,16 @@ import { hasPassed, utcToday } from '../dateText.js';
 
 export const LANDING_TARGET_KINDS = ['headline', 'subheadline', 'text', 'item', 'card', 'intro', 'answer', 'service'];
 
+/**
+ * A target as normalizeLandingTarget() returns it (the list above), and a
+ * proposal as the route sends it to the editor (client/src/editor/landingAi.js).
+ * @typedef {{ kind: 'headline' | 'subheadline' }
+ *   | { kind: 'text' | 'intro', sectionId: string }
+ *   | { kind: 'item' | 'answer' | 'service', sectionId: string, index: number }
+ *   | { kind: 'card', sectionId: string, resumeId: string }} LandingTarget
+ * @typedef {{ target: LandingTarget, before: string, after: string }} LandingProposal
+ */
+
 export class InvalidLandingTargetError extends Error {}
 
 // What `intro` asks for with no instruction of its own.
@@ -84,6 +95,10 @@ const FIELD_LIMITS = {
   service: LANDING_LIMITS.serviceText,
 };
 
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, any>}
+ */
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // The single-field targets whose text may hold links and emphasis, and how
@@ -101,6 +116,11 @@ function findSection(landing, sectionId, kind) {
 
 // The target, checked against `landing` (a validated draft) and reduced to
 // its own fields, or an InvalidLandingTargetError saying what's wrong.
+/**
+ * @param {any} landing
+ * @param {unknown} target the request's, unchecked
+ * @returns {LandingTarget}
+ */
 export function normalizeLandingTarget(landing, target) {
   if (!isPlainObject(target) || !LANDING_TARGET_KINDS.includes(target.kind)) {
     throw new InvalidLandingTargetError(`target.kind must be one of ${LANDING_TARGET_KINDS.join(', ')}`);
@@ -229,9 +249,25 @@ function dates(start, end) {
 // being a web page; bullets are left out (they carry their own visibility,
 // and an outline is enough to write a short intro from). Null when there's
 // nothing to say.
+/**
+ * @typedef {{
+ *   name?: string,
+ *   title?: string,
+ *   summary?: string,
+ *   highlights?: string[],
+ *   experience?: { jobTitle: string, company: string, dates: string }[],
+ *   skills?: { category: string, items: string }[],
+ *   education?: { degree: string, institution: string }[],
+ * }} LandingProfile
+ */
+/**
+ * @param {unknown} snapshot
+ * @returns {LandingProfile | null}
+ */
 export function landingProfile(snapshot) {
   if (!isPlainObject(snapshot)) return null;
   const header = isPlainObject(snapshot.header) ? snapshot.header : {};
+  /** @type {Required<LandingProfile>} */
   const profile = { name: text(header.name), title: text(header.title), summary: '', highlights: [], experience: [], skills: [], education: [] };
   const addSummary = (value) => {
     if (text(value)) profile.summary = [profile.summary, text(value)].filter(Boolean).join('\n\n');
@@ -453,7 +489,12 @@ export function buildLandingPrompt(landing, target, instruction, profile, resume
     const section = landing.sections.find((s) => s.id === target.sectionId);
     const lists = { item: section?.items, answer: section?.entries, service: section?.services };
     const item = lists[target.kind]?.[target.index] ?? null;
-    rules.push(fieldRule(target, FIELD_LIMITS[target.kind], item));
+    // normalizeLandingTarget() lets no kind through that fieldRule() has no
+    // rule for; a new one that misses it fails here instead of prompting
+    // with a null rule (and the check narrows the type, no cast).
+    const rule = fieldRule(target, FIELD_LIMITS[target.kind], item);
+    if (rule === null) throw new Error(`No field rule for a ${target.kind} target`);
+    rules.push(rule);
   }
   if (profile) {
     rules.push(
@@ -504,6 +545,12 @@ const LABELS = { headline: 'headline', subheadline: 'subheadline', text: 'text s
 // The proposals the model's `rewrite` makes against `landing`, one per field
 // it changed, with their links' URLs back. A field it left alone (give or
 // take whitespace) isn't one.
+/**
+ * @param {any} landing
+ * @param {any} target a LandingTarget
+ * @param {unknown} rewrite the model's answer, unchecked
+ * @returns {LandingProposal[]}
+ */
 export function landingProposals(landing, target, rewrite) {
   if (!isPlainObject(rewrite)) throw new AiError(502, 'AI response is missing "rewrite"');
   const placeholders = linkPlaceholders(landing, target);

@@ -298,8 +298,10 @@ landing template has a `style.css` scoped under its own class, with no
 outline removed without a replacement and no motion outside
 `prefers-reduced-motion: no-preference` (see
 [`landing/README.md`](landing/README.md#what-the-validator-checks)). CI runs this
-plus a full `npm run build` on any PR touching `templates/**` — a broken
-component fails the build, not just the metadata check.
+plus a full `npm run build` and the client's `npm run lint` (ESLint's
+correctness and React hooks rules, which cover `templates/**/*.jsx`) on
+any PR touching `templates/**` — a broken component fails the build, not
+just the metadata check.
 
 ## Previewing while you work
 

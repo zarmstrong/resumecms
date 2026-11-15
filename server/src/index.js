@@ -7,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db, getSetting } from './db.js'; // also ensures schema + seed run on boot
 import { accessLogger } from './logger.js';
+import { sessionCookieOptions, useSessionStore } from './authSessions.js';
+import { createSessionStore } from './sessionStore.js';
 import { store } from './store.js';
 import { applyTrustProxy } from './trustProxy.js';
 import { mountClient } from './clientStatic.js';
@@ -48,15 +50,14 @@ app.use(accessLogger);
 app.use('/mcp', mcpRoutes);
 
 app.use(express.json({ limit: '2mb' }));
-app.use(
-  cookieSession({
-    name: 'resume_session',
-    secret: SESSION_SECRET,
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    httpOnly: true,
-    sameSite: 'lax',
-  })
-);
+// The cookie carries only a session token; a login is whatever the sessions
+// table still holds (authSessions.js, sessionStore.js), so logout and a
+// password or 2FA change can revoke one. Expired rows go at boot as well as
+// at each login.
+const sessions = createSessionStore(db);
+sessions.prune();
+useSessionStore(sessions);
+app.use(cookieSession(sessionCookieOptions(SESSION_SECRET)));
 
 // NOTE: mount order matters here. Express matches app.use() by path prefix,
 // so more specific routes ('/api/public', '/api/auth/totp', '/api/ai',

@@ -1,3 +1,4 @@
+// @ts-check
 // What an AI rewrite is allowed to change, per block type. Anything not
 // handled here — ids, dates, URLs, company/institution names, visibility
 // flags, and the `data.style` keys BlockStyleForm writes — is copied from
@@ -11,6 +12,18 @@ export const REWRITABLE_TYPES = new Set(['heading', 'summary', 'executive_summar
 // and legacy data stored them as plain strings.
 const MAX_BULLET_DEPTH = 1;
 
+/**
+ * An experience bullet once normalizeBullet() has read it (a stored one
+ * may be a legacy plain string).
+ * @typedef {{ text: string, visibleWeb: boolean, visiblePrint: boolean, children: Bullet[] }} Bullet
+ * @typedef {{ visibleWeb: boolean, visiblePrint: boolean }} ShownFlags
+ */
+
+/**
+ * @param {string | Record<string, any>} bullet
+ * @param {number} [depth]
+ * @returns {Bullet}
+ */
 export function normalizeBullet(bullet, depth = 0) {
   if (typeof bullet === 'string') {
     return { text: bullet, visibleWeb: true, visiblePrint: true, children: [] };
@@ -40,6 +53,10 @@ function normalizeCustomItem(item) {
   return { ...rest, bodyType: 'text', text: body };
 }
 
+/**
+ * @param {unknown} v
+ * @returns {v is Record<string, any>}
+ */
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isBulletList = (list, depth = 0) =>
   list === undefined ||
@@ -55,6 +72,15 @@ const isBulletList = (list, depth = 0) =>
 // path ([i] for a bullet and its sub-bullets, [i, j] for one sub-bullet);
 // `item` is one custom-section item. Only the target is editable; the rest
 // of the block goes to the model as read-only context.
+/**
+ * A normalized target (normalizeTarget()); the editor keys its proposals
+ * by targetKey() of one.
+ * @typedef {{ kind: 'block' }
+ *   | { kind: 'description' }
+ *   | { kind: 'bullet', path: [number] | [number, number] }
+ *   | { kind: 'item', index: number }} RewriteTarget
+ */
+/** @type {Readonly<RewriteTarget>} */
 export const BLOCK_TARGET = Object.freeze({ kind: 'block' });
 
 // The request named a target that doesn't fit the block (wrong type, or a
@@ -63,6 +89,10 @@ export class InvalidTargetError extends Error {}
 
 // A stable string per target, for keying proposals. Mirrored client-side in
 // client/src/editor/aiReview.js.
+/**
+ * @param {RewriteTarget | null | undefined} target
+ * @returns {string}
+ */
 export function targetKey(target) {
   switch (target?.kind) {
     case 'description':
@@ -80,6 +110,12 @@ const isIndex = (n) => Number.isInteger(n) && n >= 0;
 
 // Checks a request's target against the block it's for and returns a clean
 // copy (no stray keys). A missing target means the whole block.
+/**
+ * @param {string} type
+ * @param {Record<string, any>} [data]
+ * @param {unknown} [target] the request's, unchecked
+ * @returns {RewriteTarget}
+ */
 export function normalizeTarget(type, data = {}, target) {
   if (target === undefined || target === null) return { ...BLOCK_TARGET };
   if (!isPlainObject(target)) throw new InvalidTargetError('target must be an object');
@@ -100,7 +136,7 @@ export function normalizeTarget(type, data = {}, target) {
       if (!parent || (path.length === 2 && !parent.children[path[1]])) {
         throw new InvalidTargetError('That bullet no longer exists. Reload and try again.');
       }
-      return { kind: 'bullet', path: [...path] };
+      return { kind: 'bullet', path: /** @type {[number] | [number, number]} */ ([...path]) };
     }
     case 'item': {
       if (type !== 'custom') throw new InvalidTargetError(`${type} blocks have no items to rewrite`);
@@ -135,6 +171,11 @@ export function hasRewritableShape(type, data) {
 // Where a bullet actually shows: a sub-bullet is only shown in a mode where
 // its parent is too (publicBlocks.js drops a hidden bullet's children with
 // it), whatever its own flags say.
+/**
+ * @param {ShownFlags} bullet
+ * @param {ShownFlags | null} [parentShown]
+ * @returns {ShownFlags}
+ */
 function shownFlags(bullet, parentShown = null) {
   return {
     visibleWeb: bullet.visibleWeb && (parentShown ? parentShown.visibleWeb : true),
@@ -149,9 +190,19 @@ const isHidden = (flags) => !(flags.visibleWeb && flags.visiblePrint);
 // their own and always show, so the prompt keeps their content out of them.
 // The output schema has no `hidden`, so nothing the model returns can change
 // visibility.
+/**
+ * @typedef {{ text: string, hidden?: true, children?: EditableBullet[] }} EditableBullet
+ */
+/**
+ * @param {Bullet} bullet
+ * @param {ShownFlags | null} [parentShown]
+ * @param {number} [depth]
+ * @returns {EditableBullet}
+ */
 function editableBullet(bullet, parentShown = null, depth = 0) {
   const shown = shownFlags(bullet, parentShown);
-  const out = { text: bullet.text, ...(isHidden(shown) ? { hidden: true } : {}) };
+  /** @type {EditableBullet} */
+  const out = { text: bullet.text, ...(isHidden(shown) ? { hidden: /** @type {const} */ (true) } : {}) };
   if (depth < MAX_BULLET_DEPTH) out.children = bullet.children.map((c) => editableBullet(c, shown, depth + 1));
   return out;
 }
@@ -356,6 +407,12 @@ const MATCH_THRESHOLD = 0.3;
 
 // `shown` is the bullet's effective visibility (see shownFlags). Only
 // meaningful for originals; proposed bullets have no flags.
+/**
+ * @param {any[]} bullets
+ * @param {number} [depth]
+ * @param {{ bullet: any, depth: number, shown: ShownFlags }[]} [out]
+ * @param {ShownFlags | null} [parentShown]
+ */
 function flatten(bullets, depth = 0, out = [], parentShown = null) {
   for (const bullet of bullets) {
     const shown = shownFlags(bullet, parentShown);
@@ -415,6 +472,11 @@ function rewordBullets(originals, proposed) {
 // are reported as removed. A single-bullet rewrite restructures only that
 // bullet's sub-bullets: `depth` 1 labels them as sub-bullets in the review,
 // and `parentShown` is the bullet's own visibility, which they inherit.
+/**
+ * @param {Bullet[]} originals
+ * @param {{ text: string, children?: { text: string }[] }[]} proposed
+ * @param {{ depth?: number, parentShown?: ShownFlags | null }} [options]
+ */
 export function restructureBullets(originals, proposed, { depth = 0, parentShown = null } = {}) {
   const from = flatten(originals, depth, [], parentShown);
   const to = flatten(proposed, depth);
@@ -466,6 +528,12 @@ const reviewEntry = (depth, before, after, shown) => ({ depth, before, after, wa
 // One experience bullet (path [i], with its sub-bullets) or one sub-bullet
 // ([i, j]). Every other entry of `data.bullets` is passed through as stored,
 // legacy string bullets included.
+/**
+ * @param {Record<string, any>} data
+ * @param {Record<string, any>} rewrite
+ * @param {[number] | [number, number]} path
+ * @param {boolean} allowBulletRestructure
+ */
 function mergeBullet(data, rewrite, [i, j], allowBulletRestructure) {
   const stored = data.bullets;
   const parent = normalizeBullet(stored[i]);
@@ -529,14 +597,26 @@ function mergeItem(data, rewrite, index) {
 // target's: whatever else the model returns is ignored. Returns the proposed
 // data plus, for experience bullets, a per-bullet review the editor shows
 // before the user accepts.
+/**
+ * @typedef {{ depth: number, before: string, after: string, wasHidden: boolean, visibleWeb: boolean, visiblePrint: boolean }} BulletReviewItem
+ * @typedef {{ depth: number, before: string, wasHidden: boolean }} RemovedBullet
+ * @typedef {{ data: Record<string, any>, bulletReview?: { items: BulletReviewItem[], removed: RemovedBullet[] } }} MergedRewrite
+ */
+/**
+ * @param {string} type
+ * @param {Record<string, any>} [data]
+ * @param {any} [rewrite] the model's answer, unchecked
+ * @param {{ allowBulletRestructure?: boolean, target?: unknown }} [options]
+ * @returns {MergedRewrite}
+ */
 export function mergeRewrite(type, data = {}, rewrite, { allowBulletRestructure = false, target } = {}) {
   if (!rewrite || typeof rewrite !== 'object') throw new RewriteShapeError('AI response is missing "rewrite"');
-  const { kind, path, index } = normalizeTarget(type, data, target);
-  if (kind === 'description') {
+  const normalized = normalizeTarget(type, data, target);
+  if (normalized.kind === 'description') {
     return { data: { ...data, description: rewritten(data.description, rewrite.description, 'description') } };
   }
-  if (kind === 'bullet') return mergeBullet(data, rewrite, path, allowBulletRestructure);
-  if (kind === 'item') return mergeItem(data, rewrite, index);
+  if (normalized.kind === 'bullet') return mergeBullet(data, rewrite, normalized.path, allowBulletRestructure);
+  if (normalized.kind === 'item') return mergeItem(data, rewrite, normalized.index);
   switch (type) {
     case 'heading':
     case 'summary':

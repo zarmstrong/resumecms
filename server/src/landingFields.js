@@ -1,3 +1,4 @@
+// @ts-check
 import { randomUUID } from 'node:crypto';
 import { httpError } from './httpError.js';
 import { blocksForMode } from './publicBlocks.js';
@@ -8,6 +9,12 @@ import { DEFAULT_LANDING_TEMPLATE, checkStyle, checkTemplate, darkPalette, empty
 import { hasPassed, utcToday } from './dateText.js';
 import { parseMediaUrl } from './mediaUrl.js';
 import { PUBLICATION_KINDS, PUBLICATION_ORDERS, arrangePublications, doiUrl } from './publications.js';
+
+/**
+ * @typedef {import('./landingTypes.js').LandingDraft} LandingDraft
+ * @typedef {import('./landingTypes.js').LandingSection} LandingSection
+ * @typedef {import('./landingTypes.js').SectionKind} SectionKind
+ */
 
 // The optional landing page at `/` (issue #70): a short home page with a
 // headline, a photo and a list of sections. Pure validation and shaping
@@ -208,7 +215,15 @@ export const LINK_TYPES = [
   'custom',
 ];
 
-export const SECTION_KINDS = ['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'media', 'services', 'publications', 'contact', 'documents'];
+export const SECTION_KINDS = /** @type {const} */ (['text', 'items', 'links', 'resumes', 'quotes', 'experience', 'image', 'divider', 'stats', 'faq', 'education', 'skills', 'credentials', 'gallery', 'media', 'services', 'publications', 'contact', 'documents']);
+// Type-only: fails the typecheck when a SectionKind is missing above, or
+// when one above isn't a SectionKind.
+/** @type {Exclude<SectionKind, (typeof SECTION_KINDS)[number]> extends never ? true : never} */
+const EVERY_KIND_LISTED = true;
+/** @type {Exclude<(typeof SECTION_KINDS)[number], SectionKind> extends never ? true : never} */
+const ONLY_KINDS_LISTED = true;
+void EVERY_KIND_LISTED;
+void ONLY_KINDS_LISTED;
 // Where a section goes in a template with two columns; 'main' isn't stored.
 export const SECTION_COLUMNS = ['main', 'side'];
 
@@ -225,6 +240,7 @@ export const ACTION_ICONS = [
 
 const FIELDS = ['headline', 'subheadline', 'availability', 'actions', 'photo', 'photoUrl', 'photoImage', 'coverImage', 'sections', 'seo', 'homeLink', 'homeLinkLabel', 'template', 'style'];
 const SEO_FIELDS = ['title', 'description', 'noindex', 'image'];
+/** @type {Record<SectionKind, string[]>} */
 const SECTION_FIELDS = {
   text: ['id', 'kind', 'title', 'hidden', 'column', 'body'],
   items: ['id', 'kind', 'title', 'hidden', 'column', 'items'],
@@ -277,6 +293,7 @@ function emptySeo() {
   return { title: '', description: '', noindex: false };
 }
 
+/** @returns {LandingDraft} */
 export function emptyLanding() {
   return {
     headline: '',
@@ -613,6 +630,7 @@ function checkHours(entry, label) {
 // half-typed link); mailtoUrl() and telUrl() decide.
 function checkContactLine(value, max, label) {
   const text = checkString(value ?? '', max, label);
+  // eslint-disable-next-line no-control-regex -- control characters are what it's looking for
   if (/[\u0000-\u001f\u007f]/.test(text)) throw httpError(400, `${label} must be a single line`);
   return text;
 }
@@ -630,6 +648,7 @@ function checkDocument(entry, label, refs) {
 
 // One section, with the fields of its kind and nothing else. A section
 // without an id (an MCP client adding one) gets a new one.
+/** @returns {LandingSection} */
 function checkSection(section, i, refs, ids) {
   const label = `sections[${i}]`;
   if (!isPlainObject(section)) throw httpError(400, `${label} must be an object`);
@@ -766,6 +785,7 @@ function checkSeo(seo, refs) {
 // ids: a new reference must name a stored image, one in the draft before
 // may outlive it (referencedImageIds()), and so do the file ids
 // (referencedFileIds()).
+/** @returns {LandingDraft} */
 export function validateLanding(
   input,
   { knownResumeIds, previousResumeIds = new Set(), knownImageIds = new Set(), previousImageIds = new Set(), knownFileIds = new Set(), previousFileIds = new Set() }
@@ -799,7 +819,7 @@ export function validateLanding(
   out.homeLinkLabel = checkString(input.homeLinkLabel ?? base.homeLinkLabel, LANDING_LIMITS.homeLinkLabel, 'homeLinkLabel');
   out.template = checkTemplate(input.template ?? base.template);
   out.style = checkStyle(input.style ?? base.style);
-  return out;
+  return /** @type {LandingDraft} */ (out);
 }
 
 // The MCP tool's merge (like mergeShallow in resumeStore.js): the fields in
@@ -845,6 +865,7 @@ export function mailtoUrl(email) {
   if (at < 1 || at !== text.lastIndexOf('@')) return '';
   const local = text.slice(0, at);
   const domain = text.slice(at + 1);
+  // eslint-disable-next-line no-control-regex -- control characters are what it's looking for
   const part = /^[^\s\u0000-\u001f\u007f@?#%/\\:;,<>"()[\]]+$/u;
   if (!part.test(local) || !part.test(domain)) return '';
   if (!domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) return '';

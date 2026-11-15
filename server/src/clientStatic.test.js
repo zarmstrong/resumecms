@@ -77,6 +77,58 @@ test('the manifest decides what is hashed; nothing else is', () => {
   assert.equal(loadHashedAssets(path.join(dotDir, 'nowhere')).size, 0);
 });
 
+// The client splits its lazily loaded pages into chunks of their own
+// (App.jsx, issue #179). Vite lists each under its source path
+// (`isDynamicEntry`), a chunk they share under `_name-hash.js`, and a
+// shared chunk's stylesheet under its own `_name-hash.css` key as well;
+// every one of them is hashed, so a lazy page's code is as immutable as
+// the entry's.
+test('lazily loaded chunks, shared chunks and their stylesheets are hashed too', () => {
+  const split = path.join(dotDir, 'split');
+  fs.mkdirSync(path.join(split, '.vite'), { recursive: true });
+  fs.writeFileSync(
+    path.join(split, '.vite', 'manifest.json'),
+    JSON.stringify({
+      '_ShareCard-BnakmXA_.css': { file: 'assets/ShareCard-BnakmXA_.css', src: '_ShareCard-BnakmXA_.css' },
+      '_ShareCard-9mfbYoA5.js': {
+        file: 'assets/ShareCard-9mfbYoA5.js',
+        name: 'ShareCard',
+        imports: ['_pageStyle-CwLw5ICJ.js'],
+        css: ['assets/ShareCard-BnakmXA_.css'],
+      },
+      '_pageStyle-CwLw5ICJ.js': { file: 'assets/pageStyle-CwLw5ICJ.js', name: 'pageStyle' },
+      'index.html': {
+        file: 'assets/index-DYQgLhfj.js',
+        src: 'index.html',
+        isEntry: true,
+        imports: ['_pageStyle-CwLw5ICJ.js'],
+        dynamicImports: ['src/editor/EditorRoute.jsx'],
+        css: ['assets/index-9btQJP3_.css'],
+      },
+      'src/editor/EditorRoute.jsx': {
+        file: 'assets/EditorRoute-CpUvMcaH.js',
+        src: 'src/editor/EditorRoute.jsx',
+        isDynamicEntry: true,
+        imports: ['_pageStyle-CwLw5ICJ.js', 'index.html', '_ShareCard-9mfbYoA5.js'],
+        css: ['assets/EditorRoute-DgLA-Fq0.css'],
+      },
+    })
+  );
+  const hashed = loadHashedAssets(split);
+  for (const file of [
+    'assets/index-DYQgLhfj.js',
+    'assets/index-9btQJP3_.css',
+    'assets/pageStyle-CwLw5ICJ.js',
+    'assets/EditorRoute-CpUvMcaH.js',
+    'assets/EditorRoute-DgLA-Fq0.css',
+    'assets/ShareCard-9mfbYoA5.js',
+    'assets/ShareCard-BnakmXA_.css',
+  ]) {
+    assert.equal(staticCacheControl(path.join(split, file), hashed), IMMUTABLE, file);
+  }
+  assert.equal(hashed.size, 7);
+});
+
 test('a rebuilt manifest is picked up without a restart', () => {
   const other = path.join(dotDir, 'rebuilt');
   fs.mkdirSync(path.join(other, '.vite'), { recursive: true });

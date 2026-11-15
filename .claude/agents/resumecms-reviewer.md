@@ -124,10 +124,31 @@ in prose; check the diff against the ones that apply, especially:
   server-side and rate-limited, with one failure message. A route that
   checks a code (login too) re-reads the row after its awaits and writes
   only if the factor is unchanged and the code still unspent.
+- Logins are server-side sessions (issue #172): the cookie holds only
+  `{ token }`, the `sessions` table only its sha256, and every auth check
+  (`requireAuth`, `GET /api/auth/status`) goes through `authSessions.js`'s
+  `isAuthenticated()`, which fails closed with no store registered and
+  refuses an expired row (30 days from login, never extended). Logout
+  deletes the row; a new password or username and turning 2FA on,
+  replacing or disabling it call `revokeOtherSessions()` before the write
+  (so a failed revocation changes nothing), keeping the request's own, and
+  each checks its own session again before both (the rate limiter awaits
+  after `requireAuth`, so it's never enough on its own). Nothing else (a signed `authenticated` flag,
+  a header) may stand in for a session, and a new way to change how one
+  logs in revokes the same way.
 - `RESUMECMS_SESSION_SECRET` never gets a default (in `index.js`,
   `docker-compose.yml` or an example): the boot refuses a missing, short or
   placeholder one through `checkSessionSecret()`, before `db.js` loads; a
   new example value goes in `PLACEHOLDER_SECRETS`.
+- `scripts/deploy-host.sh` rebuilds production: it keeps refusing unless
+  run as `/opt/resumecms`'s own copy on a clean `main` at origin's `main`
+  (re-checked right before Docker), and asks unless `--yes`. Nothing else
+  in the repo (`scripts/check.sh` included) touches Docker or
+  `/opt/resumecms`.
+- Public pages never import editor code: the editor, login, template
+  previews and the letter/card print routes stay lazy routes in
+  `App.jsx`, the editor's CSS loads from its own entry, and a route
+  rendered for a PDF or card sets `__PDF_READY__` only once drawn.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a
@@ -143,7 +164,13 @@ in prose; check the diff against the ones that apply, especially:
   queue's `pending()` notifies its subscribers, or `beforeunload` misses it
   (issue #105).
 - SPA routes contain no dot; CI jobs stay behind `changes` and in
-  `ci-passed`'s `needs`.
+  `ci-passed`'s `needs` (`lint and types` included).
+- A new `eslint-disable` names one rule and gives a real reason after
+  `--`; one that only silences a missing dep has to be a deliberate
+  behavior (an effect that runs once, a dep left out on purpose), not a
+  stale closure. A file with `// @ts-check` still passes `npm run
+  typecheck`, and a shape it types that the other package mirrors
+  (`Block`, a rewrite target, a proposal) changes on both sides.
 - The release workflow's Docker job publishes only release tags, and the
   Dockerfile keeps installing with `npm ci` from the lockfiles.
 - release-please's `extra-files` keep bumping both `package.json`s: the
@@ -152,8 +179,9 @@ in prose; check the diff against the ones that apply, especially:
 - CLAUDE.md/README.md prose still matches the behavior.
 
 Run the tests for the touched packages if they haven't been reported
-(`npm test` in `server/` and/or `client/`; `node scripts/validate-templates.mjs`
-and a client build for templates). A fresh worktree may need `npm ci` first.
+(`npm test`, `npm run lint` and `npm run typecheck` in `server/` and/or
+`client/`; `node scripts/validate-templates.mjs`, the client's lint and a
+client build for templates). A fresh worktree may need `npm ci` first.
 
 ## Report
 

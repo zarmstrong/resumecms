@@ -281,6 +281,9 @@ export function EditorPage({
       .getAiSettings()
       .then(({ ai }) => setAiSettings(ai))
       .catch((err) => console.error('Failed to load AI settings', err));
+    // Once per resume, whatever function onResumesChanged is on a later
+    // render: a reload here would overwrite edits still on screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loads once per resume (rapi); onResumesChanged is only called, never a reason to reload
   }, [rapi]);
 
   // While a render is pending, ask the server every few seconds until it

@@ -30,9 +30,10 @@ jobs:
     outputs:
       server: ${{ steps.diff.outputs.server }}
       client: ${{ steps.diff.outputs.client }}
+      client_lint: ${{ steps.diff.outputs.client_lint }}
+      browser: ${{ steps.diff.outputs.browser }}
       templates: ${{ steps.diff.outputs.templates }}
       docker: ${{ steps.diff.outputs.docker }}
-      browser: ${{ steps.diff.outputs.browser }}
     steps:
       # A pull_request run checks out GitHub's merge of the PR into main, so
       # its first parent is main and the diff against it is the whole PR.
@@ -54,6 +55,9 @@ jobs:
           # Client tests import server modules they mirror (pageMeta.js and
           # shareImages.js today), so a server change runs them too.
           client=$(has '^"?(client|server)/')
+          # The client's lint covers the template components it builds,
+          # but not the server modules its tests import.
+          client_lint=$(has '^"?(client|templates)/')
           # The validator checks the landing presets with the server's own
           # landing rules (server/src/landingFields.js), so those run it too.
           templates=$(has '^"?(templates/|client/src/resume/templateRegistry\.js"?$|scripts/validate-templates\.mjs"?$|server/src/)')
@@ -63,13 +67,14 @@ jobs:
           # The browser suite drives the built client against the server,
           # and the templates are built into the client.
           browser=$(has '^"?(client|server|templates)/')
-          [ "$all" = true ] && server=true client=true templates=true docker=true browser=true
+          [ "$all" = true ] && server=true client=true client_lint=true templates=true docker=true browser=true
           {
             echo "server=$server"
             echo "client=$client"
+            echo "client_lint=$client_lint"
+            echo "browser=$browser"
             echo "templates=$templates"
             echo "docker=$docker"
-            echo "browser=$browser"
           } >> "$GITHUB_OUTPUT"
 
   server:
@@ -153,8 +158,8 @@ jobs:
       # Chrome is ~150 MB: kept between runs for the same Puppeteer, so a
       # CDN hiccup doesn't fail the required check. No restore-keys: a
       # restored older cache would be saved again with the new Chrome
-      # beside the old one, growing with every Puppeteer bump. Restored before npm ci,
-      # whose Puppeteer postinstall then finds it already there.
+      # beside the old one, growing with every Puppeteer bump. Restored
+      # before npm ci, whose Puppeteer postinstall then finds it there.
       - name: Cache Puppeteer's Chrome
         uses: actions/cache@v6
         with:
@@ -195,6 +200,43 @@ jobs:
           name: browser-test-screenshots
           path: ${{ runner.temp }}/e2e-screenshots
           if-no-files-found: ignore
+
+
+  # ESLint and the incremental type check (issue #177), for each package
+  # the PR touches: its own config in each, so a step only runs for its
+  # package. Lint fails on any warning. Neither reads anything an install
+  # script builds (better-sqlite3, Puppeteer's Chrome), so they're skipped.
+  lint:
+    name: lint and types
+    needs: changes
+    if: needs.changes.outputs.server == 'true' || needs.changes.outputs.client_lint == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Lint and type-check the server
+        if: needs.changes.outputs.server == 'true'
+        run: |
+          cd server
+          npm ci --ignore-scripts
+          npm run lint
+          npm run typecheck
+
+      - name: Lint and type-check the client and templates
+        if: needs.changes.outputs.client_lint == 'true'
+        run: |
+          cd client
+          npm ci --ignore-scripts
+          npm run lint
+          npm run typecheck
 
   templates:
     name: templates
@@ -260,7 +302,7 @@ jobs:
   # failing, or a cancelled job) fails it.
   ci-passed:
     name: ci-passed
-    needs: [changes, server, client, browser, templates, pr-title, docker]
+    needs: [changes, server, client, lint, browser, templates, pr-title, docker]
     if: always()
     runs-on: ubuntu-latest
     steps:

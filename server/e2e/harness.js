@@ -101,7 +101,7 @@ export async function startServer() {
   }
 
   const deadline = Date.now() + READY_TIMEOUT_MS;
-  let last = 'no response';
+  let last; // what the last probe got, for the timeout's message
   while (true) {
     if (done) {
       const how = await exited;

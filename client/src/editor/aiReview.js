@@ -1,3 +1,4 @@
+// @ts-check
 // Pure helpers behind the AI rewrite review panel (AiRewritePanel.jsx).
 import { normalizeBullet } from '../resume/bulletUtils.js';
 import { bulletAt, updateAtPath } from './bulletDrag.js';
@@ -10,9 +11,41 @@ export const AI_REWRITABLE_TYPES = new Set(['heading', 'summary', 'executive_sum
 // everything but the description), `description` an experience block's
 // description, `bullet` one experience bullet by index path ([i] with its
 // sub-bullets, or [i, j]), `item` one custom-section item.
+/**
+ * A rewrite's target (RewriteTarget in the server's rewritableFields.js),
+ * or a tailoring plan's `hide` (tailorPlan.js), which shares its keys.
+ * @typedef {{ kind: 'block' }
+ *   | { kind: 'description' }
+ *   | { kind: 'bullet', path: number[] }
+ *   | { kind: 'item', index: number }
+ *   | { kind: 'hide', path?: number[] }} AiTarget
+ */
+/**
+ * A proposal as POST …/ai/rewrite answers it (`{ blockId, baseData,
+ * ...rewriteBlock() }` in the server's routes/ai.js), plus what EditorPage
+ * adds as it follows a moved bullet or item: `origin`, where the text sits
+ * in baseData and proposedData, and `anchorData`, the data `target` was
+ * last placed against (see relocateTarget).
+ * @typedef {{
+ *   blockId: string,
+ *   target: AiTarget,
+ *   origin?: AiTarget,
+ *   baseData: Record<string, any>,
+ *   anchorData?: Record<string, any>,
+ *   proposedData: Record<string, any>,
+ *   bulletReview?: { items: object[], removed: object[] } | null,
+ *   explanation?: string,
+ *   allowBulletRestructure?: boolean,
+ * }} AiProposal
+ */
+/** @type {Readonly<AiTarget>} */
 export const BLOCK_TARGET = Object.freeze({ kind: 'block' });
 
 // Mirrors targetKey in server/src/ai/rewritableFields.js.
+/**
+ * @param {AiTarget | null | undefined} target
+ * @returns {string}
+ */
 export function targetKey(target) {
   switch (target?.kind) {
     case 'description':
@@ -32,11 +65,19 @@ export function targetKey(target) {
 
 // Proposals are held per block and target, so several can be open at once,
 // including several on one block.
+/**
+ * @param {string} blockId
+ * @param {AiTarget | null | undefined} target
+ */
 export function proposalKey(blockId, target) {
   return `${blockId}:${targetKey(target)}`;
 }
 
 // For labels: "bullet 2", "sub-bullet 2.1", "item 3", or null for the block.
+/**
+ * @param {AiTarget | null | undefined} target
+ * @returns {string | null}
+ */
 export function describeTarget(target) {
   switch (target?.kind) {
     case 'description':
@@ -63,6 +104,11 @@ function withoutDescription(type, data) {
 
 // The part of `data` a target owns: for a block target, the whole data
 // (less an experience description).
+/**
+ * @param {string} type
+ * @param {Record<string, any> | null | undefined} data
+ * @param {AiTarget | null} [target]
+ */
 export function targetSlice(type, data, target = BLOCK_TARGET) {
   data = data || {};
   switch (target?.kind) {
@@ -80,9 +126,15 @@ export function targetSlice(type, data, target = BLOCK_TARGET) {
 // Where a proposal's text sits in its own baseData and proposedData. It
 // differs from `target` (where it applies now) once the editor has followed
 // a moved bullet or item to its new position; see relocateTarget.
+/** @type {(proposal: AiProposal) => AiTarget} */
 const originOf = (proposal) => proposal.origin || proposal.target;
 
 // Every position of one kind in `data`, for relocateTarget.
+/**
+ * @param {Record<string, any> | null | undefined} data
+ * @param {'bullet' | 'item'} kind
+ * @returns {AiTarget[]}
+ */
 function positionsOf(data, kind) {
   if (kind === 'bullet') {
     return normalizedBullets(data).flatMap((b, i) => [
@@ -138,6 +190,12 @@ export function lcsPairs(a, b) {
 //    else it stays where it is (stale).
 // Returns `proposal.target` itself when nothing moved, so callers can
 // compare by identity. Other targets never move.
+/**
+ * @param {string} type
+ * @param {AiProposal} proposal
+ * @param {Record<string, any> | null | undefined} currentData
+ * @returns {AiTarget | null}
+ */
 export function relocateTarget(type, proposal, currentData) {
   const { target } = proposal;
   if (target?.kind !== 'bullet' && target?.kind !== 'item') return target;
@@ -180,10 +238,18 @@ export function relocateTarget(type, proposal, currentData) {
 // says, and nothing else touched, so proposals for different parts of one
 // block can be accepted (or previewed) one after another. A bullet or item
 // that is no longer there leaves the data as it is.
+/**
+ * @param {string} type
+ * @param {Record<string, any> | null | undefined} currentData
+ * @param {AiProposal} proposal
+ * @returns {Record<string, any>}
+ */
 export function applyProposal(type, currentData, proposal) {
   currentData = currentData || {};
   const { target, proposedData } = proposal;
-  const origin = originOf(proposal);
+  // Of the target's own kind: relocation only ever moves a bullet or item
+  // to another position of its kind.
+  const origin = /** @type {any} */ (originOf(proposal));
   switch (target?.kind) {
     case 'description':
       return proposedData.description === undefined ? currentData : { ...currentData, description: proposedData.description };
@@ -219,6 +285,11 @@ export function applyProposal(type, currentData, proposal) {
 // A bullet or item proposal whose spot no longer holds what it was made for
 // is left out: it would otherwise show over a different bullet. Its panel
 // still offers it, with the out-of-date warning.
+/**
+ * @param {string} type
+ * @param {Record<string, any>} data
+ * @param {AiProposal[]} proposals
+ */
 export function previewData(type, data, proposals) {
   return previewedProposals(type, data, proposals).reduce((current, proposal) => applyProposal(type, current, proposal), data);
 }
@@ -231,6 +302,11 @@ export function previewData(type, data, proposals) {
 // about each, so they stay open in their panels. Returns { changes:
 // [{ blockId, data }], accepted, skipped } (proposals), the skipped ones
 // being those left open.
+/**
+ * @param {{ id: string, type: string, data: Record<string, any> }[]} blocks
+ * @param {AiProposal[]} proposals
+ * @returns {{ changes: { blockId: string, data: Record<string, any> }[], accepted: AiProposal[], skipped: AiProposal[] }}
+ */
 export function acceptAllPlan(blocks, proposals) {
   const changes = [];
   const accepted = [];
@@ -261,6 +337,12 @@ export function acceptAllPlan(blocks, proposals) {
 // (it may have added, removed, merged, or reordered them). A reword-only
 // block rewrite keeps every position, and a custom block rewrite can't
 // change its item count, so a bullet or item rewrite still shows over those.
+/**
+ * @param {string} type
+ * @param {Record<string, any>} data
+ * @param {AiProposal[]} proposals
+ * @returns {AiProposal[]}
+ */
 export function previewedProposals(type, data, proposals) {
   const isBlock = (p) => targetKey(p.target) === 'block';
   const blocks = proposals.filter(isBlock);
@@ -271,7 +353,7 @@ export function previewedProposals(type, data, proposals) {
   const restructuredBullets = new Set(
     proposals
       .filter((p) => p.target?.kind === 'bullet' && p.target.path.length === 1 && p.allowBulletRestructure)
-      .map((p) => p.target.path[0])
+      .map((p) => /** @type {{ path: number[] }} */ (p.target).path[0])
   );
   const underRestructured = (p) =>
     p.target.kind === 'bullet' && p.target.path.length === 2 && restructuredBullets.has(p.target.path[0]);
@@ -505,6 +587,11 @@ export function bulletChange(item) {
 // item is compared at its original position in baseData and its current
 // one in `currentData` (see relocateTarget); one that left its position
 // without being found elsewhere counts as changed.
+/**
+ * @param {string} type
+ * @param {AiProposal} proposal
+ * @param {Record<string, any> | null | undefined} currentData
+ */
 export function isProposalStale(type, proposal, currentData) {
   return sliceJson(type, proposal.baseData, originOf(proposal)) !== sliceJson(type, currentData, proposal.target);
 }

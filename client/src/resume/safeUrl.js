@@ -47,6 +47,7 @@ export function mailtoHref(email) {
   if (at < 1 || at !== text.lastIndexOf('@')) return undefined;
   const local = text.slice(0, at);
   const domain = text.slice(at + 1);
+  // eslint-disable-next-line no-control-regex -- control characters are what it's looking for
   const part = /^[^\s\u0000-\u001f\u007f@?#%/\\:;,<>"()[\]]+$/u;
   if (!part.test(local) || !part.test(domain)) return undefined;
   if (!domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) return undefined;

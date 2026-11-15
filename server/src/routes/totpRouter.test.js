@@ -1,34 +1,47 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import Database from 'better-sqlite3';
 import { generate, generateSecret } from 'otplib';
+import { useSessionStore } from '../authSessions.js';
 import { hashPassword } from '../passwords.js';
+import { ensureSchema } from '../schema.js';
+import { createSessionStore } from '../sessionStore.js';
 import { TOTP_STEP_SECONDS } from '../totpConfig.js';
 import { FACTOR_ERROR, PASSWORD_ERROR, createTotpRouter, readTotp } from './totpRouter.js';
 
 // Setting up, replacing and turning off 2FA (issue #173) over an in-memory
-// settings map, served on a real socket behind a logged-in session.
+// settings map, served on a real socket behind a logged-in session: a
+// session store over ':memory:', with `session` the request's token and
+// `other` a second login, there to see which changes sign it out (#172).
 
 const PASSWORD = 'correct horse battery';
 const credentials = { username: 'admin', passwordHash: hashPassword(PASSWORD) };
 
-// `hooks.onTotpRead(n)` runs before the n-th read of the totp row (0
-// first), to change it under a request between its check and its write.
+// `hooks.onTotpRead(n, settings, { sessions, session })` runs before the
+// n-th read of the totp row (0 first), to change it (or sign the request's
+// session out) under a request between its check and its write.
 async function start(totp, hooks = {}) {
   const settings = new Map([['credentials', credentials]]);
   let totpReads = 0;
   if (totp) settings.set('totp', totp);
+  const db = new Database(':memory:');
+  ensureSchema(db);
+  const sessions = createSessionStore(db);
+  useSessionStore(sessions);
+  const session = sessions.create();
+  const other = sessions.create();
   const app = express();
   app.use(express.json());
   app.use((req, res, next) => {
-    req.session = { authenticated: true };
+    req.session = { token: session };
     next();
   });
   app.use(
     '/totp',
     createTotpRouter({
       getSetting: (key) => {
-        if (key === 'totp') hooks.onTotpRead?.(totpReads++, settings);
+        if (key === 'totp') hooks.onTotpRead?.(totpReads++, settings, { sessions, session });
         return settings.get(key) ?? null;
       },
       setSetting: (key, value) => settings.set(key, value),
@@ -44,7 +57,8 @@ async function start(totp, hooks = {}) {
     });
     return { status: res.status, body: await res.json() };
   };
-  return { settings, post, close: () => server.close() };
+  const signedIn = () => ({ self: sessions.isValid(session), other: sessions.isValid(other) });
+  return { settings, post, signedIn, close: () => server.close() };
 }
 
 const code = (secret) => generate({ secret });
@@ -324,6 +338,105 @@ test('cancel while 2FA is off clears the setup', async () => {
     assert.deepEqual((await app.post('/cancel', { secret: setup.body.secret })).body, { enabled: false });
     assert.equal(app.settings.get('totp'), null);
     assert.equal((await app.post('/confirm', { token: await code(setup.body.secret) })).status, 409);
+  } finally {
+    app.close();
+  }
+});
+
+test('a session the store no longer holds gets nowhere', async () => {
+  const app = await start(null);
+  try {
+    useSessionStore(null);
+    assert.equal((await app.post('/status')).status, 401);
+    assert.equal((await app.post('/setup', { currentPassword: PASSWORD })).status, 401);
+    assert.equal(app.settings.get('totp'), undefined);
+  } finally {
+    app.close();
+  }
+});
+
+test('turning 2FA on signs out every other session, and this one stays', async () => {
+  const app = await start(null);
+  try {
+    const setup = await app.post('/setup', { currentPassword: PASSWORD });
+    // A setup alone changes no factor.
+    assert.deepEqual(app.signedIn(), { self: true, other: true });
+    assert.equal((await app.post('/confirm', { token: await code(setup.body.secret) })).status, 200);
+    assert.deepEqual(app.signedIn(), { self: true, other: false });
+    assert.equal((await app.post('/status')).status, 200);
+  } finally {
+    app.close();
+  }
+});
+
+test('replacing the factor signs out every other session, and this one stays', async () => {
+  const active = generateSecret();
+  const app = await start({ enabled: true, secret: active });
+  try {
+    const setup = await app.post('/setup', { currentPassword: PASSWORD, totpToken: await code(active) });
+    assert.deepEqual(app.signedIn(), { self: true, other: true });
+    // A refused confirm changes nothing.
+    assert.equal((await app.post('/confirm', { token: '000000' })).status, 400);
+    assert.deepEqual(app.signedIn(), { self: true, other: true });
+    assert.equal((await app.post('/confirm', { token: await code(setup.body.secret) })).status, 200);
+    assert.deepEqual(app.signedIn(), { self: true, other: false });
+  } finally {
+    app.close();
+  }
+});
+
+test('turning 2FA off signs out every other session, and this one stays', async () => {
+  const active = generateSecret();
+  const app = await start({ enabled: true, secret: active });
+  try {
+    assert.equal((await app.post('/disable', { currentPassword: 'wrong', totpToken: await code(active) })).status, 401);
+    assert.deepEqual(app.signedIn(), { self: true, other: true });
+    assert.equal((await app.post('/disable', { currentPassword: PASSWORD, totpToken: await code(active) })).status, 200);
+    assert.deepEqual(app.signedIn(), { self: true, other: false });
+    assert.equal((await app.post('/status')).status, 200);
+  } finally {
+    app.close();
+  }
+});
+
+test('cancelling a setup, or disabling with 2FA already off, signs nobody out', async () => {
+  const app = await start(null);
+  try {
+    const setup = await app.post('/setup', { currentPassword: PASSWORD });
+    await app.post('/cancel', { secret: setup.body.secret });
+    assert.equal((await app.post('/disable')).status, 200);
+    assert.deepEqual(app.signedIn(), { self: true, other: true });
+  } finally {
+    app.close();
+  }
+});
+
+test('a session signed out while confirming changes nothing and signs nobody out', async () => {
+  const secret = generateSecret();
+  // Read 1 is confirm's re-read after its code's await.
+  const app = await start({ enabled: false, pendingSecret: secret }, {
+    onTotpRead: (n, settings, { sessions, session }) => n === 1 && sessions.remove(session),
+  });
+  try {
+    const res = await app.post('/confirm', { token: await code(secret) });
+    assert.equal(res.status, 401);
+    assert.equal(readTotp(app.settings.get('totp')).enabled, false);
+    assert.deepEqual(app.signedIn(), { self: false, other: true });
+  } finally {
+    app.close();
+  }
+});
+
+test('a session signed out while disabling leaves 2FA on and signs nobody out', async () => {
+  const secret = generateSecret();
+  const app = await start({ enabled: true, secret }, {
+    onTotpRead: (n, settings, { sessions, session }) => n === 1 && sessions.remove(session),
+  });
+  try {
+    const res = await app.post('/disable', { currentPassword: PASSWORD, totpToken: await code(secret) });
+    assert.equal(res.status, 401);
+    assert.equal(readTotp(app.settings.get('totp')).enabled, true);
+    assert.deepEqual(app.signedIn(), { self: false, other: true });
   } finally {
     app.close();
   }

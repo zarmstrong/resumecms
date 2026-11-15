@@ -11,7 +11,7 @@ export function shellWatcher(indexHtml) {
   let loadedMtime = null;
   let html = null;
   return () => {
-    let mtime = null;
+    let mtime;
     try {
       mtime = fs.statSync(indexHtml).mtimeMs;
     } catch {
