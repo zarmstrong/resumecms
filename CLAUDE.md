@@ -1675,8 +1675,9 @@ row (`endSession()`), and a new password or username
 `/confirm`) or turning it off delete every *other* session
 (`revokeOtherSessions()`), so the tab that made the change stays in.
 They revoke *before* writing the change, so a failed revocation changes
-nothing, and a 2FA route checks its own session again after its awaits
-(`isAuthenticated()`), so a session signed out meanwhile can neither
+nothing, and each of those routes checks its own session again right
+before writing (`isAuthenticated()`: `requireAuth` ran before an await,
+the rate limiter's if nothing else), so a session signed out meanwhile can neither
 change the factor nor sign out the one that signed it out. A new way to
 change how one logs in must revoke the same way. The login
 routes are the `createAuthRouter()` factory (`routes/authRouter.js`, bound

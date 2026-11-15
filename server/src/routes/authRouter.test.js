@@ -297,3 +297,29 @@ test('a new password is not saved if the other sessions could not be signed out'
     app.close();
   }
 });
+
+test('a session signed out while its credentials change waited changes nothing and signs nobody out', async () => {
+  let armed = false;
+  let app;
+  // The tab's row is the first one (it logged in first); deleted when the
+  // handler reads the credentials, as another tab's change would have.
+  app = await start({
+    onRead: (key) => {
+      if (armed && key === 'credentials') app.db.prepare('DELETE FROM sessions WHERE rowid = (SELECT MIN(rowid) FROM sessions)').run();
+    },
+  });
+  try {
+    const tab = await app.login();
+    const other = await app.login();
+    const before = app.settings.get('credentials');
+    armed = true;
+    const res = await tab.post('/auth/credentials', { currentPassword: PASSWORD, newUsername: 'admin', newPassword: 'a new password' });
+    armed = false;
+    assert.equal(res.status, 401);
+    assert.deepEqual(app.settings.get('credentials'), before);
+    assert.equal(await tab.loggedIn(), false);
+    assert.equal(await other.loggedIn(), true);
+  } finally {
+    app.close();
+  }
+});

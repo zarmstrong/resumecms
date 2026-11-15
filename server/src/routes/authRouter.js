@@ -157,6 +157,10 @@ export function createAuthRouter({ getSetting, setSetting }) {
       username: newUsername.trim(),
       passwordHash: newPassword ? hashPassword(newPassword) : credentials.passwordHash,
     };
+    // requireAuth ran before the limiter, which awaits: a session signed
+    // out meanwhile (another tab's change) mustn't change the login, nor
+    // sign out the session that signed it out.
+    if (!isAuthenticated(req)) return res.status(401).json({ error: 'Not authenticated' });
     // A new password or username signs out every other session (a copied
     // cookie included), but not this one. Before the write, so a failure
     // to sign them out changes nothing, and a failed write leaves them
