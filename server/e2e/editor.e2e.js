@@ -63,6 +63,7 @@ function flow(name, fn, { ownServer = false } = {}) {
     try {
       await fn({ page, context, expectDialog, watch });
       assert.deepEqual(unexpected, [], 'no browser dialog the flow did not expect');
+      assert.equal(expected.length, 0, 'every dialog the flow expected opened');
       assert.deepEqual(errors, [], 'no uncaught error on the page');
     } catch (err) {
       t.diagnostic(`screenshot: ${await saveScreenshot(page, name)}`);
@@ -151,6 +152,32 @@ async function retype(page, field, text) {
   await field.focus();
   await field.evaluate((el) => el.select());
   await page.keyboard.type(text);
+}
+
+// Puts `text` in `field` the way typing does (the native setter and an
+// input event, so React's onChange runs) and then leaves through `exit` in
+// the same task: the editor's save debounce can't fire in between however
+// slow the machine, so the save is still waiting when the exit happens.
+// `exit` is { click: xpath } or { select: [css, value] }.
+async function editThenLeave(field, text, exit) {
+  await field.evaluate(
+    (el, text, exit) => {
+      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, text);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      if (exit.click) {
+        const button = document.evaluate(exit.click, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        button.click();
+      } else {
+        const [css, value] = exit.select;
+        const select = document.querySelector(css);
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, value);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    },
+    text,
+    exit
+  );
 }
 
 // Whether a request is a `method` request to `pathname`, and the response
@@ -383,7 +410,7 @@ flow('applies a preset, and a reload keeps it', async ({ page, expectDialog }) =
   await startButton.click();
   await page.waitForSelector(`${PRESET_DIALOG}[open]`);
   // A preset that changes the template, so the change shows.
-  const preset = (await dialogState(page)).radios.map(readPreset).find((p) => p.template !== landingBefore.landing.template);
+  const preset = (await dialogState(page)).radios.filter((id) => id !== ':keep').map(readPreset).find((p) => p.template !== landingBefore.landing.template);
   assert.ok(preset, 'a preset with another template');
   await page.click(`${PRESET_DIALOG} input[type="radio"][value="${preset.id}"]`);
 
@@ -428,9 +455,8 @@ flow('leaving through the switcher with a save pending keeps the edit', async ({
   const saved = putResponse(page, putPath);
 
   const text = `Saved on the way out, ${Date.now()}.`;
-  await retype(page, textarea, text);
-  assert.deepEqual(order, [], 'the save is still waiting on its debounce');
-  await page.select(RESUME_SELECT, 'landing');
+  assert.deepEqual(order, [], 'nothing saved before the edit');
+  await editThenLeave(textarea, text, { select: [RESUME_SELECT, 'landing'] });
 
   assert.equal((await saved).status(), 200);
   await page.waitForFunction(() => new URLSearchParams(location.search).get('page') === 'landing');
@@ -454,9 +480,8 @@ flow('logging out with a save pending saves it before the session ends', async (
   const saved = putResponse(page, putPath);
 
   const text = `Saved before logging out, ${Date.now()}.`;
-  await retype(page, textarea, text);
-  assert.deepEqual(order, [], 'the save is still waiting on its debounce');
-  await page.click('xpath/.//header//button[normalize-space()="Log out"]');
+  assert.deepEqual(order, [], 'nothing saved before the edit');
+  await editThenLeave(textarea, text, { click: '//header//button[normalize-space()="Log out"]' });
 
   assert.equal((await saved).status(), 200, 'saved while still logged in');
   await page.waitForSelector('input[autocomplete="username"]');

@@ -150,18 +150,19 @@ jobs:
             server/package-lock.json
             client/package-lock.json
 
-      - name: Install server dependencies
-        run: |
-          cd server
-          npm ci
-
       # Chrome is ~150 MB: kept between runs for the same Puppeteer, so a
-      # CDN hiccup doesn't fail the required check.
+      # CDN hiccup doesn't fail the required check. Restored before npm ci,
+      # whose Puppeteer postinstall then finds it already there.
       - name: Cache Puppeteer's Chrome
         uses: actions/cache@v6
         with:
           path: ~/.cache/puppeteer
           key: puppeteer-${{ runner.os }}-${{ hashFiles('server/package-lock.json') }}
+
+      - name: Install server dependencies
+        run: |
+          cd server
+          npm ci
 
       - name: Install Chrome for Puppeteer
         run: |
