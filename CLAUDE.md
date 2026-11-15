@@ -271,13 +271,16 @@ for `/`, `/resume`, `/r/:slug` and `/print`). The editor (`/editor`,
 previews, `/print/letter` and `/print/card` are route `lazy`s made by
 `lazyPage()` in `App.jsx`, so a public page never downloads them; never
 import editor code from a public module, or it moves back into the main
-chunk. `lazyRoute()` (`lazyRoute.js`, pure, tested) rejects a failed
-import with a `ChunkLoadError`, and the routes' `errorElement`,
+chunk. `lazyRoute()` (`lazyRoute.js`, pure, tested) rejects an import
+whose chunk didn't arrive (`isChunkFetchError()`, each browser's wording;
+an error the chunk's own code threw is passed on as it is) with a
+`ChunkLoadError`, and the routes' `errorElement`,
 `RouteError` (`RouteFallback.jsx`), reloads the page once for it (a tab
 holding an old index.html after a deploy asks for chunks the server now
 404s): at most once per `RELOAD_WINDOW_MS`, marked in `sessionStorage`,
 none without storage, the mark cleared by the next chunk that loads; then
-an error with a Reload button. On a navigation the router keeps the old
+(or once `RELOAD_GIVE_UP_MS` passes with the page still there, a reload a
+`beforeunload` prompt cancelled) an error with a Reload button. On a navigation the router keeps the old
 page up until the chunk is in; a page opened directly shows
 `RouteLoading`, blank for its first `LOADING_DELAY_MS` so it never
 flashes.

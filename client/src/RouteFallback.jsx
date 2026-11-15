@@ -12,6 +12,10 @@ const PAGE_STYLE = { padding: 40, fontFamily: 'var(--font-ui)' };
 // a line of text only once it's taking a while.
 export const LOADING_DELAY_MS = 500;
 
+// A reload that hasn't taken the page away by then was cancelled (a
+// beforeunload prompt answered "stay"): show the error and its button.
+export const RELOAD_GIVE_UP_MS = 3000;
+
 export function RouteLoading() {
   const [slow, setSlow] = useState(false);
   useEffect(() => {
@@ -38,10 +42,15 @@ export function RouteError() {
   const tried = useRef(false);
 
   useEffect(() => {
-    if (!chunk || tried.current) return;
+    if (!chunk || tried.current) return undefined;
     tried.current = true;
-    if (claimReload(sessionStore())) window.location.reload();
-    else setReloading(false);
+    if (!claimReload(sessionStore())) {
+      setReloading(false);
+      return undefined;
+    }
+    window.location.reload();
+    const timer = setTimeout(() => setReloading(false), RELOAD_GIVE_UP_MS);
+    return () => clearTimeout(timer);
   }, [chunk]);
 
   if (reloading) return null;

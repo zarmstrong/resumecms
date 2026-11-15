@@ -29,6 +29,22 @@ export function sessionStore() {
   }
 }
 
+// Whether `err` is a chunk that didn't arrive, as each browser words it
+// (Chrome, Firefox, Safari; Vite's preload helper for a stylesheet), not
+// an error the chunk's own code threw while it ran: only the first is
+// fixed by reloading.
+const FETCH_FAILURES = [
+  /Failed to fetch dynamically imported module/i,
+  /error loading dynamically imported module/i,
+  /Importing a module script failed/i,
+  /Unable to preload CSS/i,
+];
+
+export function isChunkFetchError(err) {
+  const message = typeof err?.message === 'string' ? err.message : '';
+  return FETCH_FAILURES.some((pattern) => pattern.test(message));
+}
+
 // A data router route's `lazy`: `load()` is the `import()` of the page's
 // module, `name` the export that is its component. A load that worked
 // clears the reload mark, so the next deploy gets its reload too.
@@ -40,7 +56,8 @@ export function lazyRoute(load, name, { storage = sessionStore } = {}) {
         return { Component: module[name] };
       },
       (err) => {
-        throw new ChunkLoadError(err);
+        // Anything else is the page's own error, shown as it is.
+        throw isChunkFetchError(err) ? new ChunkLoadError(err) : err;
       }
     );
 }
