@@ -25,6 +25,32 @@ export const USERNAME = 'e2e-admin';
 export const PASSWORD = `e2e-${randomBytes(8).toString('hex')}`;
 
 const READY_TIMEOUT_MS = 20000;
+// What each running server leaves behind if the test process ends without
+// its after() hooks (Puppeteer's own SIGINT handler calls process.exit(130),
+// an uncaught error, a signal): run on 'exit', which fires on any exit but
+// only runs synchronous code, and on a signal, which by default ends the
+// process without an 'exit'. A server is SIGTERMed rather than killed, so
+// its shutdown (src/shutdown.js) still closes its PDF renderer's Chromium,
+// which runs in a process group of its own; it finishes after we're gone.
+const cleanups = new Set();
+function runCleanups() {
+  for (const cleanup of cleanups) cleanup();
+  cleanups.clear();
+}
+process.on('exit', runCleanups);
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, function onSignal() {
+    runCleanups();
+    // Another handler (Puppeteer's) exits by itself. Alone, this one would
+    // keep the process alive, so it steps aside and the signal is sent
+    // again, to end it as it would have.
+    if (process.listenerCount(signal) === 1) {
+      process.off(signal, onSignal);
+      process.kill(process.pid, signal);
+    }
+  });
+}
+
 // Past the server's own FORCE_EXIT_MS backstop (src/shutdown.js), so its
 // shutdown gets to close the PDF renderer's Chromium before a SIGKILL.
 const STOP_GRACE_MS = FORCE_EXIT_MS + 2000;
@@ -90,18 +116,15 @@ export async function startServer() {
   let done = false;
   exited.then(() => (done = true));
 
-  // A test process that exits without its after() hooks (Puppeteer's own
-  // SIGINT handler calls process.exit(130), an uncaught error) still takes
-  // its server and data dir with it: 'exit' listeners run on any exit, but
-  // only synchronously, so this kills outright rather than waiting.
-  const onExit = () => {
-    if (!done) child.kill('SIGKILL');
+  // Until stop() has finished, so an exit in the middle of it still
+  // takes the server and data dir with it (see `cleanups`).
+  const cleanup = () => {
+    if (!done) child.kill('SIGTERM');
     rmSync(dataDir, { recursive: true, force: true });
   };
-  process.once('exit', onExit);
+  cleanups.add(cleanup);
 
   async function stop() {
-    process.off('exit', onExit);
     if (!done) {
       const timer = setTimeout(() => child.kill('SIGKILL'), STOP_GRACE_MS);
       child.kill('SIGTERM');
@@ -109,6 +132,7 @@ export async function startServer() {
       clearTimeout(timer);
     }
     rmSync(dataDir, { recursive: true, force: true });
+    cleanups.delete(cleanup);
   }
 
   const deadline = Date.now() + READY_TIMEOUT_MS;

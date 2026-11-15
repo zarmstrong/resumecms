@@ -101,7 +101,9 @@ What needs a browser is a small Puppeteer suite of its own (issue #178),
 in `client/` (it says so if `client/dist` is missing). `harness.js` starts
 `node src/index.js` on a free port with a fresh `mkdtemp` data dir and
 random credentials, waits on `/api/auth/status`, and on the way out SIGTERMs
-that child alone (SIGKILL after a grace period) and removes the dir; each
+that child alone (SIGKILL after a grace period) and removes the dir, also
+when the test process exits or is signalled without its hooks (a SIGTERM
+then, so the server still closes its PDF renderer's Chromium); each
 flow in `editor.e2e.js` gets a fresh browser context, blocks every request
 but the server's (Google Fonts included), waits on the page's state or on
 its requests (never a fixed sleep), and leaves a screenshot when it fails
