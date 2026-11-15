@@ -78,7 +78,10 @@ CI is one workflow,
 `changes` job diffs the PR and only the jobs it touches run (`server
 tests` for `server/**`; `client tests and build` for `client/**`,
 `server/**` (client tests import the server modules they mirror) or
-anything a template build reads; `templates`, the validator, for
+anything a template build reads; `browser tests`, which installs both
+packages, builds the client and runs the browser suite (uploading its
+screenshots when it fails), for `client/**`, `server/**` or
+`templates/**`; `templates`, the validator, for
 `templates/**`, `templateRegistry.js`, the validator itself or
 `server/src/**` (it checks the landing presets with the server's own
 landing rules); all of

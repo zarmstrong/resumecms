@@ -32,6 +32,7 @@ jobs:
       client: ${{ steps.diff.outputs.client }}
       templates: ${{ steps.diff.outputs.templates }}
       docker: ${{ steps.diff.outputs.docker }}
+      browser: ${{ steps.diff.outputs.browser }}
     steps:
       # A pull_request run checks out GitHub's merge of the PR into main, so
       # its first parent is main and the diff against it is the whole PR.
@@ -59,12 +60,16 @@ jobs:
           # The image installs from the lockfiles, so a dependency bump
           # builds it too.
           docker=$(has '^"?(Dockerfile|\.dockerignore|(server|client)/package(-lock)?\.json)"?$')
-          [ "$all" = true ] && server=true client=true templates=true docker=true
+          # The browser suite drives the built client against the server,
+          # and the templates are built into the client.
+          browser=$(has '^"?(client|server|templates)/')
+          [ "$all" = true ] && server=true client=true templates=true docker=true browser=true
           {
             echo "server=$server"
             echo "client=$client"
             echo "templates=$templates"
             echo "docker=$docker"
+            echo "browser=$browser"
           } >> "$GITHUB_OUTPUT"
 
   server:
@@ -121,6 +126,64 @@ jobs:
         run: |
           cd client
           npm run build
+
+  # The editor in a real browser (issue #178, server/e2e/): the suite starts
+  # its own server on a scratch port and data dir. `npm ci` already fetches
+  # Puppeteer's Chrome in its postinstall; the explicit install makes that
+  # step's failure (or a skipped install script) show up here rather than
+  # as a launch error. Chrome's sandbox can't start on these runners
+  # (AppArmor restricts unprivileged user namespaces), so the harness turns
+  # it off when CI is set.
+  browser:
+    name: browser tests
+    needs: changes
+    if: needs.changes.outputs.browser == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install server dependencies
+        run: |
+          cd server
+          npm ci
+
+      - name: Install Chrome for Puppeteer
+        run: |
+          cd server
+          npx puppeteer browsers install chrome
+
+      - name: Install client dependencies
+        run: |
+          cd client
+          npm ci
+
+      - name: Build client
+        run: |
+          cd client
+          npm run build
+
+      - name: Run browser tests
+        env:
+          E2E_SCREENSHOT_DIR: ${{ runner.temp }}/e2e-screenshots
+        run: |
+          cd server
+          npm run test:browser
+
+      - name: Upload screenshots of failed flows
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-test-screenshots
+          path: ${{ runner.temp }}/e2e-screenshots
+          if-no-files-found: ignore
 
   templates:
     name: templates
@@ -186,7 +249,7 @@ jobs:
   # failing, or a cancelled job) fails it.
   ci-passed:
     name: ci-passed
-    needs: [changes, server, client, templates, pr-title, docker]
+    needs: [changes, server, client, browser, templates, pr-title, docker]
     if: always()
     runs-on: ubuntu-latest
     steps:
