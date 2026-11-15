@@ -18,8 +18,9 @@ import { FACTOR_ERROR, PASSWORD_ERROR, createTotpRouter, readTotp } from './totp
 const PASSWORD = 'correct horse battery';
 const credentials = { username: 'admin', passwordHash: hashPassword(PASSWORD) };
 
-// `hooks.onTotpRead(n)` runs before the n-th read of the totp row (0
-// first), to change it under a request between its check and its write.
+// `hooks.onTotpRead(n, settings, { sessions, session })` runs before the
+// n-th read of the totp row (0 first), to change it (or sign the request's
+// session out) under a request between its check and its write.
 async function start(totp, hooks = {}) {
   const settings = new Map([['credentials', credentials]]);
   let totpReads = 0;
@@ -40,7 +41,7 @@ async function start(totp, hooks = {}) {
     '/totp',
     createTotpRouter({
       getSetting: (key) => {
-        if (key === 'totp') hooks.onTotpRead?.(totpReads++, settings);
+        if (key === 'totp') hooks.onTotpRead?.(totpReads++, settings, { sessions, session });
         return settings.get(key) ?? null;
       },
       setSetting: (key, value) => settings.set(key, value),
@@ -405,6 +406,37 @@ test('cancelling a setup, or disabling with 2FA already off, signs nobody out', 
     await app.post('/cancel', { secret: setup.body.secret });
     assert.equal((await app.post('/disable')).status, 200);
     assert.deepEqual(app.signedIn(), { self: true, other: true });
+  } finally {
+    app.close();
+  }
+});
+
+test('a session signed out while confirming changes nothing and signs nobody out', async () => {
+  const secret = generateSecret();
+  // Read 1 is confirm's re-read after its code's await.
+  const app = await start({ enabled: false, pendingSecret: secret }, {
+    onTotpRead: (n, settings, { sessions, session }) => n === 1 && sessions.remove(session),
+  });
+  try {
+    const res = await app.post('/confirm', { token: await code(secret) });
+    assert.equal(res.status, 401);
+    assert.equal(readTotp(app.settings.get('totp')).enabled, false);
+    assert.deepEqual(app.signedIn(), { self: false, other: true });
+  } finally {
+    app.close();
+  }
+});
+
+test('a session signed out while disabling leaves 2FA on and signs nobody out', async () => {
+  const secret = generateSecret();
+  const app = await start({ enabled: true, secret }, {
+    onTotpRead: (n, settings, { sessions, session }) => n === 1 && sessions.remove(session),
+  });
+  try {
+    const res = await app.post('/disable', { currentPassword: PASSWORD, totpToken: await code(secret) });
+    assert.equal(res.status, 401);
+    assert.equal(readTotp(app.settings.get('totp')).enabled, true);
+    assert.deepEqual(app.signedIn(), { self: false, other: true });
   } finally {
     app.close();
   }

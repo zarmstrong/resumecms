@@ -130,8 +130,9 @@ in prose; check the diff against the ones that apply, especially:
   `isAuthenticated()`, which fails closed with no store registered and
   refuses an expired row (30 days from login, never extended). Logout
   deletes the row; a new password or username and turning 2FA on,
-  replacing or disabling it call `revokeOtherSessions()` after the write,
-  keeping the request's own. Nothing else (a signed `authenticated` flag,
+  replacing or disabling it call `revokeOtherSessions()` before the write
+  (so a failed revocation changes nothing), keeping the request's own, and
+  a route that awaits checks its own session again before both. Nothing else (a signed `authenticated` flag,
   a header) may stand in for a session, and a new way to change how one
   logs in revokes the same way.
 - `RESUMECMS_SESSION_SECRET` never gets a default (in `index.js`,

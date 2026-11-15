@@ -157,10 +157,12 @@ export function createAuthRouter({ getSetting, setSetting }) {
       username: newUsername.trim(),
       passwordHash: newPassword ? hashPassword(newPassword) : credentials.passwordHash,
     };
-    setSetting('credentials', updated);
     // A new password or username signs out every other session (a copied
-    // cookie included), but not this one.
+    // cookie included), but not this one. Before the write, so a failure
+    // to sign them out changes nothing, and a failed write leaves them
+    // signed out over the old password, never the reverse.
     if (newPassword || updated.username !== credentials.username) revokeOtherSessions(req);
+    setSetting('credentials', updated);
     res.json({ username: updated.username });
   });
 

@@ -279,3 +279,21 @@ test('with no session store a login fails before its 2FA code is spent', async (
     app.close();
   }
 });
+
+test('a new password is not saved if the other sessions could not be signed out', async () => {
+  const app = await start();
+  try {
+    const tab = await app.login();
+    const other = await app.login();
+    const before = app.settings.get('credentials');
+    app.sessions.removeOthers = () => {
+      throw new Error('disk I/O error');
+    };
+    const res = await tab.post('/auth/credentials', { currentPassword: PASSWORD, newUsername: 'admin', newPassword: 'a new password' });
+    assert.equal(res.status, 500);
+    assert.deepEqual(app.settings.get('credentials'), before);
+    assert.equal(await other.loggedIn(), true);
+  } finally {
+    app.close();
+  }
+});
