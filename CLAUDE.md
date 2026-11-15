@@ -82,7 +82,12 @@ Conventional Commit (`feat:`, `fix(scope):`, `feat!:`; `pr-title`
 checks it, and Dependabot's are prefixed `fix(deps)`/`ci`). It keeps a
 release PR open (`release-please-config.json`, `simple` release type,
 bumping both `package.json`s and lockfiles; `.release-please-manifest.json`
-holds the current version). Merging it tags `vX.Y.Z` and the same
+holds the current version). The editor's top bar shows that version
+(`TopbarEnd.jsx`, from `client/package.json` via `vite.config.js`'s
+`__APP_VERSION__` define), so keep `client/package.json` in its
+`extra-files`; `client/src/editor/appVersion.test.js` fails if either
+`package.json` differs from the manifest. A build between releases still
+shows the last release. Merging it tags `vX.Y.Z` and the same
 workflow pushes a linux/amd64 + linux/arm64 image to Docker Hub as
 `zacharmstrong/resumecms` (`X.Y.Z`, `X.Y`, `X`, `latest`; only the newest
 release moves the last three). A manual run with a tag publishes that
@@ -984,7 +989,15 @@ of all, even ahead of the app-wide `express.json()` and the cookie session:
 its bearer check runs before its own body parser, so an unauthenticated
 request never gets 2 MB of JSON parsed on its behalf. Because of that the
 router answers every method and sub-path itself (405/404) — anything it let
-through would reach the SPA catch-all.
+through would reach the SPA catch-all. Its own error middleware answers
+body-parser errors as JSON-RPC; anything else, there or anywhere, reaches
+`middleware/errorHandler.js`, registered last of all (after
+`mountClient()`, issue #176): an error with a 4xx `status`/`statusCode`
+keeps it (body-parser's 400 for bad JSON, 413 past the 2 MB limit) with a
+message of its own, never the parser's (which quotes the body), anything
+else is logged and a generic 500, both as `{ error }` with `ERROR`
+(`no-store`) as their `Cache-Control`, and once headers are sent it only
+passes the error on. Keep it the last `app.use()`.
 
 ### Block nesting
 
@@ -1641,7 +1654,9 @@ config. `server/src/middleware/requireAuth.js` gates everything under
 `/api` except `/api/auth/*` and `/api/public/*`; `/mcp` is gated separately
 by its bearer token (see "MCP server"). Login is rate-limited
 (10 failed attempts / IP / 15 min) and optionally captcha-gated
-(`RESUMECMS_CAPTCHA_PROVIDER`); see README.md for the full auth/security
+(`RESUMECMS_CAPTCHA_PROVIDER`; off only when unset: an unknown provider
+or a missing key refuses to start, `readCaptchaConfig()` in
+`captchaConfig.js`); see README.md for the full auth/security
 notes, including manual TOTP recovery via direct SQLite access.
 `RESUMECMS_SESSION_SECRET` has no default: `requireSessionSecret.js`, imported
 first by `index.js` so it runs before `db.js` opens the database, exits unless
