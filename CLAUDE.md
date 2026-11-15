@@ -33,6 +33,8 @@ npm run dev      # node --watch src/index.js — needs RESUMECMS_ADMIN_USERNAME,
                   # RESUMECMS_DATA_DIR set (see README.md)
 npm start
 npm test          # node --test — auto-discovers **/*.test.js under server/src
+npm run test:browser  # the editor in headless Chromium (server/e2e/*.e2e.js);
+                  # needs a built client/dist, starts its own server
 
 # client (from client/)
 npm run dev       # vite dev server on :5173, proxies /api -> :4000
@@ -51,7 +53,27 @@ that doesn't need a live HTTP server or a DOM — run them with `npm test`
 from the respective package. No test imports `server/src/db.js` (importing
 it opens and seeds the real SQLite file); `resumeStore.test.js` instead
 builds the store over a `better-sqlite3` `:memory:` database via
-`ensureSchema()`, and the MCP tool tests inject a fake store. CI is one workflow,
+`ensureSchema()`, and the MCP tool tests inject a fake store.
+
+What needs a browser is a small Puppeteer suite of its own (issue #178),
+`server/e2e/`: `npm run test:browser` from `server/`, after `npm run build`
+in `client/` (it says so if `client/dist` is missing). `harness.js` starts
+`node src/index.js` on a free port with a fresh `mkdtemp` data dir and
+random credentials, waits on `/api/auth/status`, and on the way out SIGTERMs
+that child alone (SIGKILL after a grace period) and removes the dir; each
+flow in `editor.e2e.js` gets a fresh browser context, blocks every request
+but the server's (Google Fonts included), waits on the page's state or on
+its requests (never a fixed sleep), and leaves a screenshot when it fails
+(`E2E_SCREENSHOT_DIR`, else a folder under the OS temp dir). The flows:
+logging in through the form, editing a block and publishing it, the landing
+preset dialog's keyboard and focus, applying a preset and reloading, and
+leaving the editor (switcher, Log out) with a save still on its debounce.
+The files are named `*.e2e.js`, not `*.test.js`, so `npm test` (whose
+`node --test` discovers every `*.test.js` under `server/`) never runs them.
+A new flow waits on real UI state too, and answers a `confirm()` as it
+opens (`expectDialog()`): the click that opened it doesn't return before.
+
+CI is one workflow,
 `.github/workflows/ci.yml`, run on every PR into `main` (issue #97): a
 `changes` job diffs the PR and only the jobs it touches run (`server
 tests` for `server/**`; `client tests and build` for `client/**`,

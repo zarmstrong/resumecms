@@ -1,0 +1,445 @@
+// Editor flows in a real browser (issue #178): what the unit tests can't
+// see, React's event wiring, a dialog's focus, the order saves go out in
+// when the page is left. One server for the whole file, a fresh browser
+// context (so a fresh session) for each flow. Every wait is on the page's
+// own state or on a request it makes, never a fixed sleep.
+//
+// Run with `npm run test:browser` from server/, after `npm run build` in
+// client/. A failed flow leaves a screenshot (see saveScreenshot()).
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { after, before, test } from 'node:test';
+import { PASSWORD, REPO_ROOT, USERNAME, launchBrowser, saveScreenshot, startServer } from './harness.js';
+
+let server;
+let browser;
+
+before(async () => {
+  server = await startServer();
+  browser = await launchBrowser();
+});
+
+after(async () => {
+  await browser?.close();
+  await server?.stop();
+});
+
+// One flow: a fresh context and page, any browser dialog it didn't ask for
+// (expectDialog) and any uncaught page error failing it, and a screenshot
+// when it fails.
+function flow(name, fn) {
+  test(name, { timeout: 90000 }, async (t) => {
+    const context = await browser.createBrowserContext();
+    const page = await newPage(context);
+    const expected = [];
+    const unexpected = [];
+    page.on('dialog', (dialog) => {
+      const handle = expected.shift();
+      if (handle) return handle(dialog);
+      unexpected.push(`${dialog.type()}: ${dialog.message()}`);
+      return dialog.dismiss();
+    });
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    // The next browser dialog is answered with `answer` ('accept' or
+    // 'dismiss') as it opens, since the page is stopped until it is (the
+    // click that opened it doesn't return before); resolves with what it
+    // said.
+    const expectDialog = (answer) =>
+      new Promise((resolve) =>
+        expected.push(async (dialog) => {
+          const seen = { type: dialog.type(), message: dialog.message() };
+          await dialog[answer]();
+          resolve(seen);
+        })
+      );
+    try {
+      await fn({ page, context, expectDialog });
+      assert.deepEqual(unexpected, [], 'no browser dialog the flow did not expect');
+      assert.deepEqual(errors, [], 'no uncaught error on the page');
+    } catch (err) {
+      t.diagnostic(`screenshot: ${await saveScreenshot(page, name)}`);
+      if (errors.length) t.diagnostic(`uncaught page errors: ${JSON.stringify(errors)}`);
+      t.diagnostic(`server output (tail):\n${server.output().slice(-3000)}`);
+      throw err;
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+// A page that reaches only the server under test: the pages' Google Fonts
+// would otherwise make the run depend on the network, and a font arriving
+// mid-click moves what the click was aimed at.
+async function newPage(context) {
+  const page = await context.newPage();
+  page.setDefaultTimeout(15000);
+  await page.setViewport({ width: 1400, height: 1000 });
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    if (request.url().startsWith(`${server.baseUrl}/`) || request.url().startsWith('data:')) request.continue();
+    else request.abort('blockedbyclient');
+  });
+  return page;
+}
+
+// --- helpers ---------------------------------------------------------------
+
+const RESUME_SELECT = 'select[aria-label="Resume"]';
+const PRESET_DIALOG = 'dialog.ed-preset-picker';
+
+async function login(page) {
+  await page.goto(`${server.baseUrl}/editor`);
+  await page.waitForSelector('input[autocomplete="username"]');
+  await page.type('input[autocomplete="username"]', USERNAME);
+  await page.type('input[autocomplete="current-password"]', PASSWORD);
+  await page.click('button[type="submit"]');
+  await page.waitForSelector(RESUME_SELECT);
+}
+
+// A JSON call from the page, with its session cookie.
+function api(page, url, init = {}) {
+  return page.evaluate(
+    async (url, init) => {
+      const response = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json' } });
+      return { status: response.status, body: await response.json().catch(() => null) };
+    },
+    url,
+    init
+  );
+}
+
+async function defaultResumeId(page) {
+  const { body } = await api(page, '/api/resumes');
+  return body.resumes.find((r) => r.isDefault).id;
+}
+
+async function draftBlock(page, resumeId, blockId) {
+  const { body } = await api(page, `/api/resumes/${resumeId}/blocks`);
+  return body.blocks.find((b) => b.id === blockId);
+}
+
+// The draft's summary block, and its row in the block list, opened.
+async function openSummary(page, resumeId) {
+  const { body } = await api(page, `/api/resumes/${resumeId}/blocks`);
+  const block = body.blocks.find((b) => b.type === 'summary');
+  assert.ok(block, 'the sample resume has a summary');
+  const row = await page.waitForSelector(
+    'xpath/.//div[contains(@class, "ed-block-row")][.//span[@class="ed-block-type"][.="Professional Summary"]]'
+  );
+  await (await row.$('.ed-block-summary')).click();
+  const textarea = await row.waitForSelector('textarea');
+  return { block, textarea };
+}
+
+// Replaces a field's text by typing, as someone would.
+async function retype(page, field, text) {
+  await field.focus();
+  await field.evaluate((el) => el.select());
+  await page.keyboard.type(text);
+}
+
+// Whether a request is a `method` request to `pathname`, and the response
+// to the next one. Waited for before the action that sends it, and marked
+// handled, so a flow that fails before awaiting it reports its own error
+// rather than this wait's timeout.
+function isCall(method, pathname) {
+  return (request) => request.method() === method && new URL(request.url()).pathname === pathname;
+}
+
+function isPut(pathname) {
+  return isCall('PUT', pathname);
+}
+
+function nextResponse(page, method, pathname, options) {
+  const response = page.waitForResponse((r) => isCall(method, pathname)(r.request()), options);
+  response.catch(() => {});
+  return response;
+}
+
+function putResponse(page, pathname) {
+  return nextResponse(page, 'PUT', pathname);
+}
+
+// What the browser has focused, described well enough to assert on.
+function focused(page) {
+  return page.evaluate(() => {
+    const el = document.activeElement;
+    return {
+      tag: el?.tagName.toLowerCase(),
+      type: el?.getAttribute('type'),
+      value: el?.value ?? null,
+      checked: el?.checked ?? null,
+      label: el?.getAttribute('aria-label'),
+      text: el?.textContent.trim(),
+      inDialog: Boolean(el?.closest('dialog[open]')),
+    };
+  });
+}
+
+function dialogState(page) {
+  return page.evaluate((selector) => {
+    const dialog = document.querySelector(selector);
+    if (!dialog) return null;
+    return {
+      open: dialog.open,
+      modal: dialog.matches(':modal'),
+      title: dialog.querySelector('h2')?.textContent,
+      listHidden: dialog.querySelector('fieldset').hidden,
+      previewing: Boolean(dialog.querySelector('.ed-preset-preview')),
+      submit: dialog.querySelector('button[type="submit"]').textContent,
+      radios: [...dialog.querySelectorAll('input[type="radio"]')].map((r) => r.value),
+    };
+  }, PRESET_DIALOG);
+}
+
+function readPreset(id) {
+  return JSON.parse(readFileSync(path.join(REPO_ROOT, 'templates', 'landing-presets', id, 'template.json'), 'utf8'));
+}
+
+// The landing editor, with the dialog it opens by itself on a page never
+// saved closed by Skip if it's there (so a flow doesn't depend on another
+// having run first).
+async function openLandingEditor(page) {
+  await page.goto(`${server.baseUrl}/editor?page=landing`);
+  const startButton = 'xpath/.//button[normalize-space()="Start from a preset…"]';
+  await page.waitForSelector(startButton);
+  const { body } = await api(page, '/api/landing');
+  if (!body.status.hasDraft) {
+    await page.waitForSelector(`${PRESET_DIALOG}[open]`);
+    const saved = putResponse(page, '/api/landing');
+    await page.click('xpath/.//dialog[@open]//button[normalize-space()="Skip"]');
+    assert.equal((await saved).status(), 200);
+  }
+  return page.waitForSelector(`${startButton}[not(@disabled)]`);
+}
+
+// --- flows -----------------------------------------------------------------
+
+flow('logs in through the login form', async ({ page }) => {
+  await page.goto(`${server.baseUrl}/editor`);
+  await page.waitForSelector('input[autocomplete="username"]');
+  assert.equal((await focused(page)).tag, 'input', 'the username field has focus');
+
+  // A wrong password is refused on the form, which stays up.
+  await page.type('input[autocomplete="username"]', USERNAME);
+  await page.type('input[autocomplete="current-password"]', 'not-the-password');
+  await page.click('button[type="submit"]');
+  const error = await page.waitForSelector('.ed-login-error');
+  assert.match(await error.evaluate((el) => el.textContent), /incorrect username or password/i);
+  assert.equal((await api(page, '/api/auth/status')).body.authenticated, false);
+
+  await page.$eval('input[autocomplete="current-password"]', (el) => el.select());
+  await page.type('input[autocomplete="current-password"]', PASSWORD);
+  await page.click('button[type="submit"]');
+  await page.waitForSelector(RESUME_SELECT);
+  await page.waitForSelector('.ed-block-row');
+  assert.equal((await api(page, '/api/auth/status')).body.authenticated, true);
+});
+
+flow('edits a block, publishes it, and the public page shows it', async ({ page, context }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const { block, textarea } = await openSummary(page, resumeId);
+  const text = `Published from the browser suite, ${Date.now()}.`;
+
+  const saved = putResponse(page, `/api/resumes/${resumeId}/blocks/${block.id}`);
+  await retype(page, textarea, text);
+  assert.equal((await saved).status(), 200);
+  assert.equal((await draftBlock(page, resumeId, block.id)).data.text, text);
+
+  // The public page still shows the published text until the publish.
+  const visitor = await context.browser().createBrowserContext();
+  try {
+    const publicPage = await newPage(visitor);
+    await publicPage.goto(`${server.baseUrl}/`);
+    await publicPage.waitForFunction((old) => document.body.innerText.includes(old), {}, block.data.text);
+
+    // Up to the server's own wait for the PDF, and some.
+    const published = nextResponse(page, 'POST', `/api/resumes/${resumeId}/publish`, { timeout: 40000 });
+    await page.click('xpath/.//header//button[normalize-space()="Publish"]');
+    assert.equal((await published).status(), 200);
+    await page.waitForFunction(() => /^Published /.test(document.querySelector('.ed-topbar-status')?.textContent));
+
+    await publicPage.reload();
+    await publicPage.waitForFunction((t) => document.body.innerText.includes(t), {}, text);
+    assert.equal(await publicPage.evaluate((old) => document.body.innerText.includes(old), block.data.text), false);
+  } finally {
+    await visitor.close();
+  }
+});
+
+flow("the preset dialog's keyboard: arrows, preview, Escape and focus", async ({ page }) => {
+  await login(page);
+  // A landing page never saved, so the dialog opens by itself (this flow
+  // runs before the one that applies a preset).
+  const { body: landing } = await api(page, '/api/landing');
+  assert.equal(landing.status.hasDraft, false, 'a fresh install has no landing draft');
+
+  await page.goto(`${server.baseUrl}/editor?page=landing`);
+  await page.waitForSelector(`${PRESET_DIALOG}[open]`);
+  let state = await dialogState(page);
+  assert.equal(state.modal, true, 'opened with showModal(), so the editor behind it is inert');
+  assert.equal(state.title, 'How should your landing page start?');
+  assert.equal(state.radios[0], ':keep');
+  assert.ok(state.radios.length > 2, 'the presets are listed');
+  const [keep, firstPreset, secondPreset] = state.radios;
+
+  // Focus starts on the first option, the arrows move it and the choice.
+  let now = await focused(page);
+  assert.deepEqual([now.type, now.value, now.checked], ['radio', keep, true]);
+  assert.equal(state.submit, 'Keep it');
+  await page.keyboard.press('ArrowDown');
+  now = await focused(page);
+  assert.deepEqual([now.type, now.value, now.checked], ['radio', firstPreset, true]);
+  assert.equal((await dialogState(page)).submit, 'Use this preset');
+  await page.keyboard.press('ArrowRight');
+  assert.equal((await focused(page)).value, secondPreset);
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowLeft');
+  now = await focused(page);
+  assert.deepEqual([now.value, now.checked], [keep, true]);
+  assert.equal((await dialogState(page)).submit, 'Keep it');
+
+  // Tab leaves the radio group for that card's Preview, and goes on
+  // through the dialog, never to the editor behind it.
+  await page.keyboard.press('Tab');
+  now = await focused(page);
+  assert.equal(now.label, 'Preview Keep the starting page');
+  for (let i = 0; i < 6; i += 1) {
+    await page.keyboard.press('Tab');
+    assert.equal((await focused(page)).inDialog, true, `focus is still in the dialog after ${i + 2} Tabs`);
+  }
+
+  // A preview by keyboard: Enter opens it with focus on Back, Escape goes
+  // back to the list (the dialog stays open) with focus on its Preview.
+  const preview = await page.$(`${PRESET_DIALOG} button[aria-label="Preview Keep the starting page"]`);
+  await preview.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForSelector(`${PRESET_DIALOG} .ed-preset-preview`);
+  now = await focused(page);
+  assert.equal(now.text, '← Back to presets');
+  assert.equal((await dialogState(page)).listHidden, true);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector(`${PRESET_DIALOG} .ed-preset-preview`, { hidden: true });
+  state = await dialogState(page);
+  assert.deepEqual([state?.open, state?.listHidden], [true, false], 'Escape went back to the list, and the dialog is still open');
+  assert.equal((await focused(page)).label, 'Preview Keep the starting page');
+
+  // Escape on the list closes it; the dialog that opened by itself keeps
+  // the starting page, so it's saved and not offered again.
+  const saved = putResponse(page, '/api/landing');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector(PRESET_DIALOG, { hidden: true });
+  assert.equal((await saved).status(), 200);
+  assert.equal((await api(page, '/api/landing')).body.status.hasDraft, true);
+
+  // Opened from its button: focus on the first preset, and Escape gives
+  // focus back to the button.
+  const startButton = await page.waitForSelector('xpath/.//button[normalize-space()="Start from a preset…"][not(@disabled)]');
+  await startButton.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForSelector(`${PRESET_DIALOG}[open]`);
+  state = await dialogState(page);
+  assert.equal(state.title, 'Start from a preset');
+  assert.equal(state.radios[0], firstPreset);
+  now = await focused(page);
+  assert.deepEqual([now.type, now.value, now.checked], ['radio', firstPreset, true]);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector(PRESET_DIALOG, { hidden: true });
+  now = await focused(page);
+  assert.equal(now.text, 'Start from a preset…', 'focus is back on the button that opened it');
+});
+
+flow('applies a preset, and a reload keeps it', async ({ page, expectDialog }) => {
+  await login(page);
+  const startButton = await openLandingEditor(page);
+  const { body: before } = await api(page, '/api/landing');
+
+  await startButton.click();
+  await page.waitForSelector(`${PRESET_DIALOG}[open]`);
+  // A preset that changes the template, so the change shows.
+  const preset = (await dialogState(page)).radios.map(readPreset).find((p) => p.template !== before.landing.template);
+  assert.ok(preset, 'a preset with another template');
+  await page.click(`${PRESET_DIALOG} input[type="radio"][value="${preset.id}"]`);
+
+  // Applying a preset from its button asks first; it's accepted.
+  const question = expectDialog('accept');
+  const saved = putResponse(page, '/api/landing');
+  await page.click(`${PRESET_DIALOG} button[type="submit"]`);
+  const confirm = await question;
+  assert.equal(confirm.type, 'confirm');
+  assert.match(confirm.message, new RegExp(`“${preset.label}” preset`));
+  const response = await saved;
+  assert.equal(response.status(), 200);
+  assert.equal(JSON.parse(response.request().postData()).template, preset.template);
+
+  await page.reload();
+  await page.waitForSelector(`.ed-preview-frame .l-template-${preset.template}`);
+  assert.equal(await page.$(PRESET_DIALOG), null, "the dialog doesn't open again by itself");
+  const { body: after } = await api(page, '/api/landing');
+  assert.equal(after.landing.template, preset.template);
+  assert.deepEqual(after.landing.style, { ...after.landing.style, ...preset.style }, "the preset's style");
+  assert.deepEqual(
+    after.landing.sections.slice(0, preset.sections.length).map((s) => s.kind),
+    preset.sections.map((s) => s.kind),
+    "the preset's sections come first"
+  );
+});
+
+// The save waiting on its debounce when the page is left by one of its
+// own exits: the leave guard flushes it first. Each checks the PUT hadn't
+// gone out when the exit was taken, so it's the flush that sent it.
+flow('leaving through the switcher with a save pending keeps the edit', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const { block, textarea } = await openSummary(page, resumeId);
+  const putPath = `/api/resumes/${resumeId}/blocks/${block.id}`;
+  const order = [];
+  page.on('request', (request) => {
+    if (isPut(putPath)(request)) order.push('save sent');
+    if (isCall('GET', '/api/landing')(request)) order.push('landing editor loads');
+  });
+  page.on('response', (response) => isPut(putPath)(response.request()) && order.push('saved'));
+  const saved = putResponse(page, putPath);
+
+  const text = `Saved on the way out, ${Date.now()}.`;
+  await retype(page, textarea, text);
+  assert.deepEqual(order, [], 'the save is still waiting on its debounce');
+  await page.select(RESUME_SELECT, 'landing');
+
+  assert.equal((await saved).status(), 200);
+  await page.waitForFunction(() => new URLSearchParams(location.search).get('page') === 'landing');
+  await page.waitForSelector('xpath/.//button[normalize-space()="Start from a preset…"]');
+  // Flushed before the switch, not just sent as the resume's page went.
+  assert.deepEqual(order, ['save sent', 'saved', 'landing editor loads']);
+  assert.equal((await draftBlock(page, resumeId, block.id)).data.text, text);
+});
+
+flow('logging out with a save pending saves it before the session ends', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const { block, textarea } = await openSummary(page, resumeId);
+  const putPath = `/api/resumes/${resumeId}/blocks/${block.id}`;
+  const order = [];
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url());
+    if (isPut(putPath)(request)) order.push('save');
+    if (request.method() === 'POST' && pathname === '/api/auth/logout') order.push('logout');
+  });
+  const saved = putResponse(page, putPath);
+
+  const text = `Saved before logging out, ${Date.now()}.`;
+  await retype(page, textarea, text);
+  assert.deepEqual(order, [], 'the save is still waiting on its debounce');
+  await page.click('xpath/.//header//button[normalize-space()="Log out"]');
+
+  assert.equal((await saved).status(), 200, 'saved while still logged in');
+  await page.waitForSelector('input[autocomplete="username"]');
+  assert.deepEqual(order, ['save', 'logout']);
+  assert.equal((await api(page, '/api/auth/status')).body.authenticated, false);
+
+  await login(page);
+  assert.equal((await draftBlock(page, resumeId, block.id)).data.text, text);
+});
