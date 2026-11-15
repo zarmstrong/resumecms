@@ -126,7 +126,8 @@ or untracked, and no ignored file under `server/`, `client/` or
 `templates/` but `node_modules` and `dist`) at exactly origin's `main`
 (by `git ls-remote`, so it writes nothing to the checkout), checked again
 right before building; names the services first (pass some to rebuild
-only those), asks unless given `--yes`, and runs one at a time.
+only those), asks unless given `--yes`, runs one at a time, and fails
+unless each site answers on its port within 90 s of `up`.
 `--dry-run` stops before Docker.
 
 Subagents follow the same rule. Agents that write code run with

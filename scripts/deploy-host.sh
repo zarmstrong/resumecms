@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # Deploys this host's live sites: rebuilds and restarts their containers
 # from the /opt/resumecms checkout (the build context in
-# /opt/docker/personal-sites.yml), whichever checkout or worktree this
-# script is run from. It's a deploy step, not a build step: for the local
-# checks, run scripts/check.sh instead.
+# /opt/docker/personal-sites.yml). It's a deploy step, not a build step:
+# for the local checks, run scripts/check.sh instead.
 #
-# It refuses unless /opt/resumecms is a clean `main` at exactly
-# origin's main, run from /opt/resumecms's own copy, and asks before rebuilding unless given --yes.
+# It runs only as /opt/resumecms/scripts/deploy-host.sh, refuses unless
+# that checkout is a clean `main` at exactly origin's main, asks before
+# rebuilding unless given --yes, and then waits for each site to answer.
 set -euo pipefail
 
 CHECKOUT=/opt/resumecms
 COMPOSE_DIR=/opt/docker
 SERVICES=(resumecmsedbalseiro resumecmszacharyarmstrong)
+# The host port each publishes (personal-sites.yml), to check it came up.
+declare -A PORTS=([resumecmsedbalseiro]=55340 [resumecmszacharyarmstrong]=55330)
+READY_SECONDS=90
 
 # Tests point the checks at a scratch repo. The build context stays
 # /opt/resumecms whatever this says, so it's only honored with --dry-run.
@@ -93,8 +96,9 @@ if [[ "$CHECK_DIR" == "$CHECKOUT" && "$script_root" != "$checkout_real" ]]; then
 fi
 
 # One deploy at a time.
-# A fixed path, so every caller takes the same lock whatever its TMPDIR.
-exec 9>/tmp/resumecms-deploy-host.lock
+# Locked on this script itself (always /opt/resumecms's copy, see above),
+# opened read-only, so the lock creates no file anywhere.
+exec 9<"${BASH_SOURCE[0]}"
 flock -n 9 || die "another deploy-host.sh is running"
 
 # The checkout must be exactly origin's main: on main; nothing modified,
@@ -176,3 +180,29 @@ fi
 
 cd "$COMPOSE_DIR"
 "${command[@]}"
+
+# `up -d` returns once the containers are replaced, not once the app in
+# them has started; a server that refuses to boot (a missing session
+# secret, a bad captcha setting) restarts in a loop. Wait for each site to
+# answer before calling it deployed.
+failed=()
+for service in "${chosen[@]}"; do
+  port=${PORTS[$service]}
+  deadline=$((SECONDS + READY_SECONDS))
+  until curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$port/api/auth/status"; do
+    if ((SECONDS >= deadline)); then
+      failed+=("$service")
+      break
+    fi
+    sleep 3
+  done
+done
+if ((${#failed[@]})); then
+  echo "deploy-host: not answering after ${READY_SECONDS}s: ${failed[*]}" >&2
+  for service in "${failed[@]}"; do
+    echo "--- last log lines of $service:" >&2
+    docker compose logs --tail 20 "$service" >&2 || true
+  done
+  exit 1
+fi
+echo "Deployed: ${chosen[*]} (each answering on its port)."
