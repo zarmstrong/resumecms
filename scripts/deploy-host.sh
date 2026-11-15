@@ -94,9 +94,10 @@ if [[ "$CHECK_DIR" == "$CHECKOUT" && "$script_root" != "$checkout_real" ]]; then
 fi
 
 # One deploy at a time.
-# Locked on this script itself (always /opt/resumecms's copy, see above),
-# opened read-only, so the lock creates no file anywhere.
-exec 9<"${BASH_SOURCE[0]}"
+# Locked on the checkout's directory, opened read-only: it creates no file,
+# and unlike this script (which a pull replaces with a new file, and so a
+# new lock) it stays the same directory.
+exec 9<"$CHECK_DIR"
 flock -n 9 || die "another deploy-host.sh is running"
 
 # The checkout must be exactly origin's main: on main; nothing modified,
@@ -108,7 +109,11 @@ flock -n 9 || die "another deploy-host.sh is running"
 git -C "$CHECK_DIR" rev-parse --git-dir >/dev/null 2>&1 \
   || die "$CHECK_DIR is not a git checkout"
 check_checkout() {
-  local problems=() branch head remote extra
+  local problems=() branch head remote remote_ok=true extra
+  # Asked first: it can take up to a minute, and the local checks below
+  # have to describe the checkout as it is once it's answered.
+  # Never wait on a credential prompt or a stalled remote.
+  remote=$(GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes" timeout 60 git -C "$CHECK_DIR" ls-remote --exit-code origin refs/heads/main) || remote_ok=false
   branch=$(git -C "$CHECK_DIR" symbolic-ref --short -q HEAD || true)
   if [[ "$branch" != main ]]; then
     problems+=("it is on ${branch:-a detached HEAD}, not main")
@@ -130,8 +135,7 @@ check_checkout() {
     problems+=("it has ignored files the image would copy: $(echo "$extra" | head -3 | tr '\n' ' ')")
   fi
   head=$(git -C "$CHECK_DIR" rev-parse HEAD)
-  # Never wait on a credential prompt or a stalled remote.
-  if ! remote=$(GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes" timeout 60 git -C "$CHECK_DIR" ls-remote --exit-code origin refs/heads/main); then
+  if ! $remote_ok; then
     problems+=("git ls-remote origin failed or timed out, so it can't be checked against origin's main")
   elif [[ "${remote%%[[:space:]]*}" != "$head" ]]; then
     problems+=("it is at ${head:0:7}, not origin's main ${remote:0:7} (git -C $CHECK_DIR pull --ff-only, or push)")
@@ -191,7 +195,8 @@ failed=()
 while ((${#waiting[@]})); do
   still=()
   for service in "${waiting[@]}"; do
-    address=$(docker compose port "$service" 4000 2>/dev/null | tail -1 || true)
+    # Bounded, so a stalled Docker daemon can't hold the lock forever.
+    address=$(timeout 10 docker compose port "$service" 4000 2>/dev/null | tail -1 || true)
     port=${address##*:}
     if [[ -z "$port" ]] || ! curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$port/api/auth/status"; then
       still+=("$service")
@@ -209,7 +214,7 @@ if ((${#failed[@]})); then
   echo "deploy-host: not answering after ${READY_SECONDS}s: ${failed[*]}" >&2
   for service in "${failed[@]}"; do
     echo "--- last log lines of $service:" >&2
-    docker compose logs --tail 20 "$service" >&2 || true
+    timeout 20 docker compose logs --tail 20 "$service" >&2 || true
   done
   exit 1
 fi
