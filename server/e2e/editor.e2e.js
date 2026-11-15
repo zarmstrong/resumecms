@@ -257,6 +257,9 @@ flow('edits a block, publishes it, and the public page shows it', async ({ page,
     await publicPage.waitForFunction((old) => document.body.innerText.includes(old), {}, block.data.text);
 
     // Up to the server's own wait for the PDF, and some.
+    // The edit shows as unpublished first, so the "Published …" waited for
+    // below is the publish's, not the line already on screen.
+    await page.waitForFunction(() => document.querySelector('.ed-topbar-status')?.textContent === 'Unpublished changes');
     const published = nextResponse(page, 'POST', `/api/resumes/${resumeId}/publish`, { timeout: 40000 });
     await page.click('xpath/.//header//button[normalize-space()="Publish"]');
     assert.equal((await published).status(), 200);
@@ -271,9 +274,20 @@ flow('edits a block, publishes it, and the public page shows it', async ({ page,
 });
 
 flow("the preset dialog's keyboard: arrows, preview, Escape and focus", async ({ page }) => {
+  // On a server of its own, so the landing page has never been saved (and
+  // the dialog opens by itself) whichever flows ran before or are skipped.
+  const shared = server;
+  server = await startServer();
+  try {
+    await presetDialogFlow(page);
+  } finally {
+    await server.stop();
+    server = shared;
+  }
+});
+
+async function presetDialogFlow(page) {
   await login(page);
-  // A landing page never saved, so the dialog opens by itself (this flow
-  // runs before the one that applies a preset).
   const { body: landing } = await api(page, '/api/landing');
   assert.equal(landing.status.hasDraft, false, 'a fresh install has no landing draft');
 
@@ -350,7 +364,7 @@ flow("the preset dialog's keyboard: arrows, preview, Escape and focus", async ({
   await page.waitForSelector(PRESET_DIALOG, { hidden: true });
   now = await focused(page);
   assert.equal(now.text, 'Start from a preset…', 'focus is back on the button that opened it');
-});
+}
 
 flow('applies a preset, and a reload keeps it', async ({ page, expectDialog }) => {
   await login(page);

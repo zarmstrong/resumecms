@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { FORCE_EXIT_MS } from '../src/shutdown.js';
 
 const SERVER_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const REPO_ROOT = path.dirname(SERVER_DIR);
@@ -24,7 +25,9 @@ export const USERNAME = 'e2e-admin';
 export const PASSWORD = `e2e-${randomBytes(8).toString('hex')}`;
 
 const READY_TIMEOUT_MS = 20000;
-const STOP_GRACE_MS = 5000;
+// Past the server's own FORCE_EXIT_MS backstop (src/shutdown.js), so its
+// shutdown gets to close the PDF renderer's Chromium before a SIGKILL.
+const STOP_GRACE_MS = FORCE_EXIT_MS + 2000;
 
 // A port nothing is listening on, from the OS. It's closed again before the
 // server takes it, so another process could in principle grab it first; the
