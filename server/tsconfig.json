@@ -1,0 +1,22 @@
+{
+  // Type checks for the server (issue #177), run by `npm run typecheck`.
+  // Incremental: every source file is read, but only one that starts with
+  // `// @ts-check` is checked, with JSDoc for the shapes it hands across a
+  // boundary. There are no .ts files and nothing is emitted.
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    // An opted-in file is checked without first typing every parameter it
+    // has; the JSDoc goes where a shape crosses a boundary.
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.js"],
+  "exclude": ["node_modules"]
+}

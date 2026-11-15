@@ -21,6 +21,7 @@ const textOf = (value) => (typeof value === 'string' ? value.trim() : '');
 export function escapeText(value) {
   return String(value)
     .replace(/\r\n?/g, '\n')
+    // eslint-disable-next-line no-control-regex -- control characters are what it's looking for
     .replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, '')
     .replace(/[\\,;]/g, (ch) => `\\${ch}`)
     .replace(/\n/g, '\\n');
@@ -32,6 +33,7 @@ export function escapeText(value) {
 // become a space instead, so "555 0100, ext. 12" stays readable.
 export function phoneValue(value) {
   return String(value)
+    // eslint-disable-next-line no-control-regex -- control characters are what it's looking for
     .replace(/[\u0000-\u001f\u007f\\,;]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

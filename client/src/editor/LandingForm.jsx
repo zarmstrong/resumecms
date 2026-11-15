@@ -512,6 +512,7 @@ function SectionList({ sections, onChange, hasColumns, resumes, context, limits,
     } catch {
       // Storage unavailable (private browsing, etc.): it's only a convenience.
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- saved when one is collapsed or opened, not on every edit
   }, [collapsed]);
 
   // A new suggestion in a collapsed section opens it, so it isn't left
@@ -526,6 +527,7 @@ function SectionList({ sections, onChange, hasColumns, resumes, context, limits,
     const arrived = sections.filter((_, i) => ids[i].some((id) => !seen.has(id))).map((s) => s.id);
     seenSuggestions.current = new Set(ids.flat());
     if (arrived.length) setCollapsed((prev) => (arrived.some((id) => prev.has(id)) ? new Set([...prev].filter((id) => !arrived.includes(id))) : prev));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the joined ids stand for `suggestions`, a new array on every render
   }, [suggestions.join('|')]);
 
   function announce(message) {

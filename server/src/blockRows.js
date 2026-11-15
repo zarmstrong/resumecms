@@ -1,8 +1,38 @@
+// @ts-check
 // Pure helpers for turning `blocks` rows into API objects and putting them
 // in display order. They live apart from db.js (which re-exports them) so
 // modules that must not open the real database — resumeStore.js and its
 // tests — can import them directly.
 
+/**
+ * A block as the REST API, the MCP tools and the published snapshot carry
+ * it. `data` is the type's own shape (blockData.js); `parentId` names a
+ * heading (see "Block nesting" in CLAUDE.md).
+ * @typedef {'heading' | 'summary' | 'executive_summary' | 'skills_group' | 'experience' | 'education' | 'custom'} BlockType
+ * @typedef {{
+ *   id: string,
+ *   type: BlockType,
+ *   position: number,
+ *   parentId: string | null,
+ *   visibleWeb: boolean,
+ *   visiblePrint: boolean,
+ *   data: Record<string, any>,
+ * }} Block
+ * @typedef {{
+ *   id: string,
+ *   type: BlockType,
+ *   position: number,
+ *   parent_id: string | null,
+ *   visible_web: number,
+ *   visible_print: number,
+ *   data: string,
+ * }} BlockRow
+ */
+
+/**
+ * @param {BlockRow} row
+ * @returns {Block}
+ */
 export function rowToBlock(row) {
   return {
     id: row.id,
@@ -21,18 +51,26 @@ export function rowToBlock(row) {
 // by their own position and spliced in right after it. This is also the
 // order every consumer (editor list, public site, PDF) renders in, so a
 // heading's children always appear together under it.
+/**
+ * @template {{ id: string, type: string, position: number, parentId?: string | null }} T
+ * @param {T[]} blocks
+ * @returns {T[]}
+ */
 export function orderBlocksHierarchically(blocks) {
+  /** @type {Map<string | null, T[]>} */
   const childrenByParent = new Map();
   for (const block of blocks) {
     const key = block.parentId ?? null;
     if (!childrenByParent.has(key)) childrenByParent.set(key, []);
-    childrenByParent.get(key).push(block);
+    /** @type {T[]} */ (childrenByParent.get(key)).push(block);
   }
   for (const siblings of childrenByParent.values()) {
     siblings.sort((a, b) => a.position - b.position);
   }
+  /** @type {T[]} */
   const ordered = [];
   const visited = new Set();
+  /** @param {string | null} parentId */
   function visit(parentId) {
     for (const block of childrenByParent.get(parentId) || []) {
       // A heading can never get a parentId through the API (assertValidParent

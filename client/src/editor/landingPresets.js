@@ -194,7 +194,7 @@ export function contactFromLinks(landing, limits = FALLBACK_LIMITS) {
     // Only a number the field can hold as it is: digits, a leading + and
     // the usual punctuation. A *, #, pause or letter would be dropped from
     // the field's link, dialling something else, so then it's left empty.
-    const target = /^\+?[\d\s().\-]+$/.test(number) ? telHref(written) : undefined;
+    const target = /^\+?[\d\s().-]+$/.test(number) ? telHref(written) : undefined;
     const label = tel.label.trim();
     phone = !target ? '' : label && telHref(label) === target ? label : written;
   }
@@ -203,6 +203,7 @@ export function contactFromLinks(landing, limits = FALLBACK_LIMITS) {
 
 // Fits a contact section's single-line field of `max` characters, else ''.
 function contactLine(value, max) {
+  // eslint-disable-next-line no-control-regex -- control characters are what it's looking for
   return value.length <= max && !/[\u0000-\u001f\u007f]/.test(value) ? value : '';
 }
 

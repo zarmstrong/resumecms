@@ -1,3 +1,4 @@
+// @ts-check
 import { httpError } from './httpError.js';
 
 // The landing page's look (issue #93), the pure half: which template
@@ -64,10 +65,15 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
+/** @typedef {import('./landingTypes.js').LandingColors} LandingColors */
+/** @typedef {import('./landingTypes.js').LandingStyle} LandingStyle */
+
+/** @returns {LandingColors} */
 function emptyColors() {
-  return Object.fromEntries(LANDING_COLOR_KEYS.map((key) => [key, '']));
+  return /** @type {LandingColors} */ (Object.fromEntries(LANDING_COLOR_KEYS.map((key) => [key, ''])));
 }
 
+/** @returns {LandingStyle} */
 export function emptyStyle() {
   return { source: 'resume', colors: emptyColors(), font: '', nameFont: '' };
 }
@@ -81,11 +87,12 @@ export function checkTemplate(value) {
 
 // '' or #rrggbb for each of the four, stored in lower case (what a color
 // input gives).
+/** @returns {LandingColors} */
 function checkColors(colors, label) {
   if (!isPlainObject(colors)) throw httpError(400, `${label} must be an object`);
   const unknown = Object.keys(colors).find((key) => !LANDING_COLOR_KEYS.includes(key));
   if (unknown !== undefined) throw httpError(400, `Unknown ${label} field: ${unknown}`);
-  return Object.fromEntries(
+  return /** @type {LandingColors} */ (Object.fromEntries(
     LANDING_COLOR_KEYS.map((key) => {
       const value = colors[key] ?? '';
       if (typeof value !== 'string' || (value !== '' && !HEX_COLOR.test(value))) {
@@ -93,7 +100,7 @@ function checkColors(colors, label) {
       }
       return [key, value.toLowerCase()];
     })
-  );
+  ));
 }
 
 function checkFont(value, label) {
@@ -101,6 +108,7 @@ function checkFont(value, label) {
   return value;
 }
 
+/** @returns {LandingStyle} */
 export function checkStyle(style) {
   if (!isPlainObject(style)) throw httpError(400, 'style must be an object');
   const unknown = Object.keys(style).find((key) => !STYLE_FIELDS.includes(key));

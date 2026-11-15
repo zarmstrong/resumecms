@@ -281,7 +281,9 @@ export function EditorPage({
       .getAiSettings()
       .then(({ ai }) => setAiSettings(ai))
       .catch((err) => console.error('Failed to load AI settings', err));
-  }, [rapi]);
+    // onResumesChanged is ResumesEditor's reload, the same function on every
+    // render, so this still loads once per resume.
+  }, [rapi, onResumesChanged]);
 
   // While a render is pending, ask the server every few seconds until it
   // lands (or fails: pdfStale stays set). Only the PDF fields are taken, so

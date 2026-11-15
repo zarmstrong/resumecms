@@ -1,5 +1,30 @@
+// @ts-check
 const BASE = '/api';
 
+/**
+ * What a failed call rejects with: the server's `{ error }` as the message,
+ * and the HTTP status (routes/sendError.js).
+ * @typedef {Error & { status: number }} ApiError
+ */
+/**
+ * A block as the server's routes send and take it (Block in the server's
+ * blockRows.js; `data` is its type's shape, blockData.js).
+ * @typedef {'heading' | 'summary' | 'executive_summary' | 'skills_group' | 'experience' | 'education' | 'custom'} BlockType
+ * @typedef {{ id: string, type: BlockType, position: number, parentId: string | null, visibleWeb: boolean, visiblePrint: boolean, data: Record<string, any> }} Block
+ * @typedef {{ data?: Record<string, any> | null, parentId?: string | null, visibleWeb?: boolean, visiblePrint?: boolean }} BlockPatch
+ */
+/**
+ * A tailoring brief (Brief in the server's ai/brief.js); the server trims
+ * it and fills in a missing field with ''.
+ * @typedef {{ audience: string, posting?: string, guidance?: string }} TailoringBrief
+ * @typedef {import('./editor/aiReview.js').AiTarget} AiTarget
+ */
+
+/**
+ * @param {string} path under /api
+ * @param {RequestInit} [options]
+ * @returns {Promise<any>} the response's JSON, or null for a 204
+ */
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
@@ -14,7 +39,7 @@ async function request(path, options = {}) {
     } catch {
       // ignore
     }
-    const err = new Error(detail || `Request failed: ${res.status}`);
+    const err = /** @type {ApiError} */ (new Error(detail || `Request failed: ${res.status}`));
     err.status = res.status;
     throw err;
   }
@@ -45,9 +70,12 @@ export const api = {
   // The install's resumes (issue #53). The content of one is edited through
   // resumeApi(id) below.
   listResumes: () => request('/resumes'),
-  // { name, slug?, copyFrom? }
+  /** @param {{ name: string, slug?: string, copyFrom?: string, tailoring?: TailoringBrief | null }} input */
   createResume: (input) => request('/resumes', { method: 'POST', body: JSON.stringify(input) }),
-  // Any of { name, slug, isPublic, isDefault: true, hostnames }
+  /**
+   * @param {string} id
+   * @param {{ name?: string, slug?: string, isPublic?: boolean, isDefault?: true, hostnames?: string[], tailoring?: TailoringBrief | null }} patch
+   */
   updateResume: (id, patch) =>
     request(`/resumes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteResume: (id) => request(`/resumes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
@@ -94,6 +122,10 @@ export const api = {
 
   // The published resume the server picks for this host (`/`), or the
   // public one at /r/<slug> when `slug` is given.
+  /**
+   * @param {'web' | 'print'} mode
+   * @param {string | null} [slug]
+   */
   getPublicResume: (mode, slug = null) =>
     request(slug ? `/public/resumes/${encodeURIComponent(slug)}?mode=${mode}` : `/public/resume?mode=${mode}`),
 
@@ -106,6 +138,7 @@ export const api = {
 // can't land on another resume by leaving an id out. (The server's
 // unprefixed /api routes still mean the default resume; the editor doesn't
 // use them.)
+/** @param {string} resumeId */
 export function resumeApi(resumeId) {
   const prefix = `/resumes/${encodeURIComponent(resumeId)}`;
   return {
@@ -116,12 +149,27 @@ export function resumeApi(resumeId) {
     putSite: (site) => request(`${prefix}/site`, { method: 'PUT', body: JSON.stringify(site) }),
 
     getBlocks: () => request(`${prefix}/blocks`),
+    /**
+     * @param {BlockType} type
+     * @param {Record<string, any> | null} data
+     * @param {string | null} [parentId]
+     * @returns {Promise<Block>}
+     */
     createBlock: (type, data, parentId = null) =>
       request(`${prefix}/blocks`, { method: 'POST', body: JSON.stringify({ type, data, parentId }) }),
+    /**
+     * @param {string} id
+     * @param {BlockPatch} patch
+     * @returns {Promise<Block>}
+     */
     updateBlock: (id, patch) => request(`${prefix}/blocks/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
     deleteBlock: (id) => request(`${prefix}/blocks/${id}`, { method: 'DELETE' }),
     // items: [{ id, parentId }] in the desired flat order (a heading's
     // children immediately follow it) — see BlockList.jsx's flat-order model.
+    /**
+     * @param {{ id: string, parentId: string | null }[]} items
+     * @returns {Promise<Block[]>}
+     */
     reorderBlocks: (items) => request(`${prefix}/blocks/reorder`, { method: 'POST', body: JSON.stringify({ items }) }),
 
     // Returns a proposal only — nothing is saved until it's accepted and sent
@@ -131,6 +179,15 @@ export function resumeApi(resumeId) {
     // pickedTenseTypes); undefined drops out of the JSON. `brief` (a
     // resume's tailoring) tailors the rewrite; with one, the instruction
     // may be empty.
+    /**
+     * @param {string} blockId
+     * @param {Record<string, any>} data
+     * @param {string} instruction
+     * @param {AiTarget | null | undefined} target
+     * @param {string | null | undefined} tense
+     * @param {TailoringBrief | null} [brief]
+     * @returns {Promise<{ proposal: import('./editor/aiReview.js').AiProposal }>}
+     */
     aiRewrite: (blockId, data, instruction, target, tense, brief) =>
       request(`${prefix}/ai/rewrite`, {
         method: 'POST',

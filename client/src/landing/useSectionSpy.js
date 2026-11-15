@@ -83,7 +83,7 @@ export function useSectionSpy(entries, rootRef, endRef) {
       for (const type of byHand) scroller.removeEventListener(type, release);
       scroller.removeEventListener('scroll', onScroll);
     };
-    // `key` stands for `entries`, which is a new array on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for `entries`, which is a new array on every render
   }, [key, rootRef, endRef]);
 
   // Scrolls the section to the top of what holds the page, less its

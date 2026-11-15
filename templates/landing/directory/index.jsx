@@ -50,6 +50,7 @@ export default function DirectoryLanding({ landing, renderHero, renderSection, p
     if (preview || isInert(mainRef.current)) return;
     const anchor = anchorFromHash(window.location.hash, entries);
     if (anchor) jumpTo(anchor);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount (see above)
   }, []);
 
   // The open menu closes on a press anywhere outside it.
