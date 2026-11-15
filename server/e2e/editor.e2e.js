@@ -155,7 +155,6 @@ async function openSummary(page, resumeId) {
   return { block, textarea };
 }
 
-// Replaces a field's text by typing, as someone would.
 // Puts `text` in `field` in one go, the way typing does (the native setter
 // and an input event, so React's onChange runs): one change, so the one
 // save the debounce sends holds all of it, however slow the machine.

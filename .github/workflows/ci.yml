@@ -151,14 +151,15 @@ jobs:
             client/package-lock.json
 
       # Chrome is ~150 MB: kept between runs for the same Puppeteer, so a
-      # CDN hiccup doesn't fail the required check. Restored before npm ci,
+      # CDN hiccup doesn't fail the required check. No restore-keys: a
+      # restored older cache would be saved again with the new Chrome
+      # beside the old one, growing with every Puppeteer bump. Restored before npm ci,
       # whose Puppeteer postinstall then finds it already there.
       - name: Cache Puppeteer's Chrome
         uses: actions/cache@v6
         with:
           path: ~/.cache/puppeteer
           key: puppeteer-${{ runner.os }}-${{ hashFiles('server/package-lock.json') }}
-          restore-keys: puppeteer-${{ runner.os }}-
 
       - name: Install server dependencies
         run: |
