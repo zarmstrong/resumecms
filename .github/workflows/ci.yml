@@ -30,6 +30,7 @@ jobs:
     outputs:
       server: ${{ steps.diff.outputs.server }}
       client: ${{ steps.diff.outputs.client }}
+      client_lint: ${{ steps.diff.outputs.client_lint }}
       templates: ${{ steps.diff.outputs.templates }}
       docker: ${{ steps.diff.outputs.docker }}
     steps:
@@ -53,16 +54,20 @@ jobs:
           # Client tests import server modules they mirror (pageMeta.js and
           # shareImages.js today), so a server change runs them too.
           client=$(has '^"?(client|server)/')
+          # The client's lint covers the template components it builds,
+          # but not the server modules its tests import.
+          client_lint=$(has '^"?(client|templates)/')
           # The validator checks the landing presets with the server's own
           # landing rules (server/src/landingFields.js), so those run it too.
           templates=$(has '^"?(templates/|client/src/resume/templateRegistry\.js"?$|scripts/validate-templates\.mjs"?$|server/src/)')
           # The image installs from the lockfiles, so a dependency bump
           # builds it too.
           docker=$(has '^"?(Dockerfile|\.dockerignore|(server|client)/package(-lock)?\.json)"?$')
-          [ "$all" = true ] && server=true client=true templates=true docker=true
+          [ "$all" = true ] && server=true client=true client_lint=true templates=true docker=true
           {
             echo "server=$server"
             echo "client=$client"
+            echo "client_lint=$client_lint"
             echo "templates=$templates"
             echo "docker=$docker"
           } >> "$GITHUB_OUTPUT"
@@ -121,6 +126,42 @@ jobs:
         run: |
           cd client
           npm run build
+
+  # ESLint and the incremental type check (issue #177), for each package
+  # the PR touches: its own config in each, so a step only runs for its
+  # package. Lint fails on any warning. Neither reads anything an install
+  # script builds (better-sqlite3, Puppeteer's Chrome), so they're skipped.
+  lint:
+    name: lint and types
+    needs: changes
+    if: needs.changes.outputs.server == 'true' || needs.changes.outputs.client_lint == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Lint and type-check the server
+        if: needs.changes.outputs.server == 'true'
+        run: |
+          cd server
+          npm ci --ignore-scripts
+          npm run lint
+          npm run typecheck
+
+      - name: Lint and type-check the client and templates
+        if: needs.changes.outputs.client_lint == 'true'
+        run: |
+          cd client
+          npm ci --ignore-scripts
+          npm run lint
+          npm run typecheck
 
   templates:
     name: templates
@@ -186,7 +227,7 @@ jobs:
   # failing, or a cancelled job) fails it.
   ci-passed:
     name: ci-passed
-    needs: [changes, server, client, templates, pr-title, docker]
+    needs: [changes, server, client, lint, templates, pr-title, docker]
     if: always()
     runs-on: ubuntu-latest
     steps:

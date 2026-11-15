@@ -143,7 +143,13 @@ in prose; check the diff against the ones that apply, especially:
   queue's `pending()` notifies its subscribers, or `beforeunload` misses it
   (issue #105).
 - SPA routes contain no dot; CI jobs stay behind `changes` and in
-  `ci-passed`'s `needs`.
+  `ci-passed`'s `needs` (`lint and types` included).
+- A new `eslint-disable` names one rule and gives a real reason after
+  `--`; one that only silences a missing dep has to be a deliberate
+  behavior (an effect that runs once, a dep left out on purpose), not a
+  stale closure. A file with `// @ts-check` still passes `npm run
+  typecheck`, and a shape it types that the other package mirrors
+  (`Block`, a rewrite target, a proposal) changes on both sides.
 - The release workflow's Docker job publishes only release tags, and the
   Dockerfile keeps installing with `npm ci` from the lockfiles.
 - release-please's `extra-files` keep bumping both `package.json`s: the
@@ -152,8 +158,9 @@ in prose; check the diff against the ones that apply, especially:
 - CLAUDE.md/README.md prose still matches the behavior.
 
 Run the tests for the touched packages if they haven't been reported
-(`npm test` in `server/` and/or `client/`; `node scripts/validate-templates.mjs`
-and a client build for templates). A fresh worktree may need `npm ci` first.
+(`npm test`, `npm run lint` and `npm run typecheck` in `server/` and/or
+`client/`; `node scripts/validate-templates.mjs`, the client's lint and a
+client build for templates). A fresh worktree may need `npm ci` first.
 
 ## Report
 

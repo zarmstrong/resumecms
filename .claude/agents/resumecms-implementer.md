@@ -43,12 +43,18 @@ you finish).
 
 Run, from the worktree, every check for what you touched:
 
-- `server/**` → `npm test` in `server/`, and `npm test` in `client/` too
-  (client tests import the server modules they mirror)
-- `client/**` → `npm test` and `npm run build` in `client/`
+- `server/**` → `npm test`, `npm run lint` and `npm run typecheck` in
+  `server/`, and `npm test` in `client/` too (client tests import the
+  server modules they mirror)
+- `client/**` → `npm test`, `npm run lint`, `npm run typecheck` and
+  `npm run build` in `client/`
 - `templates/**`, `templateRegistry.js`, or the validator →
-  `node scripts/validate-templates.mjs` from the root and `npm run build` in
-  `client/`
+  `node scripts/validate-templates.mjs` from the root, and `npm run lint`
+  and `npm run build` in `client/` (the client's lint covers `templates/`)
+
+Lint fails on any warning. Fix what it finds; where satisfying
+`react-hooks/exhaustive-deps` would change behavior, keep the behavior and
+disable the rule on that line with `-- <the reason>`.
 
 Don't commit, push or open a PR unless your instructions say to. Never
 touch the production containers, `/opt/docker`, or the data directories

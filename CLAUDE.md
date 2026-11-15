@@ -33,18 +33,58 @@ npm run dev      # node --watch src/index.js — needs RESUMECMS_ADMIN_USERNAME,
                   # RESUMECMS_DATA_DIR set (see README.md)
 npm start
 npm test          # node --test — auto-discovers **/*.test.js under server/src
+npm run lint      # eslint, fails on any warning
+npm run typecheck # tsc --noEmit -p tsconfig.json, the // @ts-check files only
 
 # client (from client/)
 npm run dev       # vite dev server on :5173, proxies /api -> :4000
 npm run build     # vite build -> client/dist, also validates template components
 npm run preview
 npm test          # node --test — auto-discovers **/*.test.js under client/src
+npm run lint      # eslint over client/ and ../templates, fails on any warning
+npm run typecheck # tsc --noEmit -p tsconfig.json, the // @ts-check files only
 
 # templates (from repo root)
 node scripts/validate-templates.mjs   # lints templates/**, no npm install needed
 ```
 
-There's no linter configured in either package. Both `server/` and `client/`
+Each package has its own ESLint flat config (`eslint.config.js`, issue
+#177): `@eslint/js`'s recommended rules (correctness only, no style or
+formatting), node globals on the server, browser globals on the client
+(node for its tests and `vite.config.js`), and on the client
+`react-hooks/rules-of-hooks` and `react-hooks/exhaustive-deps` as errors
+(not the plugin's React Compiler rules). ESLint 10 counts a JSX reference
+as a use, so `no-unused-vars` needs no React plugin; it ignores the
+siblings of a rest property, since `const { omitted, ...rest } = x` is how
+this code drops a key. `npm run lint` passes `--max-warnings 0`, and an
+unused `eslint-disable` is an error too. The client's lint also covers the
+template components under `templates/` (ESLint looks a file's config up
+from its own folder, so `templates/eslint.config.js` re-exports the
+client's). Where exhaustive-deps would change behavior (an effect that runs
+once, or a dep left out on purpose), keep the behavior and disable the rule
+on that line with `-- <the reason>`; the same for a regex that looks for
+control characters (`no-control-regex`).
+
+Type checking is incremental (`npm run typecheck`, TypeScript's `tsc` over
+each package's `tsconfig.json`, no `.ts` files and nothing emitted):
+`checkJs` is off, so only a file whose first line is `// @ts-check` is
+checked, with `strict` but not `noImplicitAny`, and JSDoc typedefs for the
+shapes that cross a boundary. On the server those are `blockRows.js`
+(`Block`), `httpError.js`, `resumeStore.js` (`ResumeStore`,
+`ScopedResumeStore`, and `RESUME_METHODS` checked against what
+`forResume()` returns), `landingTypes.js` (the landing draft and every
+section kind, types only) with `landingFields.js` and `landingStyle.js`
+typed by it (`SECTION_FIELDS` is keyed by `SectionKind`, so a kind added
+to one and not the other fails), and `ai/rewritableFields.js`
+(`RewriteTarget`), `ai/landingRewrite.js` (`LandingTarget`,
+`LandingProposal`) and `ai/brief.js` (`Brief`). On the client, `api.js`
+(the payloads it sends) and `editor/aiReview.js` (`AiTarget`,
+`AiProposal`). The client's typedefs mirror the server's rather than
+import them, since each package checks on its own. Opt a file in by adding
+the line and making it pass. When touching either package, run `npm run
+lint` and `npm run typecheck` there too.
+
+Both `server/` and `client/`
 have a small `node:test` suite (plain `*.test.js` files next to the code
 they cover, e.g. `blockDeletion.test.js`, `blockDrag.test.js`) for logic
 that doesn't need a live HTTP server or a DOM — run them with `npm test`
@@ -59,7 +99,9 @@ tests` for `server/**`; `client tests and build` for `client/**`,
 anything a template build reads; `templates`, the validator, for
 `templates/**`, `templateRegistry.js`, the validator itself or
 `server/src/**` (it checks the landing presets with the server's own
-landing rules); all of
+landing rules); `lint and types`, each package's `npm run lint` and
+`npm run typecheck`, the server's for `server/**` and the client's for
+`client/**` or `templates/**`; all of
 them when `.github/workflows/` changes; `docker build`, an amd64 image
 build without a push, for the `Dockerfile`, `.dockerignore` or either
 package's `package.json`/lockfile; and `pr-title` on every PR). `ci-passed` gathers them and is
@@ -95,8 +137,9 @@ tag's image again. The image installs with `npm ci` from the
 lockfiles. The production sites still build from this checkout, not
 from the published image. When touching
 templates, run both templates commands locally before considering the
-change done; when touching `server/src`, run `npm test` from `server/`;
-when touching `client/src`, run `npm test` from `client/`. There's no root
+change done, and the client's `npm run lint`; when touching `server/src`,
+run `npm test`, `npm run lint` and `npm run typecheck` from `server/`;
+when touching `client/src`, the same three from `client/`. There's no root
 `package.json`; `server/` and `client/` are independent npm packages, each
 with its own lockfile.
 
