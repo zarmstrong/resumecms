@@ -29,6 +29,10 @@ Rebuilds and restarts the live services from $CHECKOUT with
   --dry-run  run every check and the confirmation, then print the
              command instead of running it
   --help     show this help
+
+It runs only as $CHECKOUT/scripts/deploy-host.sh. To try an edited copy
+from a worktree, point its checks at a scratch repo:
+RESUMECMS_DEPLOY_CHECKOUT=<repo> scripts/deploy-host.sh --dry-run
 EOF
 }
 
@@ -89,7 +93,8 @@ if [[ "$CHECK_DIR" == "$CHECKOUT" && "$script_root" != "$checkout_real" ]]; then
 fi
 
 # One deploy at a time.
-exec 9>"${TMPDIR:-/tmp}/resumecms-deploy-host.lock"
+# A fixed path, so every caller takes the same lock whatever its TMPDIR.
+exec 9>/tmp/resumecms-deploy-host.lock
 flock -n 9 || die "another deploy-host.sh is running"
 
 # The checkout must be exactly origin's main: on main; nothing modified,
@@ -124,7 +129,7 @@ check_checkout() {
   fi
   head=$(git -C "$CHECK_DIR" rev-parse HEAD)
   # Never wait on a credential prompt or a stalled remote.
-  if ! remote=$(GIT_TERMINAL_PROMPT=0 timeout 60 git -C "$CHECK_DIR" ls-remote --exit-code origin refs/heads/main); then
+  if ! remote=$(GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes" timeout 60 git -C "$CHECK_DIR" ls-remote --exit-code origin refs/heads/main); then
     problems+=("git ls-remote origin failed or timed out, so it can't be checked against origin's main")
   elif [[ "${remote%%[[:space:]]*}" != "$head" ]]; then
     problems+=("it is at ${head:0:7}, not origin's main ${remote:0:7} (git -C $CHECK_DIR pull --ff-only, or push)")
@@ -151,7 +156,7 @@ echo "Command: (cd $COMPOSE_DIR && ${command[*]})"
 
 if ! $yes; then
   [[ -t 0 ]] || die "no terminal to confirm on; rerun with --yes to deploy without asking"
-  read -r -p "Deploy to production? [y/N] " answer
+  read -r -p "Deploy to production? [y/N] " answer || answer=""
   case "$answer" in
     y | Y | yes | YES | Yes) ;;
     *) die "not deployed" ;;
