@@ -74,8 +74,9 @@ shapes that cross a boundary. On the server those are `blockRows.js`
 `ScopedResumeStore`, and `RESUME_METHODS` checked against what
 `forResume()` returns), `landingTypes.js` (the landing draft and every
 section kind, types only) with `landingFields.js` and `landingStyle.js`
-typed by it (`SECTION_FIELDS` is keyed by `SectionKind`, so a kind added
-to one and not the other fails), and `ai/rewritableFields.js`
+typed by it (`SECTION_FIELDS` is keyed by `SectionKind` and
+`SECTION_KINDS` checked to list every one, so a kind added to the type
+and not to both fails), and `ai/rewritableFields.js`
 (`RewriteTarget`), `ai/landingRewrite.js` (`LandingTarget`,
 `LandingProposal`) and `ai/brief.js` (`Brief`). On the client, `api.js`
 (the payloads it sends) and `editor/aiReview.js` (`AiTarget`,
