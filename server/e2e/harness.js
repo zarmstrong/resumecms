@@ -90,7 +90,18 @@ export async function startServer() {
   let done = false;
   exited.then(() => (done = true));
 
+  // A test process that exits without its after() hooks (Puppeteer's own
+  // SIGINT handler calls process.exit(130), an uncaught error) still takes
+  // its server and data dir with it: 'exit' listeners run on any exit, but
+  // only synchronously, so this kills outright rather than waiting.
+  const onExit = () => {
+    if (!done) child.kill('SIGKILL');
+    rmSync(dataDir, { recursive: true, force: true });
+  };
+  process.once('exit', onExit);
+
   async function stop() {
+    process.off('exit', onExit);
     if (!done) {
       const timer = setTimeout(() => child.kill('SIGKILL'), STOP_GRACE_MS);
       child.kill('SIGTERM');
