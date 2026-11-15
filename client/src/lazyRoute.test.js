@@ -92,3 +92,8 @@ test('each browser\'s wording for a chunk that did not arrive counts as one', ()
   assert.equal(isChunkFetchError(new TypeError('x is not a function')), false);
   assert.equal(isChunkFetchError(null), false);
 });
+
+test('a module without the named export is an error, not a blank page', async () => {
+  const lazy = lazyRoute(() => Promise.resolve({ Other: () => null }), 'Page', { storage: () => memoryStorage() });
+  await assert.rejects(lazy(), /no Page export/);
+});

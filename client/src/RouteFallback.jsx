@@ -44,7 +44,9 @@ export function RouteError() {
   useEffect(() => {
     if (!chunk || tried.current) return undefined;
     tried.current = true;
-    if (!claimReload(sessionStore())) {
+    // Offline, a reload only swaps this page for the browser's own error,
+    // and would use up the one allowed: show the error and its button.
+    if (navigator.onLine === false || !claimReload(sessionStore())) {
       setReloading(false);
       return undefined;
     }
