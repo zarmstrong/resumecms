@@ -489,8 +489,12 @@ export function buildLandingPrompt(landing, target, instruction, profile, resume
     const section = landing.sections.find((s) => s.id === target.sectionId);
     const lists = { item: section?.items, answer: section?.entries, service: section?.services };
     const item = lists[target.kind]?.[target.index] ?? null;
-    // Never null: normalizeLandingTarget() lets no other kind through.
-    rules.push(/** @type {string} */ (fieldRule(target, FIELD_LIMITS[target.kind], item)));
+    // normalizeLandingTarget() lets no kind through that fieldRule() has no
+    // rule for; a new one that misses it fails here instead of prompting
+    // with a null rule (and the check narrows the type, no cast).
+    const rule = fieldRule(target, FIELD_LIMITS[target.kind], item);
+    if (rule === null) throw new Error(`No field rule for a ${target.kind} target`);
+    rules.push(rule);
   }
   if (profile) {
     rules.push(
