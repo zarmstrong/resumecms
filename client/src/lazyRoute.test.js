@@ -97,3 +97,9 @@ test('a module without the named export is an error, not a blank page', async ()
   const lazy = lazyRoute(() => Promise.resolve({ Other: () => null }), 'Page', { storage: () => memoryStorage() });
   await assert.rejects(lazy(), /no Page export/);
 });
+
+test('a component that is an object (memo, forwardRef) is a page too', async () => {
+  const Page = { $$typeof: Symbol.for('react.memo'), type: () => null };
+  const lazy = lazyRoute(() => Promise.resolve({ Page }), 'Page', { storage: () => memoryStorage() });
+  assert.deepEqual(await lazy(), { Component: Page });
+});

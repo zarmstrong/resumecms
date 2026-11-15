@@ -55,7 +55,8 @@ export function lazyRoute(load, name, { storage = sessionStore } = {}) {
         forgetReload(storage());
         // A wrong name would render the route as nothing, silently (and a
         // PDF render would wait out its timeout): say so instead.
-        if (typeof module[name] !== 'function') throw new Error(`The page's module has no ${name} export`);
+        // Any component counts, memo() and forwardRef() objects included.
+        if (module[name] == null) throw new Error(`The page's module has no ${name} export`);
         return { Component: module[name] };
       },
       (err) => {
