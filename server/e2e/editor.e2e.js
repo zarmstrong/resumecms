@@ -44,9 +44,17 @@ function flow(name, fn, { ownServer = false } = {}) {
       const page = await newPage(context);
       await runFlow(t, page, context, active, name, fn);
     } finally {
-      await context?.close();
-      if (active !== shared) await active.stop();
-      server = shared;
+      // Each step whatever the one before did: a browser that's gone makes
+      // close() reject, and the flow's own server must still stop.
+      try {
+        await context?.close();
+      } finally {
+        try {
+          if (active !== shared) await active.stop();
+        } finally {
+          server = shared;
+        }
+      }
     }
   });
 }
