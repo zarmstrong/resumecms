@@ -126,4 +126,17 @@ export function ensureSchema(db) {
       created_at TEXT NOT NULL
     );
   `);
+
+  // Editor logins (issue #172), one row per session. Only the sha256 of the
+  // token the cookie carries is kept, so a copy of the database can't be
+  // turned into a login. Times are epoch milliseconds; sessionStore.js
+  // refuses a row past `expires_at` and prunes them.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS sessions_by_expiry ON sessions (expires_at);
+  `);
 }

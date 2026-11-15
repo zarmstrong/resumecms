@@ -1652,7 +1652,34 @@ then only ever read from/written to the `settings` table — changing the env
 vars later does nothing) plus optional TOTP 2FA, both stored in SQLite, not
 config. `server/src/middleware/requireAuth.js` gates everything under
 `/api` except `/api/auth/*` and `/api/public/*`; `/mcp` is gated separately
-by its bearer token (see "MCP server"). Login is rate-limited
+by its bearer token (see "MCP server").
+
+A login is a server-side session (issue #172): the `sessions` table
+(`schema.js`) holds only the sha256 of a random 32-byte token, with its
+creation and expiry times, and the signed `cookie-session` cookie holds
+only `{ token }`. `sessionStore.js` is the store over a db handle
+(`create`, `isValid`, `remove`, `removeOthers`, `prune`), and
+`authSessions.js` is the one place that says whether a request is logged
+in: `requireAuth` and `GET /api/auth/status` both go through its
+`isAuthenticated()`, which checks the token against the store
+`index.js` registers with `useSessionStore()`. It fails closed: with no
+store registered nothing is logged in and a login is a 500, and a cookie
+without a token (the old `{ authenticated: true }`) is no login. Expiry is
+the server's, 30 days from login and never extended
+(`SESSION_MAX_AGE_MS`, also the cookie's `maxAge` through
+`sessionCookieOptions()`): an expired row is refused and deleted, and
+expired rows are pruned at each login and at boot. Login replaces the
+browser's session with a new one (`startSession()`), logout deletes its
+row (`endSession()`), and a new password or username
+(`POST /api/auth/credentials`) and turning 2FA on, replacing it (both
+`/confirm`) or turning it off delete every *other* session
+(`revokeOtherSessions()`), so the tab that made the change stays in. A
+new way to change how one logs in must revoke the same way. The login
+routes are the `createAuthRouter()` factory (`routes/authRouter.js`, bound
+in `routes/auth.js`) and the 2FA ones `createTotpRouter()`, so their tests
+run on an in-memory settings map and a `:memory:` session store. The PDF
+render cookie (`renderAccess.js`) and the MCP token are separate and
+untouched by any of this. Login is rate-limited
 (10 failed attempts / IP / 15 min) and optionally captcha-gated
 (`RESUMECMS_CAPTCHA_PROVIDER`; off only when unset: an unknown provider
 or a missing key refuses to start, `readCaptchaConfig()` in
@@ -1661,7 +1688,8 @@ notes, including manual TOTP recovery via direct SQLite access.
 `RESUMECMS_SESSION_SECRET` has no default: `requireSessionSecret.js`, imported
 first by `index.js` so it runs before `db.js` opens the database, exits unless
 `checkSessionSecret()` (`sessionSecret.js`) accepts it (set, at least 32
-characters, none of `PLACEHOLDER_SECRETS`; issue #171).
+characters, none of `PLACEHOLDER_SECRETS`; issue #171). Since #172 a
+signed cookie alone is no login, but the check stays.
 
 The 2FA routes (`routes/totpRouter.js`, a factory over `getSetting`/
 `setSetting` so its test needs no `db.js`; `routes/totp.js` binds it)

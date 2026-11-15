@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { generateSecret, generateURI } from 'otplib';
 import QRCode from 'qrcode';
+import { revokeOtherSessions } from '../authSessions.js';
 import { verifyPassword } from '../passwords.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { verifyCode } from '../totpCode.js';
@@ -69,6 +70,10 @@ const isSpent = (totp, step) => totp.lastUsedStep !== null && step <= totp.lastU
 const sameFactor = (a, b) => a.enabled === b.enabled && a.secret === b.secret;
 const CHANGED_ERROR = 'Two-factor settings changed meanwhile. Reload and try again.';
 
+// Turning 2FA on, replacing the factor (both at /confirm) and turning it
+// off sign out every other session (issue #172), right after the write;
+// the request's own stays, so the tab that made the change isn't logged
+// out. A setup or a cancel changes no factor, so it revokes nothing.
 export function createTotpRouter({ getSetting, setSetting }) {
   const router = Router();
 
@@ -134,6 +139,7 @@ export function createTotpRouter({ getSetting, setSetting }) {
     // No lastUsedStep: the confirm code isn't a login, and recording it
     // would refuse the first login with the new app in the same 30 s.
     setSetting('totp', totpRow({ enabled: true, secret: totp.pendingSecret }));
+    revokeOtherSessions(req);
     res.json({ enabled: true });
   });
 
@@ -161,6 +167,7 @@ export function createTotpRouter({ getSetting, setSetting }) {
       if (isSpent(now, check.step)) return res.status(401).json({ error: FACTOR_ERROR });
     }
     setSetting('totp', null);
+    if (totp.enabled) revokeOtherSessions(req);
     res.json({ enabled: false });
   });
 

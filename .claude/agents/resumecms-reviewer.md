@@ -124,6 +124,16 @@ in prose; check the diff against the ones that apply, especially:
   server-side and rate-limited, with one failure message. A route that
   checks a code (login too) re-reads the row after its awaits and writes
   only if the factor is unchanged and the code still unspent.
+- Logins are server-side sessions (issue #172): the cookie holds only
+  `{ token }`, the `sessions` table only its sha256, and every auth check
+  (`requireAuth`, `GET /api/auth/status`) goes through `authSessions.js`'s
+  `isAuthenticated()`, which fails closed with no store registered and
+  refuses an expired row (30 days from login, never extended). Logout
+  deletes the row; a new password or username and turning 2FA on,
+  replacing or disabling it call `revokeOtherSessions()` after the write,
+  keeping the request's own. Nothing else (a signed `authenticated` flag,
+  a header) may stand in for a session, and a new way to change how one
+  logs in revokes the same way.
 - `RESUMECMS_SESSION_SECRET` never gets a default (in `index.js`,
   `docker-compose.yml` or an example): the boot refuses a missing, short or
   placeholder one through `checkSessionSecret()`, before `db.js` loads; a
