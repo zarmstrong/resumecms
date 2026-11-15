@@ -5,7 +5,7 @@
 # script is run from. It's a deploy step, not a build step: for the local
 # checks, run scripts/check.sh instead.
 #
-# It refuses unless /opt/resumecms is on a clean `main` that isn't behind
+# It refuses unless /opt/resumecms is a clean `main` at exactly
 # origin/main, and asks before rebuilding unless given --yes.
 set -euo pipefail
 
@@ -80,35 +80,53 @@ if [[ "$CHECK_DIR" != "$CHECKOUT" ]] && ! $dry_run; then
   die "RESUMECMS_DEPLOY_CHECKOUT is for testing and needs --dry-run: the build always uses $CHECKOUT"
 fi
 
-# The checkout must be what's on origin/main: on main, nothing modified or
-# staged, and nothing on origin/main it lacks. Every failed check is listed.
+# The checkout must be exactly origin/main: on main, nothing modified,
+# staged or untracked (an untracked file under server/, client/ or
+# templates/ would be copied into the image), and HEAD the same commit as
+# origin/main (neither behind it nor carrying unpushed commits). Every
+# failed check is listed.
 git -C "$CHECK_DIR" rev-parse --git-dir >/dev/null 2>&1 \
   || die "$CHECK_DIR is not a git checkout"
-problems=()
-branch=$(git -C "$CHECK_DIR" symbolic-ref --short -q HEAD || true)
-if [[ "$branch" != main ]]; then
-  problems+=("it is on ${branch:-a detached HEAD}, not main")
-fi
-if ! git -C "$CHECK_DIR" diff --quiet; then
-  problems+=("it has modified tracked files (git -C $CHECK_DIR status)")
-fi
-if ! git -C "$CHECK_DIR" diff --cached --quiet; then
-  problems+=("it has staged changes (git -C $CHECK_DIR status)")
-fi
-if ! git -C "$CHECK_DIR" fetch --quiet origin; then
-  problems+=("git fetch origin failed, so it can't be checked against origin/main")
-elif ! behind=$(git -C "$CHECK_DIR" rev-list --count HEAD..origin/main 2>/dev/null); then
-  problems+=("it has no origin/main to compare with")
-elif ((behind > 0)); then
-  problems+=("it is $behind commit(s) behind origin/main (git -C $CHECK_DIR pull --ff-only)")
-fi
-if ((${#problems[@]})); then
-  echo "deploy-host: refusing to deploy from $CHECK_DIR:" >&2
-  printf '  - %s\n' "${problems[@]}" >&2
-  exit 1
-fi
+check_checkout() {
+  local problems=() branch ahead behind
+  branch=$(git -C "$CHECK_DIR" symbolic-ref --short -q HEAD || true)
+  if [[ "$branch" != main ]]; then
+    problems+=("it is on ${branch:-a detached HEAD}, not main")
+  fi
+  if ! git -C "$CHECK_DIR" diff --quiet; then
+    problems+=("it has modified tracked files (git -C $CHECK_DIR status)")
+  fi
+  if ! git -C "$CHECK_DIR" diff --cached --quiet; then
+    problems+=("it has staged changes (git -C $CHECK_DIR status)")
+  fi
+  if [[ -n "$(git -C "$CHECK_DIR" ls-files --others --exclude-standard)" ]]; then
+    problems+=("it has untracked files (git -C $CHECK_DIR status)")
+  fi
+  # Never wait on a credential prompt or a stalled remote.
+  if ! GIT_TERMINAL_PROMPT=0 timeout 60 git -C "$CHECK_DIR" fetch --quiet origin; then
+    problems+=("git fetch origin failed or timed out, so it can't be checked against origin/main")
+  elif ! behind=$(git -C "$CHECK_DIR" rev-list --count HEAD..origin/main 2>/dev/null); then
+    problems+=("it has no origin/main to compare with")
+  else
+    ahead=$(git -C "$CHECK_DIR" rev-list --count origin/main..HEAD)
+    if ((behind > 0)); then
+      problems+=("it is $behind commit(s) behind origin/main (git -C $CHECK_DIR pull --ff-only)")
+    fi
+    if ((ahead > 0)); then
+      problems+=("it has $ahead commit(s) not on origin/main")
+    fi
+  fi
+  if ((${#problems[@]})); then
+    echo "deploy-host: refusing to deploy from $CHECK_DIR:" >&2
+    printf '  - %s\n' "${problems[@]}" >&2
+    exit 1
+  fi
+}
+check_checkout
+checked_head=$(git -C "$CHECK_DIR" rev-parse HEAD)
 
 here=$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)
+[[ -n "$here" ]] && here=$(realpath -e "$here" 2>/dev/null || echo "$here")
 command=(docker compose up -d --build "${chosen[@]}")
 echo "This rebuilds and restarts the live service(s): ${chosen[*]}"
 head=$(git -C "$CHECK_DIR" log -1 --format='%h %s')
@@ -118,7 +136,7 @@ else
   echo "Built from: $CHECKOUT"
   echo "Checked instead: $CHECK_DIR at $head (RESUMECMS_DEPLOY_CHECKOUT)"
 fi
-if [[ -n "$here" && "$here" != "$CHECKOUT" ]]; then
+if [[ -n "$here" && "$here" != "$(realpath -e "$CHECKOUT" 2>/dev/null || echo "$CHECKOUT")" ]]; then
   echo "Note: this script is running from $here; that checkout is not what gets built."
 fi
 echo "Command: (cd $COMPOSE_DIR && ${command[*]})"
@@ -130,6 +148,14 @@ if ! $yes; then
     y | Y | yes | YES | Yes) ;;
     *) die "not deployed" ;;
   esac
+fi
+
+# The checkout may have changed while the question waited: check again,
+# and against the commit that was shown.
+if ! $yes; then
+  check_checkout
+  [[ "$(git -C "$CHECK_DIR" rev-parse HEAD)" == "$checked_head" ]] \
+    || die "$CHECK_DIR moved to another commit while waiting; not deployed"
 fi
 
 if $dry_run; then
