@@ -193,6 +193,21 @@ test('a new password signs out every other session and a copy of this one, and t
   }
 });
 
+test('a new password never extends the login: the new cookie expires when the old one would', async () => {
+  const app = await start();
+  try {
+    const tab = await app.login();
+    app.clock.now += SESSION_MAX_AGE_MS - 1000;
+    const res = await tab.post('/auth/credentials', { currentPassword: PASSWORD, newUsername: 'admin', newPassword: 'a new password' });
+    assert.equal(res.status, 200);
+    assert.equal(await tab.loggedIn(), true);
+    app.clock.now += 1000;
+    assert.equal(await tab.loggedIn(), false);
+  } finally {
+    app.close();
+  }
+});
+
 test('a new username signs out every other session too', async () => {
   const app = await start();
   try {

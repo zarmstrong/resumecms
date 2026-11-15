@@ -1795,7 +1795,9 @@ row (`endSession()`), and a new password or username
 (`POST /api/auth/credentials`) and turning 2FA on, replacing it (both
 `/confirm`) or turning it off delete every session, the request's own
 token included, and give the request a new one (`reissueSession()`), so
-the tab that made the change stays in and a copy of its cookie doesn't.
+the tab that made the change stays in and a copy of its cookie doesn't;
+the new token keeps the old one's expiry (`sessions.replace()`), so a
+change never extends a login.
 They revoke *before* writing the change, so a failed revocation changes
 nothing, and each of those routes checks its own session again right
 before writing (`isAuthenticated()`: `requireAuth` ran before an await,
