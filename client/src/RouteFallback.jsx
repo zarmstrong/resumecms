@@ -37,6 +37,23 @@ export function RouteLoading() {
 // capturing this.
 export function RouteError() {
   const error = useRouteError();
+  // Keyed by the error, so a second error on the same route (back and
+  // forward between two of its URLs) starts over rather than inheriting
+  // the first one's reload state. The reload itself is still once per
+  // window (claimReload).
+  return <RouteErrorView key={errorKey(error)} error={error} />;
+}
+
+const errorIds = new WeakMap();
+let nextErrorId = 0;
+
+function errorKey(error) {
+  if (error === null || typeof error !== 'object') return `value:${String(error)}`;
+  if (!errorIds.has(error)) errorIds.set(error, ++nextErrorId);
+  return `error:${errorIds.get(error)}`;
+}
+
+function RouteErrorView({ error }) {
   const chunk = error instanceof ChunkLoadError;
   const [reloading, setReloading] = useState(chunk);
   const tried = useRef(false);
