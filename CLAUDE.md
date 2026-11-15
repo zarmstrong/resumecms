@@ -747,7 +747,8 @@ is stored) is dropped, heading and
 all, as is a hidden one. The photo (`photo: 'resume'`) and the
 site settings come from the default resume's *published* snapshot, never
 its draft. Keep both properties if you add fields or section kinds; a new
-kind needs `SECTION_FIELDS`, `checkSection()`, `resolveSection()` (both
+kind needs `SectionKind` in `landingTypes.js` and `SECTION_KINDS` (the
+typecheck holds the two together), `SECTION_FIELDS`, `checkSection()`, `resolveSection()` (both
 copies), the MCP `landingSection()` union, `LANDING_SCHEMA`, and a case in
 `LandingForm`'s `SectionFields` and `LandingView`'s `SectionBody` (or, for
 one that isn't a titled `<section>` like the divider, its `renderSection`),
