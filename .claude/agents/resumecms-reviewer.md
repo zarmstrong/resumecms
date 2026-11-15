@@ -124,6 +124,18 @@ in prose; check the diff against the ones that apply, especially:
   server-side and rate-limited, with one failure message. A route that
   checks a code (login too) re-reads the row after its awaits and writes
   only if the factor is unchanged and the code still unspent.
+- Logins are server-side sessions (issue #172): the cookie holds only
+  `{ token }`, the `sessions` table only its sha256, and every auth check
+  (`requireAuth`, `GET /api/auth/status`) goes through `authSessions.js`'s
+  `isAuthenticated()`, which fails closed with no store registered and
+  refuses an expired row (30 days from login, never extended). Logout
+  deletes the row; a new password or username and turning 2FA on,
+  replacing or disabling it call `revokeOtherSessions()` before the write
+  (so a failed revocation changes nothing), keeping the request's own, and
+  each checks its own session again before both (the rate limiter awaits
+  after `requireAuth`, so it's never enough on its own). Nothing else (a signed `authenticated` flag,
+  a header) may stand in for a session, and a new way to change how one
+  logs in revokes the same way.
 - `RESUMECMS_SESSION_SECRET` never gets a default (in `index.js`,
   `docker-compose.yml` or an example): the boot refuses a missing, short or
   placeholder one through `checkSessionSecret()`, before `db.js` loads; a
@@ -133,6 +145,10 @@ in prose; check the diff against the ones that apply, especially:
   (re-checked right before Docker), and asks unless `--yes`. Nothing else
   in the repo (`scripts/check.sh` included) touches Docker or
   `/opt/resumecms`.
+- Public pages never import editor code: the editor, login, template
+  previews and the letter/card print routes stay lazy routes in
+  `App.jsx`, the editor's CSS loads from its own entry, and a route
+  rendered for a PDF or card sets `__PDF_READY__` only once drawn.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a

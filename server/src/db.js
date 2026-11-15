@@ -110,7 +110,7 @@ if (!db.prepare('SELECT 1 FROM resumes LIMIT 1').get()) {
 
 // RESUMECMS_ADMIN_USERNAME/RESUMECMS_APP_PASSWORD are only read here, once,
 // to seed the real credentials record on first boot. After that the DB is
-// the source of truth (see routes/auth.js) — changing the env vars later has
+// the source of truth (see routes/authRouter.js) — changing the env vars later has
 // no effect, so a password change from the editor survives a redeploy.
 if (!getSetting('credentials')) {
   const seedUsername = process.env.RESUMECMS_ADMIN_USERNAME;
