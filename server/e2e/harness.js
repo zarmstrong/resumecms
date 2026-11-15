@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
-import { tmpdir } from 'node:os';
+import { constants, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
@@ -38,16 +38,14 @@ function runCleanups() {
   cleanups.clear();
 }
 process.on('exit', runCleanups);
+// Then the process ends here, with the shell's code for that signal: a
+// listener keeps it alive, and Puppeteer's own exits only on SIGINT (on
+// SIGTERM and SIGHUP it just closes its browser). process.exit() still runs
+// the 'exit' listeners, Puppeteer's included, which kills its browser.
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-  process.on(signal, function onSignal() {
+  process.on(signal, () => {
     runCleanups();
-    // Another handler (Puppeteer's) exits by itself. Alone, this one would
-    // keep the process alive, so it steps aside and the signal is sent
-    // again, to end it as it would have.
-    if (process.listenerCount(signal) === 1) {
-      process.off(signal, onSignal);
-      process.kill(process.pid, signal);
-    }
+    process.exit(128 + constants.signals[signal]);
   });
 }
 
