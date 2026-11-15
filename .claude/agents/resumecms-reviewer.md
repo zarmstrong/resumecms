@@ -124,6 +124,10 @@ in prose; check the diff against the ones that apply, especially:
   server-side and rate-limited, with one failure message. A route that
   checks a code (login too) re-reads the row after its awaits and writes
   only if the factor is unchanged and the code still unspent.
+- `RESUMECMS_SESSION_SECRET` never gets a default (in `index.js`,
+  `docker-compose.yml` or an example): the boot refuses a missing, short or
+  placeholder one through `checkSessionSecret()`, before `db.js` loads; a
+  new example value goes in `PLACEHOLDER_SECRETS`.
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a
@@ -142,6 +146,9 @@ in prose; check the diff against the ones that apply, especially:
   `ci-passed`'s `needs`.
 - The release workflow's Docker job publishes only release tags, and the
   Dockerfile keeps installing with `npm ci` from the lockfiles.
+- release-please's `extra-files` keep bumping both `package.json`s: the
+  editor's top bar shows `client/package.json`'s version (`__APP_VERSION__`),
+  and `appVersion.test.js` checks both against the manifest.
 - CLAUDE.md/README.md prose still matches the behavior.
 
 Run the tests for the touched packages if they haven't been reported

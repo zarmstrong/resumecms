@@ -1,3 +1,6 @@
+// First, so a missing or placeholder session secret stops the boot before
+// db.js opens the database (see sessionSecret.js).
+import { SESSION_SECRET } from './requireSessionSecret.js';
 import express from 'express';
 import cookieSession from 'cookie-session';
 import path from 'node:path';
@@ -11,6 +14,7 @@ import { createShellHead } from './shellHead.js';
 import { createIconVersions } from './faviconContent.js';
 import { closeBrowser } from './pdfRenderer.js';
 import { createShutdown } from './shutdown.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 import aiRoutes from './routes/ai.js';
 import authRoutes from './routes/auth.js';
@@ -27,7 +31,6 @@ import totpRoutes from './routes/totp.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 4000;
-const SESSION_SECRET = process.env.RESUMECMS_SESSION_SECRET || 'dev-secret-change-me';
 
 // Behind a reverse proxy every request arrives from the proxy's IP, so the
 // login rate limiter would lump all clients into one bucket. Set before any
@@ -92,6 +95,10 @@ mountClient(app, path.join(__dirname, '..', '..', 'client', 'dist'), {
   headFor: createShellHead(store),
   iconVersions: createIconVersions(store),
 });
+
+// Last of all, so an error from any route above (a body express.json()
+// refused, a throw past handle()) is answered as JSON, not Express's HTML.
+app.use(errorHandler);
 
 const server = app.listen(PORT, () => {
   console.log(`resume server listening on port ${PORT}`);
