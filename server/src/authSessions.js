@@ -59,7 +59,14 @@ export function endSession(req) {
 }
 
 // After a change to how one logs in (password, username, 2FA): every
-// session but the request's own, so the tab that made the change stays in.
-export function revokeOtherSessions(req) {
-  sessions?.removeOthers(tokenOf(req));
+// session goes, the request's own token included, and the request gets a
+// new one, so the tab that made the change stays in but a copy of its
+// cookie (the reason someone changes a password) doesn't. Created first,
+// so if deleting the rest fails nothing is signed out and the cookie is
+// left as it was; the new row is then just one no cookie names.
+export function reissueSession(req) {
+  if (!sessions) throw new Error('No session store configured');
+  const token = sessions.create();
+  sessions.removeOthers(token);
+  req.session = { token };
 }
