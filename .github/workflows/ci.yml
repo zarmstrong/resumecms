@@ -158,6 +158,7 @@ jobs:
         with:
           path: ~/.cache/puppeteer
           key: puppeteer-${{ runner.os }}-${{ hashFiles('server/package-lock.json') }}
+          restore-keys: puppeteer-${{ runner.os }}-
 
       - name: Install server dependencies
         run: |

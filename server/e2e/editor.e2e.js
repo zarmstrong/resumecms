@@ -33,52 +33,60 @@ after(async () => {
 function flow(name, fn, { ownServer = false } = {}) {
   test(name, { timeout: 90000 }, async (t) => {
     const shared = server;
-    if (ownServer) server = await startServer();
-    const active = server;
-    const context = await browser.createBrowserContext();
-    const page = await newPage(context);
-    const expected = [];
-    const unexpected = [];
-    page.on('dialog', (dialog) => {
-      const handle = expected.shift();
-      if (handle) return handle(dialog);
-      unexpected.push(`${dialog.type()}: ${dialog.message()}`);
-      return dialog.dismiss();
-    });
-    const errors = [];
-    const watch = (other) => other.on('pageerror', (err) => errors.push(err.message));
-    watch(page);
-    // The next browser dialog is answered with `answer` ('accept' or
-    // 'dismiss') as it opens, since the page is stopped until it is (the
-    // click that opened it doesn't return before); resolves with what it
-    // said.
-    const expectDialog = (answer) =>
-      new Promise((resolve) =>
-        expected.push(async (dialog) => {
-          const seen = { type: dialog.type(), message: dialog.message() };
-          await dialog[answer]();
-          resolve(seen);
-        })
-      );
+    let active = server;
+    let context;
+    // Everything the flow starts is inside this try, so a failure while
+    // setting up (a server that won't start, a browser that's gone) still
+    // stops its own server and puts the shared one back.
     try {
-      await fn({ page, context, expectDialog, watch });
-      assert.deepEqual(unexpected, [], 'no browser dialog the flow did not expect');
-      assert.equal(expected.length, 0, 'every dialog the flow expected opened');
-      assert.deepEqual(errors, [], 'no uncaught error on the page');
-    } catch (err) {
-      t.diagnostic(`screenshot: ${await saveScreenshot(page, name)}`);
-      if (errors.length) t.diagnostic(`uncaught page errors: ${JSON.stringify(errors)}`);
-      if (unexpected.length) t.diagnostic(`browser dialogs it didn't expect (dismissed): ${JSON.stringify(unexpected)}`);
-      t.diagnostic(`server output (tail):\n${active.output().slice(-3000)}`);
-      throw err;
+      if (ownServer) server = active = await startServer();
+      context = await browser.createBrowserContext();
+      const page = await newPage(context);
+      await runFlow(t, page, context, active, name, fn);
     } finally {
-      await context.close();
-      if (ownServer) {
-        await active.stop();
-        server = shared;
-      }
+      await context?.close();
+      if (active !== shared) await active.stop();
+      server = shared;
     }
   });
+}
+
+async function runFlow(t, page, context, active, name, fn) {
+  const expected = [];
+  const unexpected = [];
+  page.on('dialog', (dialog) => {
+    const handle = expected.shift();
+    if (handle) return handle(dialog);
+    unexpected.push(`${dialog.type()}: ${dialog.message()}`);
+    return dialog.dismiss();
+  });
+  const errors = [];
+  const watch = (other) => other.on('pageerror', (err) => errors.push(err.message));
+  watch(page);
+  // The next browser dialog is answered with `answer` ('accept' or
+  // 'dismiss') as it opens, since the page is stopped until it is (the
+  // click that opened it doesn't return before); resolves with what it
+  // said.
+  const expectDialog = (answer) =>
+    new Promise((resolve) =>
+      expected.push(async (dialog) => {
+        const seen = { type: dialog.type(), message: dialog.message() };
+        await dialog[answer]();
+        resolve(seen);
+      })
+    );
+  try {
+    await fn({ page, context, expectDialog, watch });
+    assert.deepEqual(unexpected, [], 'no browser dialog the flow did not expect');
+    assert.equal(expected.length, 0, 'every dialog the flow expected opened');
+    assert.deepEqual(errors, [], 'no uncaught error on the page');
+  } catch (err) {
+    t.diagnostic(`screenshot: ${await saveScreenshot(page, name)}`);
+    if (errors.length) t.diagnostic(`uncaught page errors: ${JSON.stringify(errors)}`);
+    if (unexpected.length) t.diagnostic(`browser dialogs it didn't expect (dismissed): ${JSON.stringify(unexpected)}`);
+    t.diagnostic(`server output (tail):\n${active.output().slice(-3000)}`);
+    throw err;
+  }
 }
 
 // A page that reaches only the server under test: the pages' Google Fonts
@@ -148,10 +156,15 @@ async function openSummary(page, resumeId) {
 }
 
 // Replaces a field's text by typing, as someone would.
-async function retype(page, field, text) {
-  await field.focus();
-  await field.evaluate((el) => el.select());
-  await page.keyboard.type(text);
+// Puts `text` in `field` in one go, the way typing does (the native setter
+// and an input event, so React's onChange runs): one change, so the one
+// save the debounce sends holds all of it, however slow the machine.
+async function setText(field, text) {
+  await field.evaluate((el, text) => {
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, text);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }, text);
 }
 
 // Puts `text` in `field` the way typing does (the native setter and an
@@ -285,7 +298,7 @@ flow('edits a block, publishes it, and the public page shows it', async ({ page,
   const text = `Published from the browser suite, ${Date.now()}.`;
 
   const saved = putResponse(page, `/api/resumes/${resumeId}/blocks/${block.id}`);
-  await retype(page, textarea, text);
+  await setText(textarea, text);
   assert.equal((await saved).status(), 200);
   assert.equal((await draftBlock(page, resumeId, block.id)).data.text, text);
 
@@ -439,8 +452,10 @@ flow('applies a preset, and a reload keeps it', async ({ page, expectDialog }) =
 });
 
 // The save waiting on its debounce when the page is left by one of its
-// own exits: the leave guard flushes it first. Each checks the PUT hadn't
-// gone out when the exit was taken, so it's the flush that sent it.
+// own exits: the leave guard flushes it first. The edit and the exit
+// happen in one page task (editThenLeave), so the debounce can't have sent
+// it; the order of requests afterwards shows the flush sent it before the
+// page moved on (or the session ended).
 flow('leaving through the switcher with a save pending keeps the edit', async ({ page }) => {
   await login(page);
   const resumeId = await defaultResumeId(page);
