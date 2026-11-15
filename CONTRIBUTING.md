@@ -30,8 +30,8 @@ Before opening a PR:
 
 ```bash
 node scripts/validate-templates.mjs   # metadata/schema check
-cd client && npm run lint             # React hooks and correctness rules
-cd client && npm run build            # catches broken components
+(cd client && npm run lint)           # React hooks and correctness rules
+(cd client && npm run build)          # catches broken components
 ```
 
 All three also run in CI on any PR touching `templates/**`. If your change is
