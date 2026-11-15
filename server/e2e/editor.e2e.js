@@ -436,6 +436,13 @@ flow('applies a preset, and a reload keeps it', async ({ page, expectDialog }) =
   const response = await saved;
   assert.equal(response.status(), 200);
   assert.equal(JSON.parse(response.request().postData()).template, preset.template);
+  // The response's headers aren't the end of the save: the page still holds
+  // it (and its beforeunload prompt) until the body is read and the queue
+  // settles, which is when it says "Saved". Reloading sooner could be asked
+  // about, and the prompt dismissed.
+  await page.waitForFunction(() => document.querySelector('.ed-topbar-status')?.textContent.trim() === 'Saved', {
+    polling: 'mutation',
+  });
 
   await page.reload();
   await page.waitForSelector(`.ed-preview-frame .l-template-${preset.template}`);

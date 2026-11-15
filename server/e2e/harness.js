@@ -109,7 +109,11 @@ export async function startServer() {
       throw new Error(`The server exited before it was ready (${JSON.stringify(how)}).\n--- server output ---\n${output}`);
     }
     try {
-      const response = await fetch(`${baseUrl}/api/auth/status`);
+      // Bounded, so a server that takes the connection and never answers
+      // still reaches the deadline below.
+      const response = await fetch(`${baseUrl}/api/auth/status`, {
+        signal: AbortSignal.timeout(Math.max(100, Math.min(2000, deadline - Date.now()))),
+      });
       if (response.ok) break;
       last = `HTTP ${response.status}`;
     } catch (err) {
