@@ -28,6 +28,7 @@ const READY_TIMEOUT_MS = 20000;
 // Past the server's own FORCE_EXIT_MS backstop (src/shutdown.js), so its
 // shutdown gets to close the PDF renderer's Chromium before a SIGKILL.
 const STOP_GRACE_MS = FORCE_EXIT_MS + 2000;
+const OUTPUT_KEEP_CHARS = 64 * 1024;
 
 // A port nothing is listening on, from the OS. It's closed again before the
 // server takes it, so another process could in principle grab it first; the
@@ -73,9 +74,13 @@ export async function startServer() {
   });
 
   const child = spawn(process.execPath, ['src/index.js'], { cwd: SERVER_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  // Only a tail is ever shown, so only a tail is kept.
   let output = '';
-  child.stdout.on('data', (chunk) => (output += chunk));
-  child.stderr.on('data', (chunk) => (output += chunk));
+  const keep = (chunk) => {
+    output = (output + chunk).slice(-OUTPUT_KEEP_CHARS);
+  };
+  child.stdout.on('data', keep);
+  child.stderr.on('data', keep);
   // Tracked from the start: a spawn failure fires 'error' and never 'exit',
   // and a listener added only at stop() could miss either.
   const exited = new Promise((resolve) => {

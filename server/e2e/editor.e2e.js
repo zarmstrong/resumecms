@@ -26,10 +26,15 @@ after(async () => {
 });
 
 // One flow: a fresh context and page, any browser dialog it didn't ask for
-// (expectDialog) and any uncaught page error failing it, and a screenshot
-// when it fails.
-function flow(name, fn) {
+// (expectDialog) and any uncaught page error failing it (on the flow's page
+// and any other it hands to `watch`), and a screenshot when it fails.
+// `ownServer` runs it on a fresh server of its own instead of the shared
+// one, for a flow that needs a never-touched install whatever ran before.
+function flow(name, fn, { ownServer = false } = {}) {
   test(name, { timeout: 90000 }, async (t) => {
+    const shared = server;
+    if (ownServer) server = await startServer();
+    const active = server;
     const context = await browser.createBrowserContext();
     const page = await newPage(context);
     const expected = [];
@@ -41,7 +46,8 @@ function flow(name, fn) {
       return dialog.dismiss();
     });
     const errors = [];
-    page.on('pageerror', (err) => errors.push(err.message));
+    const watch = (other) => other.on('pageerror', (err) => errors.push(err.message));
+    watch(page);
     // The next browser dialog is answered with `answer` ('accept' or
     // 'dismiss') as it opens, since the page is stopped until it is (the
     // click that opened it doesn't return before); resolves with what it
@@ -55,16 +61,21 @@ function flow(name, fn) {
         })
       );
     try {
-      await fn({ page, context, expectDialog });
+      await fn({ page, context, expectDialog, watch });
       assert.deepEqual(unexpected, [], 'no browser dialog the flow did not expect');
       assert.deepEqual(errors, [], 'no uncaught error on the page');
     } catch (err) {
       t.diagnostic(`screenshot: ${await saveScreenshot(page, name)}`);
       if (errors.length) t.diagnostic(`uncaught page errors: ${JSON.stringify(errors)}`);
-      t.diagnostic(`server output (tail):\n${server.output().slice(-3000)}`);
+      if (unexpected.length) t.diagnostic(`browser dialogs it didn't expect (dismissed): ${JSON.stringify(unexpected)}`);
+      t.diagnostic(`server output (tail):\n${active.output().slice(-3000)}`);
       throw err;
     } finally {
       await context.close();
+      if (ownServer) {
+        await active.stop();
+        server = shared;
+      }
     }
   });
 }
@@ -78,8 +89,10 @@ async function newPage(context) {
   await page.setViewport({ width: 1400, height: 1000 });
   await page.setRequestInterception(true);
   page.on('request', (request) => {
-    if (request.url().startsWith(`${server.baseUrl}/`) || request.url().startsWith('data:')) request.continue();
-    else request.abort('blockedbyclient');
+    // Either can reject once the page is gone (a reload, the context
+    // closing), which is no failure of the flow's.
+    if (request.url().startsWith(`${server.baseUrl}/`) || request.url().startsWith('data:')) request.continue().catch(() => {});
+    else request.abort('blockedbyclient').catch(() => {});
   });
   return page;
 }
@@ -238,7 +251,7 @@ flow('logs in through the login form', async ({ page }) => {
   assert.equal((await api(page, '/api/auth/status')).body.authenticated, true);
 });
 
-flow('edits a block, publishes it, and the public page shows it', async ({ page, context }) => {
+flow('edits a block, publishes it, and the public page shows it', async ({ page, context, watch }) => {
   await login(page);
   const resumeId = await defaultResumeId(page);
   const { block, textarea } = await openSummary(page, resumeId);
@@ -253,13 +266,14 @@ flow('edits a block, publishes it, and the public page shows it', async ({ page,
   const visitor = await context.browser().createBrowserContext();
   try {
     const publicPage = await newPage(visitor);
+    watch(publicPage);
     await publicPage.goto(`${server.baseUrl}/`);
     await publicPage.waitForFunction((old) => document.body.innerText.includes(old), {}, block.data.text);
 
-    // Up to the server's own wait for the PDF, and some.
     // The edit shows as unpublished first, so the "Published …" waited for
     // below is the publish's, not the line already on screen.
-    await page.waitForFunction(() => document.querySelector('.ed-topbar-status')?.textContent === 'Unpublished changes');
+    await page.waitForFunction(() => /^Unpublished changes/.test(document.querySelector('.ed-topbar-status')?.textContent));
+    // Up to the server's own wait for the PDF, and some.
     const published = nextResponse(page, 'POST', `/api/resumes/${resumeId}/publish`, { timeout: 40000 });
     await page.click('xpath/.//header//button[normalize-space()="Publish"]');
     assert.equal((await published).status(), 200);
@@ -273,18 +287,13 @@ flow('edits a block, publishes it, and the public page shows it', async ({ page,
   }
 });
 
-flow("the preset dialog's keyboard: arrows, preview, Escape and focus", async ({ page }) => {
-  // On a server of its own, so the landing page has never been saved (and
-  // the dialog opens by itself) whichever flows ran before or are skipped.
-  const shared = server;
-  server = await startServer();
-  try {
-    await presetDialogFlow(page);
-  } finally {
-    await server.stop();
-    server = shared;
-  }
-});
+// On a server of its own, so the landing page has never been saved (and
+// the dialog opens by itself) whichever flows ran before or are skipped.
+flow(
+  "the preset dialog's keyboard: arrows, preview, Escape and focus",
+  async ({ page }) => presetDialogFlow(page),
+  { ownServer: true }
+);
 
 async function presetDialogFlow(page) {
   await login(page);
@@ -369,12 +378,12 @@ async function presetDialogFlow(page) {
 flow('applies a preset, and a reload keeps it', async ({ page, expectDialog }) => {
   await login(page);
   const startButton = await openLandingEditor(page);
-  const { body: before } = await api(page, '/api/landing');
+  const { body: landingBefore } = await api(page, '/api/landing');
 
   await startButton.click();
   await page.waitForSelector(`${PRESET_DIALOG}[open]`);
   // A preset that changes the template, so the change shows.
-  const preset = (await dialogState(page)).radios.map(readPreset).find((p) => p.template !== before.landing.template);
+  const preset = (await dialogState(page)).radios.map(readPreset).find((p) => p.template !== landingBefore.landing.template);
   assert.ok(preset, 'a preset with another template');
   await page.click(`${PRESET_DIALOG} input[type="radio"][value="${preset.id}"]`);
 
@@ -384,7 +393,7 @@ flow('applies a preset, and a reload keeps it', async ({ page, expectDialog }) =
   await page.click(`${PRESET_DIALOG} button[type="submit"]`);
   const confirm = await question;
   assert.equal(confirm.type, 'confirm');
-  assert.match(confirm.message, new RegExp(`“${preset.label}” preset`));
+  assert.ok(confirm.message.includes(`“${preset.label}” preset`), confirm.message);
   const response = await saved;
   assert.equal(response.status(), 200);
   assert.equal(JSON.parse(response.request().postData()).template, preset.template);
@@ -392,11 +401,11 @@ flow('applies a preset, and a reload keeps it', async ({ page, expectDialog }) =
   await page.reload();
   await page.waitForSelector(`.ed-preview-frame .l-template-${preset.template}`);
   assert.equal(await page.$(PRESET_DIALOG), null, "the dialog doesn't open again by itself");
-  const { body: after } = await api(page, '/api/landing');
-  assert.equal(after.landing.template, preset.template);
-  assert.deepEqual(after.landing.style, { ...after.landing.style, ...preset.style }, "the preset's style");
+  const { body: landingAfter } = await api(page, '/api/landing');
+  assert.equal(landingAfter.landing.template, preset.template);
+  assert.deepEqual(landingAfter.landing.style, { ...landingAfter.landing.style, ...preset.style }, "the preset's style");
   assert.deepEqual(
-    after.landing.sections.slice(0, preset.sections.length).map((s) => s.kind),
+    landingAfter.landing.sections.slice(0, preset.sections.length).map((s) => s.kind),
     preset.sections.map((s) => s.kind),
     "the preset's sections come first"
   );
