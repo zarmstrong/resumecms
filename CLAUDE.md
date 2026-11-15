@@ -263,6 +263,28 @@ link has `download` so it never fires it. `onLogout` itself never asks. A
 new page or a new kind of proposal belongs in that page's
 `unsavedWork.js` function, or leaving silently drops it.
 
+That router list also splits the build (issue #179): only what a visitor
+sees is imported eagerly (`HomePage`, `ResumeRoute`, `PublicResumePage`
+for `/`, `/resume`, `/r/:slug` and `/print`). The editor (`/editor`,
+`EditorGate` in `editor/EditorRoute.jsx`, login included, which imports
+`editor.css` so the stylesheet comes with its chunk), the template
+previews, `/print/letter` and `/print/card` are route `lazy`s made by
+`lazyPage()` in `App.jsx`, so a public page never downloads them; never
+import editor code from a public module, or it moves back into the main
+chunk. `lazyRoute()` (`lazyRoute.js`, pure, tested) rejects an import
+whose chunk didn't arrive (`isChunkFetchError()`, each browser's wording;
+an error the chunk's own code threw is passed on as it is) with a
+`ChunkLoadError`, and the routes' `errorElement`,
+`RouteError` (`RouteFallback.jsx`), reloads the page once for it (a tab
+holding an old index.html after a deploy asks for chunks the server now
+404s): at most once per `RELOAD_WINDOW_MS`, marked in `sessionStorage`,
+none without storage, the mark cleared by the next chunk that loads; then
+(or once `RELOAD_GIVE_UP_MS` passes with the page still there, a reload a
+`beforeunload` prompt cancelled) an error with a Reload button. On a navigation the router keeps the old
+page up until the chunk is in; a page opened directly shows
+`RouteLoading`, blank for its first `LOADING_DELAY_MS` so it never
+flashes.
+
 `migrateToResumes()` (`server/src/resumeMigration.js`) turns an install
 from before variants into its default resume (slug `main`) on first boot:
 it attaches the blocks, moves the settings rows, and moves
@@ -1571,7 +1593,13 @@ renderer throws if the page wasn't served the resume it asked for, so a
 cookie that stops getting through fails renders instead of filing the
 default's content under another name. A cookie rather than a header because
 Puppeteer's extra headers go to every request, Google Fonts included. So
-the client needs no change to render any resume. Every render goes through the store's
+the client needs no change to render any resume. Every render, the
+share card's included, waits for the page's `window.__PDF_READY__`,
+which only the page component sets once its content is drawn, so
+`/print/letter` and `/print/card`, lazy routes (see "Several resumes"),
+are captured only after their chunk has loaded; one whose chunk fails
+shows `RouteError`, which never sets it, so that render times out
+rather than capturing an empty page. Every render goes through the store's
 single PDF queue (`withPdfLock`, shared by every resume), so two renders
 never run at once and a slow first-boot render can't overwrite a newer
 publish; keep any new PDF-writing code on that queue. Each render is bounded by the
@@ -1626,7 +1654,11 @@ every PDF route, `immutable` for the hashed
 files Vite's build manifest lists (`build.manifest` in
 `client/vite.config.js` → `dist/.vite/manifest.json`, re-read whenever its
 mtime changes so a rebuild under a running dev server is picked up; a file
-merely copied from `public/` is never in it, so it's revalidated).
+merely copied from `public/` is never in it, so it's revalidated). That
+includes the lazily loaded routes' chunks (issue #179): Vite lists each
+under its source path (`isDynamicEntry`), a chunk they share under
+`_name-hash.js` and its stylesheet under a key of its own, and
+`loadHashedAssets()` reads every entry's `file`, `css` and `assets`.
 The client is mounted by `server/src/clientStatic.js`, which also owns the
 SPA fallback — and 404s any path whose last segment has a file extension,
 so a bundle from an older build never comes back as HTML. That means SPA
