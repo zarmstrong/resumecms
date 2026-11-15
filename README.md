@@ -843,7 +843,14 @@ container:
 sqlite3 /path/to/your/data-dir/resume.sqlite3 "DELETE FROM settings WHERE key='totp';"
 ```
 
-This immediately disables the code requirement on next login.
+This immediately disables the code requirement on next login. If you're
+recovering because you think someone else got in (or after resetting the
+password the same way), also sign out every session, since a change made
+in the database doesn't:
+
+```bash
+sqlite3 /path/to/your/data-dir/resume.sqlite3 "DELETE FROM sessions;"
+```
 
 ### AI rewrites
 

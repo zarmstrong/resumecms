@@ -2,7 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { publicCaptchaConfig, verifyCaptcha } from '../captcha.js';
-import { endSession, isAuthenticated, revokeOtherSessions, startSession } from '../authSessions.js';
+import { endSession, hasSessionStore, isAuthenticated, revokeOtherSessions, startSession } from '../authSessions.js';
 import { hashPassword, verifyPassword } from '../passwords.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { verifyCode } from '../totpCode.js';
@@ -56,16 +56,30 @@ export function createAuthRouter({ getSetting, setSetting }) {
 
   router.post('/login', loginLimiter, async (req, res) => {
     const { username, password, captchaToken, totpToken } = req.body || {};
-    const credentials = getSetting('credentials');
-    if (!credentials) {
+    if (!getSetting('credentials')) {
       return res.status(500).json({
         error: 'Server misconfigured: no login credentials configured. See README for setup.',
       });
+    }
+    // Before anything is checked or spent (a 2FA code), so a server that
+    // can't keep sessions says so rather than failing after the code is used.
+    if (!hasSessionStore()) {
+      return res.status(500).json({ error: 'Server misconfigured: no session store.' });
     }
 
     const captchaOk = await verifyCaptcha(captchaToken, req.ip);
     if (!captchaOk) {
       return res.status(400).json({ error: 'Captcha verification failed. Please try again.' });
+    }
+    // Read after the captcha's await, so the password is checked against
+    // the credentials as they are now: a password changed meanwhile has
+    // already revoked every other session, and an old one mustn't start a
+    // new session after that.
+    const credentials = getSetting('credentials');
+    if (!credentials) {
+      return res.status(500).json({
+        error: 'Server misconfigured: no login credentials configured. See README for setup.',
+      });
     }
 
     const totp = getSetting('totp');
@@ -95,6 +109,12 @@ export function createAuthRouter({ getSetting, setSetting }) {
       // disabled factor, drop a pending setup, or spend a code twice.
       const current = getSetting('totp');
       if (!current?.enabled || current.secret !== totp.secret) {
+        return res.status(401).json({ error: authError });
+      }
+      // Likewise the credentials: changed during the code's check, the
+      // password just verified is no longer the one to log in with.
+      const nowCredentials = getSetting('credentials');
+      if (nowCredentials?.username !== credentials.username || nowCredentials?.passwordHash !== credentials.passwordHash) {
         return res.status(401).json({ error: authError });
       }
       if (typeof current.lastUsedStep === 'number' && step <= current.lastUsedStep) {

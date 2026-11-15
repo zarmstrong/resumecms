@@ -15,6 +15,10 @@ export function useSessionStore(store) {
   sessions = store;
 }
 
+export function hasSessionStore() {
+  return !!sessions;
+}
+
 // The cookie-session options, shared by index.js and the tests.
 export function sessionCookieOptions(secret) {
   return {

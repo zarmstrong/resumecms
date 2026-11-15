@@ -9,6 +9,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { hashPassword } from '../passwords.js';
 import { ensureSchema } from '../schema.js';
 import { SESSION_MAX_AGE_MS, createSessionStore } from '../sessionStore.js';
+import { generate, generateSecret } from 'otplib';
 import { createAuthRouter } from './authRouter.js';
 
 // Logins are revocable (issue #172): served on a real socket with the real
@@ -18,8 +19,11 @@ import { createAuthRouter } from './authRouter.js';
 const PASSWORD = 'correct horse battery';
 const SECRET = 'test-session-secret-'.padEnd(40, 'x');
 
-async function start({ store = true } = {}) {
+// `onRead(key, n, settings)` runs before the n-th read (0 first) of a
+// setting, to change it under a request between its awaits.
+async function start({ store = true, onRead } = {}) {
   const settings = new Map([['credentials', { username: 'admin', passwordHash: hashPassword(PASSWORD) }]]);
+  const reads = new Map();
   const db = new Database(':memory:');
   ensureSchema(db);
   const clock = { now: Date.now() };
@@ -37,7 +41,15 @@ async function start({ store = true } = {}) {
   app.get('/protected', requireAuth, (req, res) => res.json({ ok: true }));
   app.use(
     '/auth',
-    createAuthRouter({ getSetting: (key) => settings.get(key) ?? null, setSetting: (key, value) => settings.set(key, value) }),
+    createAuthRouter({
+      getSetting: (key) => {
+        const n = reads.get(key) ?? 0;
+        reads.set(key, n + 1);
+        onRead?.(key, n, settings);
+        return settings.get(key) ?? null;
+      },
+      setSetting: (key, value) => settings.set(key, value),
+    }),
   );
   app.use(errorHandler);
   const server = app.listen(0);
@@ -221,6 +233,48 @@ test('with no session store nothing is logged in, and a login fails', async () =
     assert.equal(isAuthenticated({ session: { token } }), false);
     useSessionStore(app.sessions);
     assert.equal(isAuthenticated({ session: { token } }), true);
+  } finally {
+    app.close();
+  }
+});
+
+const sessionCount = (app) => app.db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n;
+const changedCredentials = () => ({ username: 'admin', passwordHash: hashPassword('a whole new password') });
+
+test('a password changed while a login waits on its captcha refuses the old one', async () => {
+  // Read 0 is the up-front check; read 1, after the captcha's await, sees the change.
+  const app = await start({ onRead: (key, n, settings) => key === 'credentials' && n === 1 && settings.set(key, changedCredentials()) });
+  try {
+    const res = await app.browser().post('/auth/login', { username: 'admin', password: PASSWORD });
+    assert.equal(res.status, 401);
+    assert.equal(sessionCount(app), 0);
+  } finally {
+    app.close();
+  }
+});
+
+test('a password changed while a login checks its 2FA code starts no session', async () => {
+  const secret = generateSecret();
+  // The totp row's second read is the one after the code's await.
+  const app = await start({ onRead: (key, n, settings) => key === 'totp' && n === 1 && settings.set('credentials', changedCredentials()) });
+  app.settings.set('totp', { enabled: true, secret });
+  try {
+    const res = await app.browser().post('/auth/login', { username: 'admin', password: PASSWORD, totpToken: await generate({ secret }) });
+    assert.equal(res.status, 401);
+    assert.equal(sessionCount(app), 0);
+  } finally {
+    app.close();
+  }
+});
+
+test('with no session store a login fails before its 2FA code is spent', async () => {
+  const secret = generateSecret();
+  const app = await start({ store: false });
+  app.settings.set('totp', { enabled: true, secret });
+  try {
+    const res = await app.browser().post('/auth/login', { username: 'admin', password: PASSWORD, totpToken: await generate({ secret }) });
+    assert.equal(res.status, 500);
+    assert.equal(app.settings.get('totp').lastUsedStep, undefined);
   } finally {
     app.close();
   }
