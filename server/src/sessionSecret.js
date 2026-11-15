@@ -1,8 +1,10 @@
-// The session secret signs the cookie-session cookie, and requireAuth only
-// checks `req.session.authenticated`, so anyone who knows the secret can sign
-// their own login (issue #171). The server therefore refuses to start with a
-// missing, short or published one: the strings below have all shipped in
-// this repo as defaults or examples, so they're as good as public.
+// The session secret signs the cookie-session cookie. Until issue #172 that
+// cookie was the whole login (`{ authenticated: true }`), so anyone who knew
+// the secret could sign their own (issue #171); now it carries a token the
+// sessions table must still hold, but a signature is still a check worth
+// keeping. The server therefore refuses to start with a missing, short or
+// published one: the strings below have all shipped in this repo as
+// defaults or examples, so they're as good as public.
 export const SESSION_SECRET_MIN_LENGTH = 32;
 
 export const PLACEHOLDER_SECRETS = [

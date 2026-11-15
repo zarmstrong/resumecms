@@ -14,7 +14,7 @@ export const MCP_TOKEN_MIN_LENGTH = 32;
 // Hashing to a fixed length before comparing means a mismatched token
 // length can't itself leak an early exit (timingSafeEqual throws on
 // unequal lengths), and timingSafeEqual keeps the comparison itself from
-// leaking how many leading bytes matched — same trick as routes/auth.js.
+// leaking how many leading bytes matched — same trick as routes/authRouter.js.
 function tokenMatches(candidate, actual) {
   const a = createHash('sha256').update(String(candidate)).digest();
   const b = createHash('sha256').update(actual).digest();

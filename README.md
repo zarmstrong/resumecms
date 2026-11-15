@@ -189,24 +189,27 @@ the server.
 | `RESUMECMS_RECAPTCHA_SITE_KEY` / `RESUMECMS_RECAPTCHA_SECRET_KEY` | if using reCAPTCHA | From the [Google reCAPTCHA admin console](https://www.google.com/recaptcha/admin) (v2 "I'm not a robot" checkbox type). |
 | `RESUMECMS_MCP_TOKEN` | no | Enables the [MCP server](#mcp-server) at `POST /mcp`; the bearer token MCP clients must send. Unset disables the endpoint. Must be at least 32 characters (`openssl rand -hex 32`). |
 
-Generate `RESUMECMS_SESSION_SECRET` with `openssl rand -hex 32`. Anyone who knows it can sign a session cookie and get into the editor without the password or TOTP, so keep it out of version control; changing it signs everyone out.
+Generate `RESUMECMS_SESSION_SECRET` with `openssl rand -hex 32`. It signs the session cookie; keep it out of version control. Changing it signs everyone out. (A login is also a record on the server, see [Editor sessions](#editor-sessions), so the secret alone no longer gets anyone into the editor.)
 
 ## API reference
 
 All `/api/*` routes except `/api/auth/*` and `/api/public/*` require an
-authenticated editor session (cookie set by `/api/auth/login`).
+authenticated editor session (cookie set by `/api/auth/login`, good only
+while the server still holds its session; see [Editor sessions](#editor-sessions)).
 
 | Method & path | Purpose |
 |---|---|
-| `POST /api/auth/login` | `{ username, password, captchaToken, totpToken }` → sets session cookie |
-| `POST /api/auth/logout` | clears session |
-| `GET /api/auth/status` | `{ authenticated }` |
+| `POST /api/auth/login` | `{ username, password, captchaToken, totpToken }` → starts a new session (30 days) and sets its cookie |
+| `POST /api/auth/logout` | ends the session on the server (a copy of its cookie stops working too) and clears the cookie |
+| `GET /api/auth/status` | `{ authenticated }`: whether the cookie's session is still live |
+| `GET /api/auth/credentials` | `{ username }` (auth-gated) |
+| `POST /api/auth/credentials` | `{ currentPassword, newUsername, newPassword? }` → changes the login (auth-gated, rate-limited like login); a new password or username signs out every other session |
 | `GET /api/auth/captcha-config` | `{ provider, siteKey, totpRequired }` — `provider` is `null` if captcha is disabled |
 | `GET /api/auth/totp/status` | `{ enabled }` (auth-gated) |
 | `POST /api/auth/totp/setup` | generates a new pending secret, returns `{ secret, otpauthUrl, qrDataUrl }` (auth-gated). Needs `{ currentPassword }`, and while 2FA is on also `totpToken` (an unused code from the current app), 401 otherwise; the current factor keeps working until the new one is confirmed |
-| `POST /api/auth/totp/confirm` | `{ token }` (a code from the pending secret) → verifies it and enables 2FA, replacing any current factor (auth-gated) |
+| `POST /api/auth/totp/confirm` | `{ token }` (a code from the pending secret) → verifies it and enables 2FA, replacing any current factor, and signs out every other session (auth-gated) |
 | `POST /api/auth/totp/cancel` | `{ secret }` → drops the pending setup if it's that secret, so it can no longer be confirmed; any current factor is untouched (auth-gated) |
-| `POST /api/auth/totp/disable` | `{ currentPassword, totpToken }` → turns 2FA off (auth-gated; while 2FA is on, 401 without both; with it off it only clears a pending setup). Setup, confirm and disable are rate-limited like login (10 failed attempts / IP / 15 min) |
+| `POST /api/auth/totp/disable` | `{ currentPassword, totpToken }` → turns 2FA off and signs out every other session (auth-gated; while 2FA is on, 401 without both; with it off it only clears a pending setup and signs nobody out). Setup, confirm and disable are rate-limited like login (10 failed attempts / IP / 15 min) |
 | `GET/PUT /api/header` | header/contact fields |
 | `GET/PUT /api/site` | site settings (title and description for search results and link previews, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
@@ -799,6 +802,23 @@ default, but if your CDN has a "cache everything" or TTL-override rule, add
 a bypass for `/api/*`. No purge-on-publish is needed once the headers are
 respected.
 
+### Editor sessions
+
+A login is a session the server keeps: the cookie holds only a random
+token, and the database only that token's hash, with the time it expires,
+30 days after the login (using the editor doesn't extend it). So:
+
+- **Log out** ends the session on the server, not just in that browser: a
+  copy of the cookie stops working too.
+- **Changing your password or username**, and **turning 2FA on, moving it
+  to a new app or turning it off**, sign out every other session. The tab
+  you made the change in stays logged in.
+- To sign everyone out, yourself included, delete the rows on the host:
+  `sqlite3 /path/to/your/data-dir/resume.sqlite3 "DELETE FROM sessions;"`
+
+**Upgrading:** a login from before sessions were kept on the server is no
+longer accepted, so after updating you log in once more.
+
 ### Two-factor authentication (TOTP)
 
 From the editor's "Two-Factor Authentication" panel you can enable
@@ -823,7 +843,14 @@ container:
 sqlite3 /path/to/your/data-dir/resume.sqlite3 "DELETE FROM settings WHERE key='totp';"
 ```
 
-This immediately disables the code requirement on next login.
+This immediately disables the code requirement on next login. If you're
+recovering because you think someone else got in (or after resetting the
+password the same way), also sign out every session, since a change made
+in the database doesn't:
+
+```bash
+sqlite3 /path/to/your/data-dir/resume.sqlite3 "DELETE FROM sessions;"
+```
 
 ### AI rewrites
 

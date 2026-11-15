@@ -158,6 +158,24 @@ built from that checkout, so whatever is in it ships on the next rebuild.
 Keep it on a clean `main`. A fresh worktree has no `node_modules`: run
 `npm ci` in `server/` and `client/` before their tests.
 
+`scripts/check.sh` runs every local check for the worktree it's in (the
+template validator, both packages' tests, lint and type checks, the
+client build; it stops if
+either package has no `node_modules`, so run `npm ci` in both first),
+refuses to run in `/opt/resumecms`, and never touches Docker.
+`scripts/deploy-host.sh` is the deploy step, not a build step: it rebuilds
+this host's live services (`docker compose up -d --build` in
+`/opt/docker`) from `/opt/resumecms`, so run it only on purpose, and only
+as `/opt/resumecms/scripts/deploy-host.sh` (a worktree's copy refuses). It
+refuses unless that checkout is a clean `main` (nothing modified, staged
+or untracked, and no ignored file under `server/`, `client/` or
+`templates/` but `node_modules` and `dist`) at exactly origin's `main`
+(by `git ls-remote`, so it writes nothing to the checkout), checked again
+right before building; names the services first (pass some to rebuild
+only those), asks unless given `--yes`, runs one at a time, and fails
+unless each site answers on its port within 90 s of `up`.
+`--dry-run` stops before Docker.
+
 Subagents follow the same rule. Agents that write code run with
 `isolation: worktree`, and the project's own agents are in
 `.claude/agents/`:
@@ -307,6 +325,28 @@ lose, so an idle editor keeps the back/forward cache; the Download PDF
 link has `download` so it never fires it. `onLogout` itself never asks. A
 new page or a new kind of proposal belongs in that page's
 `unsavedWork.js` function, or leaving silently drops it.
+
+That router list also splits the build (issue #179): only what a visitor
+sees is imported eagerly (`HomePage`, `ResumeRoute`, `PublicResumePage`
+for `/`, `/resume`, `/r/:slug` and `/print`). The editor (`/editor`,
+`EditorGate` in `editor/EditorRoute.jsx`, login included, which imports
+`editor.css` so the stylesheet comes with its chunk), the template
+previews, `/print/letter` and `/print/card` are route `lazy`s made by
+`lazyPage()` in `App.jsx`, so a public page never downloads them; never
+import editor code from a public module, or it moves back into the main
+chunk. `lazyRoute()` (`lazyRoute.js`, pure, tested) rejects an import
+whose chunk didn't arrive (`isChunkFetchError()`, each browser's wording;
+an error the chunk's own code threw is passed on as it is) with a
+`ChunkLoadError`, and the routes' `errorElement`,
+`RouteError` (`RouteFallback.jsx`), reloads the page once for it (a tab
+holding an old index.html after a deploy asks for chunks the server now
+404s): at most once per `RELOAD_WINDOW_MS`, marked in `sessionStorage`,
+none without storage, the mark cleared by the next chunk that loads; then
+(or once `RELOAD_GIVE_UP_MS` passes with the page still there, a reload a
+`beforeunload` prompt cancelled) an error with a Reload button. On a navigation the router keeps the old
+page up until the chunk is in; a page opened directly shows
+`RouteLoading`, blank for its first `LOADING_DELAY_MS` so it never
+flashes.
 
 `migrateToResumes()` (`server/src/resumeMigration.js`) turns an install
 from before variants into its default resume (slug `main`) on first boot:
@@ -1617,7 +1657,13 @@ renderer throws if the page wasn't served the resume it asked for, so a
 cookie that stops getting through fails renders instead of filing the
 default's content under another name. A cookie rather than a header because
 Puppeteer's extra headers go to every request, Google Fonts included. So
-the client needs no change to render any resume. Every render goes through the store's
+the client needs no change to render any resume. Every render, the
+share card's included, waits for the page's `window.__PDF_READY__`,
+which only the page component sets once its content is drawn, so
+`/print/letter` and `/print/card`, lazy routes (see "Several resumes"),
+are captured only after their chunk has loaded; one whose chunk fails
+shows `RouteError`, which never sets it, so that render times out
+rather than capturing an empty page. Every render goes through the store's
 single PDF queue (`withPdfLock`, shared by every resume), so two renders
 never run at once and a slow first-boot render can't overwrite a newer
 publish; keep any new PDF-writing code on that queue. Each render is bounded by the
@@ -1672,7 +1718,11 @@ every PDF route, `immutable` for the hashed
 files Vite's build manifest lists (`build.manifest` in
 `client/vite.config.js` → `dist/.vite/manifest.json`, re-read whenever its
 mtime changes so a rebuild under a running dev server is picked up; a file
-merely copied from `public/` is never in it, so it's revalidated).
+merely copied from `public/` is never in it, so it's revalidated). That
+includes the lazily loaded routes' chunks (issue #179): Vite lists each
+under its source path (`isDynamicEntry`), a chunk they share under
+`_name-hash.js` and its stylesheet under a key of its own, and
+`loadHashedAssets()` reads every entry's `file`, `css` and `assets`.
 The client is mounted by `server/src/clientStatic.js`, which also owns the
 SPA fallback — and 404s any path whose last segment has a file extension,
 so a bundle from an older build never comes back as HTML. That means SPA
@@ -1698,7 +1748,39 @@ then only ever read from/written to the `settings` table — changing the env
 vars later does nothing) plus optional TOTP 2FA, both stored in SQLite, not
 config. `server/src/middleware/requireAuth.js` gates everything under
 `/api` except `/api/auth/*` and `/api/public/*`; `/mcp` is gated separately
-by its bearer token (see "MCP server"). Login is rate-limited
+by its bearer token (see "MCP server").
+
+A login is a server-side session (issue #172): the `sessions` table
+(`schema.js`) holds only the sha256 of a random 32-byte token, with its
+creation and expiry times, and the signed `cookie-session` cookie holds
+only `{ token }`. `sessionStore.js` is the store over a db handle
+(`create`, `isValid`, `remove`, `removeOthers`, `prune`), and
+`authSessions.js` is the one place that says whether a request is logged
+in: `requireAuth` and `GET /api/auth/status` both go through its
+`isAuthenticated()`, which checks the token against the store
+`index.js` registers with `useSessionStore()`. It fails closed: with no
+store registered nothing is logged in and a login is a 500, and a cookie
+without a token (the old `{ authenticated: true }`) is no login. Expiry is
+the server's, 30 days from login and never extended
+(`SESSION_MAX_AGE_MS`, also the cookie's `maxAge` through
+`sessionCookieOptions()`): an expired row is refused and deleted, and
+expired rows are pruned at each login and at boot. Login replaces the
+browser's session with a new one (`startSession()`), logout deletes its
+row (`endSession()`), and a new password or username
+(`POST /api/auth/credentials`) and turning 2FA on, replacing it (both
+`/confirm`) or turning it off delete every *other* session
+(`revokeOtherSessions()`), so the tab that made the change stays in.
+They revoke *before* writing the change, so a failed revocation changes
+nothing, and each of those routes checks its own session again right
+before writing (`isAuthenticated()`: `requireAuth` ran before an await,
+the rate limiter's if nothing else), so a session signed out meanwhile can neither
+change the factor nor sign out the one that signed it out. A new way to
+change how one logs in must revoke the same way. The login
+routes are the `createAuthRouter()` factory (`routes/authRouter.js`, bound
+in `routes/auth.js`) and the 2FA ones `createTotpRouter()`, so their tests
+run on an in-memory settings map and a `:memory:` session store. The PDF
+render cookie (`renderAccess.js`) and the MCP token are separate and
+untouched by any of this. Login is rate-limited
 (10 failed attempts / IP / 15 min) and optionally captcha-gated
 (`RESUMECMS_CAPTCHA_PROVIDER`; off only when unset: an unknown provider
 or a missing key refuses to start, `readCaptchaConfig()` in
@@ -1707,7 +1789,8 @@ notes, including manual TOTP recovery via direct SQLite access.
 `RESUMECMS_SESSION_SECRET` has no default: `requireSessionSecret.js`, imported
 first by `index.js` so it runs before `db.js` opens the database, exits unless
 `checkSessionSecret()` (`sessionSecret.js`) accepts it (set, at least 32
-characters, none of `PLACEHOLDER_SECRETS`; issue #171).
+characters, none of `PLACEHOLDER_SECRETS`; issue #171). Since #172 a
+signed cookie alone is no login, but the check stays.
 
 The 2FA routes (`routes/totpRouter.js`, a factory over `getSetting`/
 `setSetting` so its test needs no `db.js`; `routes/totp.js` binds it)
