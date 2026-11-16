@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
-import { tmpdir } from 'node:os';
+import { constants, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
@@ -20,11 +20,37 @@ import { FORCE_EXIT_MS } from '../src/shutdown.js';
 const SERVER_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const REPO_ROOT = path.dirname(SERVER_DIR);
 const CLIENT_DIST_INDEX = path.join(REPO_ROOT, 'client', 'dist', 'index.html');
+const REAPER = path.join(SERVER_DIR, 'e2e', 'reaper.js');
 
 export const USERNAME = 'e2e-admin';
 export const PASSWORD = `e2e-${randomBytes(8).toString('hex')}`;
 
 const READY_TIMEOUT_MS = 20000;
+// What each running server leaves behind if the test process ends without
+// its after() hooks (Puppeteer's own SIGINT handler calls process.exit(130),
+// an uncaught error, a signal): run on 'exit', which fires on any exit but
+// only runs synchronous code, and on a signal, which by default ends the
+// process without an 'exit'. A server is SIGTERMed rather than killed, so
+// its shutdown (src/shutdown.js) still closes its PDF renderer's Chromium,
+// which runs in a process group of its own; it finishes after we're gone,
+// so its data dir is removed by e2e/reaper.js once it has exited.
+const cleanups = new Set();
+function runCleanups() {
+  for (const cleanup of cleanups) cleanup();
+  cleanups.clear();
+}
+process.on('exit', runCleanups);
+// Then the process ends here, with the shell's code for that signal: a
+// listener keeps it alive, and Puppeteer's own exits only on SIGINT (on
+// SIGTERM and SIGHUP it just closes its browser). process.exit() still runs
+// the 'exit' listeners, Puppeteer's included, which kills its browser.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => {
+    runCleanups();
+    process.exit(128 + constants.signals[signal]);
+  });
+}
+
 // Past the server's own FORCE_EXIT_MS backstop (src/shutdown.js), so its
 // shutdown gets to close the PDF renderer's Chromium before a SIGKILL.
 const STOP_GRACE_MS = FORCE_EXIT_MS + 2000;
@@ -73,7 +99,11 @@ export async function startServer() {
     RESUMECMS_SESSION_SECRET: randomBytes(32).toString('hex'),
   });
 
-  const child = spawn(process.execPath, ['src/index.js'], { cwd: SERVER_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  // In a process group of its own, so a signal to ours (a terminal's
+  // Ctrl+C or hangup) reaches it only as the SIGTERM sent from here: it
+  // handles SIGTERM and SIGINT, but a SIGHUP would end it without its
+  // shutdown and leave its PDF renderer's Chromium running.
+  const child = spawn(process.execPath, ['src/index.js'], { cwd: SERVER_DIR, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
   // Only a tail is ever shown, so only a tail is kept.
   let output = '';
   const keep = (chunk) => {
@@ -90,6 +120,18 @@ export async function startServer() {
   let done = false;
   exited.then(() => (done = true));
 
+  // Until stop() has finished, so an exit in the middle of it still
+  // takes the server and data dir with it (see `cleanups`).
+  const cleanup = () => {
+    if (done) {
+      rmSync(dataDir, { recursive: true, force: true });
+      return;
+    }
+    child.kill('SIGTERM');
+    spawn(process.execPath, [REAPER, String(child.pid), dataDir, String(STOP_GRACE_MS)], { detached: true, stdio: 'ignore' }).unref();
+  };
+  cleanups.add(cleanup);
+
   async function stop() {
     if (!done) {
       const timer = setTimeout(() => child.kill('SIGKILL'), STOP_GRACE_MS);
@@ -98,6 +140,7 @@ export async function startServer() {
       clearTimeout(timer);
     }
     rmSync(dataDir, { recursive: true, force: true });
+    cleanups.delete(cleanup);
   }
 
   const deadline = Date.now() + READY_TIMEOUT_MS;

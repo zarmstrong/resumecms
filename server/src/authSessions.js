@@ -59,7 +59,17 @@ export function endSession(req) {
 }
 
 // After a change to how one logs in (password, username, 2FA): every
-// session but the request's own, so the tab that made the change stays in.
-export function revokeOtherSessions(req) {
-  sessions?.removeOthers(tokenOf(req));
+// session goes, the request's own token included, and the request gets a
+// new one, so the tab that made the change stays in but a copy of its
+// cookie (the reason someone changes a password) doesn't. The new token
+// keeps the old one's expiry (30 days from login, never extended). Created
+// first, so if deleting the rest fails nothing is signed out and the
+// cookie is left as it was; the new row is then just one no cookie names.
+// Callers check isAuthenticated() just before, with no await between.
+export function reissueSession(req) {
+  if (!sessions) throw new Error('No session store configured');
+  const token = sessions.replace(tokenOf(req));
+  if (!token) throw new Error('No live session to reissue');
+  sessions.removeOthers(token);
+  req.session = { token };
 }

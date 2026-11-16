@@ -101,7 +101,13 @@ What needs a browser is a small Puppeteer suite of its own (issue #178),
 in `client/` (it says so if `client/dist` is missing). `harness.js` starts
 `node src/index.js` on a free port with a fresh `mkdtemp` data dir and
 random credentials, waits on `/api/auth/status`, and on the way out SIGTERMs
-that child alone (SIGKILL after a grace period) and removes the dir; each
+that child alone (SIGKILL after a grace period) and removes the dir, also
+when the test process exits or is signalled without its hooks (a SIGTERM
+then, so the server still closes its PDF renderer's Chromium, and
+`e2e/reaper.js`, detached, removes the dir once the server has exited,
+SIGKILLing it past the grace period only while `/proc` shows it's still
+that server; the server runs in its own process group, so a terminal's
+signals reach it only that way); each
 flow in `editor.e2e.js` gets a fresh browser context, blocks every request
 but the server's (Google Fonts included), waits on the page's state or on
 its requests (never a fixed sleep), and leaves a screenshot when it fails
@@ -1793,8 +1799,11 @@ expired rows are pruned at each login and at boot. Login replaces the
 browser's session with a new one (`startSession()`), logout deletes its
 row (`endSession()`), and a new password or username
 (`POST /api/auth/credentials`) and turning 2FA on, replacing it (both
-`/confirm`) or turning it off delete every *other* session
-(`revokeOtherSessions()`), so the tab that made the change stays in.
+`/confirm`) or turning it off delete every session, the request's own
+token included, and give the request a new one (`reissueSession()`), so
+the tab that made the change stays in and a copy of its cookie doesn't;
+the new token keeps the old one's expiry (`sessions.replace()`), so a
+change never extends a login.
 They revoke *before* writing the change, so a failed revocation changes
 nothing, and each of those routes checks its own session again right
 before writing (`isAuthenticated()`: `requireAuth` ran before an await,

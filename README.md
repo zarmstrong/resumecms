@@ -203,13 +203,13 @@ while the server still holds its session; see [Editor sessions](#editor-sessions
 | `POST /api/auth/logout` | ends the session on the server (a copy of its cookie stops working too) and clears the cookie |
 | `GET /api/auth/status` | `{ authenticated }`: whether the cookie's session is still live |
 | `GET /api/auth/credentials` | `{ username }` (auth-gated) |
-| `POST /api/auth/credentials` | `{ currentPassword, newUsername, newPassword? }` → changes the login (auth-gated, rate-limited like login); a new password or username signs out every other session |
+| `POST /api/auth/credentials` | `{ currentPassword, newUsername, newPassword? }` → changes the login (auth-gated, rate-limited like login); a new password or username signs out every other session, and gives this one a new cookie |
 | `GET /api/auth/captcha-config` | `{ provider, siteKey, totpRequired }` — `provider` is `null` if captcha is disabled |
 | `GET /api/auth/totp/status` | `{ enabled }` (auth-gated) |
 | `POST /api/auth/totp/setup` | generates a new pending secret, returns `{ secret, otpauthUrl, qrDataUrl }` (auth-gated). Needs `{ currentPassword }`, and while 2FA is on also `totpToken` (an unused code from the current app), 401 otherwise; the current factor keeps working until the new one is confirmed |
-| `POST /api/auth/totp/confirm` | `{ token }` (a code from the pending secret) → verifies it and enables 2FA, replacing any current factor, and signs out every other session (auth-gated) |
+| `POST /api/auth/totp/confirm` | `{ token }` (a code from the pending secret) → verifies it and enables 2FA, replacing any current factor, and signs out every other session, giving this one a new cookie (auth-gated) |
 | `POST /api/auth/totp/cancel` | `{ secret }` → drops the pending setup if it's that secret, so it can no longer be confirmed; any current factor is untouched (auth-gated) |
-| `POST /api/auth/totp/disable` | `{ currentPassword, totpToken }` → turns 2FA off and signs out every other session (auth-gated; while 2FA is on, 401 without both; with it off it only clears a pending setup and signs nobody out). Setup, confirm and disable are rate-limited like login (10 failed attempts / IP / 15 min) |
+| `POST /api/auth/totp/disable` | `{ currentPassword, totpToken }` → turns 2FA off and signs out every other session, giving this one a new cookie (auth-gated; while 2FA is on, 401 without both; with it off it only clears a pending setup and signs nobody out). Setup, confirm and disable are rate-limited like login (10 failed attempts / IP / 15 min) |
 | `GET/PUT /api/header` | header/contact fields |
 | `GET/PUT /api/site` | site settings (title and description for search results and link previews, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
 | `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
@@ -811,8 +811,10 @@ token, and the database only that token's hash, with the time it expires,
 - **Log out** ends the session on the server, not just in that browser: a
   copy of the cookie stops working too.
 - **Changing your password or username**, and **turning 2FA on, moving it
-  to a new app or turning it off**, sign out every other session. The tab
-  you made the change in stays logged in.
+  to a new app or turning it off**, sign out every session but the tab you
+  made the change in, which stays logged in with a new cookie, so a copy
+  of its old one (if that's why you changed the password) stops working
+  too.
 - To sign everyone out, yourself included, delete the rows on the host:
   `sqlite3 /path/to/your/data-dir/resume.sqlite3 "DELETE FROM sessions;"`
 
