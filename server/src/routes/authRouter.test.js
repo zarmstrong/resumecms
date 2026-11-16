@@ -174,7 +174,7 @@ test('a signed cookie from before server-side sessions is not a login', async ()
   }
 });
 
-test('a new password signs out every other session, and this one stays', async () => {
+test('a new password signs out every other session and a copy of this one, and this one stays', async () => {
   const app = await start();
   try {
     const tab = await app.login();
@@ -185,8 +185,24 @@ test('a new password signs out every other session, and this one stays', async (
     assert.equal(await tab.loggedIn(), true);
     assert.equal((await tab.get('/protected')).status, 200);
     assert.equal(await other.loggedIn(), false);
-    // A copy of the session that made the change is that session.
-    assert.equal(await copy.loggedIn(), true);
+    // The tab got a new cookie; a copy of its old one (stolen, say) is out.
+    assert.notEqual(tab.cookie(), copy.cookie());
+    assert.equal(await copy.loggedIn(), false);
+  } finally {
+    app.close();
+  }
+});
+
+test('a new password never extends the login: the new cookie expires when the old one would', async () => {
+  const app = await start();
+  try {
+    const tab = await app.login();
+    app.clock.now += SESSION_MAX_AGE_MS - 1000;
+    const res = await tab.post('/auth/credentials', { currentPassword: PASSWORD, newUsername: 'admin', newPassword: 'a new password' });
+    assert.equal(res.status, 200);
+    assert.equal(await tab.loggedIn(), true);
+    app.clock.now += 1000;
+    assert.equal(await tab.loggedIn(), false);
   } finally {
     app.close();
   }

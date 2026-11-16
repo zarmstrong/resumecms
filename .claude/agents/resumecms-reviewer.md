@@ -130,8 +130,10 @@ in prose; check the diff against the ones that apply, especially:
   `isAuthenticated()`, which fails closed with no store registered and
   refuses an expired row (30 days from login, never extended). Logout
   deletes the row; a new password or username and turning 2FA on,
-  replacing or disabling it call `revokeOtherSessions()` before the write
-  (so a failed revocation changes nothing), keeping the request's own, and
+  replacing or disabling it call `reissueSession()` before the write
+  (so a failed revocation changes nothing): every session goes, the
+  request's own token too, and the request gets a new one with the old
+  one's expiry (`sessions.replace()`, so it never extends a login), and
   each checks its own session again before both (the rate limiter awaits
   after `requireAuth`, so it's never enough on its own). Nothing else (a signed `authenticated` flag,
   a header) may stand in for a session, and a new way to change how one

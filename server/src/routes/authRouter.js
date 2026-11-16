@@ -2,7 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { publicCaptchaConfig, verifyCaptcha } from '../captcha.js';
-import { endSession, hasSessionStore, isAuthenticated, revokeOtherSessions, startSession } from '../authSessions.js';
+import { endSession, hasSessionStore, isAuthenticated, reissueSession, startSession } from '../authSessions.js';
 import { hashPassword, verifyPassword } from '../passwords.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { verifyCode } from '../totpCode.js';
@@ -161,11 +161,12 @@ export function createAuthRouter({ getSetting, setSetting }) {
     // out meanwhile (another tab's change) mustn't change the login, nor
     // sign out the session that signed it out.
     if (!isAuthenticated(req)) return res.status(401).json({ error: 'Not authenticated' });
-    // A new password or username signs out every other session (a copied
-    // cookie included), but not this one. Before the write, so a failure
+    // A new password or username signs out every session but this one,
+    // which gets a new token, so a copy of its cookie is out too
+    // (reissueSession()). Before the write, so a failure
     // to sign them out changes nothing, and a failed write leaves them
     // signed out over the old password, never the reverse.
-    if (newPassword || updated.username !== credentials.username) revokeOtherSessions(req);
+    if (newPassword || updated.username !== credentials.username) reissueSession(req);
     setSetting('credentials', updated);
     res.json({ username: updated.username });
   });

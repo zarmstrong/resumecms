@@ -31,10 +31,18 @@ async function start(totp, hooks = {}) {
   useSessionStore(sessions);
   const session = sessions.create();
   const other = sessions.create();
+  // The request's token, as a browser would keep it: a route that gives it
+  // a new one (reissueSession()) replaces it, like a Set-Cookie would.
+  let current = session;
   const app = express();
   app.use(express.json());
   app.use((req, res, next) => {
-    req.session = { token: session };
+    req.session = { token: current };
+    const json = res.json.bind(res);
+    res.json = (body) => {
+      if (req.session?.token) current = req.session.token;
+      return json(body);
+    };
     next();
   });
   app.use(
@@ -57,8 +65,11 @@ async function start(totp, hooks = {}) {
     });
     return { status: res.status, body: await res.json() };
   };
-  const signedIn = () => ({ self: sessions.isValid(session), other: sessions.isValid(other) });
-  return { settings, post, signedIn, close: () => server.close() };
+  // `self` is the browser's current token, `old` its first one (a copy of
+  // its cookie from before any change).
+  const signedIn = () => ({ self: sessions.isValid(current), other: sessions.isValid(other) });
+  const oldCopy = () => sessions.isValid(session);
+  return { settings, post, signedIn, oldCopy, close: () => server.close() };
 }
 
 const code = (secret) => generate({ secret });
@@ -355,7 +366,7 @@ test('a session the store no longer holds gets nowhere', async () => {
   }
 });
 
-test('turning 2FA on signs out every other session, and this one stays', async () => {
+test('turning 2FA on signs out every other session and a copy of this one, and this one stays', async () => {
   const app = await start(null);
   try {
     const setup = await app.post('/setup', { currentPassword: PASSWORD });
@@ -363,13 +374,14 @@ test('turning 2FA on signs out every other session, and this one stays', async (
     assert.deepEqual(app.signedIn(), { self: true, other: true });
     assert.equal((await app.post('/confirm', { token: await code(setup.body.secret) })).status, 200);
     assert.deepEqual(app.signedIn(), { self: true, other: false });
+    assert.equal(app.oldCopy(), false, 'a copy of the cookie from before the change is out');
     assert.equal((await app.post('/status')).status, 200);
   } finally {
     app.close();
   }
 });
 
-test('replacing the factor signs out every other session, and this one stays', async () => {
+test('replacing the factor signs out every other session and a copy of this one, and this one stays', async () => {
   const active = generateSecret();
   const app = await start({ enabled: true, secret: active });
   try {
@@ -380,12 +392,13 @@ test('replacing the factor signs out every other session, and this one stays', a
     assert.deepEqual(app.signedIn(), { self: true, other: true });
     assert.equal((await app.post('/confirm', { token: await code(setup.body.secret) })).status, 200);
     assert.deepEqual(app.signedIn(), { self: true, other: false });
+    assert.equal(app.oldCopy(), false, 'a copy of the cookie from before the change is out');
   } finally {
     app.close();
   }
 });
 
-test('turning 2FA off signs out every other session, and this one stays', async () => {
+test('turning 2FA off signs out every other session and a copy of this one, and this one stays', async () => {
   const active = generateSecret();
   const app = await start({ enabled: true, secret: active });
   try {
@@ -393,6 +406,7 @@ test('turning 2FA off signs out every other session, and this one stays', async 
     assert.deepEqual(app.signedIn(), { self: true, other: true });
     assert.equal((await app.post('/disable', { currentPassword: PASSWORD, totpToken: await code(active) })).status, 200);
     assert.deepEqual(app.signedIn(), { self: true, other: false });
+    assert.equal(app.oldCopy(), false, 'a copy of the cookie from before the change is out');
     assert.equal((await app.post('/status')).status, 200);
   } finally {
     app.close();
@@ -406,6 +420,7 @@ test('cancelling a setup, or disabling with 2FA already off, signs nobody out', 
     await app.post('/cancel', { secret: setup.body.secret });
     assert.equal((await app.post('/disable')).status, 200);
     assert.deepEqual(app.signedIn(), { self: true, other: true });
+    assert.equal(app.oldCopy(), true, 'no change, so no new cookie');
   } finally {
     app.close();
   }

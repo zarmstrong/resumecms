@@ -46,6 +46,31 @@ test('a session expires 30 days after it was made, however much it was used, and
   assert.equal(count(), 0);
 });
 
+test('replace gives a new token for the same login, expiring when the old one would', () => {
+  const { db, clock, sessions } = setup();
+  const token = sessions.create();
+  clock.now += SESSION_MAX_AGE_MS - 10;
+  const next = sessions.replace(token);
+  assert.match(next, /^[A-Za-z0-9_-]{43}$/);
+  assert.notEqual(next, token);
+  // Both live until the caller removes the old one.
+  assert.equal(sessions.isValid(token), true);
+  assert.equal(sessions.isValid(next), true);
+  const rows = db.prepare('SELECT created_at, expires_at FROM sessions').all();
+  assert.deepEqual(rows[0], rows[1]);
+  clock.now += 10;
+  assert.equal(sessions.isValid(next), false);
+});
+
+test('replace refuses anything but a live session', () => {
+  const { clock, sessions, count } = setup();
+  for (const bad of [undefined, null, '', 'x', 'A'.repeat(43)]) assert.equal(sessions.replace(bad), null, String(bad));
+  const token = sessions.create();
+  clock.now += SESSION_MAX_AGE_MS;
+  assert.equal(sessions.replace(token), null);
+  assert.equal(count(), 0);
+});
+
 test('remove ends one session, removeOthers every other one', () => {
   const { sessions } = setup();
   const [a, b, c] = [sessions.create(), sessions.create(), sessions.create()];
