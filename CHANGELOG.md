@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.0.1](https://github.com/zarmstrong/resumecms/compare/v2.0.0...v2.0.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **deps:** bump body-parser from 2.3.0 to 2.4.0 in /server ([#202](https://github.com/zarmstrong/resumecms/issues/202)) ([c85ada0](https://github.com/zarmstrong/resumecms/commit/c85ada08a5b12e6eaf8a75136e5c8e689c4a5db4))
+* **deps:** bump ip-address from 10.7.0 to 10.7.6 in /server ([#204](https://github.com/zarmstrong/resumecms/issues/204)) ([47c8026](https://github.com/zarmstrong/resumecms/commit/47c8026b2c30edfcc315ae30258d79c69444cc14))
+* **deps:** bump qs from 6.16.0 to 6.17.1 in /server ([#203](https://github.com/zarmstrong/resumecms/issues/203)) ([5d00240](https://github.com/zarmstrong/resumecms/commit/5d002408013c16ca109a35bf8a9dab5336c75ab9))
+
 ## [2.0.0](https://github.com/zarmstrong/resumecms/compare/v1.2.0...v2.0.0) (2026-11-16)
 
 
