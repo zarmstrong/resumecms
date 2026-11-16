@@ -1,7 +1,7 @@
 # ---- Stage 1: build the React client ----------------------------------
 # The bundle is the same on every architecture, so a multi-platform build
 # makes it once on the builder's own platform instead of under emulation.
-FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS client-build
+FROM --platform=$BUILDPLATFORM node:26-bookworm-slim AS client-build
 WORKDIR /app/client
 # npm ci installs exactly the lockfile CI tested, never a fresh resolve.
 COPY client/package.json client/package-lock.json ./
@@ -11,7 +11,7 @@ COPY templates/ /app/templates/
 RUN npm run build
 
 # ---- Stage 2: server runtime -------------------------------------------
-FROM node:24-bookworm-slim
+FROM node:26-bookworm-slim
 
 # System Chromium is used for PDF export instead of Puppeteer's bundled
 # download (faster, smaller, more reliable across architectures).

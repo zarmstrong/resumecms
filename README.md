@@ -144,7 +144,7 @@ container restarts and rebuilds.
 
 ## Local development (without Docker)
 
-You'll need Node 22+ (puppeteer and better-sqlite3 require it); Node 24 (the current LTS, and what the Docker image uses) is recommended.
+You'll need Node 22+ (puppeteer and better-sqlite3 require it); Node 26 (the current LTS, and what the Docker image and CI use) is recommended.
 
 ```bash
 # terminal 1 — API server
