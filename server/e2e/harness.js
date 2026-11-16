@@ -20,6 +20,7 @@ import { FORCE_EXIT_MS } from '../src/shutdown.js';
 const SERVER_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const REPO_ROOT = path.dirname(SERVER_DIR);
 const CLIENT_DIST_INDEX = path.join(REPO_ROOT, 'client', 'dist', 'index.html');
+const REAPER = path.join(SERVER_DIR, 'e2e', 'reaper.js');
 
 export const USERNAME = 'e2e-admin';
 export const PASSWORD = `e2e-${randomBytes(8).toString('hex')}`;
@@ -31,7 +32,8 @@ const READY_TIMEOUT_MS = 20000;
 // only runs synchronous code, and on a signal, which by default ends the
 // process without an 'exit'. A server is SIGTERMed rather than killed, so
 // its shutdown (src/shutdown.js) still closes its PDF renderer's Chromium,
-// which runs in a process group of its own; it finishes after we're gone.
+// which runs in a process group of its own; it finishes after we're gone,
+// so its data dir is removed by e2e/reaper.js once it has exited.
 const cleanups = new Set();
 function runCleanups() {
   for (const cleanup of cleanups) cleanup();
@@ -97,7 +99,11 @@ export async function startServer() {
     RESUMECMS_SESSION_SECRET: randomBytes(32).toString('hex'),
   });
 
-  const child = spawn(process.execPath, ['src/index.js'], { cwd: SERVER_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  // In a process group of its own, so a signal to ours (a terminal's
+  // Ctrl+C or hangup) reaches it only as the SIGTERM sent from here: it
+  // handles SIGTERM and SIGINT, but a SIGHUP would end it without its
+  // shutdown and leave its PDF renderer's Chromium running.
+  const child = spawn(process.execPath, ['src/index.js'], { cwd: SERVER_DIR, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
   // Only a tail is ever shown, so only a tail is kept.
   let output = '';
   const keep = (chunk) => {
@@ -117,8 +123,12 @@ export async function startServer() {
   // Until stop() has finished, so an exit in the middle of it still
   // takes the server and data dir with it (see `cleanups`).
   const cleanup = () => {
-    if (!done) child.kill('SIGTERM');
-    rmSync(dataDir, { recursive: true, force: true });
+    if (done) {
+      rmSync(dataDir, { recursive: true, force: true });
+      return;
+    }
+    child.kill('SIGTERM');
+    spawn(process.execPath, [REAPER, String(child.pid), dataDir, String(STOP_GRACE_MS)], { detached: true, stdio: 'ignore' }).unref();
   };
   cleanups.add(cleanup);
 

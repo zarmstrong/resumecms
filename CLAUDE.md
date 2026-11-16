@@ -103,7 +103,11 @@ in `client/` (it says so if `client/dist` is missing). `harness.js` starts
 random credentials, waits on `/api/auth/status`, and on the way out SIGTERMs
 that child alone (SIGKILL after a grace period) and removes the dir, also
 when the test process exits or is signalled without its hooks (a SIGTERM
-then, so the server still closes its PDF renderer's Chromium); each
+then, so the server still closes its PDF renderer's Chromium, and
+`e2e/reaper.js`, detached, removes the dir once the server has exited,
+SIGKILLing it past the grace period only while `/proc` shows it's still
+that server; the server runs in its own process group, so a terminal's
+signals reach it only that way); each
 flow in `editor.e2e.js` gets a fresh browser context, blocks every request
 but the server's (Google Fonts included), waits on the page's state or on
 its requests (never a fixed sleep), and leaves a screenshot when it fails
