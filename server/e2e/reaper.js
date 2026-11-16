@@ -39,7 +39,9 @@ function alive() {
 
 function isOurServer() {
   try {
-    return readFileSync(`/proc/${pid}/environ`, 'latin1').split('\0').includes(`RESUMECMS_DATA_DIR=${dataDir}`);
+    // UTF-8, as Node wrote the server's environment, so a temp dir with
+    // non-ASCII characters still matches.
+    return readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').includes(`RESUMECMS_DATA_DIR=${dataDir}`);
   } catch {
     return false;
   }
@@ -52,7 +54,12 @@ if (Number.isInteger(pid) && pid > 0 && dataDir) {
     if (waited > GIVE_UP_MS) process.exit(1);
     if (!killed && waited > grace) {
       killed = true;
-      if (isOurServer()) process.kill(pid, 'SIGKILL');
+      try {
+        if (isOurServer()) process.kill(pid, 'SIGKILL');
+      } catch {
+        // It exited between the check and the kill (ESRCH): the loop sees
+        // it gone and removes the dir.
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
