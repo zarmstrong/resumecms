@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.0.0](https://github.com/zarmstrong/resumecms/compare/v1.2.0...v2.0.0) (2026-11-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **auth:** the server now refuses to start unless RESUMECMS_SESSION_SECRET is set to at least 32 characters and isn't a known placeholder (the old compose default "please-change-this-session-secret", "dev-secret-change-me", the old .env.example value or "devsecret"). Generate one with `openssl rand -hex 32`. Changing it signs everyone out.
+
+### Features
+
+* show the app version in the editor's top bar ([#189](https://github.com/zarmstrong/resumecms/issues/189)) ([93fe585](https://github.com/zarmstrong/resumecms/commit/93fe585f0b91dc02bacd1558200127daeca9816f))
+
+
+### Bug Fixes
+
+* answer errors outside a handler as JSON, not Express's HTML ([#186](https://github.com/zarmstrong/resumecms/issues/186)) ([c59604c](https://github.com/zarmstrong/resumecms/commit/c59604c759e299ae8aec0e5c71b1e1d40fca98fb))
+* **auth:** give the tab that changes the login a new session ([#198](https://github.com/zarmstrong/resumecms/issues/198)) ([11ec896](https://github.com/zarmstrong/resumecms/commit/11ec896ecf6a651e7e3c6477616a62e56c69127c))
+* **auth:** keep the active 2FA factor until a new one is confirmed ([#188](https://github.com/zarmstrong/resumecms/issues/188)) ([17edb8e](https://github.com/zarmstrong/resumecms/commit/17edb8e0adaebdb2419e5d026d334c895f48c099))
+* **auth:** make logins revocable with server-side sessions ([#192](https://github.com/zarmstrong/resumecms/issues/192)) ([041ddf8](https://github.com/zarmstrong/resumecms/commit/041ddf89c0fe1531beb453a0826d2f0a3bf8d13d))
+* **auth:** refuse to start when the login captcha is misconfigured ([#185](https://github.com/zarmstrong/resumecms/issues/185)) ([5afb2e6](https://github.com/zarmstrong/resumecms/commit/5afb2e67c4709113fa0e21628fbea78ef809a9c7)), closes [#174](https://github.com/zarmstrong/resumecms/issues/174)
+* **auth:** refuse to start without a real session secret ([#187](https://github.com/zarmstrong/resumecms/issues/187)) ([359382d](https://github.com/zarmstrong/resumecms/commit/359382d3c84faff47f1df2386b438e6016569735))
+* **deps:** bump openai from 7.55.0 to 7.56.0 in /server ([#196](https://github.com/zarmstrong/resumecms/issues/196)) ([ff898c2](https://github.com/zarmstrong/resumecms/commit/ff898c29a7e1b896128a5bc6ae25a7595bcbbf8f))
+* **deps:** move the Docker image and CI to Node 26 ([#200](https://github.com/zarmstrong/resumecms/issues/200)) ([d2eff81](https://github.com/zarmstrong/resumecms/commit/d2eff81b98ff6a6d5e57925e12541959cc5c3617))
+
+
+### Performance
+
+* lazy-load the editor so public visitors don't download it ([#195](https://github.com/zarmstrong/resumecms/issues/195)) ([2fa31bf](https://github.com/zarmstrong/resumecms/commit/2fa31bfc7d1699fcfdcf6cc25afe539ac42d5ec6))
+
 ## [1.2.0](https://github.com/zarmstrong/resumecms/compare/v1.1.1...v1.2.0) (2026-11-14)
 
 
