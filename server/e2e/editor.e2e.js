@@ -616,3 +616,50 @@ flow('logging out with a save pending saves it before the session ends', async (
   await login(page);
   assert.equal((await draftBlock(page, resumeId, block.id)).data.text, text);
 });
+
+flow('adds a credential, warns on expiry, and preserves its data after reload', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const created = nextResponse(page, 'POST', `/api/resumes/${resumeId}/blocks`);
+  await page.click('xpath/.//button[normalize-space()="+ Credential"]');
+  const response = await created;
+  assert.equal(response.status(), 201);
+  const { block } = await response.json();
+  assert.equal(block.type, 'credentials');
+  const row = await page.waitForSelector('xpath/.//div[contains(@class, "ed-block-row")][.//span[@class="ed-block-type"][.="Credential"]]');
+  await (await row.$('.ed-block-summary')).click();
+  const name = await row.waitForSelector('xpath/.//label[span[.="Name"]]/input');
+  const expires = await row.waitForSelector('xpath/.//label[span[.="Expires"]]/input');
+  const text = `Browser credential ${Date.now()}`;
+  await setText(name, text);
+  // Wait specifically for the save containing both edits: the name's
+  // debounce could have fired before setting the expiry on a busy runner.
+  const saved = page.waitForResponse((r) => {
+    if (!isPut(`/api/resumes/${resumeId}/blocks/${block.id}`)(r.request())) return false;
+    const data = JSON.parse(r.request().postData()).data;
+    return data.name === text && data.expires === 'Jan 2000';
+  });
+  saved.catch(() => {});
+  await setText(expires, 'Jan 2000');
+  // normalize-space(.) rather than text(): React writes the date as its
+  // own text node, so no single text node holds the whole sentence.
+  await row.waitForSelector('xpath/.//div[contains(@class, "ed-field-hint")][normalize-space(.)="This expired on Jan 2000. It\'s still shown; update the date or hide this block."]');
+  await page.waitForFunction((name) => [...document.querySelectorAll('.r-credential .r-experience-title')].some((el) => el.textContent === name), {}, text);
+  assert.equal((await saved).status(), 200);
+  // The response's headers aren't the end of the save: the page still holds
+  // it (and its beforeunload prompt) until the body is read and the queue
+  // settles. Then the status leaves "Saving…" for "Saved", which lasts only
+  // 1.2 s before the idle text, so wait for anything but "Saving…".
+  await page.waitForFunction(
+    () => {
+      const status = document.querySelector('.ed-topbar-status')?.textContent.trim();
+      return Boolean(status) && !status.startsWith('Saving');
+    },
+    { polling: 'mutation' }
+  );
+  await page.reload();
+  await page.waitForSelector(RESUME_SELECT);
+  const stored = await draftBlock(page, resumeId, block.id);
+  assert.deepEqual(stored.data, { kind: 'certification', name: text, issuer: '', number: '', issued: '', expires: 'Jan 2000', url: '' });
+  await page.waitForFunction((name) => [...document.querySelectorAll('.r-credential .r-experience-title')].some((el) => el.textContent === name), {}, text);
+});

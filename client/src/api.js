@@ -9,7 +9,7 @@ const BASE = '/api';
 /**
  * A block as the server's routes send and take it (Block in the server's
  * blockRows.js; `data` is its type's shape, blockData.js).
- * @typedef {'heading' | 'summary' | 'executive_summary' | 'skills_group' | 'experience' | 'education' | 'custom'} BlockType
+ * @typedef {'heading' | 'summary' | 'executive_summary' | 'skills_group' | 'experience' | 'education' | 'credentials' | 'custom'} BlockType
  * @typedef {{ id: string, type: BlockType, position: number, parentId: string | null, visibleWeb: boolean, visiblePrint: boolean, data: Record<string, any> }} Block
  * @typedef {{ data?: Record<string, any> | null, parentId?: string | null, visibleWeb?: boolean, visiblePrint?: boolean }} BlockPatch
  */

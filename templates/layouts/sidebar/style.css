@@ -1,4 +1,4 @@
-/* "sidebar": skills/education move into a narrow, tinted side rail on the
+/* "sidebar": skills/education/credentials move into a narrow, tinted side rail on the
    left; the rest of the sections stay in the wider main column. See
    index.jsx for how blocks are assigned. The rail's own styling
    (.r-sidebar/.r-main) comes from @resume/sidebarPanel.css (imported

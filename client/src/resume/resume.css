@@ -666,8 +666,21 @@
   text-align: center;
 }
 
+.r-credential-meta {
+  font-family: var(--font-ui);
+  font-size: 0.8125em;
+  color: var(--slate);
+}
+
+/* The line's own color (underlined, so still a link): the accent can be
+   unreadable on a dark sidebar rail, which only resets --slate. */
+.r-credential-meta a {
+  color: inherit;
+}
+
 .r-experience,
-.r-education {
+.r-education,
+.r-credential {
   margin-top: var(--r-block-space-above, 0);
   margin-bottom: var(--r-block-space-below, 18px);
 }

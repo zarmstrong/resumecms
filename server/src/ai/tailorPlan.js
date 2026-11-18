@@ -126,6 +126,8 @@ function blockContent(block, ref, refs) {
       return { category: text(data.category), items: text(data.items) };
     case 'education':
       return { degree: text(data.degree), institution: text(data.institution), dates: dates(text(data.startDate), text(data.endDate)) };
+    case 'credentials':
+      return { kind: text(data.kind), name: text(data.name), issuer: text(data.issuer), issued: text(data.issued), expires: text(data.expires) };
     case 'custom':
       return {
         title: text(data.title),
@@ -228,7 +230,7 @@ const SURFACE_NAMES = { print: 'the PDF', both: 'both the web page and the PDF' 
 const HIDE_RULES = (hideFrom) => [
   `Suggest what to hide for this audience: entries, bullets, or whole sections that matter least to them. A hide applies to ${SURFACE_NAMES[hideFrom]}. Hiding is not deleting: the person can show it again in one click.`,
   'Hide only what clearly matters less to the audience, and keep the resume substantial; when in doubt, keep it. Recent experience usually stays.',
-  'You may hide an experience entry, one bullet (with its sub-bullets), one sub-bullet, a skills row, an education entry, or a custom section. To hide a whole section, give its heading\'s ref: everything in that section goes with it.',
+  'You may hide an experience entry, one bullet (with its sub-bullets), one sub-bullet, a skills row, an education entry, a credential, or a custom section. To hide a whole section, give its heading\'s ref: everything in that section goes with it.',
   'Never hide a summary or executive summary, every experience entry, or every bullet of an entry (hide the entry instead).',
   ...(hideFrom === 'print' ? ['Something whose "shows" has no "pdf" is already hidden from the PDF; do not suggest hiding it.'] : []),
   'Give each hide a one-line reason addressed to the person, saying why it matters less for this audience.',

@@ -48,7 +48,7 @@ block — built-in or custom — has the same shape:
   generated PDF (they share the same template, so one flag covers both).
 - `parentId` — nests this block one level deep under a `heading` block's
   `id`; `null` for a top-level block. Only `experience`, `skills_group`,
-  `education`, `custom`, and `executive_summary` blocks can be nested — a `heading` can't be
+  `education`, `credentials`, `custom`, and `executive_summary` blocks can be nested — a `heading` can't be
   nested under another heading, and `summary` always stays top-level. In
   the editor, drag a block to sit directly under a heading to nest it there.
 - `position` — only unique within a sibling group (blocks sharing the same
@@ -59,7 +59,12 @@ block — built-in or custom — has the same shape:
   in right after it.
 
 Built-in block types: `heading`, `summary`, `executive_summary`,
-`skills_group`, `experience`, `education`.
+`skills_group`, `experience`, `education`, `credentials`.
+
+A **credential** (`type: "credentials"`) holds one license, certification or
+membership: name, issuer, number, issued/expires dates and a verification URL.
+Expired credentials stay visible; the editor warns so you can update or hide
+them. AI features read their facts without the number and never rewrite them.
 
 An **executive summary** (`type: "executive_summary"`) is a one-line
 headline, a short overview, and a list of key career highlights (one per

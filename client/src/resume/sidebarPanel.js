@@ -3,7 +3,7 @@ import { contrastTextFor } from './siteColors.js';
 // Shared by the "sidebar" and "sidebar-right" layouts — same auto-placement
 // heuristic and same rail text-contrast handling; only which side the rail
 // renders on differs between the two.
-const SIDEBAR_AUTO_TYPES = new Set(['skills_group', 'education']);
+const SIDEBAR_AUTO_TYPES = new Set(['skills_group', 'education', 'credentials']);
 
 // A heading's section goes to the rail (the "secondary" column, see
 // blockColumns.js) when every block in its group — nested via `parentId`

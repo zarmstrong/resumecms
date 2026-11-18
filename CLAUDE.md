@@ -9,8 +9,8 @@ the full product description, environment variables, and API reference).
 Content is a reorderable list of **blocks** (`{ id, type, position, parentId,
 visibleWeb, visiblePrint, data }`); built-in types are `heading`, `summary`,
 `executive_summary` (headline, overview, `highlights` list), `skills_group`,
-`experience`, `education`, plus a freeform `custom` type. `experience`,
-`skills_group`, `education`, `custom`, and `executive_summary` blocks may each nest
+`experience`, `education`, `credentials`, plus a freeform `custom` type. `experience`,
+`skills_group`, `education`, `credentials`, `custom`, and `executive_summary` blocks may each nest
 one level deep under a `heading` block via `parentId` — this is an explicit
 allowlist (`NESTABLE_TYPES` in `resumeStore.js`), not "everything but
 heading/summary", so a new block type added later is top-level-only until
@@ -1119,7 +1119,7 @@ passes the error on. Keep it the last `app.use()`.
 ### Block nesting
 
 A block's `parentId` (nullable, on the `blocks` table and in the API) points
-at a `heading` block's `id`; only `experience`, `skills_group`, `education`,
+at a `heading` block's `id`; only `experience`, `skills_group`, `education`, `credentials`,
 `custom`, and `executive_summary` blocks can be nested, and only one level deep — a `heading`
 can't itself have a `parentId`, and `summary` can't have one at all. This is
 enforced server-side in `server/src/resumeStore.js`'s `assertValidParent`,
@@ -1180,7 +1180,7 @@ is nested under it via `parentId` and sorts each group into one of two
 columns. A heading can pin its own section to a column via `data.column`
 (`'primary' | 'secondary'`, editable in the editor's heading form); anything
 else falls to the layout's `classifyAuto(group, index)`. Three layouts use
-this today: `sidebar` and `sidebar-right` (a skills/education rail, left or
+this today: `sidebar` and `sidebar-right` (a skills/education/credentials rail, left or
 right — see `client/src/resume/sidebarPanel.js` for their shared
 heuristic + rail text-contrast handling) and `split-columns` (two even
 columns, alternating by section).
@@ -1410,6 +1410,18 @@ change to how stored content is drawn reaches a resume's PDF only at its
 next publish; a cover letter's at its next download once
 `LETTER_RENDER_VERSION` is bumped; the share card draws no text on a
 color.
+
+A `credentials` block holds one license, certification or membership, with
+`kind`, `name`, `issuer`, `number`, `issued`, `expires` and `url`. It nests
+under a heading and goes to the sidebar rail alongside skills and education.
+It is shown as written and never dropped when expired: PDFs are rendered
+at publish, so request-time expiry would make web and PDF disagree. The
+editor warns when it has expired. Entry layouts add its CSS selectors beside
+education's, including consecutive timeline entries. The pure
+`client/src/resume/credentials.js` reuses `landing/dateText.js` for date
+reading; verification links require absolute http/https URLs. Credentials
+are factual context, never rewritten; their number is public but never sent
+to the AI. A tailoring plan can hide an individual credential.
 
 ### AI rewrites
 

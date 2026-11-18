@@ -16,7 +16,7 @@ const COMMON = {
     visibleWeb: 'boolean — show on the public web page (default true)',
     visiblePrint: 'boolean — show in the print/PDF version (default true)',
     parentId:
-      'string | null — id of a top-level heading to nest under. Only experience, skills_group, education, custom, and executive_summary blocks can be nested, one level deep.',
+      'string | null — id of a top-level heading to nest under. Only experience, skills_group, education, credentials, custom, and executive_summary blocks can be nested, one level deep.',
   },
   dataStyle: {
     description: 'Optional `data.style` object on any block type for per-block spacing, alignment, and emphasis.',
@@ -26,7 +26,7 @@ const COMMON = {
       align: {
         enum: ['', 'left', 'center', 'right'],
         description:
-          "Text alignment for the block; '' or omitted = template default. Honored on heading, summary, executive_summary, skills_group, and custom blocks; ignored on experience and education. A custom block with no title and one centered text or link item makes a one-line footer such as 'More work history at example.com'.",
+          "Text alignment for the block; '' or omitted = template default. Honored on heading, summary, executive_summary, skills_group, and custom blocks; ignored on experience, education and credentials. A custom block with no title and one centered text or link item makes a one-line footer such as 'More work history at example.com'.",
       },
       highlight: { type: 'boolean', description: 'Draw the block with a highlight background' },
     },
@@ -144,6 +144,20 @@ export const BLOCK_DATA_SCHEMAS = {
       style: { $ref: 'dataStyle' },
     },
     example: { degree: 'B.S. Computer Science', institution: 'State University', location: 'City, ST', startDate: '2010', endDate: '2014' },
+  },
+  credentials: {
+    description: 'One license, certification or membership.',
+    properties: {
+      kind: { enum: ['license', 'certification', 'membership'] },
+      name: { type: 'string' },
+      issuer: { type: 'string' },
+      number: { type: 'string' },
+      issued: { type: 'string', description: 'Free-form date, shown as written' },
+      expires: { type: 'string', description: 'Free-form date, shown as written; expired credentials remain shown' },
+      url: { type: 'string', description: 'Link to verify the credential, drawn only when it is an absolute http/https URL' },
+      style: { $ref: 'dataStyle' },
+    },
+    example: { kind: 'certification', name: 'Professional Certification', issuer: 'Institute', number: '123', issued: 'Mar 2024', expires: 'Mar 2027', url: 'https://example.com/verify/123' },
   },
   custom: {
     description: 'A freeform section: a title and a list of items, each with a heading and a body of one of four kinds.',

@@ -657,3 +657,19 @@ test('cover letter tools: create, merge or replace on update, delete, scoped by 
   assert.deepEqual((await call('delete_cover_letter', { letterId: 'l1' })).json, { deleted: 'l1' });
   assert.ok((await call('get_block_schemas')).json.coverLetter.properties.paragraphs);
 });
+
+test('MCP creates a credential and documents its schema', async (t) => {
+  const { call, close } = await connect(fakeStore());
+  t.after(close);
+  const heading = (await call('create_block', { type: 'heading', data: { text: 'Credentials' } })).json.block;
+  const data = { kind: 'membership', name: 'Member', issuer: 'Institute', number: '123', issued: '2024', expires: '', url: 'https://example.com' };
+  const created = await call('create_block', { type: 'credentials', parentId: heading.id, data });
+  assert.equal(created.isError, false);
+  assert.equal(created.json.block.type, 'credentials');
+  assert.equal(created.json.block.parentId, heading.id);
+  assert.deepEqual(created.json.block.data, data);
+  const schemas = await call('get_block_schemas');
+  assert.ok(schemas.json.blocks.credentials);
+  const schema = (await call('get_block_schemas', { type: 'credentials' })).json.schema;
+  assert.deepEqual(schema.properties.kind.enum, ['license', 'certification', 'membership']);
+});

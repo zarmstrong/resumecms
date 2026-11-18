@@ -8,6 +8,9 @@ import { ensureSchema } from './schema.js';
 import { createResumeStore, NESTABLE_TYPES } from './resumeStore.js';
 import { migrateToResumes } from './resumeMigration.js';
 import { pdfPathFor } from './pdfPaths.js';
+// Dependency-free, so the server's suite can compare its mirror (the
+// client's CI job doesn't install the server's packages).
+import { NESTABLE_TYPES as CLIENT_NESTABLE_TYPES } from '../../client/src/editor/blockDefaults.js';
 
 // Exercises the real SQL against an in-memory database — the regression
 // guard for the logic that used to live inline in routes/blocks.js and
@@ -763,4 +766,35 @@ test('ensurePdfs ignores published_resume rows of a resume that does not exist',
   db.prepare("INSERT INTO resume_settings (resume_id, key, value) VALUES ('ghost', 'published_resume', '{}')").run();
   assert.deepEqual(await store.ensurePdfs(), { rendered: 0, errors: [] });
   assert.equal(calls.renderPdf, 0);
+});
+
+test('credentials round trip, nest, reorder, publish and follow public visibility', async (t) => {
+  const { store, db, pdfDir, setting } = makeStore();
+  t.after(() => { db.close(); fs.rmSync(pdfDir, { recursive: true, force: true }); });
+  const heading = store.createBlock({ type: 'heading', data: { text: 'Licenses & certifications' } });
+  const first = store.createBlock({ type: 'credentials', data: { kind: 'license', name: 'First', number: '123', expires: '2000' } });
+  const second = store.createBlock({ type: 'credentials', parentId: heading.id, data: { name: 'Second' } });
+  assert.deepEqual(store.updateBlock(first.id, { data: { name: 'Replaced', issuer: 'Institute' } }).data, { name: 'Replaced', issuer: 'Institute' });
+  assert.deepEqual(store.updateBlock(first.id, { data: { kind: 'membership', number: '456' } }, { mergeData: true }).data, { name: 'Replaced', issuer: 'Institute', kind: 'membership', number: '456' });
+  assert.equal(store.updateBlock(first.id, { parentId: heading.id }).parentId, heading.id);
+  assert.throws(() => store.createBlock({ type: 'credentials', parentId: second.id }), { status: 400 });
+  assert.throws(() => store.updateBlock(first.id, { parentId: second.id }), { status: 400 });
+  assert.throws(() => store.createBlock({ type: 'credentials', data: { url: 42 } }), { status: 400 });
+  const reordered = store.reorderBlocks([{ id: heading.id }, { id: first.id, parentId: heading.id }, { id: second.id, parentId: heading.id }]);
+  assert.deepEqual(ids(reordered), [heading.id, first.id, second.id]);
+  store.updateBlock(first.id, { visibleWeb: false });
+  await store.publish();
+  const snapshot = setting('published_resume');
+  assert.deepEqual(snapshot.blocks.find((b) => b.id === first.id).data, store.getBlock(first.id).data);
+  assert.equal(snapshot.blocks.find((b) => b.id === second.id).type, 'credentials');
+  const { blocksForMode } = await import('./publicBlocks.js');
+  const web = blocksForMode(snapshot.blocks, 'web');
+  assert.deepEqual(web.find((b) => b.id === first.id).data, {});
+  assert.equal(web.find((b) => b.id === first.id).hidden, true);
+  assert.equal(web.find((b) => b.id === second.id).data.name, 'Second');
+  assert.equal(blocksForMode(snapshot.blocks, 'print').find((b) => b.id === first.id).data.number, '456');
+});
+
+test("the editor's NESTABLE_TYPES mirrors the server's", () => {
+  assert.deepEqual([...CLIENT_NESTABLE_TYPES].sort(), [...NESTABLE_TYPES].sort());
 });

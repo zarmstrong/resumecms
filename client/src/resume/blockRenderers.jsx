@@ -1,3 +1,4 @@
+import { credentialKindLabel, credentialHref, credentialMeta } from './credentials.js';
 import { normalizeBullet } from './bulletUtils.js';
 import { safeHref, linkProps } from './safeUrl.js';
 import { headingFontSize } from './blockStyle.js';
@@ -147,6 +148,25 @@ export function EducationBlock({ data }) {
   );
 }
 
+export function CredentialsBlock({ data }) {
+  const { name, issuer } = data;
+  const url = credentialHref(data.url);
+  const parts = credentialMeta(data);
+  return (
+    <div className="r-credential">
+      <div className="r-experience-top"><div className="r-experience-title">{name}</div></div>
+      <div className="r-experience-company">{credentialKindLabel(data.kind)}{issuer ? ` · ${issuer}` : ''}</div>
+      {(parts.length > 0 || url) && (
+        <div className="r-credential-meta">
+          {parts.join(' · ')}
+          {parts.length > 0 && url && ' · '}
+          {url && <a {...linkProps(url)} aria-label={`Verify ${name}`}>Verify</a>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CustomItemBody({ item }) {
   switch (item.bodyType) {
     case 'list':
@@ -206,5 +226,6 @@ export const BLOCK_RENDERERS = {
   skills_group: SkillsGroupBlock,
   experience: ExperienceBlock,
   education: EducationBlock,
+  credentials: CredentialsBlock,
   custom: CustomBlock,
 };

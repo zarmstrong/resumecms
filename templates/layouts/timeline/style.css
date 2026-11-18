@@ -7,7 +7,8 @@
    whenever another timeline entry follows, so the line reads as one
    continuous run instead of broken segments. */
 .r-layout-timeline .r-body [data-block-type='experience'],
-.r-layout-timeline .r-body [data-block-type='education'] {
+.r-layout-timeline .r-body [data-block-type='education'],
+.r-layout-timeline .r-body [data-block-type='credentials'] {
   position: relative;
   padding-left: 22px;
   margin-bottom: 18px;
@@ -17,7 +18,12 @@
 .r-layout-timeline .r-body [data-block-type='experience']:has(+ [data-block-type='experience']),
 .r-layout-timeline .r-body [data-block-type='experience']:has(+ [data-block-type='education']),
 .r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='experience']),
-.r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='education']) {
+.r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='education']),
+.r-layout-timeline .r-body [data-block-type='experience']:has(+ [data-block-type='credentials']),
+.r-layout-timeline .r-body [data-block-type='credentials']:has(+ [data-block-type='experience']),
+.r-layout-timeline .r-body [data-block-type='credentials']:has(+ [data-block-type='education']),
+.r-layout-timeline .r-body [data-block-type='credentials']:has(+ [data-block-type='credentials']),
+.r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='credentials']) {
   /* On a highlighted entry that gap goes below its box's inset, and the
      box (see .r-block-highlight) stops short of it. A spaceBelow preset
      sets both inline instead. */
@@ -27,7 +33,8 @@
 }
 
 .r-layout-timeline .r-body [data-block-type='experience']::before,
-.r-layout-timeline .r-body [data-block-type='education']::before {
+.r-layout-timeline .r-body [data-block-type='education']::before,
+.r-layout-timeline .r-body [data-block-type='credentials']::before {
   content: '';
   position: absolute;
   left: -7px;
@@ -43,6 +50,7 @@
 }
 
 .r-layout-timeline .r-body [data-block-type='experience'] .r-experience,
-.r-layout-timeline .r-body [data-block-type='education'] .r-education {
+.r-layout-timeline .r-body [data-block-type='education'] .r-education,
+.r-layout-timeline .r-body [data-block-type='credentials'] .r-credential {
   margin-bottom: 0;
 }

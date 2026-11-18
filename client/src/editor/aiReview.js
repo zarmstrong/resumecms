@@ -572,7 +572,7 @@ export function hiddenBulletCount(type, data = {}) {
 // Mirrors brief.js's outlineScope for rewrites without a brief.
 export function contextNote(type) {
   if (type !== 'executive_summary') return null;
-  return 'An outline of the rest of this resume is sent to the AI too: job titles, companies, dates, taglines, descriptions, bullets, skills, and education, leaving out anything hidden where this block shows.';
+  return 'An outline of the rest of this resume is sent to the AI too: job titles, companies, dates, taglines, descriptions, bullets, skills, education and credentials, leaving out anything hidden where this block shows.';
 }
 
 // What happened to one bullet in the server's bulletReview, for its label.

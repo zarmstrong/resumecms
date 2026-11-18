@@ -42,9 +42,9 @@ import { landingPage, resumePage } from './pageMeta.js';
 // Only these types can be nested under a heading; `heading` itself can't
 // (no multi-level nesting) and `summary` stays top-level only. An
 // executive summary can sit under its own "Executive Summary" heading.
-export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'custom', 'executive_summary']);
+export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'credentials', 'custom', 'executive_summary']);
 
-export const BLOCK_TYPES = ['heading', 'summary', 'executive_summary', 'skills_group', 'experience', 'education', 'custom'];
+export const BLOCK_TYPES = ['heading', 'summary', 'executive_summary', 'skills_group', 'experience', 'education', 'credentials', 'custom'];
 
 export { httpError };
 

@@ -41,6 +41,7 @@ export const BLOCK_DATA_VALIDATORS = {
     style,
   }),
   education: z.looseObject({ degree: str, institution: str, location: str, startDate: str, endDate: str, style }),
+  credentials: z.looseObject({ kind: str, name: str, issuer: str, number: str, issued: str, expires: str, url: str, style }),
   custom: z.looseObject({
     title: str,
     items: z
