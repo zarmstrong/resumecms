@@ -113,8 +113,9 @@ but the server's (Google Fonts included), waits on the page's state or on
 its requests (never a fixed sleep), and leaves a screenshot when it fails
 (`E2E_SCREENSHOT_DIR`, else a folder under the OS temp dir). The flows:
 logging in through the form, editing a block and publishing it, the landing
-preset dialog's keyboard and focus, applying a preset and reloading, and
-leaving the editor (switcher, Log out) with a save still on its debounce.
+preset dialog's keyboard and focus, applying a preset and reloading,
+publishing right after a site setting changes, and leaving the editor
+(switcher, Log out) with a save still on its debounce.
 The files are named `*.e2e.js`, not `*.test.js`, so `npm test` (whose
 `node --test` discovers every `*.test.js` under `server/`) never runs them.
 A new flow waits on real UI state too, and answers a `confirm()` as it
@@ -325,7 +326,9 @@ every edit to the draft goes through its `createSaveQueue()`
 request by `track()` (with a key when a failure leaves the edit only on
 screen, so it's still reported at the next switch). Switching, New resume
 (the server copies its *stored* draft), Discard and Log out `flush()`
-first, and unmounting sends whatever is still waiting, so a new edit must
+first, and so does Publish (the server snapshots the stored draft), which
+stops with an error instead while a save has failed, as the landing
+page's does; unmounting sends whatever is still waiting, so a new edit must
 be tracked there too or a switch can outrun it. The switcher's dialogs are
 in `ResumeModals.jsx`, and their pure parts (which resume to open, its
 public URL, the settings form's PATCH) in `resumeLinks.js`.
@@ -1748,6 +1751,23 @@ letter's download has the same cap: past it, a 503 to try again, while
 the render carries on and leaves its file for the retry (the editor
 retries on its own). Both go through `settleWithin()`, so a request that
 waits on the PDF queue should too.
+
+Page numbers (issue #206) are opt-in per resume: `site.pdfPageNumbers:
+true` in its site settings (drafted and published with them; missing or
+anything but `true` is off) turns on Chromium's footer through
+`pdfPageOptions()` in `server/src/pdfFooter.js`, "Page N of M" centered in
+the existing bottom margin (`PDF_BASE_OPTIONS`, unchanged, so nothing on
+the page moves). `renderResumePdf()` reads it from the `/api/public/resume`
+body the `/print` page was served, never from the store at queue time, so
+the footer always matches the snapshot drawn. Only the resume renderer
+passes it: cover letters and share cards never get a footer. The footer
+template's only input from the settings is the text color, used only as
+`#rrggbb` and only while it has 4.5:1 on white (the footer sits in the
+margin, which Chromium leaves white whatever the resume's background; the
+default ink otherwise), plus a serif or sans family picked from
+the font id (`SANS_FONT_IDS`, compared with the client's `FONT_OPTIONS`),
+so no free text from the settings or the snapshot ever reaches it; keep it
+that way if you add anything to it.
 
 Puppeteer is launched with its own SIGTERM/SIGINT/SIGHUP handlers off: they
 closed the browser but kept Node from exiting, so a server that had ever

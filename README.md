@@ -28,7 +28,9 @@ exact same components.
 - **`/print`** — the print-styled version of the resume (used internally by
   the PDF export; you generally won't visit this directly).
 - **Download PDF** — server-generates a real PDF on demand via headless
-  Chromium, from the same markup as the print view.
+  Chromium, from the same markup as the print view. "Page numbers in the
+  PDF" in a resume's site settings (off by default) adds "Page 1 of 2" at
+  the foot of every page from its next publish.
 - **Cover letters** — private letters kept next to each resume, drawn under
   its header in its look, downloadable as PDF or copied as plain text, and
   optionally drafted with AI from the resume and a job posting (see "Cover

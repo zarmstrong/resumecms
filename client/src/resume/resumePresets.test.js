@@ -61,6 +61,10 @@ test('title, description and unrelated settings stay, and templateId is dropped'
   assert.equal(Object.hasOwn(next, 'templateId'), false);
 });
 
+test('the PDF page numbers setting is kept, since it is not part of the look', () => {
+  assert.equal(presetSite({ pdfPageNumbers: true }, classic).pdfPageNumbers, true);
+});
+
 test('every preset applies a registered header and layout', () => {
   const headers = new Set(readTemplates('headers').map((t) => t.id));
   const layouts = new Set(readTemplates('layouts').map((t) => t.id));

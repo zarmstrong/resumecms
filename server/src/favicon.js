@@ -66,8 +66,8 @@ export function siteAccent(site) {
   return colorOf(site?.colors?.accent, null) ?? colorOf(site?.accent, DEFAULT_LANDING_COLORS.accent);
 }
 
-// WCAG 2 relative luminance of a #rrggbb color.
-function relativeLuminance(hex) {
+// WCAG 2 relative luminance of a #rrggbb color (also pdfFooter.js's).
+export function relativeLuminance(hex) {
   const channel = (i) => {
     const c = parseInt(hex.slice(i, i + 2), 16) / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;

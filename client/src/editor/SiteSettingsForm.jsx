@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
   normalizeSiteColors,
   normalizePillPadding,
@@ -163,6 +163,7 @@ function NameFontField({ site, onChange }) {
 export function SiteSettingsForm({ header, site, blocks, onChange }) {
   const colors = normalizeSiteColors(site);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const pageNumbersHintId = useId();
 
   function setColor(key, value) {
     onChange({ ...site, colors: { ...colors, [key]: value } });
@@ -335,6 +336,21 @@ export function SiteSettingsForm({ header, site, blocks, onChange }) {
             ))}
           </select>
         </label>
+      </div>
+
+      <div className="ed-field">
+        <label className="ed-checkbox-field">
+          <input
+            type="checkbox"
+            checked={site.pdfPageNumbers === true}
+            aria-describedby={pageNumbersHintId}
+            onChange={(e) => onChange({ ...site, pdfPageNumbers: e.target.checked })}
+          />
+          <span>Page numbers in the PDF</span>
+        </label>
+        <span className="ed-field-hint" id={pageNumbersHintId}>
+          Adds “Page 1 of 2” at the foot of every page of the downloaded PDF, a one-page PDF included. Shows after you publish.
+        </span>
       </div>
     </div>
   );

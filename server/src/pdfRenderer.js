@@ -7,6 +7,7 @@ import {
   renderCookieValue,
 } from './renderAccess.js';
 import { CARD_HEIGHT, CARD_WIDTH } from './shareImages.js';
+import { PDF_BASE_OPTIONS, pdfPageOptions } from './pdfFooter.js';
 
 // Renders a PDF (or a link preview's card, as a PNG) and returns its bytes;
 // the store decides where they go (see pdfPaths.js, resumeStore.js's
@@ -86,6 +87,10 @@ export function renderResumePdf({ signal, resumeId } = {}) {
     expectedId: resumeId,
     describeServed: (servedId) =>
       `/print was served ${servedId ? `resume ${servedId}` : 'the default resume'} instead of ${resumeId}`,
+    // Page numbers (pdfFooter.js) follow the snapshot /print actually drew,
+    // never the store's at queue time: a publish landing in between would
+    // put one snapshot's setting on another's content.
+    capture: (page, served) => printPdf(page, pdfPageOptions(served?.site)),
   });
 }
 
@@ -123,19 +128,17 @@ export function renderShareCard({ signal, content }) {
   });
 }
 
-function printPdf(page) {
-  return page.pdf({
-    format: 'Letter',
-    printBackground: true,
-    margin: { top: '0.5in', bottom: '0.5in', left: '0.5in', right: '0.5in' },
-  });
+function printPdf(page, extra = {}) {
+  return page.pdf({ ...PDF_BASE_OPTIONS, margin: { ...PDF_BASE_OPTIONS.margin }, ...extra });
 }
 
 // Loads `pagePath` with `cookie` set and prints it, once the page has
 // said it's ready and `apiPath`'s response named `expectedId` in its
 // `servedHeader` (a page that got the wrong content is no PDF of ours).
-// `prepare(page)` runs before it loads, and `capture(page)` instead of
-// printing it, for the share card.
+// `prepare(page)` runs before it loads, and `capture(page, served)` instead
+// of printing it plainly: the share card's screenshot, or the resume's PDF
+// with the options its served JSON (`served`, `apiPath`'s body, or null)
+// asks for.
 async function renderPage({
   signal,
   pagePath,
@@ -145,7 +148,7 @@ async function renderPage({
   expectedId = null,
   describeServed = null,
   prepare = null,
-  capture = printPdf,
+  capture = (page) => printPdf(page),
 }) {
   const port = process.env.PORT || 4000;
   const host = '127.0.0.1';
@@ -165,9 +168,11 @@ async function renderPage({
     const page = await untilAborted(context.newPage(), signal);
     if (prepare) await untilAborted(prepare(page), signal);
     let servedId = null;
+    let servedBody = Promise.resolve(null);
     page.on('response', (response) => {
       if (apiPath && new URL(response.url()).pathname === apiPath) {
         servedId = response.headers()[servedHeader.toLowerCase()] ?? null;
+        servedBody = response.json().catch(() => null);
       }
     });
     await untilAborted(page.goto(printUrl, { waitUntil: 'networkidle0' }), signal);
@@ -175,7 +180,8 @@ async function renderPage({
     await untilAborted(page.waitForFunction('window.__PDF_READY__ === true', { timeout: 15000 }), signal);
     if (expectedId && servedId !== expectedId) throw new Error(describeServed(servedId));
 
-    const bytes = await untilAborted(capture(page), signal);
+    const served = await untilAborted(servedBody, signal);
+    const bytes = await untilAborted(capture(page, served), signal);
     // Puppeteer returns a Uint8Array; callers that hand this to res.send() or
     // fs.writeFile() need a real Buffer.
     return Buffer.from(bytes);

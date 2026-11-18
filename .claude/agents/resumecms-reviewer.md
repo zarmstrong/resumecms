@@ -163,6 +163,9 @@ in prose; check the diff against the ones that apply, especially:
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a
   request waits on it, `settleWithin()`.
+- The PDF footer (`pdfFooter.js`, page numbers) never takes free text from
+  the site settings or the snapshot: only a `#rrggbb` color and a font
+  family it picks itself, read from the snapshot `/print` was served.
 - Store handlers in routes are wrapped in `handle()`; MCP content tools sit
   in `CONTENT_TOOLS`.
 - AI output schemas stay strict-mode valid (`additionalProperties: false`,

@@ -334,6 +334,29 @@ flow('edits a block, publishes it, and the public page shows it', async ({ page,
   }
 });
 
+// Publish sends every save still on its debounce first (the server
+// snapshots the stored draft), so a setting ticked just before Publish is
+// in what's published: here, the PDF's page numbers.
+flow('publishing right after a site setting changes publishes it', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const order = [];
+  page.on('request', (request) => {
+    if (isPut(`/api/resumes/${resumeId}/site`)(request)) order.push('site');
+    if (isCall('POST', `/api/resumes/${resumeId}/publish`)(request)) order.push('publish');
+  });
+  await page.click('xpath/.//button[.//span[normalize-space()="Site Settings & Colors"]]');
+  const checkbox = 'xpath/.//label[.//span[normalize-space()="Page numbers in the PDF"]]//input[@type="checkbox"]';
+  await page.click(checkbox);
+  // Up to the server's own wait for the PDF, and some.
+  const published = nextResponse(page, 'POST', `/api/resumes/${resumeId}/publish`, { timeout: 40000 });
+  await page.click('xpath/.//header//button[normalize-space()="Publish"]');
+  assert.equal((await published).status(), 200);
+  assert.deepEqual(order, ['site', 'publish']);
+  assert.equal((await api(page, '/api/public/resume?mode=print')).body.site.pdfPageNumbers, true);
+  await page.waitForFunction(() => /^Published /.test(document.querySelector('.ed-topbar-status')?.textContent));
+});
+
 flow('applies a resume preset by keyboard, and a reload keeps it', async ({ page }) => {
   await login(page);
   const resumeId = await defaultResumeId(page);

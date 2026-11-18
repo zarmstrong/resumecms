@@ -259,6 +259,10 @@ export const SITE_SCHEMA = {
     lineSpacing: { enum: ['tight', 'snug', 'normal', 'relaxed', 'loose'] },
     pillPadding: { enum: ['compact', 'snug', 'cozy', 'roomy', 'spacious'] },
     bulletStyle: { enum: ['disc', 'circle', 'square', 'dash', 'arrow', 'none'] },
+    pdfPageNumbers: {
+      type: 'boolean',
+      description: "Draw 'Page N of M' at the foot of every page of this resume's PDF. Off when omitted; takes effect at the next publish.",
+    },
     colors: {
       type: 'object',
       description: "#rrggbb values; the optional ones accept '' for \"not set\"",

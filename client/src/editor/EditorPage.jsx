@@ -480,7 +480,21 @@ export function EditorPage({
   async function handlePublish() {
     setPublishState('publishing');
     setPublishError(null);
+    // Counted before the flush: an edit typed while it runs may miss the
+    // snapshot, so it counts as unpublished below (at worst, one that made
+    // it in shows as unpublished until the next publish).
     const editsBefore = editSeq.current;
+    // The server snapshots the stored draft, so every save still on its
+    // debounce goes out first, or a publish right after an edit would leave
+    // that edit out. Publishing past a failed save would publish something
+    // other than what's on screen, so a failure stops it, as the landing
+    // page's publish does.
+    const failed = await saves.flush();
+    if (failed.length) {
+      setPublishState('idle');
+      setPublishError(`Not published: a save failed (${failed[0].message || 'unknown error'})`);
+      return;
+    }
     try {
       const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion, pdfPending: newPdfPending } = await rapi.publish();
       setPublishedAt(newPublishedAt);
