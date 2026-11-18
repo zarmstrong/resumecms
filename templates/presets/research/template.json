@@ -1,10 +1,10 @@
 {
   "id": "research",
   "label": "Research (CV)",
-  "description": "For researchers, slate header rules and a minimal serif layout keep a detailed CV clear and restrained.",
+  "description": "For researchers, a ruled header over a dated academic CV layout in slate and serif, for a long, detailed CV.",
   "author": "resumecms",
   "header": "ruled",
-  "layout": "minimal",
+  "layout": "academic",
   "colors": {
     "accent": "#334155"
   },

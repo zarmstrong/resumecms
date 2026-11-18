@@ -1,0 +1,150 @@
+/* "academic": an academic CV. Dates sit in a left-hand gutter and each
+   entry hangs beside them, so a long, multi-page list of positions,
+   degrees and credentials reads by year. Section headings are dense small
+   caps, and nothing in the body is filled or tinted. The header keeps
+   whatever header style is chosen independently.
+
+   The gutter is 7.5em plus a 1em gap, in the entry's own font size; rows
+   in a smaller font divide by it so every gutter is the same width. */
+
+/* Dated entries: a two-column grid. .r-experience-top (title + dates) is
+   display: contents so its children are grid items. Both are pinned to
+   row 1: with only a column set, auto-placement would put the dates, whose
+   column comes before the title's, on the next row. A credential has no
+   dates in its top row, so its gutter stays empty. */
+.r-layout-academic .r-body :is(.r-experience, .r-education, .r-credential) {
+  display: grid;
+  grid-template-columns: 7.5em minmax(0, 1fr);
+  column-gap: 1em;
+  margin-bottom: var(--r-block-space-below, 12px);
+}
+
+.r-layout-academic .r-body :is(.r-experience, .r-education, .r-credential) > * {
+  grid-column: 2;
+}
+
+.r-layout-academic .r-body .r-experience-top {
+  display: contents;
+}
+
+.r-layout-academic .r-body .r-experience-title {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: baseline;
+}
+
+/* No date pill. Its text color (--r-dates-text) is the pill's contrast
+   color and can be white, so the dates use the text color instead. They
+   span two rows, so a range that wraps runs beside the company line
+   rather than making the title's row taller. */
+.r-layout-academic .r-body .r-experience-dates {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: baseline;
+  color: var(--r-text, var(--ink));
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  white-space: normal;
+  text-align: left;
+}
+
+/* Skills rows share the gutter, the label in it. The row's font is
+   0.90625em, hence the division. */
+.r-layout-academic .r-body .r-skills-row {
+  grid-template-columns: calc(7.5em / 0.90625) minmax(0, 1fr);
+  column-gap: calc(1em / 0.90625);
+}
+
+.r-layout-academic .r-body .r-skills-label {
+  color: var(--r-heading, var(--ink));
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  text-align: left;
+  align-self: baseline;
+}
+
+.r-layout-academic .r-body .r-skills-value {
+  align-self: baseline;
+}
+
+/* Custom blocks hang with the entries (the gutter plus the gap). A summary
+   and an executive summary stay full width: they usually open the CV. */
+.r-layout-academic .r-body .r-custom {
+  padding-left: 8.5em;
+}
+
+/* A block centered or right-aligned in the editor keeps that: its skills
+   row goes back to the shared auto-sized pair (resume.css moves it with
+   justify-content), and a custom block drops the hanging indent. Entries
+   can't be aligned (not in ALIGNABLE_TYPES), so they always keep the
+   gutter. */
+.r-layout-academic .r-body :is(.r-align-center, .r-align-right) .r-skills-row {
+  grid-template-columns: auto auto;
+  column-gap: 12px;
+}
+
+.r-layout-academic .r-body :is(.r-align-center, .r-align-right) .r-custom {
+  padding-left: 0;
+}
+
+/* Dense section headings in the body font, small caps. Capitals stay full
+   size (small-caps, not all-small-caps): the heading's size is set inline
+   (headingFontSize()), so a layout can't enlarge it to make up for
+   all-small-caps shrinking every letter. */
+.r-layout-academic .r-body .r-heading {
+  font-family: inherit;
+  font-weight: 700;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.06em;
+  padding-bottom: 3px;
+  margin: var(--r-block-space-above, 22px) 0 var(--r-block-space-below, 10px);
+}
+
+.r-layout-academic .r-body .r-block:first-child .r-heading {
+  margin-top: var(--r-block-space-above, 0);
+}
+
+.r-layout-academic .r-body .r-bullets {
+  padding-left: 1.1em;
+}
+
+/* A heading (a section's, or a custom block's own title) never ends a
+   page. Short entries don't split; an experience entry may run long, so it
+   can. */
+@media print {
+  .r-layout-academic .r-body .r-block[data-block-type='heading'],
+  .r-layout-academic .r-body .r-custom-title {
+    break-after: avoid;
+  }
+
+  .r-layout-academic .r-body :is(.r-education, .r-credential, .r-skills-row, .r-custom-item) {
+    break-inside: avoid;
+  }
+}
+
+/* Phones: no gutter. The title and dates stack as in every other layout
+   (this restates resume.css's narrow rule, which display: contents above
+   would otherwise override). */
+@media screen and (max-width: 640px) {
+  .r-layout-academic .r-body :is(.r-experience, .r-education, .r-credential) {
+    display: block;
+  }
+
+  .r-layout-academic .r-body .r-experience-top {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .r-layout-academic .r-body .r-skills-row,
+  .r-layout-academic .r-body :is(.r-align-center, .r-align-right) .r-skills-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .r-layout-academic .r-body .r-custom {
+    padding-left: 0;
+  }
+}
