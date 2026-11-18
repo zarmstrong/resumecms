@@ -334,6 +334,102 @@ flow('edits a block, publishes it, and the public page shows it', async ({ page,
   }
 });
 
+flow('applies a resume preset by keyboard, and a reload keeps it', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const sitePath = `/api/resumes/${resumeId}/site`;
+  const writes = [];
+  page.on('request', (request) => {
+    if (isPut(sitePath)(request)) writes.push(JSON.parse(request.postData()));
+  });
+  await page.click('xpath/.//button[.//span[normalize-space()="Site Settings & Colors"]]');
+  await page.click('xpath/.//button[normalize-space()="Change template…"]');
+  const picker = '[role="dialog"][aria-labelledby="ed-template-picker-title"]';
+  const modes = `${picker} .ed-template-picker-modes`;
+  const radios = `${picker} [role="radiogroup"][aria-label="Presets"] [role="radio"]`;
+  const useButton = `${picker} .ed-modal-actions .ed-btn-primary`;
+
+  // Default mode is unchanged. Reach Presets by Tab from Header & layout,
+  // then Tab into the unselected list, whose first option is a tab stop.
+  const headerMode = await page.waitForSelector(`${modes} button:first-child`);
+  assert.equal(await headerMode.evaluate((el) => el.getAttribute('aria-pressed')), 'true');
+  await headerMode.focus();
+  await page.keyboard.press('Tab');
+  assert.equal((await focused(page)).text, 'Presets');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.$eval(useButton, (el) => el.textContent.trim()), 'Use this preset');
+  assert.equal(await page.$eval(useButton, (el) => el.disabled), true);
+  assert.equal(await page.$$eval(radios, (els) => els.some((el) => el.getAttribute('aria-checked') === 'true')), false);
+  await page.keyboard.press('Tab');
+  assert.equal(await page.$eval(`${radios}:first-child`, (el) => el === document.activeElement), true);
+  assert.equal(await page.$eval(`${radios}:first-child`, (el) => el.getAttribute('aria-checked')), 'false');
+  assert.equal(await page.$eval(useButton, (el) => el.disabled), true, 'focus alone does not select a preset');
+
+  const labels = await page.$$eval(`${radios} .ed-template-picker-option-label`, (els) => els.map((el) => el.textContent));
+  const target = labels.indexOf('Law & finance');
+  assert.ok(target > 0, 'Law & finance follows the first option');
+  for (let index = 0; index < target; index += 1) await page.keyboard.press('ArrowDown');
+  assert.equal(await page.evaluate(() => document.activeElement.querySelector('.ed-template-picker-option-label')?.textContent), 'Law & finance');
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-checked')), 'true');
+  assert.equal(await page.$eval(useButton, (el) => el.disabled), false);
+  await page.waitForSelector(`${picker} .ed-template-picker-preview .r-layout-small-caps`);
+  assert.deepEqual(writes, [], 'browsing has saved nothing');
+
+  const saved = putResponse(page, sitePath);
+  await page.click(useButton);
+  assert.equal((await saved).status(), 200);
+  await page.waitForFunction(() => document.querySelector('.ed-topbar-status')?.textContent.trim() === 'Saved', { polling: 'mutation' });
+  assert.equal(writes.length, 1, 'applying sends one site save');
+  await page.reload();
+  await page.waitForSelector(RESUME_SELECT);
+  const { body } = await api(page, sitePath);
+  assert.equal(body.site.template, 'double-rule');
+  assert.equal(body.site.layout, 'small-caps');
+  assert.equal(body.site.font, 'eb-garamond');
+  assert.equal(body.site.colors.accent, '#1e3a5f');
+});
+
+flow('resume picker switches previews, cancels changes, and selects the first preset with Space or Enter', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const sitePath = `/api/resumes/${resumeId}/site`;
+  const before = (await api(page, sitePath)).body.site;
+  const writes = [];
+  page.on('request', (request) => {
+    if (isPut(sitePath)(request)) writes.push(request);
+  });
+  await page.click('xpath/.//button[.//span[normalize-space()="Site Settings & Colors"]]');
+  const openPicker = 'xpath/.//button[normalize-space()="Change template…"]';
+  const picker = '[role="dialog"][aria-labelledby="ed-template-picker-title"]';
+  const mode = `${picker} .ed-template-picker-modes button`;
+  const firstPreset = `${picker} [role="radiogroup"][aria-label="Presets"] [role="radio"]:first-child`;
+  const useButton = `${picker} .ed-modal-actions .ed-btn-primary`;
+  for (const key of ['Space', 'Enter']) {
+    await page.click(openPicker);
+    await page.click(`${mode}:last-child`);
+    assert.equal(await page.$eval(useButton, (el) => el.disabled), true, 'each opening starts without a preset');
+    await page.keyboard.press('Tab');
+    await page.keyboard.press(key);
+    assert.equal(await page.$eval(firstPreset, (el) => el.getAttribute('aria-checked')), 'true');
+    assert.equal(await page.$eval(useButton, (el) => el.disabled), false);
+    await page.click(`${mode}:first-child`);
+    const headers = `${picker} [role="radiogroup"][aria-label="Header style"] [role="radio"]`;
+    const layouts = `${picker} [role="radiogroup"][aria-label="Body layout"] [role="radio"]`;
+    assert.equal(await page.$$eval(headers, (els) => els.filter((el) => el.tabIndex === 0).length), 1);
+    assert.equal(await page.$$eval(layouts, (els) => els.filter((el) => el.tabIndex === 0).length), 1);
+    await page.waitForSelector(`${picker} .ed-template-picker-preview .r-layout-${before.layout || 'classic'}`);
+    assert.equal(await page.$eval(useButton, (el) => el.textContent.trim()), 'Use this template');
+    await (await page.$(`${headers}[aria-checked="true"]`)).focus();
+    await page.keyboard.press('ArrowDown');
+    await page.click(`${mode}:last-child`);
+    if (key === 'Space') await page.click(`${picker} .ed-modal-actions .ed-btn-ghost`);
+    else await page.keyboard.press('Escape');
+    await page.waitForSelector(picker, { hidden: true });
+  }
+  assert.deepEqual(writes, [], 'Cancel and Escape never save the browsed appearance');
+  assert.deepEqual((await api(page, sitePath)).body.site, before);
+});
+
 // On a server of its own, so the landing page has never been saved (and
 // the dialog opens by itself) whichever flows ran before or are skipped.
 flow(

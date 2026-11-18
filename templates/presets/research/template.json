@@ -1,0 +1,12 @@
+{
+  "id": "research",
+  "label": "Research (CV)",
+  "description": "For researchers, slate header rules and a minimal serif layout keep a detailed CV clear and restrained.",
+  "author": "resumecms",
+  "header": "ruled",
+  "layout": "minimal",
+  "colors": {
+    "accent": "#334155"
+  },
+  "font": "source-serif"
+}

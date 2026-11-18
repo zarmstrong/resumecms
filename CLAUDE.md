@@ -1197,6 +1197,18 @@ Headers require an `index.jsx` component; layouts' `index.jsx` is optional
 default flat block list; see `templateRegistry.js`'s comment on
 `skillsDisplayFor`).
 
+Resume presets (`templates/presets/<id>/template.json`, a header and layout
+plus optional colors and type settings) are applied from the editor's
+template picker, in Presets mode. `presetSite()` in
+`client/src/resume/resumePresets.js` replaces every appearance setting
+(template, layout, colors and the legacy `accent`, fonts, size, weight,
+spacing, pill padding and bullet style), resetting anything the preset
+doesn't set to its default, and keeps everything else (title and
+description included). The picker and `/template-preview/preset/:id`
+use the same function, so the applied result draws as that preview does.
+Nothing is written until "Use this preset"; it goes through the ordinary
+site save queue and `touchDraft()`, and publishes nothing.
+
 A landing template needs a `style.css` with every rule scoped under
 `.l-template-<id>` (the validator checks the class appears; `classic`,
 the fallback, must exist), and its `index.jsx` is optional. Its

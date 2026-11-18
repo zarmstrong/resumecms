@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { ResumeView } from './ResumeView.jsx';
 import { sampleHeader, sampleBlocks } from './sampleResume.js';
 import { getPreset, DEFAULT_TEMPLATE, DEFAULT_LAYOUT } from './templateRegistry.js';
+import { presetSite } from './resumePresets.js';
 
 // Renders a template against placeholder data only — never a real resume.
 // Two ways in:
@@ -15,15 +16,7 @@ export function TemplatePreviewPage() {
 
   const preset = id ? getPreset(id) : null;
   const site = preset
-    ? {
-        template: preset.header,
-        layout: preset.layout,
-        colors: preset.colors,
-        font: preset.font,
-        fontSize: preset.fontSize,
-        lineSpacing: preset.lineSpacing,
-        pillPadding: preset.pillPadding,
-      }
+    ? presetSite({}, preset)
     : {
         template: searchParams.get('header') || DEFAULT_TEMPLATE,
         layout: searchParams.get('layout') || DEFAULT_LAYOUT,

@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { ResumeView } from '../resume/ResumeView.jsx';
-import { HEADER_TEMPLATES, LAYOUT_TEMPLATES, normalizeTemplate, normalizeLayout } from '../resume/templateRegistry.js';
+import { HEADER_TEMPLATES, LAYOUT_TEMPLATES, PRESETS, normalizeTemplate, normalizeLayout } from '../resume/templateRegistry.js';
+import { presetSite } from '../resume/resumePresets.js';
 
 // Real ARIA APG radio-group keyboard behavior, not just the roles: only the
-// checked option is a tab stop (roving tabindex), and arrow keys both move
-// focus and change the selection, wrapping at the ends — matching how a
+// checked option (or the first if none is checked) is a tab stop, and arrow
+// keys both move focus and change the selection, wrapping at the ends — matching how a
 // native <input type="radio"> group behaves.
 function OptionList({ title, options, selectedId, onSelect }) {
   const buttonRefs = useRef([]);
+  const hasSelection = options.some((opt) => opt.id === selectedId);
 
   function handleKeyDown(e, index) {
     const forward = e.key === 'ArrowDown' || e.key === 'ArrowRight';
@@ -30,7 +32,7 @@ function OptionList({ title, options, selectedId, onSelect }) {
             type="button"
             role="radio"
             aria-checked={opt.id === selectedId}
-            tabIndex={opt.id === selectedId ? 0 : -1}
+            tabIndex={opt.id === selectedId || (!hasSelection && index === 0) ? 0 : -1}
             className={`ed-template-picker-option${opt.id === selectedId ? ' ed-template-picker-option-active' : ''}`}
             onClick={() => onSelect(opt.id)}
             onKeyDown={(e) => handleKeyDown(e, index)}
@@ -48,13 +50,26 @@ function OptionList({ title, options, selectedId, onSelect }) {
 // templateRegistry.js) — this modal lets you browse and mix them freely,
 // previewing the combination against the resume's real content (not
 // placeholder data) before committing. Nothing is written to the real
-// draft until "Use this template".
+// draft until "Use this template" or "Use this preset".
 export function TemplatePickerModal({ header, site, blocks, onChange, onClose }) {
+  const [mode, setMode] = useState('templates');
+  const [presetId, setPresetId] = useState(null);
   const [previewTemplate, setPreviewTemplate] = useState(normalizeTemplate(site));
   const [previewLayout, setPreviewLayout] = useState(normalizeLayout(site));
   const previewRef = useRef(null);
 
-  const previewSite = { ...site, template: previewTemplate, layout: previewLayout };
+  const preset = PRESETS.find((p) => p.id === presetId);
+  const previewSite = mode === 'presets' && preset
+    ? presetSite(site, preset)
+    : { ...site, template: previewTemplate, layout: previewLayout };
+
+  useEffect(() => {
+    function handleEscape(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
   // Belt-and-suspenders alongside `inert` below (every current browser
   // supports it, but this is cheap insurance regardless): strip every real
@@ -66,9 +81,15 @@ export function TemplatePickerModal({ header, site, blocks, onChange, onClose })
     previewRef.current?.querySelectorAll('a, button, input, select, textarea, [tabindex]').forEach((el) => {
       el.setAttribute('tabindex', '-1');
     });
-  }, [previewTemplate, previewLayout, header, blocks]);
+  }, [previewTemplate, previewLayout, mode, preset, header, blocks]);
 
   function handleUse() {
+    if (mode === 'presets') {
+      if (!preset) return;
+      onChange(previewSite);
+      onClose();
+      return;
+    }
     // Explicitly drop templateId (undefined is omitted by JSON.stringify)
     // rather than just spreading site — an install from before this modal
     // replaced the old preset gallery can still have it set, and PUT
@@ -87,18 +108,47 @@ export function TemplatePickerModal({ header, site, blocks, onChange, onClose })
 
         <div className="ed-template-picker-body">
           <div className="ed-template-picker-columns">
-            <OptionList
-              title="Header style"
-              options={HEADER_TEMPLATES}
-              selectedId={previewTemplate}
-              onSelect={setPreviewTemplate}
-            />
-            <OptionList
-              title="Body layout"
-              options={LAYOUT_TEMPLATES}
-              selectedId={previewLayout}
-              onSelect={setPreviewLayout}
-            />
+            <div className="ed-template-picker-modes" role="group" aria-label="Template picker mode">
+              <button
+                type="button"
+                className={`ed-btn ${mode === 'templates' ? 'ed-btn-primary' : 'ed-btn-ghost'}`}
+                aria-pressed={mode === 'templates'}
+                onClick={() => setMode('templates')}
+              >
+                Header &amp; layout
+              </button>
+              <button
+                type="button"
+                className={`ed-btn ${mode === 'presets' ? 'ed-btn-primary' : 'ed-btn-ghost'}`}
+                aria-pressed={mode === 'presets'}
+                onClick={() => setMode('presets')}
+              >
+                Presets
+              </button>
+            </div>
+            {mode === 'presets' ? (
+              <>
+                <OptionList title="Presets" options={PRESETS} selectedId={presetId} onSelect={setPresetId} />
+                <p className="ed-template-picker-notice">
+                  A preset replaces the template, layout, colors and type settings (fonts, size, weight, spacing, pill padding, bullet style), and keeps the title and description.
+                </p>
+              </>
+            ) : (
+              <>
+                <OptionList
+                  title="Header style"
+                  options={HEADER_TEMPLATES}
+                  selectedId={previewTemplate}
+                  onSelect={setPreviewTemplate}
+                />
+                <OptionList
+                  title="Body layout"
+                  options={LAYOUT_TEMPLATES}
+                  selectedId={previewLayout}
+                  onSelect={setPreviewLayout}
+                />
+              </>
+            )}
           </div>
 
           {/* inert — this is a real ResumeView with real <a> tags
@@ -119,8 +169,8 @@ export function TemplatePickerModal({ header, site, blocks, onChange, onClose })
           <button type="button" className="ed-btn ed-btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="ed-btn ed-btn-primary" onClick={handleUse}>
-            Use this template
+          <button type="button" className="ed-btn ed-btn-primary" disabled={mode === 'presets' && !preset} onClick={handleUse}>
+            {mode === 'presets' ? 'Use this preset' : 'Use this template'}
           </button>
         </div>
       </div>

@@ -108,7 +108,9 @@ operations are in the API (`/api/resumes` below) and the MCP tools.
 The editor's Site Settings has a "Change template…" button opening a modal
 where header style and body layout are browsed and picked independently,
 mixed freely, and previewed live against your actual resume content before
-you commit to anything. Headers, layouts, and the curated **presets** that
+you apply anything. Its **Presets** mode previews and applies a bundled
+header, layout, colors and type settings, keeping your title and description.
+Headers, layouts, and the curated **presets** that
 bundle a header + layout + optional colors/fonts under one shareable name
 (previewable via `/template-preview/preset/<id>`, and used to generate the
 thumbnails in [`templates/`](templates/)) are all open to contribution —

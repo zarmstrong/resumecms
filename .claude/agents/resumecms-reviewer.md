@@ -81,6 +81,13 @@ in prose; check the diff against the ones that apply, especially:
   `LandingView`; a
   section's `column` is read only by a template whose `template.json` says
   `columns: true`.
+- A resume preset (`templates/presets/`, issue #206) is applied through
+  `presetSite()` and the ordinary site save queue, only on "Use this preset".
+  It replaces template, layout, colors and all type settings, clears the
+  legacy `accent` and `templateId`, and keeps title, description and other
+  settings. A missing preset value resets to its default; `nameFont`,
+  `fontWeight` and `bulletStyle` always reset. The standalone preview uses
+  the same function; nothing is published.
 - A landing preset (`templates/landing-presets/`, issue #130) is applied
   only on the client (`landingPresets.js`) as an ordinary draft edit
   through the save queue, never by a route of its own; it keeps the hero

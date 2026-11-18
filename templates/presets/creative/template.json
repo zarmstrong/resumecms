@@ -1,0 +1,12 @@
+{
+  "id": "creative",
+  "label": "Creative",
+  "description": "For creative professionals, a pink framed header and split columns give portfolios and experience a distinctive structure.",
+  "author": "resumecms",
+  "header": "framed",
+  "layout": "split-columns",
+  "colors": {
+    "accent": "#be185d"
+  },
+  "font": "montserrat"
+}

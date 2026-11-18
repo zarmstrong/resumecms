@@ -24,8 +24,8 @@ const layoutComponents = import.meta.glob('../../../templates/layouts/*/index.js
   eager: true,
   import: 'default',
 });
-// Curated bundles combining a header + layout + colors/fonts, previewable
-// via TemplatePreviewPage.jsx's /template-preview/preset/:id route — unlike
+// Curated bundles combining a header + layout + colors/fonts, applied from
+// the editor's template picker and previewable at /template-preview/preset/:id — unlike
 // headers/layouts these already carry their own `id` field (validated to
 // match their folder name), so no id-from-path step is needed here.
 const presetMeta = import.meta.glob('../../../templates/presets/*/template.json', {

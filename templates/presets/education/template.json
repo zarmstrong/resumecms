@@ -1,0 +1,12 @@
+{
+  "id": "education",
+  "label": "Education",
+  "description": "For educators, a centered header and indigo dividers frame experience in a welcoming serif style.",
+  "author": "resumecms",
+  "header": "centered",
+  "layout": "divider",
+  "colors": {
+    "accent": "#4338ca"
+  },
+  "font": "lora"
+}

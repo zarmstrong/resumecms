@@ -4,8 +4,8 @@ This folder holds four kinds of contributable templates, from least to most
 involved:
 
 - **[Presets](#presets)** — no code. A JSON file bundling an existing header
-  + layout + optional colors/fonts under one name, shown as a card in the
-  editor's gallery.
+  + layout + optional colors/fonts under one name, listed in the editor's
+  template picker in Presets mode.
 - **[Layouts](#headers--layouts)** — code (a React component) that controls
   how section blocks are arranged below the header. Some existing layouts
   are pure CSS instead (no component needed).
@@ -24,6 +24,15 @@ All three are loaded at build time via `import.meta.glob` in
 — adding files here is enough to make them selectable, no registration step.
 
 ## Presets
+
+Open `/editor` → Site Settings → "Change template…" → **Presets** to
+preview a preset against your resume, then **Use this preset** to apply it.
+It replaces the header, layout, colors and type settings (including fonts,
+size, weight, spacing, pill padding and bullet style); anything it doesn't
+set goes back to its default. Your title, description and other settings
+stay. Header and layout can still be picked independently in **Header &
+layout** mode. Browsing or cancelling writes nothing; applying saves the
+draft without publishing it.
 
 The simplest contribution: `templates/presets/<id>/template.json`, `<id>`
 matching the folder name, lowercase kebab-case:
@@ -315,9 +324,10 @@ cd client && npm run dev     # terminal 2
   developing a new header or layout, before it has a preset.
 - `http://localhost:5173/template-preview/preset/<id>` — a specific preset.
 - Or open `/editor` → Site Settings → "Change template…", which lists every
-  registered header and layout and renders your **real** resume content
-  live as you browse them — the most accurate way to check a new header or
-  layout looks right, since it's not placeholder text.
+  registered header and layout in **Header & layout** mode, and presets in
+  **Presets** mode. It renders your **real** resume content live as you browse
+  them — the most accurate way to check a new header, layout or preset looks
+  right, since it's not placeholder text.
 
 The two `/template-preview` routes above don't touch real resume data —
 they render
