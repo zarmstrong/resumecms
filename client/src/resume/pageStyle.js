@@ -78,19 +78,43 @@ export function resumePageStyle(site) {
   return { colors, style };
 }
 
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+// The color a PDF's half-inch page margin is painted (issue #213): the
+// page's background when it's a #rrggbb, else null and the margin stays
+// white. The server's pdfMarginColor() (server/src/pdfFooter.js) reads the
+// same color from the same site settings to pick the page-number footer's
+// ink, and pageStyle.test.js checks the two agree.
+export function printMarginColor(background) {
+  return typeof background === 'string' && HEX_COLOR.test(background) ? background : null;
+}
+
 // In print/PDF output there's no card floating on the app background —
 // the page's own background must fill the whole physical page, or any
 // leftover space after the last block on a page shows the app's page
-// color instead, producing a visible color seam at a page break.
+// color instead, producing a visible color seam at a page break. html and
+// body fill only the area inside the page's margins (resume.css's @page),
+// which Chromium leaves white, so the margins get the same color through
+// an @page background of their own; the page's layout doesn't change. It's
+// set through the CSSOM, which drops a value that isn't a color rather than
+// parsing it as CSS.
 export function usePrintBackground(mode, background) {
   useEffect(() => {
     if (mode !== 'print') return undefined;
     const prevBg = document.body.style.background;
     document.documentElement.style.background = background;
     document.body.style.background = background;
+    const margin = printMarginColor(background);
+    const pageRule = margin ? document.createElement('style') : null;
+    if (pageRule) {
+      document.head.appendChild(pageRule);
+      pageRule.sheet.insertRule('@page {}');
+      pageRule.sheet.cssRules[0].style.backgroundColor = margin;
+    }
     return () => {
       document.documentElement.style.background = '';
       document.body.style.background = prevBg;
+      pageRule?.remove();
     };
   }, [mode, background]);
 }

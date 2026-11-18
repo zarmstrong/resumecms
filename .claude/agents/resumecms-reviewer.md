@@ -164,8 +164,12 @@ in prose; check the diff against the ones that apply, especially:
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a
   request waits on it, `settleWithin()`.
 - The PDF footer (`pdfFooter.js`, page numbers) never takes free text from
-  the site settings or the snapshot: only a `#rrggbb` color and a font
-  family it picks itself, read from the snapshot `/print` was served.
+  the site settings or the snapshot: only `#rrggbb` colors and a font
+  family it picks itself, read from the snapshot `/print` was served. Its
+  ink reads on the margin's color, which the server's `pdfMarginColor()`
+  and the client's `printMarginColor()` (`pageStyle.js`, the `@page`
+  background `usePrintBackground()` paints, issue #213) must agree on;
+  the `page.pdf()` margins stay, so a white page's PDF doesn't move.
 - Store handlers in routes are wrapped in `handle()`; MCP content tools sit
   in `CONTENT_TOOLS`.
 - AI output schemas stay strict-mode valid (`additionalProperties: false`,

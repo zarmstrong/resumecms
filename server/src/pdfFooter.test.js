@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PDF_BASE_OPTIONS, SANS_FONT_IDS, pdfPageOptions } from './pdfFooter.js';
+import { PDF_BASE_OPTIONS, SANS_FONT_IDS, pdfMarginColor, pdfPageOptions } from './pdfFooter.js';
+import { inkFor } from './favicon.js';
 import { FONT_IDS } from './landingStyle.js';
 import { FONT_OPTIONS } from '../../client/src/resume/siteColors.js';
 
@@ -18,18 +19,46 @@ test('on: an empty header and a footer Chromium fills with the page numbers', ()
   assert.match(options.footerTemplate, /font-size: 8pt/);
 });
 
-test("the footer is drawn in the resume's text color while it reads on the white margin, the default otherwise", () => {
+test("the footer is drawn in the resume's text color while it reads on a white margin, the default otherwise", () => {
   const ink = (text) => pdfPageOptions({ pdfPageNumbers: true, colors: { text } }).footerTemplate.match(/color: ([^;]+);/)[1];
   assert.equal(ink(undefined), '#14181c');
   assert.equal(ink('#334155'), '#334155');
   assert.equal(ink('#767676'), '#767676'); // 4.54:1 on white, just over AA
   assert.equal(ink('#777777'), '#14181c'); // 4.48:1, just under
-  assert.equal(ink('#D5DBE1'), '#14181c'); // a dark resume's light text
+  assert.equal(ink('#D5DBE1'), '#14181c'); // a light text on a white page
   for (const text of ['red', '#fff', 'red;"><script>alert(1)</script>', '#14181c"; x', 42, null]) {
     const { footerTemplate } = pdfPageOptions({ pdfPageNumbers: true, colors: { text } });
     assert.match(footerTemplate, /color: #14181c;/, String(text));
     assert.doesNotMatch(footerTemplate, /script|red|x;/);
   }
+});
+
+test("the margin is the page's #rrggbb background, white when it has none", () => {
+  for (const site of [undefined, null, 'x', {}, { colors: null }, { colors: {} }, { colors: { background: '' } }]) {
+    assert.equal(pdfMarginColor(site), '#ffffff', JSON.stringify(site));
+  }
+  assert.equal(pdfMarginColor({ colors: { background: '#15191d' } }), '#15191d');
+  assert.equal(pdfMarginColor({ colors: { background: '#15191D' } }), '#15191D');
+  for (const background of ['navy', '#fff', '#15191d; x', 'rgb(0,0,0)', 42]) {
+    assert.equal(pdfMarginColor({ colors: { background } }), '#ffffff', String(background));
+  }
+});
+
+test("on a colored margin (issue #213) the footer keeps the text color while it reads there, else the margin's own ink", () => {
+  const ink = (colors) => pdfPageOptions({ pdfPageNumbers: true, colors }).footerTemplate.match(/color: ([^;]+);/)[1];
+  // A dark resume's light text reads on its own background.
+  assert.equal(ink({ background: '#15191d', text: '#d5dbe1' }), '#d5dbe1');
+  // Dark text on a dark page doesn't, nor does a missing one.
+  assert.equal(ink({ background: '#15191d', text: '#14181c' }), '#ffffff');
+  assert.equal(ink({ background: '#15191d' }), '#ffffff');
+  assert.equal(ink({ background: '#15191d', text: 'red' }), '#ffffff');
+  // A mid-tone page whose text is too faint there gets inkFor()'s choice.
+  assert.equal(ink({ background: '#2f6f4e', text: '#8fae9b' }), inkFor('#2f6f4e'));
+  assert.equal(ink({ background: '#ffd166', text: '#ffffff' }), '#14181c');
+  // A pale page keeps working like white.
+  assert.equal(ink({ background: '#f7f3e8', text: '#334155' }), '#334155');
+  // A background the margin isn't painted in reads as white.
+  assert.equal(ink({ background: 'navy', text: '#d5dbe1' }), '#14181c');
 });
 
 test("the footer's family follows the resume's font, a missing or unknown one reading as the default serif", () => {
