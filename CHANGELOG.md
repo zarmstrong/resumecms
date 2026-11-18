@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.0](https://github.com/zarmstrong/resumecms/compare/v2.0.1...v2.1.0) (2026-11-18)
+
+
+### Features
+
+* add a credentials block type for licenses and certifications ([#206](https://github.com/zarmstrong/resumecms/issues/206)) ([#210](https://github.com/zarmstrong/resumecms/issues/210)) ([17715d0](https://github.com/zarmstrong/resumecms/commit/17715d06fcc554adccd0390204a91127373df0c4))
+* add an academic CV layout, used by the research preset ([#206](https://github.com/zarmstrong/resumecms/issues/206)) ([#211](https://github.com/zarmstrong/resumecms/issues/211)) ([a3cab22](https://github.com/zarmstrong/resumecms/commit/a3cab22b963035a5a312f6273751746ce2e50391))
+* add optional page numbers to a resume's PDF ([#206](https://github.com/zarmstrong/resumecms/issues/206)) ([#212](https://github.com/zarmstrong/resumecms/issues/212)) ([37550eb](https://github.com/zarmstrong/resumecms/commit/37550eb8f0b43899efae423b6a39c262f1426f1a))
+* apply resume presets from the editor, with seven by profession ([#206](https://github.com/zarmstrong/resumecms/issues/206)) ([#209](https://github.com/zarmstrong/resumecms/issues/209)) ([e74acd1](https://github.com/zarmstrong/resumecms/commit/e74acd1b3acffb1c95962d0f58f90fe2d816f724))
+
+
+### Bug Fixes
+
+* **deps:** bump openai from 7.56.0 to 7.57.0 in /server ([#207](https://github.com/zarmstrong/resumecms/issues/207)) ([1fc8493](https://github.com/zarmstrong/resumecms/commit/1fc8493f282face76acf331e830148758f9e91c4))
+
 ## [2.0.1](https://github.com/zarmstrong/resumecms/compare/v2.0.0...v2.0.1) (2026-11-16)
 
 
