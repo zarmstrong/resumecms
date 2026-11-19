@@ -1435,7 +1435,9 @@ goes through). `CustomBlock` gives only a dated item the heading row
 `.r-custom-item-top`, the date an `.r-experience-dates` (plus
 `.r-custom-item-date`) so it takes the entry dates' look, pill and
 layout overrides; an item without one renders exactly the markup it did
-before, so existing resumes and PDFs don't change. The row stacks where
+before, so existing resumes and PDFs don't change. Being free text, the
+date may wrap (an entry's never does): it never shrinks, but a long one
+stops at 40% of the row and wraps there. The row stacks where
 `.r-experience-top` does (narrow screens, the sidebar rail), a centered
 or right-aligned block puts the date under the heading, and the
 `academic` layout reaches a dated item back over its custom-block indent
@@ -1446,7 +1448,13 @@ item so it comes through as stored, and the editor's `targetSlice()`
 leaves it out. Its staleness check also compares custom items as the
 form writes them back (a legacy item with its `bodyType` and `text`
 added, keys sorted: `comparableItem()`), so a date edit alone, even
-on a block of legacy items, makes no proposal stale. `applyProposal()`
+on a block of legacy items, makes no proposal stale. Relocation
+(`relocateTarget()`) is the other way round: it compares items with the
+date kept (`placeJson()`), since the lists it's for repeat an entry that
+differs only by date (the same award every year), and drops an item
+proposal that would otherwise stay, not stale, over another year's
+entry once its own is deleted; a date edited alone is rule 2's edit in
+place, so the proposal stays. `applyProposal()`
 keeps the current date: an item rewrite's from the item at its target,
 a block rewrite's by position, but only while the proposal isn't stale
 (items have no ids, so once they've been added, removed, reordered or

@@ -11,7 +11,7 @@ function normalizeItem(item) {
   return { ...item, bodyType: 'text', text: item.body };
 }
 
-function TagColorField({ item, onChange }) {
+function TagColorField({ item, name, onChange }) {
   const enabled = Boolean(item.tagColor);
   return (
     <label className="ed-color-field">
@@ -19,6 +19,7 @@ function TagColorField({ item, onChange }) {
         <input
           type="checkbox"
           checked={enabled}
+          aria-label={`${name} custom tag color`}
           onChange={(e) => onChange({ tagColor: e.target.checked ? DEFAULT_TAG_COLOR : '' })}
         />
         Custom tag color
@@ -31,16 +32,21 @@ function TagColorField({ item, onChange }) {
             className="ed-color-swatch"
             value={item.tagColor}
             onChange={(e) => onChange({ tagColor: e.target.value })}
-            aria-label="Tag color"
+            aria-label={`${name} tag color`}
           />
-          <input className="ed-input" value={item.tagColor} onChange={(e) => onChange({ tagColor: e.target.value })} />
+          <input
+            className="ed-input"
+            value={item.tagColor}
+            onChange={(e) => onChange({ tagColor: e.target.value })}
+            aria-label={`${name} tag color, as #rrggbb`}
+          />
         </div>
       )}
     </label>
   );
 }
 
-function ItemBodyFields({ item, onChange }) {
+function ItemBodyFields({ item, name, onChange }) {
   switch (item.bodyType) {
     case 'list':
       return (
@@ -50,6 +56,7 @@ function ItemBodyFields({ item, onChange }) {
           value={item.items || ''}
           onChange={(e) => onChange({ items: e.target.value })}
           placeholder="One list item per line"
+          aria-label={`${name} list, one entry per line`}
         />
       );
     case 'link':
@@ -60,12 +67,14 @@ function ItemBodyFields({ item, onChange }) {
             value={item.label || ''}
             onChange={(e) => onChange({ label: e.target.value })}
             placeholder="Link text, e.g. View certificate"
+            aria-label={`${name} link text`}
           />
           <input
             className="ed-input ed-input-flex"
             value={item.url || ''}
             onChange={(e) => onChange({ url: e.target.value })}
             placeholder="https://..."
+            aria-label={`${name} link URL`}
           />
         </div>
       );
@@ -77,8 +86,9 @@ function ItemBodyFields({ item, onChange }) {
             value={item.items || ''}
             onChange={(e) => onChange({ items: e.target.value })}
             placeholder="Comma-separated, e.g. English (native), Spanish (fluent)"
+            aria-label={`${name} tags, comma-separated`}
           />
-          <TagColorField item={item} onChange={onChange} />
+          <TagColorField item={item} name={name} onChange={onChange} />
         </div>
       );
     case 'text':
@@ -90,6 +100,7 @@ function ItemBodyFields({ item, onChange }) {
           value={item.text || ''}
           onChange={(e) => onChange({ text: e.target.value })}
           placeholder="Item detail"
+          aria-label={`${name} text`}
         />
       );
   }
@@ -152,7 +163,7 @@ function CustomItem({ item, index, setItem, setItemType, removeItem, aiPanel, ai
           ))}
         </select>
       </div>
-      <ItemBodyFields item={item} onChange={(patch) => setItem(index, patch)} />
+      <ItemBodyFields item={item} name={name} onChange={(patch) => setItem(index, patch)} />
       {aiShown &&
         aiPanel({ kind: 'item', index }, { open: true, onClose: () => setAiOpen(false), className: 'ed-ai-panel-inline' })}
     </div>

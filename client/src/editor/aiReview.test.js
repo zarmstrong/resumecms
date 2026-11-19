@@ -283,6 +283,43 @@ test('a stale custom block proposal keeps its own dates, never a moved item\'s',
   assert.deepEqual(datesOf(applyProposal('custom', redated, proposal)), ['2021', '2020', '2015']);
 });
 
+// The lists a date is for repeat themselves: the same award, the same
+// heading and text, in several years. Relocation tells them apart by date.
+test('an item proposal follows its own dated entry among entries that differ only by date', () => {
+  const dl = (date, text = 'College of Eng.') => ({ heading: "Dean's List", bodyType: 'text', text, date });
+  const base = { title: 'Awards', items: [dl('2019'), dl('2020'), dl('2021')] };
+
+  // Rewrite the 2019 entry, then delete it: the proposal goes with it,
+  // rather than staying, not stale, over the 2020 entry.
+  const first = { target: { kind: 'item', index: 0 }, baseData: base, proposedData: { ...base, items: [dl('2019', 'R19'), dl('2020'), dl('2021')] } };
+  const withoutFirst = { ...base, items: [base.items[1], base.items[2]] };
+  assert.equal(relocateTarget('custom', first, withoutFirst), null);
+
+  // Rewrite the 2021 entry, then delete 2020: it follows its entry to 1.
+  const last = { target: { kind: 'item', index: 2 }, baseData: base, proposedData: { ...base, items: [dl('2019'), dl('2020'), dl('2021', 'R21')] } };
+  const withoutMiddle = { ...base, items: [base.items[0], base.items[2]] };
+  const moved = relocateTarget('custom', last, withoutMiddle);
+  assert.deepEqual(moved, { kind: 'item', index: 1 });
+  assert.equal(isProposalStale('custom', { ...last, target: moved, origin: last.target }, withoutMiddle), false);
+  assert.deepEqual(applyProposal('custom', withoutMiddle, { ...last, target: moved, origin: last.target }).items, [dl('2019'), dl('2021', 'R21')]);
+
+  // A block rewrite maps dates by position while it isn't stale, which with
+  // entries like these means every item but its date is as it was made
+  // for: each current entry gets the rewrite of an identical one and keeps
+  // its own date, so the 2019 entry deleted and a 2022 one added stay so.
+  const block = { target: BLOCK_TARGET, baseData: base, proposedData: { ...base, items: [dl('2019', 'R'), dl('2020', 'R'), dl('2021', 'R')] } };
+  const shifted = { ...base, items: [base.items[1], base.items[2], dl('2022')] };
+  assert.equal(isProposalStale('custom', block, shifted), false);
+  assert.deepEqual(applyProposal('custom', shifted, block).items, [dl('2020', 'R'), dl('2021', 'R'), dl('2022', 'R')]);
+
+  // A date edited alone leaves the proposal where it is, and not stale.
+  const middle = { target: { kind: 'item', index: 1 }, baseData: base, proposedData: { ...base, items: [dl('2019'), dl('2020', 'R20'), dl('2021')] } };
+  const redated = { ...base, items: [base.items[0], dl('2018'), base.items[2]] };
+  assert.equal(relocateTarget('custom', middle, redated), middle.target);
+  assert.equal(isProposalStale('custom', middle, redated), false);
+  assert.deepEqual(applyProposal('custom', redated, middle).items[1], dl('2018', 'R20'));
+});
+
 // The form writes every legacy { heading, body } item back with a bodyType
 // and text on any edit to its block, a date's included.
 test('a date edit on a block of legacy custom items makes none of its proposals stale', () => {

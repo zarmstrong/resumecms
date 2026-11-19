@@ -105,8 +105,11 @@
   align-self: baseline;
 }
 
+/* The gutter is the date's whole column, so resume.css's 40% cap on a
+   long date in the heading row doesn't apply here. */
 .r-layout-academic .r-body .r-custom-item-date {
   margin-left: 0;
+  max-width: none;
 }
 
 /* In a centered or right-aligned block the date follows the block's

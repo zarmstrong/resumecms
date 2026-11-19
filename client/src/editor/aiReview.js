@@ -198,6 +198,22 @@ function comparableSlice(type, slice, target) {
 
 const sliceJson = (type, data, target) => JSON.stringify(comparableSlice(type, targetSlice(type, data, target), target) ?? null);
 
+// What relocateTarget tells positions apart by: a custom item's date
+// included, since the lists the date is for repeat themselves (the same
+// award or talk in several years, differing only by it). Only staleness
+// leaves the date out. A date edited alone is then an unpaired item in a
+// gap of the same size on both sides, which rule 2 keeps in place.
+/**
+ * @param {string} type
+ * @param {Record<string, any> | null | undefined} data
+ * @param {AiTarget} target
+ */
+function placeJson(type, data, target) {
+  if (type !== 'custom' || target.kind !== 'item') return sliceJson(type, data, target);
+  const item = Array.isArray(data?.items) ? data.items[target.index] : null;
+  return JSON.stringify(comparableItem(item ?? null) ?? null);
+}
+
 // Longest-common-subsequence pairs [i, j] (in order) between two lists of
 // strings. Lists here are a block's bullets or items (or a cover letter's
 // paragraphs, letters/letterAi.js), so they're short.
@@ -238,7 +254,9 @@ export function lcsPairs(a, b) {
 //    content is where it was dragged to (a sub-bullet only matches
 //    sub-bullets).
 // 4. Otherwise it can't be placed: null when its current position is gone,
-//    else it stays where it is (stale).
+//    else it stays where it is (stale). A custom item proposal is dropped
+//    instead when it would stay over an item that differs from its own
+//    only by date, since that wouldn't count as stale.
 // Returns `proposal.target` itself when nothing moved, so callers can
 // compare by identity. Other targets never move.
 /**
@@ -261,8 +279,8 @@ export function relocateTarget(type, proposal, currentData) {
   const currentPositions = positionsOf(currentData, target.kind).filter(sameDepth);
   const o = basePositions.findIndex((t) => targetKey(t) === targetKey(target));
   if (o === -1) return stay;
-  const a = basePositions.map((t) => sliceJson(type, anchor, t));
-  const b = currentPositions.map((t) => sliceJson(type, currentData, t));
+  const a = basePositions.map((t) => placeJson(type, anchor, t));
+  const b = currentPositions.map((t) => placeJson(type, currentData, t));
   const pairs = lcsPairs(a, b);
 
   const paired = pairs.find(([i]) => i === o);
@@ -282,6 +300,13 @@ export function relocateTarget(type, proposal, currentData) {
   const pairedCurrent = new Set(pairs.map(([, j]) => j));
   const moved = b.map((_, j) => j).filter((j) => !pairedCurrent.has(j) && b[j] === a[o]);
   if (moved.length === 1) return keep(currentPositions[moved[0]]);
+  // Staying put relies on the proposal going stale, which a custom item
+  // differing from its own only by date (the same entry from another year,
+  // its own one deleted) wouldn't: it would show and be accepted over the
+  // wrong item. Its item is gone, so the proposal goes too.
+  if (stay && placeJson(type, currentData, target) !== a[o] && sliceJson(type, currentData, target) === sliceJson(type, anchor, target)) {
+    return null;
+  }
   return stay;
 }
 

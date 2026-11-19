@@ -80,9 +80,11 @@ anything the built-in types don't cover — certifications, publications,
 volunteer work, side projects — without touching any code. They drag,
 reorder, and toggle visibility exactly like built-in blocks. An item's
 date (`date`, free text such as "2021" or "Forthcoming") is shown at the
-right of its heading the way experience dates are; the Academic CV layout
-puts it in its left-hand date column, so a publications list reads by
-year. An item without a date looks as it always has.
+right of its heading the way experience dates are (under the heading in a
+centered or right-aligned block, and a long one wraps rather than
+crowding the heading); the Academic CV layout puts it in its left-hand
+date column, so a publications list reads by year. An item without a date
+looks as it always has.
 
 Every block also has a **Customize block** section in the editor, stored at
 `data.style`: extra space above/below (`spaceAbove`, `spaceBelow`), a

@@ -38,4 +38,5 @@
 
 .r-sidebar .r-custom-item-top > .r-custom-item-date {
   margin-left: 0;
+  max-width: none;
 }
