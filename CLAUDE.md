@@ -1761,10 +1761,12 @@ the page moves). `renderResumePdf()` reads it from the `/api/public/resume`
 body the `/print` page was served, never from the store at queue time, so
 the footer always matches the snapshot drawn. Only the resume renderer
 passes it: cover letters and share cards never get a footer. The footer
-template's only input from the settings is the text color, used only as
-`#rrggbb` and only while it has 4.5:1 on white (the footer sits in the
-margin, which Chromium leaves white whatever the resume's background; the
-default ink otherwise), plus a serif or sans family picked from
+template's inputs from the settings are the text and background colors,
+used only as `#rrggbb`: the text color while it has 4.5:1 on the
+background (the footer sits in the margin, which resume.css's `@page`
+paints in the background, issue #213; a background that isn't `#rrggbb`
+counts as white), `inkFor()`'s near-black or white otherwise, plus a
+serif or sans family picked from
 the font id (`SANS_FONT_IDS`, compared with the client's `FONT_OPTIONS`),
 so no free text from the settings or the snapshot ever reaches it; keep it
 that way if you add anything to it.

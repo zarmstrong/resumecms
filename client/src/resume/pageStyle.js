@@ -82,14 +82,21 @@ export function resumePageStyle(site) {
 // the page's own background must fill the whole physical page, or any
 // leftover space after the last block on a page shows the app's page
 // color instead, producing a visible color seam at a page break.
+// html and body only fill the area inside the PDF's half-inch margins,
+// though: Chromium leaves the margins white unless the page box itself is
+// painted, so a dark resume printed as a panel inside a white border
+// (issue #213). `--r-print-bg` is what resume.css's `@page` paints it with.
 export function usePrintBackground(mode, background) {
   useEffect(() => {
     if (mode !== 'print') return undefined;
+    const root = document.documentElement;
     const prevBg = document.body.style.background;
-    document.documentElement.style.background = background;
+    root.style.background = background;
+    root.style.setProperty('--r-print-bg', background);
     document.body.style.background = background;
     return () => {
-      document.documentElement.style.background = '';
+      root.style.background = '';
+      root.style.removeProperty('--r-print-bg');
       document.body.style.background = prevBg;
     };
   }, [mode, background]);

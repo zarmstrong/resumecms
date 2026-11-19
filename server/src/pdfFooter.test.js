@@ -18,7 +18,7 @@ test('on: an empty header and a footer Chromium fills with the page numbers', ()
   assert.match(options.footerTemplate, /font-size: 8pt/);
 });
 
-test("the footer is drawn in the resume's text color while it reads on the white margin, the default otherwise", () => {
+test("on the default white background the footer is the resume's text color while it reads, the default ink otherwise", () => {
   const ink = (text) => pdfPageOptions({ pdfPageNumbers: true, colors: { text } }).footerTemplate.match(/color: ([^;]+);/)[1];
   assert.equal(ink(undefined), '#14181c');
   assert.equal(ink('#334155'), '#334155');
@@ -30,6 +30,18 @@ test("the footer is drawn in the resume's text color while it reads on the white
     assert.match(footerTemplate, /color: #14181c;/, String(text));
     assert.doesNotMatch(footerTemplate, /script|red|x;/);
   }
+});
+
+test("on a colored background the footer's ink is checked against it, not against white (issue #213)", () => {
+  const ink = (colors) => pdfPageOptions({ pdfPageNumbers: true, colors }).footerTemplate.match(/color: ([^;]+);/)[1];
+  assert.equal(ink({ text: '#d5dbe1', background: '#15191d' }), '#d5dbe1'); // a dark resume's light text reads
+  assert.equal(ink({ text: '#14181c', background: '#15191d' }), '#ffffff'); // dark text on dark: white instead
+  assert.equal(ink({ background: '#15191D' }), '#ffffff');
+  assert.equal(ink({ text: '#334155', background: '#fdf6e3' }), '#334155'); // a light tint keeps dark text
+  assert.equal(ink({ text: '#d5dbe1', background: 'navy' }), '#14181c'); // not #rrggbb: read as white
+  const { footerTemplate } = pdfPageOptions({ pdfPageNumbers: true, colors: { background: '#000000"><script>' } });
+  assert.match(footerTemplate, /color: #14181c;/);
+  assert.doesNotMatch(footerTemplate, /script/);
 });
 
 test("the footer's family follows the resume's font, a missing or unknown one reading as the default serif", () => {

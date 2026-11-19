@@ -1114,7 +1114,13 @@
     padding: 0;
     max-width: none;
   }
+  /* The margin belongs to the page box, which the html and body
+     backgrounds don't reach; painting it in the resume's background
+     (usePrintBackground() in pageStyle.js sets --r-print-bg) takes the
+     color to the paper's edge (issue #213). Unset, it stays transparent:
+     a white page, as before. */
   @page {
     margin: 0.5in;
+    background: var(--r-print-bg, transparent);
   }
 }
