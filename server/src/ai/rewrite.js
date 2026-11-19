@@ -98,15 +98,27 @@ function experienceRules(target, allowBulletRestructure) {
 const CUSTOM_BODY_RULE =
   '"body" follows its item type: "list" is one entry per line, "tags" is a comma-separated list, "link" is the link\'s visible text, "text" is prose.';
 
-function customRules(target) {
+// An item's date is drawn beside its heading, so it never needs to be in
+// the text (rewritableFields.js sends it only when an item has one).
+const CUSTOM_DATE_RULE = {
+  item: 'Dates (this item\'s itemDate in the context, and "date" on the other items) are shown beside the items\' headings. They are not part of this rewrite; don\'t add them to the heading or body.',
+  block: 'itemDates in the context are the items\' dates, in order ("" for none), shown beside their headings. They are not part of this rewrite; don\'t add them to the headings or bodies.',
+};
+
+function customRules(target, context) {
   if (target.kind === 'item') {
+    const dated = Boolean(context?.itemDate) || (context?.items || []).some((item) => item.date);
     return [
       'You are rewriting one item of this section. The section title and other items are context only.',
       CONTEXT_PLACEHOLDER_RULE,
       `The item's type is itemBodyType in the context. ${CUSTOM_BODY_RULE}`,
+      ...(dated ? [CUSTOM_DATE_RULE.item] : []),
     ];
   }
-  return [`Return exactly the same number of items in the same order. Each item's type is in itemBodyTypes. ${CUSTOM_BODY_RULE}`];
+  return [
+    `Return exactly the same number of items in the same order. Each item's type is in itemBodyTypes. ${CUSTOM_BODY_RULE}`,
+    ...(context?.itemDates ? [CUSTOM_DATE_RULE.block] : []),
+  ];
 }
 
 // An executive summary's three fields. An empty one stays empty unless
@@ -176,7 +188,7 @@ export function buildPrompt(
   if (outline && type === 'executive_summary') rules.push(ACCOMPLISHMENTS_RULE);
   if (Object.hasOwn(TENSE_RULES, tense ?? '')) rules.push(TENSE_RULES[tense]);
   if (type === 'experience') rules.push(...experienceRules(target, allowBulletRestructure));
-  if (type === 'custom') rules.push(...customRules(target));
+  if (type === 'custom') rules.push(...customRules(target, context));
   if (type === 'executive_summary') rules.push(...EXECUTIVE_SUMMARY_RULES);
 
   const system = [

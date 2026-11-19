@@ -102,8 +102,33 @@ function withoutDescription(type, data) {
   return rest;
 }
 
+// A custom item's date (issue #214) is never rewritten: the server reads
+// it as context only and copies it through. So no target owns it, and a
+// date edited while a proposal is open neither makes it stale nor is
+// undone by accepting it (applyProposal keeps the current dates).
+/** @param {any} item a stored item, or null for one that isn't there */
+function withoutDate(item) {
+  if (!item || typeof item !== 'object' || !('date' in item)) return item;
+  const { date, ...rest } = item;
+  return rest;
+}
+
+/**
+ * @param {any} item
+ * @param {any} current the item whose date to keep
+ */
+function withDateOf(item, current) {
+  const rest = withoutDate(item);
+  return current && typeof current === 'object' && 'date' in current ? { ...rest, date: current.date } : rest;
+}
+
+function withoutItemDates(type, data) {
+  if (type !== 'custom' || !Array.isArray(data?.items)) return data;
+  return { ...data, items: data.items.map(withoutDate) };
+}
+
 // The part of `data` a target owns: for a block target, the whole data
-// (less an experience description).
+// (less an experience description, and a custom block's item dates).
 /**
  * @param {string} type
  * @param {Record<string, any> | null | undefined} data
@@ -117,9 +142,9 @@ export function targetSlice(type, data, target = BLOCK_TARGET) {
     case 'bullet':
       return bulletAt(normalizedBullets(data), target.path);
     case 'item':
-      return (Array.isArray(data.items) ? data.items[target.index] : null) ?? null;
+      return withoutDate((Array.isArray(data.items) ? data.items[target.index] : null) ?? null);
     default:
-      return withoutDescription(type, data);
+      return withoutItemDates(type, withoutDescription(type, data));
   }
 }
 
@@ -266,9 +291,23 @@ export function applyProposal(type, currentData, proposal) {
     case 'item': {
       const replacement = proposedData.items?.[origin.index];
       if (!replacement || !Array.isArray(currentData.items) || target.index >= currentData.items.length) return currentData;
-      return { ...currentData, items: currentData.items.map((item, i) => (i === target.index ? replacement : item)) };
+      return {
+        ...currentData,
+        items: currentData.items.map((item, i) => (i === target.index ? withDateOf(replacement, item) : item)),
+      };
     }
     default: {
+      // A custom block's item dates, like an experience description below,
+      // are the current ones: the proposal's are only copies. Its items
+      // are matched by position, which holds while the count does (a block
+      // rewrite can't change it); otherwise the block was edited since and
+      // its proposal's dates are the ones it was made against.
+      if (type === 'custom') {
+        const items = proposedData.items;
+        const current = currentData.items;
+        if (!Array.isArray(items) || !Array.isArray(current) || items.length !== current.length) return proposedData;
+        return { ...proposedData, items: items.map((item, i) => withDateOf(item, current[i])) };
+      }
       // The proposal's description is just the old one copied through, so
       // keep the current one: accepting mustn't undo a description edit (or
       // an accepted description rewrite) made since.

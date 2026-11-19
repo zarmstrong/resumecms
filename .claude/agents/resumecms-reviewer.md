@@ -24,6 +24,10 @@ in prose; check the diff against the ones that apply, especially:
   placeholders, `letterResumeContext()`/`planOutline()`/`resumeOutline()`
   filters kept. Resume credentials are never rewritten or dropped when expired;
   their numbers never enter AI context, and verification links are absolute http/https.
+  A custom item's `date` is never in a rewrite's editable set or schema
+  (context only), every custom merge keeps it as stored, and the editor's
+  `applyProposal()` keeps the current one; a custom item without a date
+  renders the same markup as before it existed.
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing

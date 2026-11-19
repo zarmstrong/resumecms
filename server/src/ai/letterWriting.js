@@ -120,7 +120,7 @@ export function letterResumeContext(blocks) {
         const items = (Array.isArray(data.items) ? data.items : [])
           .filter(isPlainObject)
           .map(customItemProse)
-          .map((item) => ({ heading: text(item.heading), body: text(item.body) }))
+          .map((item) => ({ heading: text(item.heading), body: text(item.body), ...(item.date ? { date: item.date } : {}) }))
           .filter((item) => item.heading || item.body);
         if (items.length) out.otherSections.push({ title: text(data.title), items });
         break;

@@ -759,6 +759,33 @@
   font-weight: 600;
 }
 
+/* A dated item's heading row (issue #214): the heading and its date, the
+   date in .r-experience-dates' look like an entry's. Only the date takes
+   the entry row's weight; the heading keeps its own color. Without a
+   heading the date still sits at the right. */
+.r-custom-item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.r-custom-item-top > .r-custom-item-date {
+  margin-left: auto;
+}
+
+/* In a centered or right-aligned block the date goes under the heading,
+   inline so the block's text-align moves it (and a date pill stays its
+   own width), at any width and in a sidebar rail alike. */
+.r-block:is(.r-align-center, .r-align-right) .r-custom-item-top {
+  display: block;
+}
+
+.r-block:is(.r-align-center, .r-align-right) .r-custom-item-top > .r-custom-item-date {
+  display: inline-block;
+  margin-left: 0;
+}
+
 /* Body layout styling now lives per-layout under templates/layouts/<id>/style.css
    (see client/src/resume/templateRegistry.js) — only styling shared across
    layouts (skills chips, block highlight/dim, print/screen media) stays here. */
@@ -1099,9 +1126,14 @@
     gap: 2px;
   }
 
-  .r-experience-top {
+  .r-experience-top,
+  .r-custom-item-top {
     flex-direction: column;
     gap: 2px;
+  }
+
+  .r-custom-item-top > .r-custom-item-date {
+    margin-left: 0;
   }
 }
 

@@ -68,6 +68,22 @@ test('letterResumeContext leaves out blocks and bullets hidden everywhere, and k
   assert.equal(letterResumeContext([block('heading', { text: 'Only a heading' })]), null);
 });
 
+test("a custom item's date goes with it as context, and an item with only a date doesn't", () => {
+  const context = letterResumeContext([
+    block('custom', {
+      title: 'Publications',
+      items: [
+        { heading: 'On caching', bodyType: 'text', text: 'J. Things.', date: '2021' },
+        { heading: 'Talk', body: 'Conf.' },
+        { heading: '', bodyType: 'text', text: '', date: '2020' },
+      ],
+    }),
+  ]);
+  assert.deepEqual(context.otherSections, [
+    { title: 'Publications', items: [{ heading: 'On caching', body: 'J. Things.', date: '2021' }, { heading: 'Talk', body: 'Conf.' }] },
+  ]);
+});
+
 test("an executive summary's headline and overview read as summary, its highlights as highlights", () => {
   assert.deepEqual(
     letterResumeContext([

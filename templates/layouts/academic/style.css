@@ -1,6 +1,7 @@
 /* "academic": an academic CV. Dates sit in a left-hand gutter and each
    entry hangs beside them, so a long, multi-page list of positions,
-   degrees and credentials reads by year. Section headings are dense small
+   degrees, credentials and dated custom items (a publication's year)
+   reads by year. Section headings are dense small
    caps, and nothing in the body is filled or tinted. The header keeps
    whatever header style is chosen independently.
 
@@ -75,6 +76,45 @@
   padding-left: 8.5em;
 }
 
+/* A custom item with a date (a publication's year) reaches back over the
+   indent into the gutter and lays out like an entry: its heading row is
+   display: contents, the date (an .r-experience-dates, placed by the rule
+   above) in column 1, the heading and body in column 2. Without a heading
+   the body takes row 1, beside the date. Items without a date keep the
+   plain indent. Not in a centered or right-aligned block, which has no
+   indent to reach back over (resume.css puts its date under the
+   heading). */
+.r-layout-academic .r-body .r-block:not(.r-align-center, .r-align-right) .r-custom-item-dated {
+  display: grid;
+  grid-template-columns: 7.5em minmax(0, 1fr);
+  column-gap: 1em;
+  margin-left: -8.5em;
+}
+
+.r-layout-academic .r-body .r-block:not(.r-align-center, .r-align-right) .r-custom-item-dated > * {
+  grid-column: 2;
+}
+
+.r-layout-academic .r-body .r-block:not(.r-align-center, .r-align-right) .r-custom-item-top {
+  display: contents;
+}
+
+.r-layout-academic .r-body .r-custom-item-top > .r-custom-item-heading {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: baseline;
+}
+
+.r-layout-academic .r-body .r-custom-item-date {
+  margin-left: 0;
+}
+
+/* In a centered or right-aligned block the date follows the block's
+   alignment, under the heading (resume.css), rather than the gutter's. */
+.r-layout-academic .r-body :is(.r-align-center, .r-align-right) .r-custom-item-date {
+  text-align: inherit;
+}
+
 /* A block centered or right-aligned in the editor keeps that: its skills
    row goes back to the shared auto-sized pair (resume.css moves it with
    justify-content), and a custom block drops the hanging indent. Entries
@@ -146,5 +186,16 @@
 
   .r-layout-academic .r-body .r-custom {
     padding-left: 0;
+  }
+
+  .r-layout-academic .r-body .r-block:not(.r-align-center, .r-align-right) .r-custom-item-dated {
+    display: block;
+    margin-left: 0;
+  }
+
+  .r-layout-academic .r-body .r-block:not(.r-align-center, .r-align-right) .r-custom-item-top {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 }

@@ -1426,6 +1426,31 @@ reading; verification links require absolute http/https URLs. Credentials
 are factual context, never rewritten; their number is public but never sent
 to the AI. A tailoring plan can hide an individual credential.
 
+A `custom` block's item (`{ heading, bodyType, text | items | label/url
+| tagColor }`, or the legacy `{ heading, body }`) may carry a `date`
+(issue #214): free text such as "2021" or "Forthcoming", never parsed,
+stored only while set (`patchCustomItem()` in
+`client/src/resume/customItems.js`, which the editor's per-item Date input
+goes through). `CustomBlock` gives only a dated item the heading row
+`.r-custom-item-top`, the date an `.r-experience-dates` (plus
+`.r-custom-item-date`) so it takes the entry dates' look, pill and
+layout overrides; an item without one renders exactly the markup it did
+before, so existing resumes and PDFs don't change. The row stacks where
+`.r-experience-top` does (narrow screens, the sidebar rail), a centered
+or right-aligned block puts the date under the heading, and the
+`academic` layout reaches a dated item back over its custom-block indent
+into the date column, as for its entries. `blockData.js` and
+`mcp/blockSchemas.js` list the key. The AI never writes it: it's not in
+any custom target's editable set or schema, the merges spread the stored
+item so it comes through as stored, and the editor's `targetSlice()`
+leaves it out (a date edit doesn't make a proposal stale) while
+`applyProposal()` keeps the current one. It is read-only context
+(`itemDates`, or `itemDate` and each other item's `date` for an item
+target, sent only when an item has one, with a prompt rule not to put it
+in the text), as an experience entry's dates are, and goes with
+`customItemProse()` into `letterResumeContext()` and `planOutline()`,
+where an item with only a date is left out.
+
 ### AI rewrites
 
 `POST /api/ai/rewrite` (`server/src/routes/ai.js`) never writes anything. It

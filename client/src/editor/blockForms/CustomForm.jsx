@@ -1,6 +1,7 @@
 import { CUSTOM_BODY_TYPES, defaultCustomItem } from '../blockDefaults.js';
 import { targetKey } from '../aiReview.js';
 import { useRowPanelOpen } from '../useRowPanelOpen.js';
+import { patchCustomItem } from '../../resume/customItems.js';
 
 const DEFAULT_TAG_COLOR = '#2f6f4e';
 
@@ -109,17 +110,6 @@ function CustomItem({ item, index, setItem, setItemType, removeItem, aiPanel, ai
           onChange={(e) => setItem(index, { heading: e.target.value })}
           placeholder="Optional item heading"
         />
-        <select
-          className="ed-input ed-field-narrow"
-          value={item.bodyType || 'text'}
-          onChange={(e) => setItemType(index, e.target.value)}
-        >
-          {CUSTOM_BODY_TYPES.map(({ value, label }) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
         <button type="button" className="ed-icon-btn" onClick={() => removeItem(index)} aria-label="Remove item">
           ✕
         </button>
@@ -136,6 +126,28 @@ function CustomItem({ item, index, setItem, setItemType, removeItem, aiPanel, ai
           </button>
         )}
       </div>
+      {/* Its own row, so the heading keeps the first row's full width. */}
+      <div className="ed-field-row">
+        <input
+          className="ed-input ed-input-flex"
+          value={item.date || ''}
+          onChange={(e) => setItem(index, { date: e.target.value })}
+          placeholder="Date"
+          aria-label="Item date (optional)"
+          title="Optional, e.g. 2021: shown beside the heading"
+        />
+        <select
+          className="ed-input ed-field-narrow"
+          value={item.bodyType || 'text'}
+          onChange={(e) => setItemType(index, e.target.value)}
+        >
+          {CUSTOM_BODY_TYPES.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
       <ItemBodyFields item={item} onChange={(patch) => setItem(index, patch)} />
       {aiShown &&
         aiPanel({ kind: 'item', index }, { open: true, onClose: () => setAiOpen(false), className: 'ed-ai-panel-inline' })}
@@ -149,7 +161,7 @@ export function CustomForm({ data, onChange, aiPanel = null, aiEntries = null })
 
   function setItem(i, patch) {
     const next = [...items];
-    next[i] = { ...next[i], ...patch };
+    next[i] = patchCustomItem(next[i], patch);
     onChange({ ...data, items: next });
   }
   function setItemType(i, bodyType) {

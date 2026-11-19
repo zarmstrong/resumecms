@@ -206,6 +206,56 @@ test('applyProposal writes only the targeted custom item', () => {
   assert.equal(applyProposal('custom', { items: [] }, { target: { kind: 'item', index: 1 }, proposedData }).items.length, 0);
 });
 
+// Issue #214: an item's date is never the AI's, so a proposal neither
+// sets nor undoes one, and a date edited meanwhile doesn't make it stale.
+test("a custom proposal keeps every item's current date and doesn't go stale over one", () => {
+  const base = {
+    title: 'Publications',
+    items: [
+      { heading: 'Paper', bodyType: 'text', text: 'x', date: '2021' },
+      { heading: 'Talk', bodyType: 'text', text: 'y' },
+    ],
+  };
+  const proposedData = {
+    title: 'Selected publications',
+    items: [
+      { heading: 'Paper', bodyType: 'text', text: 'X', date: '1999' },
+      { heading: 'Talk', bodyType: 'text', text: 'Y', date: 'made up' },
+    ],
+  };
+  // Edited since: the paper's date changed and the talk got one.
+  const current = { ...base, items: [{ ...base.items[0], date: '2022' }, { ...base.items[1], date: '2020' }] };
+
+  const block = { target: BLOCK_TARGET, baseData: base, proposedData };
+  assert.equal(isProposalStale('custom', block, current), false);
+  assert.deepEqual(applyProposal('custom', current, block), {
+    title: 'Selected publications',
+    items: [
+      { heading: 'Paper', bodyType: 'text', text: 'X', date: '2022' },
+      { heading: 'Talk', bodyType: 'text', text: 'Y', date: '2020' },
+    ],
+  });
+  const undated = applyProposal('custom', base, block);
+  assert.deepEqual(undated.items.map((item) => item.date), ['2021', undefined]);
+  assert.equal(Object.hasOwn(undated.items[1], 'date'), false);
+  assert.deepEqual(previewData('custom', current, [block]).items.map((item) => item.date), ['2022', '2020']);
+
+  for (const index of [0, 1]) {
+    const item = { target: { kind: 'item', index }, baseData: base, proposedData };
+    assert.equal(isProposalStale('custom', item, current), false, `item ${index}`);
+    assert.deepEqual(applyProposal('custom', current, item).items.map((it) => it.date), ['2022', '2020']);
+    assert.deepEqual(applyProposal('custom', base, item).items.map((it) => it.date), ['2021', undefined]);
+    assert.equal(Object.hasOwn(applyProposal('custom', base, item).items[1], 'date'), false);
+  }
+  assert.equal(applyProposal('custom', current, { target: { kind: 'item', index: 0 }, baseData: base, proposedData }).items[0].text, 'X');
+
+  // The text still decides staleness, and the date doesn't move an item
+  // proposal onto another item.
+  const reworded = { ...current, items: [{ ...current.items[0], text: 'edited' }, current.items[1]] };
+  assert.equal(isProposalStale('custom', block, reworded), true);
+  assert.deepEqual(relocateTarget('custom', { target: { kind: 'item', index: 1 }, baseData: base }, current), { kind: 'item', index: 1 });
+});
+
 test('applyProposal for the whole block returns the proposed data', () => {
   const proposal = { target: BLOCK_TARGET, proposedData: { text: 'new' } };
   assert.deepEqual(applyProposal('summary', { text: 'old' }, proposal), { text: 'new' });
