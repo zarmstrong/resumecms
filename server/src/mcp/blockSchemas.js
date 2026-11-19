@@ -178,7 +178,7 @@ export const BLOCK_DATA_SCHEMAS = {
             date: {
               type: 'string',
               description:
-                "Optional, any body type: free text such as '2021' or 'Mar 2024', shown at the right of the heading (in the academic layout, in its date column). Omit it for none. Never changed by an AI rewrite.",
+                "Optional, any body type: free text such as '2021' or 'Mar 2024', shown at the right of the heading (under it in a centered or right-aligned block; in the academic layout, in its date column). Omit it for none. Never changed by an AI rewrite.",
             },
           },
         },

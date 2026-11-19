@@ -772,15 +772,17 @@
 
 /* The date is free text, so unlike an entry's it may wrap: it never
    shrinks (a short one draws as an entry's does), but a long one ("Accepted,
-   Journal of X (in press)") stops at 40% of the row and wraps there, so
-   the heading keeps the rest. Where the row stacks, it gets the full width
-   back. */
+   Journal of X (in press)") stops at 40% of the row and wraps there,
+   its lines to the right like the date column, so the heading keeps the
+   rest. Where the row stacks, it gets the full width and the block's
+   alignment back. */
 .r-custom-item-top > .r-custom-item-date {
   margin-left: auto;
   flex-shrink: 0;
   max-width: 40%;
   white-space: normal;
   overflow-wrap: anywhere;
+  text-align: right;
 }
 
 /* In a centered or right-aligned block the date goes under the heading,
@@ -794,6 +796,7 @@
   display: inline-block;
   margin-left: 0;
   max-width: none;
+  text-align: inherit;
 }
 
 /* Body layout styling now lives per-layout under templates/layouts/<id>/style.css
@@ -1145,6 +1148,7 @@
   .r-custom-item-top > .r-custom-item-date {
     margin-left: 0;
     max-width: none;
+    text-align: inherit;
   }
 }
 

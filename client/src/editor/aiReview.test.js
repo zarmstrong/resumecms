@@ -320,6 +320,43 @@ test('an item proposal follows its own dated entry among entries that differ onl
   assert.deepEqual(applyProposal('custom', redated, middle).items[1], dl('2018', 'R20'));
 });
 
+// A date edit that makes two items identical (or a cleared date) moves
+// nothing: each proposal stays on its own index, typed one keystroke at a
+// time as the editor's anchor advances.
+test('a date edit that makes two items twins leaves each proposal on its own item', () => {
+  const award = (date) => ({ heading: 'Best paper', bodyType: 'text', text: 'Conf X', ...(date ? { date } : {}) });
+  const follow = (proposal, steps) => {
+    let p = proposal;
+    for (const data of steps) {
+      const target = relocateTarget('custom', p, data);
+      if (target === null) return null;
+      p = { ...p, target, origin: p.origin || p.target, anchorData: data };
+    }
+    return p;
+  };
+  const cases = [
+    // Retyping item 0's date: 2020 → 202 → 2021.
+    [[award('2020'), award('2021')], [[award('202'), award('2021')], [award('2021'), award('2021')]]],
+    // Clearing it: 2020 → 202 → … → none.
+    [[award('2020'), award()], [[award('202'), award()], [award('20'), award()], [award('2'), award()], [award(), award()]]],
+  ];
+  for (const [items, stepItems] of cases) {
+    const base = { title: 'Awards', items };
+    const steps = stepItems.map((step) => ({ ...base, items: step }));
+    for (const index of [0, 1]) {
+      const proposedData = { ...base, items: items.map((it, i) => (i === index ? { ...it, text: `R${index}` } : it)) };
+      const placed = follow({ target: { kind: 'item', index }, baseData: base, proposedData }, steps);
+      const last = steps[steps.length - 1];
+      assert.deepEqual(placed?.target, { kind: 'item', index }, `item ${index}`);
+      assert.equal(isProposalStale('custom', placed, last), false);
+      assert.deepEqual(
+        applyProposal('custom', last, placed).items.map((it) => it.text),
+        [0, 1].map((i) => (i === index ? `R${index}` : 'Conf X'))
+      );
+    }
+  }
+});
+
 // The form writes every legacy { heading, body } item back with a bodyType
 // and text on any edit to its block, a date's included.
 test('a date edit on a block of legacy custom items makes none of its proposals stale', () => {

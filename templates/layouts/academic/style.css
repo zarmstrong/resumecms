@@ -95,6 +95,12 @@
   grid-column: 2;
 }
 
+/* A link body is a grid item too: kept to its text's width, so its click
+   target doesn't run across the empty rest of the column. */
+.r-layout-academic .r-body .r-block:not(.r-align-center, .r-align-right) .r-custom-item-dated > a.r-custom-item-body {
+  justify-self: start;
+}
+
 .r-layout-academic .r-body .r-block:not(.r-align-center, .r-align-right) .r-custom-item-top {
   display: contents;
 }

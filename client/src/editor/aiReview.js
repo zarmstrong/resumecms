@@ -243,6 +243,10 @@ export function lcsPairs(a, b) {
 // ones. EditorPage advances the anchor on every change to the block, so
 // each call only has to resolve one edit, insert, delete, or move, which
 // these rules can always tell apart:
+// 0. If only custom item dates changed (every position the same with
+//    dates ignored), nothing moved. The rules below compare items with
+//    their dates (placeJson), to tell entries apart that differ only by
+//    date, which a date edit alone mustn't turn into a move.
 // 1. Unchanged bullets are paired in order (longest common subsequence).
 //    If the proposal's own bullet is paired, that's where it is now: this
 //    follows inserts and deletes above it.
@@ -279,6 +283,18 @@ export function relocateTarget(type, proposal, currentData) {
   const currentPositions = positionsOf(currentData, target.kind).filter(sameDepth);
   const o = basePositions.findIndex((t) => targetKey(t) === targetKey(target));
   if (o === -1) return stay;
+  // Nothing but dates changed (the same items in the same places): every
+  // proposal stays put. Matching by date could otherwise pair a twin with
+  // the wrong one when a date edit makes two items identical, or tell two
+  // apart that a cleared date made the same.
+  if (
+    type === 'custom' &&
+    target.kind === 'item' &&
+    basePositions.length === currentPositions.length &&
+    basePositions.every((t, i) => sliceJson(type, anchor, t) === sliceJson(type, currentData, currentPositions[i]))
+  ) {
+    return stay;
+  }
   const a = basePositions.map((t) => placeJson(type, anchor, t));
   const b = currentPositions.map((t) => placeJson(type, currentData, t));
   const pairs = lcsPairs(a, b);

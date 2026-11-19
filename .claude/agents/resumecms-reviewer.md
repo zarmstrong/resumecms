@@ -28,7 +28,7 @@ in prose; check the diff against the ones that apply, especially:
   (context only), and every custom merge keeps it as stored. The editor's
   staleness check ignores it (legacy items compared as the form rewrites
   them), relocation keeps it (entries that differ only by date are told
-  apart by it), and `applyProposal()` keeps the current date only where it can
+  apart by it) except when only dates changed (then nothing moves), and `applyProposal()` keeps the current date only where it can
   tell which item is which: an item rewrite's own item, a block rewrite's
   items by position only while the proposal isn't stale (otherwise the
   proposal's own dates). A custom item without a date renders the same
