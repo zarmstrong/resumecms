@@ -8,7 +8,8 @@
    continuous run instead of broken segments. */
 .r-layout-timeline .r-body [data-block-type='experience'],
 .r-layout-timeline .r-body [data-block-type='education'],
-.r-layout-timeline .r-body [data-block-type='credentials'] {
+.r-layout-timeline .r-body [data-block-type='credentials'],
+.r-layout-timeline .r-body [data-block-type='publications'] {
   position: relative;
   padding-left: 22px;
   margin-bottom: 18px;
@@ -23,7 +24,9 @@
 .r-layout-timeline .r-body [data-block-type='credentials']:has(+ [data-block-type='experience']),
 .r-layout-timeline .r-body [data-block-type='credentials']:has(+ [data-block-type='education']),
 .r-layout-timeline .r-body [data-block-type='credentials']:has(+ [data-block-type='credentials']),
-.r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='credentials']) {
+.r-layout-timeline .r-body [data-block-type='education']:has(+ [data-block-type='credentials']),
+.r-layout-timeline .r-body [data-block-type='publications']:has(+ :is([data-block-type='experience'], [data-block-type='education'], [data-block-type='credentials'], [data-block-type='publications'])),
+.r-layout-timeline .r-body :is([data-block-type='experience'], [data-block-type='education'], [data-block-type='credentials']):has(+ [data-block-type='publications']) {
   /* On a highlighted entry that gap goes below its box's inset, and the
      box (see .r-block-highlight) stops short of it. A spaceBelow preset
      sets both inline instead. */
@@ -34,7 +37,8 @@
 
 .r-layout-timeline .r-body [data-block-type='experience']::before,
 .r-layout-timeline .r-body [data-block-type='education']::before,
-.r-layout-timeline .r-body [data-block-type='credentials']::before {
+.r-layout-timeline .r-body [data-block-type='credentials']::before,
+.r-layout-timeline .r-body [data-block-type='publications']::before {
   content: '';
   position: absolute;
   left: -7px;
@@ -51,6 +55,7 @@
 
 .r-layout-timeline .r-body [data-block-type='experience'] .r-experience,
 .r-layout-timeline .r-body [data-block-type='education'] .r-education,
-.r-layout-timeline .r-body [data-block-type='credentials'] .r-credential {
+.r-layout-timeline .r-body [data-block-type='credentials'] .r-credential,
+.r-layout-timeline .r-body [data-block-type='publications'] .r-publication {
   margin-bottom: 0;
 }

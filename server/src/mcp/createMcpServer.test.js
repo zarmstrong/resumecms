@@ -673,3 +673,19 @@ test('MCP creates a credential and documents its schema', async (t) => {
   const schema = (await call('get_block_schemas', { type: 'credentials' })).json.schema;
   assert.deepEqual(schema.properties.kind.enum, ['license', 'certification', 'membership']);
 });
+
+test('MCP creates a publication and documents its schema', async (t) => {
+  const { call, close } = await connect(fakeStore());
+  t.after(close);
+  const heading = (await call('create_block', { type: 'heading', data: { text: 'Publications' } })).json.block;
+  const data = { kind: 'article', title: 'A Study of Things', outlet: 'Journal of Examples', date: '2024', url: 'https://example.com/study', doi: '10.1234/abcd', note: 'invited' };
+  const created = await call('create_block', { type: 'publications', parentId: heading.id, data });
+  assert.equal(created.isError, false);
+  assert.equal(created.json.block.type, 'publications');
+  assert.equal(created.json.block.parentId, heading.id);
+  assert.deepEqual(created.json.block.data, data);
+  const schemas = await call('get_block_schemas');
+  assert.ok(schemas.json.blocks.publications);
+  const schema = (await call('get_block_schemas', { type: 'publications' })).json.schema;
+  assert.deepEqual(schema.properties.kind.enum, ['article', 'paper', 'book', 'chapter', 'talk', 'podcast', 'press']);
+});

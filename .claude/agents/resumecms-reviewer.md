@@ -24,6 +24,8 @@ in prose; check the diff against the ones that apply, especially:
   placeholders, `letterResumeContext()`/`planOutline()`/`resumeOutline()`
   filters kept. Resume credentials are never rewritten or dropped when expired;
   their numbers never enter AI context, and verification links are absolute http/https.
+  Resume publications are never rewritten, their URL and DOI never enter AI
+  context, and only absolute http/https URLs are linked.
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing

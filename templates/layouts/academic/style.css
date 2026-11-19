@@ -1,8 +1,8 @@
 /* "academic": an academic CV. Dates sit in a left-hand gutter and each
    entry hangs beside them, so a long, multi-page list of positions,
-   degrees and credentials reads by year. Section headings are dense small
-   caps, and nothing in the body is filled or tinted. The header keeps
-   whatever header style is chosen independently.
+   degrees, credentials and publications reads by year. Section headings
+   are dense small caps, and nothing in the body is filled or tinted. The
+   header keeps whatever header style is chosen independently.
 
    The gutter is 7.5em plus a 1em gap, in the entry's own font size; rows
    in a smaller font divide by it so every gutter is the same width. */
@@ -11,15 +11,16 @@
    display: contents so its children are grid items. Both are pinned to
    row 1: with only a column set, auto-placement would put the dates, whose
    column comes before the title's, on the next row. A credential has no
-   dates in its top row, so its gutter stays empty. */
-.r-layout-academic .r-body :is(.r-experience, .r-education, .r-credential) {
+   dates in its top row, so its gutter stays empty; a publication's date
+   sits there like an entry's. */
+.r-layout-academic .r-body :is(.r-experience, .r-education, .r-credential, .r-publication) {
   display: grid;
   grid-template-columns: 7.5em minmax(0, 1fr);
   column-gap: 1em;
   margin-bottom: var(--r-block-space-below, 12px);
 }
 
-.r-layout-academic .r-body :is(.r-experience, .r-education, .r-credential) > * {
+.r-layout-academic .r-body :is(.r-experience, .r-education, .r-credential, .r-publication) > * {
   grid-column: 2;
 }
 
@@ -119,7 +120,7 @@
     break-after: avoid;
   }
 
-  .r-layout-academic .r-body :is(.r-education, .r-credential, .r-skills-row, .r-custom-item) {
+  .r-layout-academic .r-body :is(.r-education, .r-credential, .r-publication, .r-skills-row, .r-custom-item) {
     break-inside: avoid;
   }
 }
@@ -128,7 +129,7 @@
    (this restates resume.css's narrow rule, which display: contents above
    would otherwise override). */
 @media screen and (max-width: 640px) {
-  .r-layout-academic .r-body :is(.r-experience, .r-education, .r-credential) {
+  .r-layout-academic .r-body :is(.r-experience, .r-education, .r-credential, .r-publication) {
     display: block;
   }
 

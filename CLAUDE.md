@@ -9,8 +9,9 @@ the full product description, environment variables, and API reference).
 Content is a reorderable list of **blocks** (`{ id, type, position, parentId,
 visibleWeb, visiblePrint, data }`); built-in types are `heading`, `summary`,
 `executive_summary` (headline, overview, `highlights` list), `skills_group`,
-`experience`, `education`, `credentials`, plus a freeform `custom` type. `experience`,
-`skills_group`, `education`, `credentials`, `custom`, and `executive_summary` blocks may each nest
+`experience`, `education`, `credentials`, `publications`, plus a freeform
+`custom` type. `experience`, `skills_group`, `education`, `credentials`,
+`publications`, `custom`, and `executive_summary` blocks may each nest
 one level deep under a `heading` block via `parentId` — this is an explicit
 allowlist (`NESTABLE_TYPES` in `resumeStore.js`), not "everything but
 heading/summary", so a new block type added later is top-level-only until
@@ -1122,8 +1123,9 @@ passes the error on. Keep it the last `app.use()`.
 ### Block nesting
 
 A block's `parentId` (nullable, on the `blocks` table and in the API) points
-at a `heading` block's `id`; only `experience`, `skills_group`, `education`, `credentials`,
-`custom`, and `executive_summary` blocks can be nested, and only one level deep — a `heading`
+at a `heading` block's `id`; only `experience`, `skills_group`, `education`,
+`credentials`, `publications`, `custom`, and `executive_summary` blocks can be
+nested, and only one level deep — a `heading`
 can't itself have a `parentId`, and `summary` can't have one at all. This is
 enforced server-side in `server/src/resumeStore.js`'s `assertValidParent`,
 called from every store method that can set `parentId` (`createBlock`,
@@ -1425,6 +1427,19 @@ education's, including consecutive timeline entries. The pure
 reading; verification links require absolute http/https URLs. Credentials
 are factual context, never rewritten; their number is public but never sent
 to the AI. A tailoring plan can hide an individual credential.
+
+A `publications` block (issue #214) holds one published work or appearance,
+with `kind` (the landing section's `PUBLICATION_KINDS`), `title`, `outlet`,
+`date`, `url`, `doi` and `note`. It nests under a heading and stays in the
+main column (never the sidebar rail). Its title links to `url` when that is
+an absolute http/https URL, else to the DOI's doi.org address
+(`client/src/resume/publications.js`, reusing `landing/publications.js`'s
+`doiUrl()`). It reuses the entry markup (`.r-experience-top`,
+`.r-experience-dates`), so the date sits at the right of the title in every
+layout and in the Academic CV's date column; entry layouts add its selectors
+beside credentials'. Custom blocks are unchanged by it. Publications are
+factual context, never rewritten; their URL and DOI never go to the AI. A
+tailoring plan can hide an individual publication.
 
 ### AI rewrites
 

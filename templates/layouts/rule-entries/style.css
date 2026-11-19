@@ -2,7 +2,8 @@
    type, instead of boxing each one in a card (compare boxed/soft-cards). */
 .r-layout-rule-entries .r-body [data-block-type='experience'] + [data-block-type='experience'],
 .r-layout-rule-entries .r-body [data-block-type='education'] + [data-block-type='education'],
-.r-layout-rule-entries .r-body [data-block-type='credentials'] + [data-block-type='credentials'] {
+.r-layout-rule-entries .r-body [data-block-type='credentials'] + [data-block-type='credentials'],
+.r-layout-rule-entries .r-body [data-block-type='publications'] + [data-block-type='publications'] {
   border-top: 1px solid var(--line);
   padding-top: 16px;
 }

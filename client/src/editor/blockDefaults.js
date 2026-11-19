@@ -6,13 +6,14 @@ export const BLOCK_TYPE_LABELS = {
   experience: 'Experience Entry',
   education: 'Education Entry',
   credentials: 'Credential',
+  publications: 'Publication',
   custom: 'Custom Block',
 };
 
 // Mirrors NESTABLE_TYPES in server/src/resumeStore.js: these are the only
 // types that can live under a heading. `heading` can't nest (no multi-level
 // sections) and `summary` always stays top-level.
-export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'credentials', 'custom', 'executive_summary']);
+export const NESTABLE_TYPES = new Set(['experience', 'skills_group', 'education', 'credentials', 'publications', 'custom', 'executive_summary']);
 
 export const CUSTOM_BODY_TYPES = [
   { value: 'text', label: 'Text' },
@@ -54,6 +55,8 @@ export function defaultDataForType(type) {
       return { degree: 'Degree', institution: 'Institution', location: '', startDate: '', endDate: '' };
     case 'credentials':
       return { kind: 'certification', name: 'Credential name', issuer: '', number: '', issued: '', expires: '', url: '' };
+    case 'publications':
+      return { kind: 'paper', title: 'Publication title', outlet: '', date: '', url: '', doi: '', note: '' };
     case 'custom':
       return { title: 'Custom Section', items: [defaultCustomItem()] };
     default:

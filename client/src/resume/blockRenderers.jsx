@@ -1,4 +1,5 @@
 import { credentialKindLabel, credentialHref, credentialMeta } from './credentials.js';
+import { publicationHref, publicationKindLabel } from './publications.js';
 import { normalizeBullet } from './bulletUtils.js';
 import { safeHref, linkProps } from './safeUrl.js';
 import { headingFontSize } from './blockStyle.js';
@@ -167,6 +168,21 @@ export function CredentialsBlock({ data }) {
   );
 }
 
+export function PublicationsBlock({ data }) {
+  const href = publicationHref(data);
+  const meta = [publicationKindLabel(data.kind), data.outlet].filter(Boolean).join(' · ');
+  return (
+    <div className="r-publication">
+      <div className="r-experience-top">
+        <div className="r-experience-title">{href ? <a {...linkProps(href)}>{data.title}</a> : data.title}</div>
+        {data.date ? <div className="r-experience-dates">{data.date}</div> : null}
+      </div>
+      <div className="r-experience-company">{meta}</div>
+      {data.note ? <div className="r-publication-note">{data.note}</div> : null}
+    </div>
+  );
+}
+
 function CustomItemBody({ item }) {
   switch (item.bodyType) {
     case 'list':
@@ -227,5 +243,6 @@ export const BLOCK_RENDERERS = {
   experience: ExperienceBlock,
   education: EducationBlock,
   credentials: CredentialsBlock,
+  publications: PublicationsBlock,
   custom: CustomBlock,
 };

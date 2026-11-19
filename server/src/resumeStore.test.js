@@ -798,3 +798,28 @@ test('credentials round trip, nest, reorder, publish and follow public visibilit
 test("the editor's NESTABLE_TYPES mirrors the server's", () => {
   assert.deepEqual([...CLIENT_NESTABLE_TYPES].sort(), [...NESTABLE_TYPES].sort());
 });
+
+test('publications round trip, nest, publish and follow public visibility', async (t) => {
+  const { store, db, pdfDir, setting } = makeStore();
+  t.after(() => { db.close(); fs.rmSync(pdfDir, { recursive: true, force: true }); });
+  const heading = store.createBlock({ type: 'heading', data: { text: 'Publications' } });
+  const first = store.createBlock({ type: 'publications', data: { kind: 'paper', title: 'First', outlet: 'Journal', doi: '10.1234/abcd', date: '2024' } });
+  const second = store.createBlock({ type: 'publications', parentId: heading.id, data: { title: 'Second' } });
+  assert.deepEqual(store.updateBlock(first.id, { data: { title: 'Replaced', outlet: 'Press' } }).data, { title: 'Replaced', outlet: 'Press' });
+  assert.deepEqual(store.updateBlock(first.id, { data: { kind: 'talk', note: 'invited' } }, { mergeData: true }).data, { title: 'Replaced', outlet: 'Press', kind: 'talk', note: 'invited' });
+  assert.equal(store.updateBlock(first.id, { parentId: heading.id }).parentId, heading.id);
+  assert.throws(() => store.createBlock({ type: 'publications', parentId: second.id }), { status: 400 });
+  assert.throws(() => store.updateBlock(first.id, { parentId: second.id }), { status: 400 });
+  assert.throws(() => store.createBlock({ type: 'publications', data: { doi: 42 } }), { status: 400 });
+  store.updateBlock(first.id, { visibleWeb: false });
+  await store.publish();
+  const snapshot = setting('published_resume');
+  assert.deepEqual(snapshot.blocks.find((b) => b.id === first.id).data, store.getBlock(first.id).data);
+  assert.equal(snapshot.blocks.find((b) => b.id === second.id).type, 'publications');
+  const { blocksForMode } = await import('./publicBlocks.js');
+  const web = blocksForMode(snapshot.blocks, 'web');
+  assert.deepEqual(web.find((b) => b.id === first.id).data, {});
+  assert.equal(web.find((b) => b.id === first.id).hidden, true);
+  assert.equal(web.find((b) => b.id === second.id).data.title, 'Second');
+  assert.equal(blocksForMode(snapshot.blocks, 'print').find((b) => b.id === first.id).data.note, 'invited');
+});

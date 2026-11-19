@@ -2,7 +2,8 @@
    soft drop shadow instead of a hard border (compare templates/layouts/boxed). */
 .r-layout-soft-cards .r-body [data-block-type='experience'],
 .r-layout-soft-cards .r-body [data-block-type='education'],
-.r-layout-soft-cards .r-body [data-block-type='credentials'] {
+.r-layout-soft-cards .r-body [data-block-type='credentials'],
+.r-layout-soft-cards .r-body [data-block-type='publications'] {
   background: var(--r-bg, #ffffff);
   border-radius: var(--radius);
   padding: 16px 18px;
@@ -17,6 +18,7 @@
 
 .r-layout-soft-cards .r-body [data-block-type='experience'] .r-experience,
 .r-layout-soft-cards .r-body [data-block-type='education'] .r-education,
-.r-layout-soft-cards .r-body [data-block-type='credentials'] .r-credential {
+.r-layout-soft-cards .r-body [data-block-type='credentials'] .r-credential,
+.r-layout-soft-cards .r-body [data-block-type='publications'] .r-publication {
   margin-bottom: 0;
 }

@@ -8,3 +8,8 @@ test('credentials share the education rail unless the section contains main cont
   assert.equal(classifySkillsEducationAuto(group('credentials', 'education')), 'secondary');
   assert.equal(classifySkillsEducationAuto(group('credentials', 'experience')), 'primary');
 });
+
+test('publications stay in the main column', () => {
+  const group = (...types) => ({ blocks: ['heading', ...types].map((type) => ({ type })) });
+  assert.equal(classifySkillsEducationAuto(group('publications')), 'primary');
+});

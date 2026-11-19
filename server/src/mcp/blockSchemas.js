@@ -16,7 +16,7 @@ const COMMON = {
     visibleWeb: 'boolean — show on the public web page (default true)',
     visiblePrint: 'boolean — show in the print/PDF version (default true)',
     parentId:
-      'string | null — id of a top-level heading to nest under. Only experience, skills_group, education, credentials, custom, and executive_summary blocks can be nested, one level deep.',
+      'string | null — id of a top-level heading to nest under. Only experience, skills_group, education, credentials, publications, custom, and executive_summary blocks can be nested, one level deep.',
   },
   dataStyle: {
     description: 'Optional `data.style` object on any block type for per-block spacing, alignment, and emphasis.',
@@ -26,7 +26,7 @@ const COMMON = {
       align: {
         enum: ['', 'left', 'center', 'right'],
         description:
-          "Text alignment for the block; '' or omitted = template default. Honored on heading, summary, executive_summary, skills_group, and custom blocks; ignored on experience, education and credentials. A custom block with no title and one centered text or link item makes a one-line footer such as 'More work history at example.com'.",
+          "Text alignment for the block; '' or omitted = template default. Honored on heading, summary, executive_summary, skills_group, and custom blocks; ignored on experience, education, credentials and publications. A custom block with no title and one centered text or link item makes a one-line footer such as 'More work history at example.com'.",
       },
       highlight: { type: 'boolean', description: 'Draw the block with a highlight background' },
     },
@@ -158,6 +158,20 @@ export const BLOCK_DATA_SCHEMAS = {
       style: { $ref: 'dataStyle' },
     },
     example: { kind: 'certification', name: 'Professional Certification', issuer: 'Institute', number: '123', issued: 'Mar 2024', expires: 'Mar 2027', url: 'https://example.com/verify/123' },
+  },
+  publications: {
+    description: 'One published work or appearance: an article, paper, book, chapter, talk, podcast or press piece.',
+    properties: {
+      kind: { enum: ['article', 'paper', 'book', 'chapter', 'talk', 'podcast', 'press'] },
+      title: { type: 'string' },
+      outlet: { type: 'string', description: 'Where it appeared: a journal, publisher, conference or show' },
+      date: { type: 'string', description: 'Free-form date, shown as written; the academic layout puts it in its date column' },
+      url: { type: 'string', description: 'Link for the title, used only when it is an absolute http/https URL' },
+      doi: { type: 'string', description: 'A DOI such as 10.1234/abcd; the title links to https://doi.org/<doi> when there is no url' },
+      note: { type: 'string', description: 'Optional plain-text note, such as co-authors or "invited"' },
+      style: { $ref: 'dataStyle' },
+    },
+    example: { kind: 'paper', title: 'A Study of Things', outlet: 'Journal of Examples', date: '2024', url: '', doi: '10.1234/abcd', note: 'with A. Author' },
   },
   custom: {
     description: 'A freeform section: a title and a list of items, each with a heading and a body of one of four kinds.',

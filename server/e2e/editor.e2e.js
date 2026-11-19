@@ -686,3 +686,58 @@ flow('adds a credential, warns on expiry, and preserves its data after reload', 
   assert.deepEqual(stored.data, { kind: 'certification', name: text, issuer: '', number: '', issued: '', expires: 'Jan 2000', url: '' });
   await page.waitForFunction((name) => [...document.querySelectorAll('.r-credential .r-experience-title')].some((el) => el.textContent === name), {}, text);
 });
+
+flow('adds a publication, links its DOI, and preserves its data after reload', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const created = nextResponse(page, 'POST', `/api/resumes/${resumeId}/blocks`);
+  await page.click('xpath/.//button[normalize-space()="+ Publication"]');
+  const response = await created;
+  assert.equal(response.status(), 201);
+  const { block } = await response.json();
+  assert.equal(block.type, 'publications');
+  const row = await page.waitForSelector('xpath/.//div[contains(@class, "ed-block-row")][.//span[@class="ed-block-type"][.="Publication"]]');
+  await (await row.$('.ed-block-summary')).click();
+  const title = await row.waitForSelector('xpath/.//label[span[1][.="Title"]]/input');
+  const date = await row.waitForSelector('xpath/.//label[span[1][.="Date"]]/input');
+  const doi = await row.waitForSelector('xpath/.//label[span[1][.="DOI"]]/input');
+  const text = `Browser publication ${Date.now()}`;
+  await setText(title, text);
+  await setText(date, '2024');
+  // Wait specifically for the save containing all three edits: the title's
+  // debounce could have fired before setting the DOI on a busy runner.
+  const saved = page.waitForResponse((r) => {
+    if (!isPut(`/api/resumes/${resumeId}/blocks/${block.id}`)(r.request())) return false;
+    const data = JSON.parse(r.request().postData()).data;
+    return data.title === text && data.date === '2024' && data.doi === '10.1234/abcd';
+  });
+  saved.catch(() => {});
+  await setText(doi, '10.1234/abcd');
+  await page.waitForFunction(
+    ({ text }) => {
+      const link = document.querySelector('.r-publication .r-experience-title a');
+      return link?.textContent === text && link.getAttribute('href') === 'https://doi.org/10.1234/abcd';
+    },
+    { polling: 'mutation' },
+    { text }
+  );
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.r-publication .r-experience-dates')].some((el) => el.textContent.trim() === '2024'),
+    { polling: 'mutation' }
+  );
+  assert.equal((await saved).status(), 200);
+  // The status leaves "Saving…" for "Saved", which lasts only 1.2 s before
+  // the idle text, so wait for anything but "Saving…" (see the credential
+  // flow above for why the response alone isn't the end of the save).
+  await page.waitForFunction(
+    () => {
+      const status = document.querySelector('.ed-topbar-status')?.textContent.trim();
+      return Boolean(status) && !status.startsWith('Saving');
+    },
+    { polling: 'mutation' }
+  );
+  await page.reload();
+  await page.waitForSelector(RESUME_SELECT);
+  const stored = await draftBlock(page, resumeId, block.id);
+  assert.deepEqual(stored.data, { kind: 'paper', title: text, outlet: '', date: '2024', url: '', doi: '10.1234/abcd', note: '' });
+});

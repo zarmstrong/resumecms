@@ -678,9 +678,24 @@
   color: inherit;
 }
 
+/* A publication's note (co-authors, "invited"), muted like a credential's
+   details line. */
+.r-publication-note {
+  font-family: var(--font-ui);
+  font-size: 0.8125em;
+  color: var(--slate);
+}
+
+/* The title is the link, in the title's own color (underlined, so still a
+   link), like a credential's Verify link. */
+.r-publication .r-experience-title a {
+  color: inherit;
+}
+
 .r-experience,
 .r-education,
-.r-credential {
+.r-credential,
+.r-publication {
   margin-top: var(--r-block-space-above, 0);
   margin-bottom: var(--r-block-space-below, 18px);
 }

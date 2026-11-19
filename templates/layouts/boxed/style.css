@@ -2,7 +2,8 @@
    same margin-zeroing approach as the timeline layout. */
 .r-layout-boxed .r-body [data-block-type='experience'],
 .r-layout-boxed .r-body [data-block-type='education'],
-.r-layout-boxed .r-body [data-block-type='credentials'] {
+.r-layout-boxed .r-body [data-block-type='credentials'],
+.r-layout-boxed .r-body [data-block-type='publications'] {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 16px 18px;
@@ -14,6 +15,7 @@
 
 .r-layout-boxed .r-body [data-block-type='experience'] .r-experience,
 .r-layout-boxed .r-body [data-block-type='education'] .r-education,
-.r-layout-boxed .r-body [data-block-type='credentials'] .r-credential {
+.r-layout-boxed .r-body [data-block-type='credentials'] .r-credential,
+.r-layout-boxed .r-body [data-block-type='publications'] .r-publication {
   margin-bottom: 0;
 }
