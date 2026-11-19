@@ -1436,7 +1436,7 @@ goes through). `CustomBlock` gives only a dated item the heading row
 `.r-custom-item-date`) so it takes the entry dates' look, pill and
 layout overrides; an item without one renders exactly the markup it did
 before, so existing resumes and PDFs don't change. Being free text, the
-date may wrap (an entry's never does): it never shrinks, but a long one
+date may wrap (an entry's does only in `academic`): it never shrinks, but a long one
 stops at 40% of the row and wraps there, right-aligned (the block's own
 alignment wherever the row stacks). The row stacks where
 `.r-experience-top` does (narrow screens, the sidebar rail), a centered
