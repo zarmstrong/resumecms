@@ -7,7 +7,7 @@
 // Run with `npm run test:browser` from server/, after `npm run build` in
 // client/. A failed flow leaves a screenshot (see saveScreenshot()).
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { PASSWORD, REPO_ROOT, USERNAME, launchBrowser, saveScreenshot, startServer } from './harness.js';
@@ -685,4 +685,35 @@ flow('adds a credential, warns on expiry, and preserves its data after reload', 
   const stored = await draftBlock(page, resumeId, block.id);
   assert.deepEqual(stored.data, { kind: 'certification', name: text, issuer: '', number: '', issued: '', expires: 'Jan 2000', url: '' });
   await page.waitForFunction((name) => [...document.querySelectorAll('.r-credential .r-experience-title')].some((el) => el.textContent === name), {}, text);
+});
+
+// Issue #222: a link's type letter is drawn as a path, never as text, so a
+// PDF's text layer (what an ATS parser reads) holds only the link itself.
+// Every header, through the template preview's sample header and its link.
+flow('every header draws its link badges as paths, not text', async ({ page }) => {
+  const headers = readdirSync(path.join(REPO_ROOT, 'templates/headers'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  let badged = 0;
+  for (const header of headers) {
+    await page.goto(`${server.baseUrl}/template-preview?header=${header}`);
+    await page.waitForSelector('.r-header');
+    const found = await page.evaluate(() => {
+      const glyphs = [...document.querySelectorAll('.r-header .r-link-badge, .r-header .r-link-glyph')];
+      const chips = [...document.querySelectorAll('.r-header a.r-contact-chip:has(.r-link-glyph)')];
+      return {
+        count: glyphs.length,
+        texts: glyphs.map((el) => el.textContent),
+        drawn: glyphs.every((el) => el.matches('svg') ? el.querySelector('path') : el.querySelector('svg path')),
+        hidden: glyphs.every((el) => el.closest('[aria-hidden="true"]')),
+        chips: chips.map((el) => el.textContent),
+      };
+    });
+    assert.ok(found.texts.every((text) => text === ''), `${header}: no badge holds text (${JSON.stringify(found.texts)})`);
+    assert.ok(found.drawn, `${header}: every badge draws its letter as a path`);
+    assert.ok(found.hidden, `${header}: every badge is aria-hidden`);
+    assert.ok(found.chips.every((text) => text === 'linkedin.com/in/you'), `${header}: a link chip's text is its label alone (${JSON.stringify(found.chips)})`);
+    if (found.count) badged += 1;
+  }
+  assert.ok(badged >= 16, `most headers draw a badge (${badged} of ${headers.length})`);
 });

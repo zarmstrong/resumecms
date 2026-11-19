@@ -1,5 +1,6 @@
 import { linkProps } from '../resume/safeUrl.js';
 import { linkGlyph } from '../resume/linkTypes.js';
+import { LinkBadge } from '../resume/LinkGlyph.jsx';
 import { getLandingTemplate } from '../resume/templateRegistry.js';
 import { darkClass, landingPageStyle } from './landingStyle.js';
 import { textParagraphs } from './resolveLanding.js';
@@ -176,7 +177,7 @@ function SectionBody({ section, preview }) {
           {section.links.map((link, i) => (
             <li key={i}>
               <a {...linkProps(link.url)}>
-                <span className="r-link-badge">{linkGlyph(link)}</span>
+                <LinkBadge glyph={linkGlyph(link)} />
                 {link.label}
               </a>
             </li>

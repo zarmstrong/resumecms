@@ -159,6 +159,9 @@ in prose; check the diff against the ones that apply, especially:
   previews and the letter/card print routes stay lazy routes in
   `App.jsx`, the editor's CSS loads from its own entry, and a route
   rendered for a PDF or card sets `__PDF_READY__` only once drawn.
+- A decorative letter or icon on a resume (a link's badge) is a path
+  (`LinkGlyph.jsx`), never text, so a PDF's text layer holds only the
+  resume (issue #222).
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a
