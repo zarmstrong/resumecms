@@ -101,6 +101,8 @@ function ItemBodyFields({ item, onChange }) {
 function CustomItem({ item, index, setItem, setItemType, removeItem, aiPanel, aiEntry }) {
   const [aiOpen, setAiOpen] = useRowPanelOpen(aiEntry);
   const aiShown = Boolean(aiPanel && aiOpen);
+  // Each control names its item, since every item has the same ones.
+  const name = `Item ${index + 1}`;
   return (
     <div className="ed-custom-item">
       <div className="ed-field-row">
@@ -109,8 +111,9 @@ function CustomItem({ item, index, setItem, setItemType, removeItem, aiPanel, ai
           value={item.heading || ''}
           onChange={(e) => setItem(index, { heading: e.target.value })}
           placeholder="Optional item heading"
+          aria-label={`${name} heading`}
         />
-        <button type="button" className="ed-icon-btn" onClick={() => removeItem(index)} aria-label="Remove item">
+        <button type="button" className="ed-icon-btn" onClick={() => removeItem(index)} aria-label={`Remove item ${index + 1}`}>
           ✕
         </button>
         {aiPanel && (
@@ -118,7 +121,7 @@ function CustomItem({ item, index, setItem, setItemType, removeItem, aiPanel, ai
             type="button"
             className={`ed-icon-btn${aiShown ? ' ed-icon-btn-active' : ''}`}
             onClick={() => setAiOpen((open) => !open)}
-            aria-label="Rewrite item with AI"
+            aria-label={`Rewrite item ${index + 1} with AI`}
             aria-expanded={aiShown}
             title="Rewrite this item with AI"
           >
@@ -133,13 +136,14 @@ function CustomItem({ item, index, setItem, setItemType, removeItem, aiPanel, ai
           value={item.date || ''}
           onChange={(e) => setItem(index, { date: e.target.value })}
           placeholder="Date"
-          aria-label="Item date (optional)"
+          aria-label={`${name} date (optional)`}
           title="Optional, e.g. 2021: shown beside the heading"
         />
         <select
           className="ed-input ed-field-narrow"
           value={item.bodyType || 'text'}
           onChange={(e) => setItemType(index, e.target.value)}
+          aria-label={`${name} body type`}
         >
           {CUSTOM_BODY_TYPES.map(({ value, label }) => (
             <option key={value} value={value}>

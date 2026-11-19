@@ -104,8 +104,9 @@ function withoutDescription(type, data) {
 
 // A custom item's date (issue #214) is never rewritten: the server reads
 // it as context only and copies it through. So no target owns it, and a
-// date edited while a proposal is open neither makes it stale nor is
-// undone by accepting it (applyProposal keeps the current dates).
+// date edited while a proposal is open doesn't make it stale, nor is it
+// undone by accepting the proposal (applyProposal keeps the current dates
+// wherever it can still tell which item is which).
 /** @param {any} item a stored item, or null for one that isn't there */
 function withoutDate(item) {
   if (!item || typeof item !== 'object' || !('date' in item)) return item;
@@ -170,7 +171,32 @@ function positionsOf(data, kind) {
   return (Array.isArray(data?.items) ? data.items : []).map((_, index) => ({ kind: 'item', index }));
 }
 
-const sliceJson = (type, data, target) => JSON.stringify(targetSlice(type, data, target) ?? null);
+// A custom item as it's compared (isProposalStale, relocateTarget), never
+// saved: as the editor's form writes it back. CustomForm normalizes every
+// legacy { heading, body } item of a block (adding bodyType and text) on
+// any edit to it, so without this an edit elsewhere in the block, a date's
+// included, would make the block's proposals stale. Keys are sorted, so
+// the order an edit leaves them in doesn't count either.
+/** @param {any} item */
+function comparableItem(item) {
+  if (!item || typeof item !== 'object') return item;
+  const normalized = item.bodyType ? item : { ...item, bodyType: 'text', text: item.body };
+  return Object.fromEntries(Object.keys(normalized).sort().map((key) => [key, normalized[key]]));
+}
+
+/**
+ * @param {string} type
+ * @param {any} slice targetSlice() of `target`
+ * @param {AiTarget | null | undefined} target
+ */
+function comparableSlice(type, slice, target) {
+  if (type !== 'custom') return slice;
+  if (target?.kind === 'item') return comparableItem(slice);
+  if (targetKey(target) === 'block' && Array.isArray(slice?.items)) return { ...slice, items: slice.items.map(comparableItem) };
+  return slice;
+}
+
+const sliceJson = (type, data, target) => JSON.stringify(comparableSlice(type, targetSlice(type, data, target), target) ?? null);
 
 // Longest-common-subsequence pairs [i, j] (in order) between two lists of
 // strings. Lists here are a block's bullets or items (or a cover letter's
@@ -298,14 +324,18 @@ export function applyProposal(type, currentData, proposal) {
     }
     default: {
       // A custom block's item dates, like an experience description below,
-      // are the current ones: the proposal's are only copies. Its items
-      // are matched by position, which holds while the count does (a block
-      // rewrite can't change it); otherwise the block was edited since and
-      // its proposal's dates are the ones it was made against.
+      // are the current ones: the proposal's are only copies. Items have no
+      // ids, so a current date is matched to a proposed item by position,
+      // and only while the proposal isn't stale (every item but its date is
+      // as the proposal was made for, so position i is still the same
+      // item). Once items were added, removed, reordered or edited, the
+      // positions can't be trusted, and the proposal keeps the dates it was
+      // made against, which a rewrite never changes.
       if (type === 'custom') {
         const items = proposedData.items;
         const current = currentData.items;
         if (!Array.isArray(items) || !Array.isArray(current) || items.length !== current.length) return proposedData;
+        if (isProposalStale(type, proposal, currentData)) return proposedData;
         return { ...proposedData, items: items.map((item, i) => withDateOf(item, current[i])) };
       }
       // The proposal's description is just the old one copied through, so

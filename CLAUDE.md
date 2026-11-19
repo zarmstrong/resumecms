@@ -1443,8 +1443,15 @@ into the date column, as for its entries. `blockData.js` and
 `mcp/blockSchemas.js` list the key. The AI never writes it: it's not in
 any custom target's editable set or schema, the merges spread the stored
 item so it comes through as stored, and the editor's `targetSlice()`
-leaves it out (a date edit doesn't make a proposal stale) while
-`applyProposal()` keeps the current one. It is read-only context
+leaves it out. Its staleness check also compares custom items as the
+form writes them back (a legacy item with its `bodyType` and `text`
+added, keys sorted: `comparableItem()`), so a date edit alone, even
+on a block of legacy items, makes no proposal stale. `applyProposal()`
+keeps the current date: an item rewrite's from the item at its target,
+a block rewrite's by position, but only while the proposal isn't stale
+(items have no ids, so once they've been added, removed, reordered or
+edited it keeps the dates it was made against rather than put one
+item's date on another). It is read-only context
 (`itemDates`, or `itemDate` and each other item's `date` for an item
 target, sent only when an item has one, with a prompt rule not to put it
 in the text), as an experience entry's dates are, and goes with

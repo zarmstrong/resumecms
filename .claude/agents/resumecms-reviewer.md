@@ -25,9 +25,13 @@ in prose; check the diff against the ones that apply, especially:
   filters kept. Resume credentials are never rewritten or dropped when expired;
   their numbers never enter AI context, and verification links are absolute http/https.
   A custom item's `date` is never in a rewrite's editable set or schema
-  (context only), every custom merge keeps it as stored, and the editor's
-  `applyProposal()` keeps the current one; a custom item without a date
-  renders the same markup as before it existed.
+  (context only), and every custom merge keeps it as stored. The editor's
+  staleness check ignores it (legacy items compared as the form rewrites
+  them), and `applyProposal()` keeps the current date only where it can
+  tell which item is which: an item rewrite's own item, a block rewrite's
+  items by position only while the proposal isn't stale (otherwise the
+  proposal's own dates). A custom item without a date renders the same
+  markup as before it existed.
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing

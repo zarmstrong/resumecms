@@ -256,6 +256,66 @@ test("a custom proposal keeps every item's current date and doesn't go stale ove
   assert.deepEqual(relocateTarget('custom', { target: { kind: 'item', index: 1 }, baseData: base }, current), { kind: 'item', index: 1 });
 });
 
+// Dates go by position only while the positions still mean the same items:
+// once the block's items changed, a stale proposal keeps the dates it was
+// made against rather than putting another item's date on each.
+test('a stale custom block proposal keeps its own dates, never a moved item\'s', () => {
+  const item = (heading, date) => ({ heading, bodyType: 'text', text: heading.toLowerCase(), ...(date ? { date } : {}) });
+  const base = { title: 'Pubs', items: [item('A', '2021'), item('B', '2019'), item('C', '2015')] };
+  const proposedData = { title: 'Pubs', items: [item("A'", '2021'), item("B'", '2019'), item("C'", '2015')] };
+  const proposal = { target: BLOCK_TARGET, baseData: base, proposedData };
+  const datesOf = (data) => data.items.map((it) => it.date);
+
+  // A removed and an undated D added: same count, different items.
+  const swapped = { ...base, items: [base.items[1], base.items[2], item('D')] };
+  assert.equal(isProposalStale('custom', proposal, swapped), true);
+  assert.deepEqual(datesOf(applyProposal('custom', swapped, proposal)), ['2021', '2019', '2015']);
+  assert.deepEqual(datesOf(previewData('custom', swapped, [proposal])), ['2021', '2019', '2015']);
+
+  // Reordered (say over MCP): same items, same count.
+  const reordered = { ...base, items: [base.items[2], base.items[0], base.items[1]] };
+  assert.equal(isProposalStale('custom', proposal, reordered), true);
+  assert.equal(applyProposal('custom', reordered, proposal), proposedData);
+
+  // A date-only edit still keeps the new date.
+  const redated = { ...base, items: [base.items[0], { ...base.items[1], date: '2020' }, base.items[2]] };
+  assert.equal(isProposalStale('custom', proposal, redated), false);
+  assert.deepEqual(datesOf(applyProposal('custom', redated, proposal)), ['2021', '2020', '2015']);
+});
+
+// The form writes every legacy { heading, body } item back with a bodyType
+// and text on any edit to its block, a date's included.
+test('a date edit on a block of legacy custom items makes none of its proposals stale', () => {
+  const base = { title: 'Talks', items: [{ heading: 'Conf', body: 'Spoke.' }, { heading: 'Meetup', body: 'Demoed.' }] };
+  const proposedData = {
+    title: 'Talks',
+    items: [
+      { heading: 'Conf', bodyType: 'text', text: 'Spoke well.' },
+      { heading: 'Meetup', bodyType: 'text', text: 'Demoed it.' },
+    ],
+  };
+  // As CustomForm leaves it after a date typed on the second item.
+  const current = {
+    title: 'Talks',
+    items: [
+      { heading: 'Conf', body: 'Spoke.', bodyType: 'text', text: 'Spoke.' },
+      { heading: 'Meetup', body: 'Demoed.', bodyType: 'text', text: 'Demoed.', date: '2024' },
+    ],
+  };
+  const block = { target: BLOCK_TARGET, baseData: base, proposedData };
+  assert.equal(isProposalStale('custom', block, current), false);
+  assert.deepEqual(applyProposal('custom', current, block).items.map((it) => it.date), [undefined, '2024']);
+  for (const index of [0, 1]) {
+    const proposal = { target: { kind: 'item', index }, baseData: base, proposedData };
+    assert.equal(isProposalStale('custom', proposal, current), false, `item ${index}`);
+    assert.deepEqual(relocateTarget('custom', proposal, current), { kind: 'item', index });
+  }
+  // Its text edited is still an edit.
+  const edited = { ...current, items: [{ ...current.items[0], text: 'Spoke twice.' }, current.items[1]] };
+  assert.equal(isProposalStale('custom', { target: { kind: 'item', index: 0 }, baseData: base, proposedData }, edited), true);
+  assert.equal(isProposalStale('custom', block, edited), true);
+});
+
 test('applyProposal for the whole block returns the proposed data', () => {
   const proposal = { target: BLOCK_TARGET, proposedData: { text: 'new' } };
   assert.deepEqual(applyProposal('summary', { text: 'old' }, proposal), { text: 'new' });
