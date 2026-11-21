@@ -26,6 +26,8 @@ test('well-formed data passes, including the documented examples, extras, and st
 test('a key of the wrong kind is a 400 that names it', () => {
   const fail = (type, data, re) => assert.throws(() => assertBlockData(type, data), (e) => e.status === 400 && re.test(e.message), `${type} ${JSON.stringify(data)}`);
   fail('credentials', { url: 42 }, /^data\.url: /);
+  fail('languages', { entries: 'x' }, /^data\.entries: /);
+  fail('languages', { entries: [{ language: 1 }] }, /^data\.entries\.0/);
   fail('experience', { bullets: 'not a list' }, /^data\.bullets: /);
   fail('experience', { bullets: [{ text: 1 }] }, /^data\.bullets\.0/);
   fail('experience', { bullets: [{ children: 'x' }] }, /^data\.bullets\.0\.children/);

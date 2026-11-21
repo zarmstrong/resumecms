@@ -678,6 +678,21 @@
   color: inherit;
 }
 
+/* A languages block: one wrapped line of "Spanish – Fluent" pairs, the
+   level muted like a credential's details. */
+.r-languages {
+  list-style: none;
+  margin: var(--r-block-space-above, 0) 0 var(--r-block-space-below, 12px);
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+}
+
+.r-language-level {
+  color: var(--slate);
+}
+
 .r-experience,
 .r-education,
 .r-credential {
