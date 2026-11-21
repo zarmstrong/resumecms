@@ -741,3 +741,60 @@ flow('adds a languages block and preserves its entries after reload', async ({ p
   const stored = await draftBlock(page, resumeId, block.id);
   assert.deepEqual(stored.data, { entries: expected });
 });
+
+flow('fills an entry\'s federal details and hides them from the web page', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const { body } = await api(page, `/api/resumes/${resumeId}/blocks`);
+  const experience = body.blocks.find((b) => b.type === 'experience');
+  assert.ok(experience, 'the sample resume has an experience entry');
+
+  const row = await page.waitForSelector('xpath/.//div[contains(@class, "ed-block-row")][.//span[@class="ed-block-type"][.="Experience Entry"]]');
+  await (await row.$('.ed-block-summary')).click();
+  const group = await row.waitForSelector('xpath/.//details[contains(@class, "ed-collapsible")][.//summary[contains(., "Federal and formal details")]]');
+  await (await group.$('summary')).click();
+  const hours = await group.waitForSelector('xpath/.//label[span[.="Hours per week"]]/input');
+  const supervisor = await group.waitForSelector('xpath/.//label[span[.="Supervisor"]]/input');
+  const contact = await group.waitForSelector('xpath/.//label[span[.="May we contact your supervisor?"]]/select');
+  const webVisible = await group.waitForSelector('xpath/.//label[span[.="Show on the web page"]]/input');
+
+  // The save with all three edits: the debounce may send an earlier one.
+  const saved = page.waitForResponse((r) => {
+    if (!isPut(`/api/resumes/${resumeId}/blocks/${experience.id}`)(r.request())) return false;
+    const data = JSON.parse(r.request().postData()).data;
+    return data.hoursPerWeek === '40' && data.supervisor === 'Jane Doe' && data.contactSupervisor === 'yes';
+  });
+  saved.catch(() => {});
+  await setText(hours, '40');
+  await setText(supervisor, 'Jane Doe');
+  await contact.select('yes');
+  assert.equal((await saved).status(), 200);
+
+  await page.waitForFunction(
+    () => document.querySelector('.r-experience-details')?.textContent === 'Hours per week: 40 · Supervisor: Jane Doe · May contact supervisor: Yes'
+  );
+
+  const hidden = page.waitForResponse((r) => {
+    if (!isPut(`/api/resumes/${resumeId}/blocks/${experience.id}`)(r.request())) return false;
+    return JSON.parse(r.request().postData()).data.detailsVisibleWeb === false;
+  });
+  hidden.catch(() => {});
+  await webVisible.click();
+  assert.equal((await hidden).status(), 200);
+  // The preview keeps the line, dimmed, like a bullet one surface hides.
+  await page.waitForSelector('.r-experience-details.r-experience-details-dimmed');
+
+  const published = await api(page, `/api/resumes/${resumeId}/publish`, { method: 'POST' });
+  assert.equal(published.status, 200);
+
+  const web = await api(page, '/api/public/resume?mode=web');
+  const webExperience = web.body.blocks.find((b) => b.id === experience.id);
+  assert.ok(webExperience, 'the web page carries the entry');
+  assert.equal(webExperience.data.supervisor, undefined, 'the web snapshot leaves the supervisor out');
+  assert.equal(webExperience.data.hoursPerWeek, undefined);
+
+  const print = await api(page, '/api/public/resume?mode=print');
+  const printExperience = print.body.blocks.find((b) => b.id === experience.id);
+  assert.equal(printExperience.data.supervisor, 'Jane Doe', 'the print view keeps the supervisor');
+  assert.equal(printExperience.data.hoursPerWeek, '40');
+});

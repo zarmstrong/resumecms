@@ -65,6 +65,11 @@ block — built-in or custom — has the same shape:
 Built-in block types: `heading`, `summary`, `executive_summary`,
 `skills_group`, `experience`, `education`, `credentials`, `languages`.
 
+An experience entry can also carry labelled details for a US federal or other
+formal resume (hours per week, series and grade, salary, supervisor, and
+whether they may be contacted), shown as one line under the company; each
+surface (web, print/PDF) can leave them off.
+
 A **credential** (`type: "credentials"`) holds one license, certification or
 membership: name, issuer, number, issued/expires dates and a verification URL.
 Expired credentials stay visible; the editor warns so you can update or hide

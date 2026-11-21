@@ -115,6 +115,13 @@ export const BLOCK_DATA_SCHEMAS = {
       endDate: { type: 'string', description: 'Free text, e.g. "Current"' },
       tagline: { type: 'string', description: 'One line about the company, shown under the title' },
       description: { type: 'string', description: 'Optional paragraph before the bullets' },
+      hoursPerWeek: { type: 'string', description: 'Optional, for a US federal or formal resume, e.g. "40"' },
+      grade: { type: 'string', description: 'Optional series and grade of a federal position, e.g. "GS-0343-11"' },
+      salary: { type: 'string', description: 'Optional, free text, e.g. "$85,000 per year"' },
+      supervisor: { type: 'string', description: "Optional supervisor's name and contact, as written; public wherever the details line shows" },
+      contactSupervisor: { enum: ['', 'yes', 'no'], description: "Whether the supervisor may be contacted; '' when not stated" },
+      detailsVisibleWeb: { type: 'boolean', description: 'Show the details line on the web page (default true)' },
+      detailsVisiblePrint: { type: 'boolean', description: 'Show the details line in print and the PDF (default true)' },
       bullets: {
         type: 'array',
         items: BULLET,

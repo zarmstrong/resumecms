@@ -1,6 +1,7 @@
 // @ts-check
 // Pure helpers behind the AI rewrite review panel (AiRewritePanel.jsx).
 import { normalizeBullet } from '../resume/bulletUtils.js';
+import { EXPERIENCE_DETAIL_FLAGS, EXPERIENCE_DETAIL_KEYS } from '../resume/experienceDetails.js';
 import { bulletAt, updateAtPath } from './bulletDrag.js';
 
 // Mirrors REWRITABLE_TYPES in server/src/ai/rewritableFields.js.
@@ -8,7 +9,8 @@ export const AI_REWRITABLE_TYPES = new Set(['heading', 'summary', 'executive_sum
 
 // What part of a block a rewrite is aimed at; see the server's
 // rewritableFields.js. `block` is the whole block (for an experience block,
-// everything but the description), `description` an experience block's
+// everything but the description and the labelled details, see
+// EXPERIENCE_UNOWNED), `description` an experience block's
 // description, `bullet` one experience bullet by index path ([i] with its
 // sub-bullets, or [i, j]), `item` one custom-section item.
 /**
@@ -93,17 +95,23 @@ export function describeTarget(target) {
 
 const normalizedBullets = (data) => (Array.isArray(data?.bullets) ? data.bullets.map((b) => normalizeBullet(b)) : []);
 
-// The whole block minus what a block target doesn't own: an experience
-// block's description has its own target, and the server copies it through
-// a block rewrite unchanged.
-function withoutDescription(type, data) {
-  if (type !== 'experience' || !data || !('description' in data)) return data;
-  const { description, ...rest } = data;
+// What an experience block target doesn't own: the description has its own
+// target, and the labelled details with their two visibility flags (issue
+// #223) are facts no rewrite touches. The server copies all of them through
+// a block rewrite unchanged, so a proposal's copy of them is only as old as
+// its request.
+const EXPERIENCE_UNOWNED = ['description', ...EXPERIENCE_DETAIL_KEYS, ...EXPERIENCE_DETAIL_FLAGS];
+
+// The whole block minus what a block target doesn't own.
+function ownedByBlock(type, data) {
+  if (type !== 'experience' || !data || !EXPERIENCE_UNOWNED.some((key) => key in data)) return data;
+  const rest = { ...data };
+  for (const key of EXPERIENCE_UNOWNED) delete rest[key];
   return rest;
 }
 
 // The part of `data` a target owns: for a block target, the whole data
-// (less an experience description).
+// (less an experience block's description and labelled details).
 /**
  * @param {string} type
  * @param {Record<string, any> | null | undefined} data
@@ -119,7 +127,7 @@ export function targetSlice(type, data, target = BLOCK_TARGET) {
     case 'item':
       return (Array.isArray(data.items) ? data.items[target.index] : null) ?? null;
     default:
-      return withoutDescription(type, data);
+      return ownedByBlock(type, data);
   }
 }
 
@@ -269,12 +277,17 @@ export function applyProposal(type, currentData, proposal) {
       return { ...currentData, items: currentData.items.map((item, i) => (i === target.index ? replacement : item)) };
     }
     default: {
-      // The proposal's description is just the old one copied through, so
-      // keep the current one: accepting mustn't undo a description edit (or
-      // an accepted description rewrite) made since.
+      // The proposal's description, details and details flags are just the
+      // old ones copied through, so keep the current ones: accepting mustn't
+      // undo a description edit (or an accepted description rewrite) made
+      // since, nor bring back a salary or supervisor removed since or show
+      // the details line on a surface it was hidden from since.
       if (type !== 'experience') return proposedData;
-      const next = withoutDescription(type, proposedData);
-      return currentData.description === undefined ? next : { ...next, description: currentData.description };
+      const next = { ...ownedByBlock(type, proposedData) };
+      for (const key of EXPERIENCE_UNOWNED) {
+        if (currentData[key] !== undefined) next[key] = currentData[key];
+      }
+      return next;
     }
   }
 }

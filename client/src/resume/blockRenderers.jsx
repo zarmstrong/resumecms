@@ -4,6 +4,7 @@ import { normalizeBullet } from './bulletUtils.js';
 import { safeHref, linkProps } from './safeUrl.js';
 import { headingFontSize } from './blockStyle.js';
 import { splitItems } from './skillItems.js';
+import { experienceDetailsLine } from './experienceDetails.js';
 
 // Joins whichever of the two date fields is actually filled in — no
 // dangling " – " when only a start or only an end date is set.
@@ -110,6 +111,7 @@ function BulletList({ bullets, mode }) {
 
 export function ExperienceBlock({ data, mode = 'web' }) {
   const bullets = (data.bullets || []).map((b) => normalizeBullet(b));
+  const { details, dimmed: detailsDimmed, printHidden: detailsPrintHidden } = experienceDetailsLine(data, mode);
 
   return (
     <div className="r-experience">
@@ -127,6 +129,21 @@ export function ExperienceBlock({ data, mode = 'web' }) {
         )}
         {data.location ? <span className="r-experience-location">, {data.location}</span> : null}
       </div>
+      {details.length ? (
+        <div
+          className={`r-experience-details${detailsDimmed ? ' r-experience-details-dimmed' : ''}${detailsPrintHidden ? ' r-experience-details-print-hidden' : ''}`}
+        >
+          {/* Each "Label: value" stays on one line (its separator with it), so
+              a line breaks only between details, never inside one. */}
+          {details.flatMap((detail, i) => [
+            i ? ' ' : null,
+            <span className="r-experience-detail" key={detail.key}>
+              {detail.label}: {detail.value}
+              {i < details.length - 1 ? ' ·' : null}
+            </span>,
+          ])}
+        </div>
+      ) : null}
       {data.tagline ? <div className="r-experience-tagline">{data.tagline}</div> : null}
       {data.description ? <p className="r-experience-description">{data.description}</p> : null}
       <BulletList bullets={bullets} mode={mode} />

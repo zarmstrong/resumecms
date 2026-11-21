@@ -31,6 +31,8 @@ test('a key of the wrong kind is a 400 that names it', () => {
   fail('experience', { bullets: 'not a list' }, /^data\.bullets: /);
   fail('experience', { bullets: [{ text: 1 }] }, /^data\.bullets\.0/);
   fail('experience', { bullets: [{ children: 'x' }] }, /^data\.bullets\.0\.children/);
+  fail('experience', { hoursPerWeek: 40 }, /^data\.hoursPerWeek: /);
+  fail('experience', { detailsVisibleWeb: 'no' }, /^data\.detailsVisibleWeb: /);
   fail('custom', { items: { heading: 'h' } }, /^data\.items: /);
   fail('custom', { items: [{ url: 5 }] }, /^data\.items\.0\.url/);
   fail('skills_group', { items: ['Go', 'Python'] }, /^data\.items: /);

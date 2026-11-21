@@ -177,6 +177,50 @@ test('accepting a whole-block experience rewrite keeps the current description',
   assert.ok(!('description' in applyProposal('experience', noDescription, proposal)));
 });
 
+test('a whole-block experience rewrite leaves the labelled details and their flags as they are now', () => {
+  const details = { hoursPerWeek: '40', grade: 'GS-0343-11', salary: '$1', supervisor: 'Jane Doe', contactSupervisor: 'yes' };
+  const base = { ...exp, ...details };
+  const proposal = { target: BLOCK_TARGET, baseData: base, proposedData: { ...base, tagline: 'New tagline' } };
+
+  // Hidden from the web, a salary changed and a supervisor removed since the request.
+  const { supervisor, ...withoutSupervisor } = base;
+  const current = { ...withoutSupervisor, salary: '$2', detailsVisibleWeb: false };
+  const accepted = applyProposal('experience', current, proposal);
+  assert.equal(accepted.tagline, 'New tagline');
+  assert.equal(accepted.detailsVisibleWeb, false, 'the line stays hidden from the web');
+  assert.equal(accepted.salary, '$2');
+  assert.ok(!('supervisor' in accepted), 'a detail removed since is not brought back');
+  assert.equal(accepted.hoursPerWeek, '40');
+  assert.ok(!('detailsVisiblePrint' in accepted));
+  assert.deepEqual(previewData('experience', current, [proposal]), accepted, 'the preview shows what Accept saves');
+
+  // Shown again since a request made while it was hidden.
+  const hiddenBase = { ...base, detailsVisibleWeb: false, detailsVisiblePrint: false };
+  const fromHidden = { target: BLOCK_TARGET, baseData: hiddenBase, proposedData: { ...hiddenBase, tagline: 'New tagline' } };
+  const shownAgain = applyProposal('experience', { ...base, detailsVisibleWeb: true }, fromHidden);
+  assert.equal(shownAgain.detailsVisibleWeb, true);
+  assert.ok(!('detailsVisiblePrint' in shownAgain));
+
+  // Details filled in since a request made before there were any.
+  const plain = { target: BLOCK_TARGET, baseData: exp, proposedData: { ...exp, tagline: 'New tagline' } };
+  assert.equal(applyProposal('experience', { ...exp, supervisor: 'Jane Doe' }, plain).supervisor, 'Jane Doe');
+
+  // None of it is the proposal's, so none of it makes the proposal out of
+  // date, shows in its review, or keeps it out of Accept all.
+  assert.equal(isProposalStale('experience', proposal, current), false);
+  assert.equal(isProposalStale('experience', proposal, { ...current, tagline: 'edited since' }), true);
+  for (const key of [...Object.keys(details), 'detailsVisibleWeb', 'detailsVisiblePrint']) {
+    assert.ok(!(key in targetSlice('experience', { ...base, detailsVisibleWeb: false, detailsVisiblePrint: true })), key);
+  }
+  const plan = acceptAllPlan([{ id: 'b1', type: 'experience', data: current }], [{ ...proposal, blockId: 'b1' }]);
+  assert.deepEqual(plan.changes, [{ blockId: 'b1', data: accepted }]);
+  assert.deepEqual(plan.skipped, []);
+
+  // Another type's block rewrite still replaces its whole data.
+  const summary = { target: BLOCK_TARGET, proposedData: { text: 'New', salary: 'kept as proposed' } };
+  assert.equal(applyProposal('summary', { text: 'Old' }, summary), summary.proposedData);
+});
+
 test('applyProposal writes only the targeted bullet, keeping the others as stored', () => {
   const proposedData = {
     ...exp,
