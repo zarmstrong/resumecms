@@ -762,9 +762,13 @@ flow('every header draws its link badges as paths, not text', async ({ page }) =
     await page.waitForSelector(`.r-header a[href="${SAMPLE_LINK.url}"]`);
     const found = await page.evaluate((url) => {
       const glyphs = [...document.querySelectorAll('.r-header .r-link-badge, .r-header .r-link-glyph')];
+      const links = [...document.querySelectorAll(`.r-header a[href="${url}"]`)];
+      // The link's own badge: inside it (a chip), or beside it in the
+      // element that holds the two. Another field's badge doesn't count.
+      const ownBadge = (el) => el.querySelector('.r-link-glyph') || el.parentElement.querySelector(':scope > .r-link-badge .r-link-glyph');
       return {
-        links: [...document.querySelectorAll(`.r-header a[href="${url}"]`)].map((el) => el.textContent),
-        count: glyphs.length,
+        links: links.map((el) => el.textContent),
+        badged: links.every(ownBadge),
         texts: glyphs.map((el) => el.textContent),
         drawn: glyphs.every((el) => (el.matches('svg') ? el.querySelector('path') : el.querySelector('svg path'))),
         hidden: glyphs.every((el) => el.closest('[aria-hidden="true"]')),
@@ -774,7 +778,7 @@ flow('every header draws its link badges as paths, not text', async ({ page }) =
     assert.ok(found.texts.every((text) => text === ''), `${header}: no badge holds text (${JSON.stringify(found.texts)})`);
     assert.ok(found.drawn, `${header}: every badge draws its letter as a path`);
     assert.ok(found.hidden, `${header}: every badge is aria-hidden`);
-    if (!TEXT_LABEL_HEADERS.includes(header)) assert.ok(found.count > 0, `${header}: draws a badge for its link`);
+    if (!TEXT_LABEL_HEADERS.includes(header)) assert.ok(found.badged, `${header}: draws a badge for its link`);
   }
 });
 
