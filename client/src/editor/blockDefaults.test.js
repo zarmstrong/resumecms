@@ -10,3 +10,9 @@ test('a credential is nestable, labelled, and starts as a certification', () => 
   assert.equal(BLOCK_TYPE_LABELS.credentials, 'Credential');
   assert.deepEqual(defaultDataForType('credentials'), { kind: 'certification', name: 'Credential name', issuer: '', number: '', issued: '', expires: '', url: '' });
 });
+
+test('a languages block is nestable, labelled, and starts with one language', () => {
+  assert.ok(NESTABLE_TYPES.has('languages'));
+  assert.equal(BLOCK_TYPE_LABELS.languages, 'Languages');
+  assert.deepEqual(defaultDataForType('languages'), { entries: [{ language: 'Language', level: '' }] });
+});

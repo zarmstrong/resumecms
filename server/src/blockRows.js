@@ -8,7 +8,7 @@
  * A block as the REST API, the MCP tools and the published snapshot carry
  * it. `data` is the type's own shape (blockData.js); `parentId` names a
  * heading (see "Block nesting" in CLAUDE.md).
- * @typedef {'heading' | 'summary' | 'executive_summary' | 'skills_group' | 'experience' | 'education' | 'credentials' | 'custom'} BlockType
+ * @typedef {'heading' | 'summary' | 'executive_summary' | 'skills_group' | 'experience' | 'education' | 'credentials' | 'languages' | 'custom'} BlockType
  * @typedef {{
  *   id: string,
  *   type: BlockType,

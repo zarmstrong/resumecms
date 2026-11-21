@@ -7,6 +7,8 @@ import { ExecutiveSummaryForm } from './blockForms/ExecutiveSummaryForm.jsx';
 import { SkillsGroupForm } from './blockForms/SkillsGroupForm.jsx';
 import { ExperienceForm } from './blockForms/ExperienceForm.jsx';
 import { CredentialsForm } from './blockForms/CredentialsForm.jsx';
+import { LanguagesForm } from './blockForms/LanguagesForm.jsx';
+import { shownLanguages } from '../resume/languages.js';
 import { credentialKindLabel } from '../resume/credentials.js';
 import { hasPassed, utcToday } from '../landing/dateText.js';
 import { EducationForm } from './blockForms/EducationForm.jsx';
@@ -31,6 +33,7 @@ const FORM_COMPONENTS = {
   experience: ExperienceForm,
   education: EducationForm,
   credentials: CredentialsForm,
+  languages: LanguagesForm,
   custom: CustomForm,
 };
 
@@ -55,6 +58,10 @@ function summarize(block) {
       return { title: `${d.degree || 'Untitled'} — ${d.institution || ''}` };
     case 'credentials':
       return { title: d.name || 'Untitled', subtitle: [credentialKindLabel(d.kind), d.issuer].filter(Boolean).join(' · ') + (hasPassed(d.expires, utcToday()) ? ' · Expired' : '') };
+    case 'languages': {
+      const shown = shownLanguages(d);
+      return { title: shown.length ? shown.map((e) => e.language).join(', ') : 'No languages' };
+    }
     case 'custom':
       return { title: d.title || 'Untitled' };
     default:

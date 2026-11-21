@@ -9,8 +9,8 @@ the full product description, environment variables, and API reference).
 Content is a reorderable list of **blocks** (`{ id, type, position, parentId,
 visibleWeb, visiblePrint, data }`); built-in types are `heading`, `summary`,
 `executive_summary` (headline, overview, `highlights` list), `skills_group`,
-`experience`, `education`, `credentials`, plus a freeform `custom` type. `experience`,
-`skills_group`, `education`, `credentials`, `custom`, and `executive_summary` blocks may each nest
+`experience`, `education`, `credentials`, `languages`, plus a freeform `custom` type. `experience`,
+`skills_group`, `education`, `credentials`, `languages`, `custom`, and `executive_summary` blocks may each nest
 one level deep under a `heading` block via `parentId` — this is an explicit
 allowlist (`NESTABLE_TYPES` in `resumeStore.js`), not "everything but
 heading/summary", so a new block type added later is top-level-only until
@@ -1123,7 +1123,7 @@ passes the error on. Keep it the last `app.use()`.
 
 A block's `parentId` (nullable, on the `blocks` table and in the API) points
 at a `heading` block's `id`; only `experience`, `skills_group`, `education`, `credentials`,
-`custom`, and `executive_summary` blocks can be nested, and only one level deep — a `heading`
+`languages`, `custom`, and `executive_summary` blocks can be nested, and only one level deep — a `heading`
 can't itself have a `parentId`, and `summary` can't have one at all. This is
 enforced server-side in `server/src/resumeStore.js`'s `assertValidParent`,
 called from every store method that can set `parentId` (`createBlock`,
@@ -1183,7 +1183,7 @@ is nested under it via `parentId` and sorts each group into one of two
 columns. A heading can pin its own section to a column via `data.column`
 (`'primary' | 'secondary'`, editable in the editor's heading form); anything
 else falls to the layout's `classifyAuto(group, index)`. Three layouts use
-this today: `sidebar` and `sidebar-right` (a skills/education/credentials rail, left or
+this today: `sidebar` and `sidebar-right` (a skills/education/credentials/languages rail, left or
 right — see `client/src/resume/sidebarPanel.js` for their shared
 heuristic + rail text-contrast handling) and `split-columns` (two even
 columns, alternating by section).
@@ -1491,6 +1491,15 @@ target, sent only when an item has one, with a prompt rule not to put it
 in the text), as an experience entry's dates are, and goes with
 `customItemProse()` into `letterResumeContext()` and `planOutline()`,
 where an item with only a date is left out.
+
+A `languages` block (issue #217) holds the whole list in one block,
+`entries: [{ language, level }]`, drawn as one wrapped line
+(`client/src/resume/languages.js`'s `shownLanguages()` drops an entry
+without a language). Its level is free text shown as written; the editor
+only suggests some. It nests under a heading, goes to the sidebar rail with
+skills and education, and in the Academic CV hangs beside the entries like
+a custom block. Languages are factual context for the AI, never rewritten,
+and a tailoring plan can hide the block.
 
 ### AI rewrites
 
@@ -1825,6 +1834,21 @@ the render carries on and leaves its file for the retry (the editor
 retries on its own). Both go through `settleWithin()`, so a request that
 waits on the PDF queue should too.
 
+A PDF is its page's background edge to edge (issue #213). `page.pdf()`
+keeps its half-inch margins (`PDF_BASE_OPTIONS`) and resume.css's `@page`
+the same, so the layout, page count and line breaks are what they were;
+Chromium leaves that margin white whatever `html` and `body` are painted,
+so `usePrintBackground()` (`client/src/resume/pageStyle.js`, used by
+`ResumeView` and `CoverLetterView` in print mode) also gives the page an
+`@page` background, through the CSSOM rather than as CSS text, and only
+when the background is a `#rrggbb` (`printMarginColor()`; anything else
+leaves the margin white). Moving the half inch inside the page instead
+(zero margins, padding repeated by `box-decoration-break: clone`) also
+paints the margin in Chromium, but changes the layout every template is
+drawn in, and the footer would no longer have a margin of its own. A
+change to it reaches a resume's PDF at its next publish, and a letter's
+through `LETTER_RENDER_VERSION` (3).
+
 Page numbers (issue #206) are opt-in per resume: `site.pdfPageNumbers:
 true` in its site settings (drafted and published with them; missing or
 anything but `true` is off) turns on Chromium's footer through
@@ -1834,10 +1858,15 @@ the page moves). `renderResumePdf()` reads it from the `/api/public/resume`
 body the `/print` page was served, never from the store at queue time, so
 the footer always matches the snapshot drawn. Only the resume renderer
 passes it: cover letters and share cards never get a footer. The footer
-template's only input from the settings is the text color, used only as
-`#rrggbb` and only while it has 4.5:1 on white (the footer sits in the
-margin, which Chromium leaves white whatever the resume's background; the
-default ink otherwise), plus a serif or sans family picked from
+template's only inputs from the settings are the text and background
+colors, each used only as `#rrggbb`: the footer sits in the margin, which
+is painted in the background (`pdfMarginColor()`, white unless it's a
+`#rrggbb`, mirroring the client's `printMarginColor()`, and
+`pageStyle.test.js` compares the two), so the text color is used only
+while it has 4.5:1 on that color, `inkFor()` of it (`favicon.js`, the
+client's `contrastTextFor()`) otherwise, and, on the mid-tones where that
+doesn't reach 4.5:1 either (see "Text on a color"), the better of pure
+black and white, which always does; plus a serif or sans family picked from
 the font id (`SANS_FONT_IDS`, compared with the client's `FONT_OPTIONS`),
 so no free text from the settings or the snapshot ever reaches it; keep it
 that way if you add anything to it.

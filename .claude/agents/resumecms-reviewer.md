@@ -23,7 +23,7 @@ in prose; check the diff against the ones that apply, especially:
   snapshots only (never a draft) on public routes, hidden blocks as
   placeholders, `letterResumeContext()`/`planOutline()`/`resumeOutline()`
   filters kept. Resume credentials are never rewritten or dropped when expired;
-  their numbers never enter AI context, and verification links are absolute http/https.
+  their numbers never enter AI context, and verification links are absolute http/https. Resume languages are never rewritten.
   A custom item's `date` is never in a rewrite's editable set or schema
   (context only), and every custom merge keeps it as stored. The editor's
   staleness check ignores it (legacy items compared as the form rewrites
@@ -182,8 +182,13 @@ in prose; check the diff against the ones that apply, especially:
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a
   request waits on it, `settleWithin()`.
 - The PDF footer (`pdfFooter.js`, page numbers) never takes free text from
-  the site settings or the snapshot: only a `#rrggbb` color and a font
-  family it picks itself, read from the snapshot `/print` was served.
+  the site settings or the snapshot: only `#rrggbb` colors and a font
+  family it picks itself, read from the snapshot `/print` was served. Its
+  ink has at least 4.5:1 on the margin's color whatever the colors (pure
+  black or white where `inkFor()` falls short), which the server's `pdfMarginColor()`
+  and the client's `printMarginColor()` (`pageStyle.js`, the `@page`
+  background `usePrintBackground()` paints, issue #213) must agree on;
+  the `page.pdf()` margins stay, so a white page's PDF doesn't move.
 - Store handlers in routes are wrapped in `handle()`; MCP content tools sit
   in `CONTENT_TOOLS`.
 - AI output schemas stay strict-mode valid (`additionalProperties: false`,
