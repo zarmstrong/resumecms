@@ -673,3 +673,20 @@ test('MCP creates a credential and documents its schema', async (t) => {
   const schema = (await call('get_block_schemas', { type: 'credentials' })).json.schema;
   assert.deepEqual(schema.properties.kind.enum, ['license', 'certification', 'membership']);
 });
+
+test('MCP creates a languages block and documents its schema', async (t) => {
+  const { call, close } = await connect(fakeStore());
+  t.after(close);
+  const heading = (await call('create_block', { type: 'heading', data: { text: 'Languages' } })).json.block;
+  const data = { entries: [{ language: 'English', level: 'Native' }, { language: 'Spanish', level: 'Fluent' }] };
+  const created = await call('create_block', { type: 'languages', parentId: heading.id, data });
+  assert.equal(created.isError, false);
+  assert.equal(created.json.block.type, 'languages');
+  assert.equal(created.json.block.parentId, heading.id);
+  assert.deepEqual(created.json.block.data, data);
+  const schemas = await call('get_block_schemas');
+  assert.ok(schemas.json.blocks.languages);
+  const schema = (await call('get_block_schemas', { type: 'languages' })).json.schema;
+  assert.equal(schema.properties.entries.type, 'array');
+  assert.deepEqual(schema.properties.entries.items.properties.language, { type: 'string' });
+});

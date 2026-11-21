@@ -16,7 +16,7 @@ const COMMON = {
     visibleWeb: 'boolean — show on the public web page (default true)',
     visiblePrint: 'boolean — show in the print/PDF version (default true)',
     parentId:
-      'string | null — id of a top-level heading to nest under. Only experience, skills_group, education, credentials, custom, and executive_summary blocks can be nested, one level deep.',
+      'string | null — id of a top-level heading to nest under. Only experience, skills_group, education, credentials, languages, custom, and executive_summary blocks can be nested, one level deep.',
   },
   dataStyle: {
     description: 'Optional `data.style` object on any block type for per-block spacing, alignment, and emphasis.',
@@ -26,7 +26,7 @@ const COMMON = {
       align: {
         enum: ['', 'left', 'center', 'right'],
         description:
-          "Text alignment for the block; '' or omitted = template default. Honored on heading, summary, executive_summary, skills_group, and custom blocks; ignored on experience, education and credentials. A custom block with no title and one centered text or link item makes a one-line footer such as 'More work history at example.com'.",
+          "Text alignment for the block; '' or omitted = template default. Honored on heading, summary, executive_summary, skills_group, and custom blocks; ignored on experience, education, credentials and languages. A custom block with no title and one centered text or link item makes a one-line footer such as 'More work history at example.com'.",
       },
       highlight: { type: 'boolean', description: 'Draw the block with a highlight background' },
     },
@@ -158,6 +158,24 @@ export const BLOCK_DATA_SCHEMAS = {
       style: { $ref: 'dataStyle' },
     },
     example: { kind: 'certification', name: 'Professional Certification', issuer: 'Institute', number: '123', issued: 'Mar 2024', expires: 'Mar 2027', url: 'https://example.com/verify/123' },
+  },
+  languages: {
+    description: 'A list of languages spoken, each with an optional level; the whole list is one block.',
+    properties: {
+      entries: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            language: { type: 'string' },
+            level: { type: 'string', description: 'Free text shown as written, e.g. Native, Fluent, Conversational, B2' },
+          },
+        },
+        description: 'In display order; an entry with an empty language is not shown',
+      },
+      style: { $ref: 'dataStyle' },
+    },
+    example: { entries: [{ language: 'English', level: 'Native' }, { language: 'Spanish', level: 'Fluent' }] },
   },
   custom: {
     description: 'A freeform section: a title and a list of items, each with a heading and a body of one of four kinds.',

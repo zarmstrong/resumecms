@@ -69,9 +69,9 @@
   align-self: baseline;
 }
 
-/* Custom blocks hang with the entries (the gutter plus the gap). A summary
-   and an executive summary stay full width: they usually open the CV. */
-.r-layout-academic .r-body .r-custom {
+/* Custom and languages blocks hang with the entries (the gutter plus the gap).
+   A summary and an executive summary stay full width: they usually open the CV. */
+.r-layout-academic .r-body :is(.r-custom, .r-languages) {
   padding-left: 8.5em;
 }
 
@@ -144,7 +144,7 @@
     gap: 2px;
   }
 
-  .r-layout-academic .r-body .r-custom {
+  .r-layout-academic .r-body :is(.r-custom, .r-languages) {
     padding-left: 0;
   }
 }

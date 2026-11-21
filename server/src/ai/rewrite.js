@@ -138,7 +138,7 @@ const TAILORING_RULES = [
 
 // The summary's view of the rest of the resume (brief.js's resumeOutline).
 const OUTLINE_RULE =
-  'The outline of the rest of the resume is context: you may draw on its job titles, companies, skills, education and credentials to describe the person, but never on anything it does not say.';
+  'The outline of the rest of the resume is context: you may draw on its job titles, companies, skills, education, credentials and languages to describe the person, but never on anything it does not say.';
 // An executive summary's outline also has each job's accomplishments
 // (outlineScope). Two bullets' numbers added up are a new claim.
 const ACCOMPLISHMENTS_RULE =
