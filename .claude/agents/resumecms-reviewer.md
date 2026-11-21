@@ -28,10 +28,13 @@ in prose; check the diff against the ones that apply, especially:
   (context only), and every custom merge keeps it as stored. The editor's
   staleness check ignores it (legacy items compared as the form rewrites
   them; but a block proposal that words date-only twins differently is
-  stale once their dates differ from its base's, `twinsRedated()`),
+  stale once their dates differ from its base's, `twinsRedated()`, and
+  stale for good once the item count has differed, `itemsChanged`),
   relocation keeps it (entries that differ only by date are told
   apart by it) except when only dates changed (then nothing moves, unless
-  the dated items are the same ones reordered; an item proposal that
+  the dated items are the same ones reordered, and then by exact match;
+  a custom item proposal goes with its removed item, and when an exact
+  copy of its item was removed or moved; an item proposal that
   can't be placed and wouldn't be stale where it stays is dropped; a
   request still loading is followed like a ready proposal,
   `relocateRequest()`/`landProposal()`), and `applyProposal()` keeps the current date only where it can

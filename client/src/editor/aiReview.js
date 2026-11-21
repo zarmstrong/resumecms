@@ -25,7 +25,8 @@ export const AI_REWRITABLE_TYPES = new Set(['heading', 'summary', 'executive_sum
  * ...rewriteBlock() }` in the server's routes/ai.js), plus what EditorPage
  * adds as it follows a moved bullet or item: `origin`, where the text sits
  * in baseData and proposedData, and `anchorData`, the data `target` was
- * last placed against (see relocateTarget).
+ * last placed against (see relocateTarget); and, on a custom block's,
+ * `itemsChanged` once its item count has differed (see itemCountChanged).
  * @typedef {{
  *   blockId: string,
  *   target: AiTarget,
@@ -33,6 +34,7 @@ export const AI_REWRITABLE_TYPES = new Set(['heading', 'summary', 'executive_sum
  *   baseData: Record<string, any>,
  *   anchorData?: Record<string, any>,
  *   proposedData: Record<string, any>,
+ *   itemsChanged?: boolean,
  *   bulletReview?: { items: object[], removed: object[] } | null,
  *   explanation?: string,
  *   allowBulletRestructure?: boolean,
@@ -257,10 +259,17 @@ function isReordering(a, b) {
 // 0. If only custom item dates changed (every position the same with
 //    dates ignored), nothing moved. The rules below compare items with
 //    their dates (placeJson), to tell entries apart that differ only by
-//    date, which a date edit alone mustn't turn into a move. Unless the
-//    dated items are the anchor's own in another order: one date edit
-//    can't do that, so entries that differ only by date were reordered,
-//    and the rules below follow the proposal's own.
+//    date, which a date edit alone mustn't turn into a move. For custom
+//    items, what a single change leaves behind is also read exactly
+//    before the rules below, which pair by content and can be misled
+//    once an edit makes two items read alike: one item changed in place
+//    moves nothing; the anchor's own items in another order (no edit does
+//    that) put the proposal on the one item that reads exactly like its
+//    own, however many moved (and drop it when an exact copy of its
+//    own moved, since nothing says which); and one item removed takes the proposal
+//    with it when it's the proposal's, or one of several exact copies of
+//    it (the data is the same whichever went), and otherwise only shifts
+//    it.
 // 1. Unchanged bullets are paired in order (longest common subsequence).
 //    If the proposal's own bullet is paired, that's where it is now: this
 //    follows inserts and deletes above it.
@@ -300,21 +309,45 @@ export function relocateTarget(type, proposal, currentData) {
   if (o === -1) return stay;
   const a = basePositions.map((t) => placeJson(type, anchor, t));
   const b = currentPositions.map((t) => placeJson(type, currentData, t));
-  // Nothing but dates changed (the same items in the same places): every
-  // proposal stays put. Matching by date could otherwise pair a twin with
-  // the wrong one when a date edit makes two items identical, or tell two
-  // apart that a cleared date made the same. But the same dated items in
-  // another order are a reorder of entries that differ only by date (the
-  // 2020 and 2021 awards swapped), which no single date edit leaves
-  // behind: those go on to the rules below, by date.
-  if (
-    type === 'custom' &&
-    target.kind === 'item' &&
-    basePositions.length === currentPositions.length &&
-    basePositions.every((t, i) => sliceJson(type, anchor, t) === sliceJson(type, currentData, currentPositions[i])) &&
-    !isReordering(a, b)
-  ) {
-    return stay;
+  if (type === 'custom' && target.kind === 'item') {
+    // What one change to the items leaves behind is read exactly, before
+    // the rules below guess: they pair by content, and an edit can make
+    // an item read like another one (a date typed until two awards match).
+    const copiesIn = (list) => list.filter((entry) => entry === a[o]).length;
+    const changed = a.length === b.length ? a.filter((entry, i) => entry !== b[i]).length : -1;
+    // One item edited in place (its date, its text): nothing moved, even
+    // if it now reads like the proposal's own.
+    if (changed === 0 || changed === 1) return stay;
+    if (isReordering(a, b)) {
+      // The same items in another order (entries that differ only by date
+      // included: the 2020 and 2021 awards swapped), which no edit leaves
+      // behind. The proposal's own is the one that reads exactly like it,
+      // wherever it went and however many others moved. With exact copies
+      // of it, it stays while they all hold the positions they did (the
+      // others moved around them); once a copy moved, nothing says which
+      // one, so the proposal goes rather than follow the wrong one.
+      if (copiesIn(b) === 1) return keep(currentPositions[b.indexOf(a[o])]);
+      return a.every((entry, i) => (entry === a[o]) === (b[i] === a[o])) ? stay : null;
+    } else if (changed > 1 && basePositions.every((t, i) => sliceJson(type, anchor, t) === sliceJson(type, currentData, currentPositions[i]))) {
+      // Nothing but dates changed (the same items in the same places):
+      // every proposal stays put. Matching by date could otherwise pair a
+      // twin with the wrong one when a date edit makes two items
+      // identical, or tell two apart that a cleared date made the same.
+      return stay;
+    } else if (b.length === a.length - 1) {
+      // One item removed: every index whose removal leaves this list (more
+      // than one when it had exact copies side by side). The proposal goes
+      // with its own item, and also when its item is one of several copies
+      // that may have been the one removed, since the data is the same
+      // either way; otherwise it only shifts up past the gap.
+      const removed = a.map((_, d) => d).filter((d) => a.every((entry, i) => i === d || entry === b[i < d ? i : i - 1]));
+      if (removed.includes(o)) return null;
+      if (removed.length > 0) return keep(currentPositions[removed[0] < o ? o - 1 : o]);
+    }
+    // Several changes at once (a block rewrite accepted, say) that left
+    // fewer exact copies of the proposal's item in a shorter list: one of
+    // them went, and the data can't say which.
+    if (b.length < a.length && copiesIn(a) > 1 && copiesIn(b) < copiesIn(a)) return null;
   }
   const pairs = lcsPairs(a, b);
 
@@ -352,7 +385,7 @@ export function relocateTarget(type, proposal, currentData) {
 // `asked` and `baseData`). Returns where it is now, `request.target`
 // itself when nothing moved, or null when its bullet or item is gone.
 /**
- * @typedef {{ asked: AiTarget, baseData: Record<string, any>, target: AiTarget, anchorData: Record<string, any> }} LoadingRequest
+ * @typedef {{ asked: AiTarget, baseData: Record<string, any>, target: AiTarget, anchorData: Record<string, any>, itemsChanged?: boolean }} LoadingRequest
  */
 /**
  * @param {string} type
@@ -367,7 +400,8 @@ export function relocateRequest(type, request, currentData) {
 
 // A proposal as it lands for a request that was followed while it loaded:
 // placed where relocateRequest left it, its text still at `asked` in its
-// own baseData and proposedData.
+// own baseData and proposedData. A custom block's keeps the note that its
+// item count differed meanwhile (itemCountChanged).
 /**
  * @param {AiProposal} proposal
  * @param {LoadingRequest} request
@@ -375,6 +409,7 @@ export function relocateRequest(type, request, currentData) {
  */
 export function landProposal(proposal, request) {
   const { asked, target, anchorData } = request;
+  if (request.itemsChanged) return { ...proposal, itemsChanged: true };
   if (asked?.kind !== 'bullet' && asked?.kind !== 'item') return proposal;
   const moved = targetKey(target) !== targetKey(asked);
   return { ...proposal, ...(moved ? { target, origin: asked } : {}), anchorData };
@@ -759,7 +794,27 @@ export function bulletChange(item) {
  */
 export function isProposalStale(type, proposal, currentData) {
   if (sliceJson(type, proposal.baseData, originOf(proposal)) !== sliceJson(type, currentData, proposal.target)) return true;
-  return type === 'custom' && targetKey(proposal.target) === 'block' && twinsRedated(proposal, currentData);
+  if (type !== 'custom' || targetKey(proposal.target) !== 'block') return false;
+  return Boolean(proposal.itemsChanged) || twinsRedated(proposal, currentData);
+}
+
+// A custom block proposal goes by position, with dates ignored, so it
+// can't see an item removed and another added that reads the same but for
+// its date (last year's award deleted, this year's typed in): the data is
+// what a date edit would leave. EditorPage therefore notes on the proposal
+// (and on a request still loading) once the block's item count has
+// differed from what it was made against, and it's stale from then on,
+// whatever the items read later.
+/**
+ * @param {string} type
+ * @param {AiTarget | null | undefined} target
+ * @param {Record<string, any> | null | undefined} baseData
+ * @param {Record<string, any> | null | undefined} currentData
+ */
+export function itemCountChanged(type, target, baseData, currentData) {
+  if (type !== 'custom' || targetKey(target) !== 'block') return false;
+  const count = (data) => (Array.isArray(data?.items) ? data.items.length : 0);
+  return count(baseData) !== count(currentData);
 }
 
 // A custom block proposal goes by position, and a date edit doesn't make

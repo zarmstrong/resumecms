@@ -38,6 +38,7 @@ import {
   applyProposal,
   describeTarget,
   isProposalStale,
+  itemCountChanged,
   previewedProposals,
   proposalKey,
   landProposal,
@@ -192,7 +193,8 @@ export function EditorPage({
   // `baseData`, the target and block data it was sent with, and
   // `anchorData`, the data `target` was last placed against. The relocation
   // effect follows a loading request's bullet or item like a ready
-  // proposal's, re-keying it here).
+  // proposal's, re-keying it here; a custom block's request has `asked`,
+  // `baseData` and, once its item count differed, `itemsChanged`).
   // A response is applied only if its request is still the latest for that
   // key; the entry is removed once it settles.
   const aiRequestsRef = useRef({});
@@ -730,6 +732,7 @@ export function EditorPage({
   // skipped, which also keeps this from looping on its own update.
   useEffect(() => {
     const placed = [];
+    const noted = [];
     const dropped = new Set();
     for (const [key, entry] of Object.entries(aiProposals)) {
       const block = blocks.find((b) => b.id === entry.blockId);
@@ -738,7 +741,22 @@ export function EditorPage({
         continue;
       }
       const kind = entry.target?.kind;
-      if (kind !== 'bullet' && kind !== 'item') continue;
+      // A custom block rewrite goes by position: once the item count has
+      // differed from what it was made against, it's noted for good (see
+      // itemCountChanged), on the request while it loads.
+      if (kind !== 'bullet' && kind !== 'item') {
+        const request = entry.status === 'loading' && aiRequestsRef.current[key];
+        if (request && request.id === entry.requestId && request.baseData) {
+          if (itemCountChanged(block.type, entry.target, request.baseData, block.data)) request.itemsChanged = true;
+        } else if (
+          entry.status === 'ready' &&
+          !entry.proposal.itemsChanged &&
+          itemCountChanged(block.type, entry.target, entry.proposal.baseData, block.data)
+        ) {
+          noted.push({ key, entry });
+        }
+        continue;
+      }
       if (entry.status === 'loading') {
         const request = aiRequestsRef.current[key];
         if (request?.id !== entry.requestId || !request.anchorData || request.anchorData === block.data) continue;
@@ -755,7 +773,7 @@ export function EditorPage({
       if (target === null) dropped.add(key);
       else placed.push({ key, entry, target, anchorData: block.data });
     }
-    if (placed.length === 0 && dropped.size === 0) return;
+    if (placed.length === 0 && dropped.size === 0 && noted.length === 0) return;
     for (const key of dropped) delete aiRequestsRef.current[key];
     // A loading request goes to its new key with its entry: all of them
     // off their old keys first, since one may move onto another's. One
@@ -772,6 +790,9 @@ export function EditorPage({
     setAiProposals((prev) => {
       const gone = new Set([...dropped, ...placed.map(({ key }) => key)]);
       const next = Object.fromEntries(Object.entries(prev).filter(([key]) => !gone.has(key)));
+      for (const { key, entry } of noted) {
+        if (next[key] === entry) next[key] = { ...entry, proposal: { ...entry.proposal, itemsChanged: true } };
+      }
       for (const { key, entry, target, anchorData } of placed) {
         // A newer request for this key landed since; leave it to the next run.
         if (prev[key] !== entry) {
@@ -899,6 +920,8 @@ export function EditorPage({
       target,
       status: 'loading',
       ...(positional ? { asked: target, baseData: block.data, anchorData: block.data } : {}),
+      // A custom block's request notes an item count that differs meanwhile.
+      ...(block.type === 'custom' && !positional ? { asked: target, baseData: block.data } : {}),
     };
     const tailored = Boolean(brief);
     const settle = (patch) => {
@@ -909,7 +932,7 @@ export function EditorPage({
       if (!found) return false;
       const [at, request] = found;
       if (patch.status !== 'loading') delete aiRequestsRef.current[at];
-      const landed = patch.proposal && positional ? { proposal: landProposal(patch.proposal, request) } : {};
+      const landed = patch.proposal && request.baseData ? { proposal: landProposal(patch.proposal, request) } : {};
       setAiProposals((prev) => ({
         ...prev,
         // requestId tells a panel which request it's showing (see

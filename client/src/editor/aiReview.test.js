@@ -11,6 +11,7 @@ import {
   describeTarget,
   hiddenBulletCount,
   isProposalStale,
+  itemCountChanged,
   pickerTense,
   presetsFor,
   previewData,
@@ -393,6 +394,59 @@ test('an item proposal follows its entry when entries that differ only by date a
   const copies = { title: 'Awards', items: [award('2020'), award('2020')] };
   const copy = { target: { kind: 'item', index: 0 }, baseData: copies, proposedData: copies };
   assert.equal(relocateTarget('custom', copy, { ...copies, items: [award('2020'), award('2020')] }), copy.target);
+
+  // Exact copies with another entry moved past them: a copy that moved
+  // can't be told from one that didn't, so their proposals go. While the
+  // copies keep their positions, they stay.
+  const withOther = { title: 'Awards', items: [award('2020'), award('2020'), other] };
+  const past = { ...withOther, items: [other, award('2020'), award('2020')] };
+  for (const index of [0, 1]) {
+    assert.equal(relocateTarget('custom', { target: { kind: 'item', index }, baseData: withOther, proposedData: withOther }, past), null);
+  }
+  const around = { title: 'Awards', items: [other, award('2020'), award('2021'), award('2020')] };
+  const aroundMoved = { ...around, items: [award('2021'), award('2020'), other, award('2020')] };
+  const kept = { target: { kind: 'item', index: 3 }, baseData: around, proposedData: around };
+  assert.equal(relocateTarget('custom', kept, aroundMoved), kept.target);
+
+  // Several moved in one update (two swaps): each is found by what it
+  // reads, not by the gap it sat in.
+  const four = { title: 'Awards', items: [award('2020'), award('2021'), award('2022'), award('2023')] };
+  const shuffled = { ...four, items: [award('2021'), award('2020'), award('2023'), award('2022')] };
+  const in4 = (index) => relocateTarget('custom', { target: { kind: 'item', index }, baseData: four, proposedData: four }, shuffled);
+  assert.deepEqual([0, 1, 2, 3].map((i) => in4(i).index), [1, 0, 3, 2]);
+  // The same for entries with nothing alike, reversed.
+  const plain = (heading) => ({ heading, bodyType: 'text', text: heading.toLowerCase() });
+  const abc = { title: 'T', items: [plain('A'), plain('B'), plain('C'), plain('D')] };
+  const reversed = { ...abc, items: [...abc.items].reverse() };
+  const inAbc = (index) => relocateTarget('custom', { target: { kind: 'item', index }, baseData: abc, proposedData: abc }, reversed);
+  assert.deepEqual([0, 1, 2, 3].map((i) => inAbc(i).index), [3, 2, 1, 0]);
+});
+
+// Two entries a date edit made exact copies, then one removed: the data
+// is the same whichever went, so the proposal can't be kept on a survivor.
+test('an item proposal goes when one of several exact copies of its entry is removed', () => {
+  const award = (date, text = 'Conf X') => ({ heading: 'Best paper', bodyType: 'text', text, date });
+  const other = { heading: 'Fellow', bodyType: 'text', text: 'Society Y' };
+  const base = { title: 'Awards', items: [award('2020'), award('2021'), other] };
+  const twins = { ...base, items: [award('2021'), award('2021'), other] };
+  const one = { ...base, items: [award('2021'), other] };
+  for (const index of [0, 1]) {
+    const proposal = { target: { kind: 'item', index }, baseData: base, proposedData: base };
+    assert.equal(relocateTarget('custom', proposal, twins), proposal.target);
+    assert.equal(relocateTarget('custom', { ...proposal, anchorData: twins }, one), null, `item ${index}`);
+    // A request still loading goes the same way.
+    const request = { asked: proposal.target, baseData: base, target: proposal.target, anchorData: twins };
+    assert.equal(relocateRequest('custom', request, one), null);
+  }
+  // The other entry's proposal follows it, and removing it instead leaves
+  // the copies' proposals where they are.
+  const onOther = { target: { kind: 'item', index: 2 }, baseData: base, proposedData: base, anchorData: twins };
+  assert.deepEqual(relocateTarget('custom', onOther, one), { kind: 'item', index: 1 });
+  const first = { target: { kind: 'item', index: 0 }, baseData: base, proposedData: base, anchorData: twins };
+  assert.equal(relocateTarget('custom', first, { ...base, items: [award('2021'), award('2021')] }), first.target);
+  // Editing one copy in place isn't a removal: its proposal stays on it.
+  const edited = { ...base, items: [award('2021', 'Conf X, with a prize'), award('2021'), other] };
+  assert.equal(relocateTarget('custom', first, edited), first.target);
 });
 
 // An entry edited and then deleted: the proposal compares against what it
@@ -408,13 +462,20 @@ test('an item proposal goes with its entry when the entry is edited and then del
   const deleted = { ...base, items: [award('2021')] };
   assert.equal(relocateTarget('custom', { ...proposal, anchorData: edited }, deleted), null);
 
-  // Over an entry that doesn't read the same it stays, stale, as before.
+  // It goes with a removed entry whatever takes its place, rather than
+  // wait there, stale, for that one to be edited into reading like it.
   const other = { ...base, items: [award('2020'), { heading: 'Fellow', bodyType: 'text', text: 'Society Y' }] };
   const editedOther = { ...other, items: [award('2020', 'edited'), other.items[1]] };
   const onOther = { ...proposal, baseData: other, anchorData: editedOther };
-  const left = { ...other, items: [other.items[1]] };
-  assert.equal(relocateTarget('custom', onOther, left), onOther.target);
-  assert.equal(isProposalStale('custom', onOther, left), true);
+  assert.equal(relocateTarget('custom', onOther, { ...other, items: [other.items[1]] }), null);
+  assert.equal(relocateTarget('custom', { ...proposal, baseData: other }, { ...other, items: [other.items[1]] }), null);
+
+  // An edit that makes the entry above read exactly like the proposal's
+  // own moves nothing: the proposal doesn't jump onto the edited one.
+  const three = { title: 'T', items: [award('2021', 'x'), award('2021', 'y'), award('2021', 'x')] };
+  const middle = { target: { kind: 'item', index: 1 }, baseData: three, proposedData: three };
+  const alike = { ...three, items: [award('2021', 'y'), award('2021', 'y'), award('2021', 'x')] };
+  assert.equal(relocateTarget('custom', middle, alike), middle.target);
 });
 
 // A rewrite still loading is followed one change at a time, like a ready
@@ -529,6 +590,40 @@ test('a custom block proposal goes stale when entries that differ only by date m
   const normalized = (date) => ({ ...legacy(date), bodyType: 'text', text: 'Conf X' });
   assert.equal(isProposalStale('custom', legacyProposal, { title: 'Awards', items: [normalized('2020'), normalized('2021')] }), false);
   assert.equal(isProposalStale('custom', legacyProposal, { title: 'Awards', items: [normalized('2021'), normalized('2020')] }), true);
+});
+
+// An item removed and another added that reads the same but for its date
+// is, in the data, a date edit. EditorPage notes the count changing.
+test('a custom block proposal is stale for good once its item count has differed', () => {
+  const award = (date, text = 'Conf X') => ({ heading: 'Best paper', bodyType: 'text', text, ...(date ? { date } : {}) });
+  const base = { title: 'Awards', items: [award('2020')] };
+  const proposal = { blockId: 'b', target: BLOCK_TARGET, baseData: base, proposedData: { title: 'Awards', items: [award('2020', 'R2020')] } };
+  const empty = { ...base, items: [] };
+  const retyped = { ...base, items: [award('2021')] };
+
+  assert.equal(itemCountChanged('custom', BLOCK_TARGET, base, base), false);
+  assert.equal(itemCountChanged('custom', BLOCK_TARGET, base, retyped), false);
+  assert.equal(itemCountChanged('custom', undefined, base, empty), true);
+  assert.equal(itemCountChanged('custom', BLOCK_TARGET, base, { ...base, items: [award('2020'), award()] }), true);
+  // Only a custom block's whole-block rewrite goes by item position.
+  assert.equal(itemCountChanged('custom', { kind: 'item', index: 0 }, base, empty), false);
+  assert.equal(itemCountChanged('skills_group', BLOCK_TARGET, base, empty), false);
+
+  // Unnoted, the retyped entry reads as a date edit; noted, it's stale,
+  // the proposal keeps its own dates, and Accept all leaves it open.
+  assert.equal(isProposalStale('custom', proposal, retyped), false);
+  const noted = { ...proposal, itemsChanged: true };
+  assert.equal(isProposalStale('custom', noted, retyped), true);
+  assert.equal(isProposalStale('custom', noted, base), true);
+  assert.equal(applyProposal('custom', retyped, noted), noted.proposedData);
+  assert.deepEqual(acceptAllPlan([{ id: 'b', type: 'custom', data: retyped }], [noted]).skipped, [noted]);
+
+  // A request that saw the count differ while it loaded lands noted.
+  const landed = landProposal(proposal, { asked: BLOCK_TARGET, baseData: base, itemsChanged: true });
+  assert.equal(landed.itemsChanged, true);
+  assert.equal(isProposalStale('custom', landed, retyped), true);
+  assert.equal(landProposal(proposal, { asked: BLOCK_TARGET, baseData: base }), proposal);
+  assert.equal(landProposal(proposal, { asked: undefined, baseData: base }), proposal);
 });
 
 // The form writes every legacy { heading, body } item back with a bodyType

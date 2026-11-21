@@ -1456,14 +1456,26 @@ on a block of legacy items, makes no proposal stale, with one exception
 are the same but for their date goes stale once any of those entries'
 dates isn't the one it was made against, since the date is all that says
 which is which (they may have been reordered, and a block proposal has
-no anchor to follow that with). Relocation
+no anchor to follow that with); and a block proposal is stale for good
+once its block's item count has differed from what it was made against
+(`itemCountChanged()`, noted by `EditorPage`'s relocation effect as
+`itemsChanged` on the proposal, or on its request while it loads), since
+an item removed and another added that differs only by date reads as a
+date edit. Relocation
 (`relocateTarget()`) first checks whether only dates changed (the same
 number of items, each the same with dates ignored); then every item
 proposal stays on its index, even when the edit makes two items
-identical or a cleared date makes them so, unless the dated items are
-the anchor's own in another order (`isReordering()`: entries that differ
-only by date were reordered, which one date edit can't do), and then it
-follows its entry by the rules below. Otherwise it compares items
+identical or a cleared date makes them so. For custom items it reads
+what one change leaves behind exactly, before the content-pairing rules
+(which an edit that makes two items read alike can mislead): one item
+changed in place moves nothing; the anchor's own items in another order
+(`isReordering()`, which no edit leaves behind: entries that differ only
+by date swapped, say) put the proposal on the one item that reads
+exactly like its own, however many moved, and drop it when an exact copy
+of its own moved; and one item removed drops the proposal when it's its
+own or one of several exact copies of it (the data can't say which
+went), rather than leave it, stale, on whatever took its place, and
+otherwise only shifts it. Otherwise it compares items
 with the date kept (`placeJson()`), since the lists it's for repeat an
 entry that differs only by date (the same award every year), and drops
 an item proposal that would otherwise stay, not stale, over another
