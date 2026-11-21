@@ -38,8 +38,11 @@ import {
   applyProposal,
   describeTarget,
   isProposalStale,
+  itemCountChanged,
   previewedProposals,
   proposalKey,
+  landProposal,
+  relocateRequest,
   relocateTarget,
   targetSlice,
 } from './aiReview.js';
@@ -185,7 +188,13 @@ export function EditorPage({
   aiProposalsRef.current = aiProposals;
   const reorderRequestIdRef = useRef(0);
   // Requests still in flight, per proposal key ({ id, blockId, target,
-  // status: 'loading' }, the fields dropAiProposals' predicates can rely on).
+  // status: 'loading' }, the fields dropAiProposals' predicates can rely on,
+  // plus, for a bullet or item, what relocateRequest needs: `asked` and
+  // `baseData`, the target and block data it was sent with, and
+  // `anchorData`, the data `target` was last placed against. The relocation
+  // effect follows a loading request's bullet or item like a ready
+  // proposal's, re-keying it here; a custom block's request has `asked`,
+  // `baseData` and, once its item count differed, `itemsChanged`).
   // A response is applied only if its request is still the latest for that
   // key; the entry is removed once it settles.
   const aiRequestsRef = useRef({});
@@ -708,9 +717,13 @@ export function EditorPage({
   // or a delete or insert above it): it's re-keyed to the new position, so
   // its panel and preview move with it. One whose position is gone and can't
   // be found, or whose block is gone, is dropped, since it would otherwise
-  // stay counted in the banner with no panel to reject it from. Loading
-  // entries are left alone until their response lands (they have no
-  // baseData yet); this runs again then.
+  // stay counted in the banner with no panel to reject it from. A request
+  // still loading is followed the same way (relocateRequest, from the data
+  // it was sent with), and forgotten with its bullet or item, so its
+  // response lands on what it was asked for or not at all: a list can
+  // change a lot while a rewrite loads, and placing it afterwards in one
+  // step can't always tell what happened (an entry deleted and another
+  // year's added reads like two date edits).
   //
   // Each check compares the block against the proposal's anchorData, the
   // data it was last placed against, and then advances the anchor (see
@@ -719,6 +732,7 @@ export function EditorPage({
   // skipped, which also keeps this from looping on its own update.
   useEffect(() => {
     const placed = [];
+    const noted = [];
     const dropped = new Set();
     for (const [key, entry] of Object.entries(aiProposals)) {
       const block = blocks.find((b) => b.id === entry.blockId);
@@ -726,19 +740,59 @@ export function EditorPage({
         dropped.add(key);
         continue;
       }
+      const kind = entry.target?.kind;
+      // A custom block rewrite goes by position: once the item count has
+      // differed from what it was made against, it's noted for good (see
+      // itemCountChanged), on the request while it loads.
+      if (kind !== 'bullet' && kind !== 'item') {
+        const request = entry.status === 'loading' && aiRequestsRef.current[key];
+        if (request && request.id === entry.requestId && request.baseData) {
+          if (itemCountChanged(block.type, entry.target, request.baseData, block.data)) request.itemsChanged = true;
+        } else if (
+          entry.status === 'ready' &&
+          !entry.proposal.itemsChanged &&
+          itemCountChanged(block.type, entry.target, entry.proposal.baseData, block.data)
+        ) {
+          noted.push({ key, entry });
+        }
+        continue;
+      }
+      if (entry.status === 'loading') {
+        const request = aiRequestsRef.current[key];
+        if (request?.id !== entry.requestId || !request.anchorData || request.anchorData === block.data) continue;
+        const target = relocateRequest(block.type, request, block.data);
+        if (target === null) dropped.add(key);
+        // Still at its key: only the request's anchor advances.
+        else if (proposalKey(entry.blockId, target) === key) request.anchorData = block.data;
+        else placed.push({ key, entry, target, anchorData: block.data, request });
+        continue;
+      }
       if (entry.status !== 'ready') continue;
-      const kind = entry.proposal.target?.kind;
-      if (kind !== 'bullet' && kind !== 'item') continue;
       if ((entry.proposal.anchorData ?? entry.proposal.baseData) === block.data) continue;
       const target = relocateTarget(block.type, entry.proposal, block.data);
       if (target === null) dropped.add(key);
       else placed.push({ key, entry, target, anchorData: block.data });
     }
-    if (placed.length === 0 && dropped.size === 0) return;
+    if (placed.length === 0 && dropped.size === 0 && noted.length === 0) return;
     for (const key of dropped) delete aiRequestsRef.current[key];
+    // A loading request goes to its new key with its entry: all of them
+    // off their old keys first, since one may move onto another's. One
+    // whose new key holds a request that didn't move gives way to it.
+    // The same goes for an entry that stays at that key (the rule below).
+    const moving = placed.filter(({ request }) => request);
+    const leaving = new Set([...dropped, ...placed.map(({ key }) => key)]);
+    for (const { key } of moving) delete aiRequestsRef.current[key];
+    for (const { entry, target, anchorData, request } of moving) {
+      const newKey = proposalKey(entry.blockId, target);
+      if (aiRequestsRef.current[newKey] || (aiProposals[newKey] && !leaving.has(newKey))) continue;
+      aiRequestsRef.current[newKey] = { ...request, target, anchorData };
+    }
     setAiProposals((prev) => {
       const gone = new Set([...dropped, ...placed.map(({ key }) => key)]);
       const next = Object.fromEntries(Object.entries(prev).filter(([key]) => !gone.has(key)));
+      for (const { key, entry } of noted) {
+        if (next[key] === entry) next[key] = { ...entry, proposal: { ...entry.proposal, itemsChanged: true } };
+      }
       for (const { key, entry, target, anchorData } of placed) {
         // A newer request for this key landed since; leave it to the next run.
         if (prev[key] !== entry) {
@@ -748,6 +802,10 @@ export function EditorPage({
         const newKey = proposalKey(entry.blockId, target);
         // Two proposals can't share a position; the one already there wins.
         if (next[newKey]) continue;
+        if (entry.status === 'loading') {
+          next[newKey] = { ...entry, target };
+          continue;
+        }
         const origin = entry.proposal.origin || entry.proposal.target;
         next[newKey] = { ...entry, target, proposal: { ...entry.proposal, target, origin, anchorData } };
       }
@@ -855,16 +913,43 @@ export function EditorPage({
     // alone.
     const key = proposalKey(blockId, target);
     const id = ++aiRequestCounterRef.current;
-    aiRequestsRef.current[key] = { id, blockId, target, status: 'loading' };
+    const positional = target?.kind === 'bullet' || target?.kind === 'item';
+    aiRequestsRef.current[key] = {
+      id,
+      blockId,
+      target,
+      status: 'loading',
+      ...(positional ? { asked: target, baseData: block.data, anchorData: block.data } : {}),
+      // A custom block's request notes an item count that differs meanwhile.
+      ...(block.type === 'custom' && !positional ? { asked: target, baseData: block.data } : {}),
+    };
     const tailored = Boolean(brief);
     const settle = (patch) => {
-      if (aiRequestsRef.current[key]?.id !== id) return false;
-      if (patch.status !== 'loading') delete aiRequestsRef.current[key];
+      // Under the key its bullet or item is at now: the relocation effect
+      // moves a loading request with it, and forgets one whose bullet or
+      // item is gone.
+      const found = Object.entries(aiRequestsRef.current).find(([, request]) => request.id === id);
+      if (!found) return false;
+      const [at, request] = found;
+      if (patch.status !== 'loading') delete aiRequestsRef.current[at];
+      const landed = patch.proposal && request.baseData ? { proposal: landProposal(patch.proposal, request) } : {};
       setAiProposals((prev) => ({
         ...prev,
         // requestId tells a panel which request it's showing (see
         // AiRewritePanel), since relocation can move another one under it.
-        [key]: { blockId, target, instruction, tense, pickedTense, tailored, requestId: id, proposal: null, error: null, ...patch },
+        [at]: {
+          blockId,
+          target: request.target,
+          instruction,
+          tense,
+          pickedTense,
+          tailored,
+          requestId: id,
+          proposal: null,
+          error: null,
+          ...patch,
+          ...landed,
+        },
       }));
       return true;
     };

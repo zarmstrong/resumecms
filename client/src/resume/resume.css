@@ -774,6 +774,55 @@
   font-weight: 600;
 }
 
+/* A dated item's heading row (issue #214): the heading and its date, the
+   date in .r-experience-dates' look like an entry's. Only the date takes
+   the entry row's weight; the heading keeps its own color. Without a
+   heading the date still sits at the right. */
+.r-custom-item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 600;
+}
+
+/* The heading gives way to the date: it may shrink below its longest
+   word, which then breaks, instead of pushing the row out of a narrow
+   column (two columns, a rail, a phone). An undated item's heading is a
+   plain block and isn't touched. */
+.r-custom-item-top > .r-custom-item-heading {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The date is free text, so unlike an entry's it may wrap: it never
+   shrinks (a short one draws as an entry's does), but a long one ("Accepted,
+   Journal of X (in press)") stops at 40% of the row and wraps there,
+   its lines to the right like the date column, so the heading keeps the
+   rest. Where the row stacks, it gets the full width and the block's
+   alignment back. */
+.r-custom-item-top > .r-custom-item-date {
+  margin-left: auto;
+  flex-shrink: 0;
+  max-width: 40%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+/* In a centered or right-aligned block the date goes under the heading,
+   inline so the block's text-align moves it (and a date pill stays its
+   own width), at any width and in a sidebar rail alike. */
+.r-block:is(.r-align-center, .r-align-right) .r-custom-item-top {
+  display: block;
+}
+
+.r-block:is(.r-align-center, .r-align-right) .r-custom-item-top > .r-custom-item-date {
+  display: inline-block;
+  margin-left: 0;
+  max-width: none;
+  text-align: inherit;
+}
+
 /* Body layout styling now lives per-layout under templates/layouts/<id>/style.css
    (see client/src/resume/templateRegistry.js) — only styling shared across
    layouts (skills chips, block highlight/dim, print/screen media) stays here. */
@@ -1114,9 +1163,16 @@
     gap: 2px;
   }
 
-  .r-experience-top {
+  .r-experience-top,
+  .r-custom-item-top {
     flex-direction: column;
     gap: 2px;
+  }
+
+  .r-custom-item-top > .r-custom-item-date {
+    margin-left: 0;
+    max-width: none;
+    text-align: inherit;
   }
 }
 

@@ -111,6 +111,18 @@ test('an item prompt names the item and its type', () => {
   assert.doesNotMatch(system, /same number of items/);
 });
 
+test("a custom prompt says the items' dates aren't part of the rewrite, only when one has a date", () => {
+  const dated = { items: [{ heading: 'Paper', bodyType: 'text', text: 'x', date: '2021' }, { heading: 'Talk', bodyType: 'text', text: 'y' }] };
+  const undated = { items: [{ heading: 'Paper', bodyType: 'text', text: 'x' }] };
+  const item = { kind: 'item', index: 1 };
+  const block = { kind: 'block' };
+  const system = (data, target) => buildPrompt('custom', rewriteInput('custom', data, target), 'x', { target }).system;
+  assert.match(system(dated, block), /itemDates in the context are the items' dates/);
+  assert.match(system(dated, item), /They are not part of this rewrite/);
+  assert.doesNotMatch(system(undated, block), /itemDates/);
+  assert.doesNotMatch(system(undated, { kind: 'item', index: 0 }), /itemDate/);
+});
+
 test('rewriteBlock passes the target through to the schema and the result', async () => {
   let request;
   const result = await rewriteBlock({
