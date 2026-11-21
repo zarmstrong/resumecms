@@ -4,6 +4,7 @@
 // reimplementing it.
 import { safeHref, linkProps, telHref } from './safeUrl.js';
 import { linkGlyph } from './linkTypes.js';
+import { LinkBadge } from './LinkGlyph.jsx';
 
 export function ContactRow({ label, children }) {
   return (
@@ -32,7 +33,7 @@ export function ContactInline({ header, className }) {
       )}
       {(header.links || []).map((link, i) => (
         <span key={i}>
-          <span className="r-link-badge">{linkGlyph(link)}</span>
+          <LinkBadge glyph={linkGlyph(link)} />
           <a {...linkProps(link.url)}>{link.label}</a>
         </span>
       ))}

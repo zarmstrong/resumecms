@@ -7,7 +7,7 @@
 // Run with `npm run test:browser` from server/, after `npm run build` in
 // client/. A failed flow leaves a screenshot (see saveScreenshot()).
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { PASSWORD, REPO_ROOT, USERNAME, launchBrowser, saveScreenshot, startServer } from './harness.js';
@@ -740,4 +740,64 @@ flow('adds a languages block and preserves its entries after reload', async ({ p
   await page.waitForSelector(RESUME_SELECT);
   const stored = await draftBlock(page, resumeId, block.id);
   assert.deepEqual(stored.data, { entries: expected });
+});
+
+// Issue #222: a link's type letter is drawn as a path, never as text, so a
+// PDF's text layer (what an ATS parser reads) holds only the link itself.
+// Every header, through the template preview's sample header and its link:
+// the link is found by its address, not by its badge, so a header that
+// went back to a text letter (or lost its badge) fails rather than passing
+// with nothing to check.
+const SAMPLE_LINK = { label: 'linkedin.com/in/you', url: 'https://linkedin.com/in/you' };
+// The one header with no badge: its row labels ("i:") are text on purpose.
+const TEXT_LABEL_HEADERS = ['labeled-header'];
+
+flow('every header draws its link badges as paths, not text', async ({ page }) => {
+  const headers = readdirSync(path.join(REPO_ROOT, 'templates/headers'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  assert.ok(headers.length >= 19, `found the header templates (${headers.length})`);
+  for (const header of headers) {
+    await page.goto(`${server.baseUrl}/template-preview?header=${header}`);
+    await page.waitForSelector(`.r-header a[href="${SAMPLE_LINK.url}"]`);
+    const found = await page.evaluate((url) => {
+      const glyphs = [...document.querySelectorAll('.r-header .r-link-badge, .r-header .r-link-glyph')];
+      const links = [...document.querySelectorAll(`.r-header a[href="${url}"]`)];
+      // The link's own badge: inside it (a chip), or beside it in the
+      // element that holds the two. Another field's badge doesn't count.
+      const ownBadge = (el) => el.querySelector('.r-link-glyph') || el.parentElement.querySelector(':scope > .r-link-badge .r-link-glyph');
+      return {
+        links: links.map((el) => el.textContent),
+        badged: links.every(ownBadge),
+        texts: glyphs.map((el) => el.textContent),
+        drawn: glyphs.every((el) => (el.matches('svg') ? el.querySelector('path') : el.querySelector('svg path'))),
+        hidden: glyphs.every((el) => el.closest('[aria-hidden="true"]')),
+      };
+    }, SAMPLE_LINK.url);
+    assert.deepEqual(found.links, [SAMPLE_LINK.label], `${header}: the link's text is its label alone`);
+    assert.ok(found.texts.every((text) => text === ''), `${header}: no badge holds text (${JSON.stringify(found.texts)})`);
+    assert.ok(found.drawn, `${header}: every badge draws its letter as a path`);
+    assert.ok(found.hidden, `${header}: every badge is aria-hidden`);
+    if (!TEXT_LABEL_HEADERS.includes(header)) assert.ok(found.badged, `${header}: draws a badge for its link`);
+  }
+});
+
+// A link may have an address and no label (or one of only spaces). A
+// chip's letter is hidden from a screen reader, so the chip shows the
+// address rather than being a link with no name.
+flow('a chip link without a label shows its address', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const { body: before } = await api(page, `/api/resumes/${resumeId}/header`);
+  const spaces = 'https://github.com/you';
+  const header = { ...before.header, links: [{ type: 'linkedin', label: '', url: SAMPLE_LINK.url }, { type: 'github', label: '  ', url: spaces }] };
+  assert.equal((await api(page, `/api/resumes/${resumeId}/header`, { method: 'PUT', body: JSON.stringify(header) })).status, 200);
+  const { body: site } = await api(page, `/api/resumes/${resumeId}/site`);
+  assert.equal((await api(page, `/api/resumes/${resumeId}/site`, { method: 'PUT', body: JSON.stringify({ ...site.site, template: 'chip-links' }) })).status, 200);
+  await page.reload();
+  for (const url of [SAMPLE_LINK.url, spaces]) {
+    const chip = await page.waitForSelector(`.ed-preview-frame a.r-contact-chip[href="${url}"]`);
+    assert.equal(await chip.evaluate((el) => el.textContent), url);
+    assert.ok(await chip.$('svg.r-link-glyph[aria-hidden="true"] path'), 'the chip still draws its letter');
+  }
 });

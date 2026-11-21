@@ -137,7 +137,9 @@ function resolveSection(section, targets, images, { today, withHidden, files }) 
     case 'links': {
       const links = section.links
         .filter((link) => link.url !== '' && isSafeUrl(link.url))
-        .map((link) => ({ ...(link.type ? { type: link.type } : {}), label: link.label || link.url, url: link.url }));
+        // A label of nothing but spaces counts as none: the link's badge is
+        // hidden from a screen reader, so its text is all that names it.
+        .map((link) => ({ ...(link.type ? { type: link.type } : {}), label: (link.label || '').trim() ? link.label : link.url, url: link.url }));
       return links.length ? { links } : null;
     }
     case 'resumes': {

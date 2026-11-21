@@ -103,6 +103,15 @@
   opacity: 0.85;
 }
 
+/* A badge's letter (LinkGlyph.jsx): a path about the height of the UI
+   font's capitals, where the badge used to draw it as text (issue #222).
+   A chip (chip-links) draws it bare, before the label. */
+.r-link-glyph {
+  height: 0.72em;
+  width: auto;
+  flex: none;
+}
+
 .r-header-actions {
   display: flex;
   gap: 8px;
