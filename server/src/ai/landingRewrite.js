@@ -244,7 +244,7 @@ function dates(start, end) {
 // What the AI may know about a resume, from its published snapshot
 // (`{ header, blocks }`): its header's name and title, its summary (an
 // executive summary's headline and overview too, and its highlights), and an
-// outline of its jobs, skills, education and credentials, like brief.js's
+// outline of its jobs, skills, education, credentials and languages, like brief.js's
 // resumeOutline(). Only blocks shown on the web are read, the landing page
 // being a web page; bullets are left out (they carry their own visibility,
 // and an outline is enough to write a short intro from). Null when there's
@@ -259,6 +259,7 @@ function dates(start, end) {
  *   skills?: { category: string, items: string }[],
  *   education?: { degree: string, institution: string }[],
  *   credentials?: { name: string, issuer: string }[],
+ *   languages?: { language: string, level?: string }[],
  * }} LandingProfile
  */
 /**
@@ -269,7 +270,7 @@ export function landingProfile(snapshot) {
   if (!isPlainObject(snapshot)) return null;
   const header = isPlainObject(snapshot.header) ? snapshot.header : {};
   /** @type {Required<LandingProfile>} */
-  const profile = { name: text(header.name), title: text(header.title), summary: '', highlights: [], experience: [], skills: [], education: [], credentials: [] };
+  const profile = { name: text(header.name), title: text(header.title), summary: '', highlights: [], experience: [], skills: [], education: [], credentials: [], languages: [] };
   const addSummary = (value) => {
     if (text(value)) profile.summary = [profile.summary, text(value)].filter(Boolean).join('\n\n');
   };
@@ -294,6 +295,13 @@ export function landingProfile(snapshot) {
     } else if (block.type === 'credentials') {
       const entry = { name: text(data.name), issuer: text(data.issuer) };
       if (entry.name) profile.credentials.push(entry);
+    } else if (block.type === 'languages') {
+      for (const entry of Array.isArray(data.entries) ? data.entries : []) {
+        const language = isPlainObject(entry) ? text(entry.language) : '';
+        if (!language) continue;
+        const level = text(entry.level);
+        profile.languages.push(level ? { language, level } : { language });
+      }
     }
   }
   const nonEmpty = Object.fromEntries(

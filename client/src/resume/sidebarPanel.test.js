@@ -8,3 +8,9 @@ test('credentials share the education rail unless the section contains main cont
   assert.equal(classifySkillsEducationAuto(group('credentials', 'education')), 'secondary');
   assert.equal(classifySkillsEducationAuto(group('credentials', 'experience')), 'primary');
 });
+
+test('languages share the education rail unless the section contains main content', () => {
+  const group = (...types) => ({ blocks: ['heading', ...types].map((type) => ({ type })) });
+  assert.equal(classifySkillsEducationAuto(group('languages')), 'secondary');
+  assert.equal(classifySkillsEducationAuto(group('languages', 'experience')), 'primary');
+});

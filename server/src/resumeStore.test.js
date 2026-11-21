@@ -795,6 +795,28 @@ test('credentials round trip, nest, reorder, publish and follow public visibilit
   assert.equal(blocksForMode(snapshot.blocks, 'print').find((b) => b.id === first.id).data.number, '456');
 });
 
+test('languages round trip, nest, publish and follow public visibility', async (t) => {
+  const { store, db, pdfDir, setting } = makeStore();
+  t.after(() => { db.close(); fs.rmSync(pdfDir, { recursive: true, force: true }); });
+  const heading = store.createBlock({ type: 'heading', data: { text: 'Languages' } });
+  const block = store.createBlock({ type: 'languages', parentId: heading.id, data: { entries: [{ language: 'English', level: 'Native' }] } });
+  assert.equal(store.getBlock(block.id).parentId, heading.id);
+  const entries = [{ language: 'English', level: 'Native' }, { language: 'Spanish', level: 'B2' }];
+  assert.deepEqual(store.updateBlock(block.id, { data: { entries } }).data, { entries });
+  assert.throws(() => store.createBlock({ type: 'languages', data: { entries: 'x' } }), { status: 400 });
+  assert.throws(() => store.updateBlock(block.id, { data: { entries: 'x' } }), { status: 400 });
+  store.updateBlock(block.id, { visibleWeb: false });
+  await store.publish();
+  const snapshot = setting('published_resume');
+  assert.deepEqual(snapshot.blocks.find((b) => b.id === block.id).data, store.getBlock(block.id).data);
+  assert.equal(snapshot.blocks.find((b) => b.id === block.id).type, 'languages');
+  const { blocksForMode } = await import('./publicBlocks.js');
+  const web = blocksForMode(snapshot.blocks, 'web');
+  assert.equal(web.find((b) => b.id === block.id).hidden, true);
+  assert.deepEqual(web.find((b) => b.id === block.id).data, {});
+  assert.deepEqual(blocksForMode(snapshot.blocks, 'print').find((b) => b.id === block.id).data, { entries });
+});
+
 test("the editor's NESTABLE_TYPES mirrors the server's", () => {
   assert.deepEqual([...CLIENT_NESTABLE_TYPES].sort(), [...NESTABLE_TYPES].sort());
 });
