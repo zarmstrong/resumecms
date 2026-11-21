@@ -18,6 +18,7 @@ const draft = {
       title: 'Elsewhere',
       links: [
         { type: 'github', label: '', url: 'https://github.com/jo' },
+        { type: 'gitlab', label: '  ', url: 'https://gitlab.com/jo' },
         { type: 'phone', label: '+1 555 555 0100', url: 'tel:+15555550100' },
         { label: 'half typed', url: '' },
         { label: 'bad', url: 'java\tscript:alert(1)' },
@@ -46,6 +47,7 @@ test('the preview resolves the draft like the server does', () => {
       title: 'Elsewhere',
       links: [
         { type: 'github', label: 'https://github.com/jo', url: 'https://github.com/jo' },
+        { type: 'gitlab', label: 'https://gitlab.com/jo', url: 'https://gitlab.com/jo' },
         { type: 'phone', label: '+1 555 555 0100', url: 'tel:+15555550100' },
       ],
     },

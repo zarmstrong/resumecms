@@ -1,6 +1,6 @@
 import { HeadshotImage, HeaderActions, PhoneText } from '@resume/headerParts.jsx';
 import { safeHref, linkProps } from '@resume/safeUrl.js';
-import { linkGlyph } from '@resume/linkTypes.js';
+import { linkGlyph, linkText } from '@resume/linkTypes.js';
 import { LinkGlyph } from '@resume/LinkGlyph.jsx';
 
 export default function ChipLinksHeader({ header, showActions, onPrint, pdfHref }) {
@@ -25,7 +25,7 @@ export default function ChipLinksHeader({ header, showActions, onPrint, pdfHref 
                 <LinkGlyph glyph={linkGlyph(link)} />
                 {/* The glyph is hidden from a screen reader, so a link
                     without a label shows its address, never just the letter. */}
-                {link.label || link.url}
+                {linkText(link)}
               </a>
             ))}
           </div>

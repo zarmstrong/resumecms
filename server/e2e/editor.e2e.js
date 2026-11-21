@@ -782,19 +782,22 @@ flow('every header draws its link badges as paths, not text', async ({ page }) =
   }
 });
 
-// A link may have an address and no label. A chip's letter is hidden from
-// a screen reader, so the chip shows the address rather than being a link
-// with no name.
+// A link may have an address and no label (or one of only spaces). A
+// chip's letter is hidden from a screen reader, so the chip shows the
+// address rather than being a link with no name.
 flow('a chip link without a label shows its address', async ({ page }) => {
   await login(page);
   const resumeId = await defaultResumeId(page);
   const { body: before } = await api(page, `/api/resumes/${resumeId}/header`);
-  const header = { ...before.header, links: [{ type: 'linkedin', label: '', url: SAMPLE_LINK.url }] };
+  const spaces = 'https://github.com/you';
+  const header = { ...before.header, links: [{ type: 'linkedin', label: '', url: SAMPLE_LINK.url }, { type: 'github', label: '  ', url: spaces }] };
   assert.equal((await api(page, `/api/resumes/${resumeId}/header`, { method: 'PUT', body: JSON.stringify(header) })).status, 200);
   const { body: site } = await api(page, `/api/resumes/${resumeId}/site`);
   assert.equal((await api(page, `/api/resumes/${resumeId}/site`, { method: 'PUT', body: JSON.stringify({ ...site.site, template: 'chip-links' }) })).status, 200);
   await page.reload();
-  const chip = await page.waitForSelector(`.ed-preview-frame a.r-contact-chip[href="${SAMPLE_LINK.url}"]`);
-  assert.equal(await chip.evaluate((el) => el.textContent), SAMPLE_LINK.url);
-  assert.ok(await chip.$('svg.r-link-glyph[aria-hidden="true"] path'), 'the chip still draws its letter');
+  for (const url of [SAMPLE_LINK.url, spaces]) {
+    const chip = await page.waitForSelector(`.ed-preview-frame a.r-contact-chip[href="${url}"]`);
+    assert.equal(await chip.evaluate((el) => el.textContent), url);
+    assert.ok(await chip.$('svg.r-link-glyph[aria-hidden="true"] path'), 'the chip still draws its letter');
+  }
 });

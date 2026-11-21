@@ -1422,8 +1422,11 @@ of the resume (the LinkedIn badge as a stray "I" after the last section).
 Every other way of drawing a letter tried (a `::before`, an SVG `<text>`,
 an SVG background image or mask, a tagged PDF) still writes it as text.
 `LinkBadge` is the square badge; `chip-links` draws the bare
-`LinkGlyph` inside the link, so a link with no label shows its address
-there rather than being a link with no name. A browser flow finds every
+`LinkGlyph` inside the link, so a link whose label is empty or only
+spaces shows its address there (`linkText()` in `linkTypes.js`) rather
+than being a link with no name; the landing page's links section, whose
+badge is inside the link too, gets the same from `resolveLanding()` (both
+copies). A browser flow finds every
 header's sample link by its address and checks that its text is the label
 alone, that no badge holds text and that the link has a badge of its own.
 The `labeled-header` header's row labels ("e:") are text on purpose (the

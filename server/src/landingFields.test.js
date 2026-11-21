@@ -351,7 +351,7 @@ test('resolveLanding shows only available resumes, without ids or internal names
     sections: [
       { id: 'intro', kind: 'text', title: 'About', body: 'Hello' },
       { id: 'blank', kind: 'text', title: 'Nothing here', body: '  \n ' },
-      { id: 'links', kind: 'links', title: '', links: [{ label: '', url: 'https://a.example' }, { label: 'no url', url: '' }] },
+      { id: 'links', kind: 'links', title: '', links: [{ label: '', url: 'https://a.example' }, { label: ' \t', url: 'https://b.example' }, { label: 'no url', url: '' }] },
       {
         id: 'projects',
         kind: 'items',
@@ -386,7 +386,7 @@ test('resolveLanding shows only available resumes, without ids or internal names
   const out = resolveLanding(landing, context);
   assert.deepEqual(out.sections, [
     { kind: 'text', title: 'About', body: 'Hello' },
-    { kind: 'links', title: '', links: [{ label: 'https://a.example', url: 'https://a.example' }] },
+    { kind: 'links', title: '', links: [{ label: 'https://a.example', url: 'https://a.example' }, { label: 'https://b.example', url: 'https://b.example' }] },
     {
       kind: 'items',
       title: 'Projects',

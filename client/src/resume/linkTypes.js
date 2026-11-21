@@ -97,6 +97,13 @@ export function linkGlyph(link) {
   return linkTypeConfig(inferLinkType(link)).glyph;
 }
 
+// What a link shows where its text is all that names it (its badge is
+// hidden from a screen reader): its label, or its address when the label
+// is empty or only spaces.
+export function linkText(link) {
+  return String(link.label ?? '').trim() ? link.label : link.url;
+}
+
 // For a type whose URL is just its label in another form (email, phone),
 // the URL a label change should leave behind: the new label's URL while
 // the link's URL still follows its label (empty, or what the old label
