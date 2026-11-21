@@ -39,11 +39,15 @@ export function pdfMarginColor(site) {
   return typeof background === 'string' && HEX_COLOR.test(background) ? background : WHITE;
 }
 
-// The footer is drawn in that margin, so the resume's text color is used
-// only while it reads on the margin's color (WCAG AA for normal text), and
-// otherwise whichever of near-black and white reads better there
-// (favicon.js's inkFor(), the client's contrastTextFor()).
+// The footer is drawn in that margin, so it always has WCAG AA contrast for
+// normal text there: the resume's text color while it reads on the margin's
+// color, otherwise whichever of near-black and white reads better
+// (favicon.js's inkFor(), the client's contrastTextFor()). On some
+// mid-tones neither of those reaches it (about 4.2:1 at worst), and then
+// it's the better of pure black and white, one of which has at least
+// 4.58:1 on any color.
 const MIN_CONTRAST = 4.5;
+const BLACK = '#000000';
 const contrast = (a, b) => {
   const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
@@ -53,7 +57,11 @@ const contrast = (a, b) => {
  * @param {string} margin a #rrggbb
  */
 function footerInk(text, margin) {
-  return typeof text === 'string' && HEX_COLOR.test(text) && contrast(text, margin) >= MIN_CONTRAST ? text : inkFor(margin);
+  const reads = (color) => contrast(color, margin) >= MIN_CONTRAST;
+  if (typeof text === 'string' && HEX_COLOR.test(text) && reads(text)) return text;
+  const ink = inkFor(margin);
+  if (reads(ink)) return ink;
+  return contrast(BLACK, margin) >= contrast(WHITE, margin) ? BLACK : WHITE;
 }
 
 /**

@@ -1790,8 +1790,10 @@ colors, each used only as `#rrggbb`: the footer sits in the margin, which
 is painted in the background (`pdfMarginColor()`, white unless it's a
 `#rrggbb`, mirroring the client's `printMarginColor()`, and
 `pageStyle.test.js` compares the two), so the text color is used only
-while it has 4.5:1 on that color and `inkFor()` of it (`favicon.js`, the
-client's `contrastTextFor()`) otherwise; plus a serif or sans family picked from
+while it has 4.5:1 on that color, `inkFor()` of it (`favicon.js`, the
+client's `contrastTextFor()`) otherwise, and, on the mid-tones where that
+doesn't reach 4.5:1 either (see "Text on a color"), the better of pure
+black and white, which always does; plus a serif or sans family picked from
 the font id (`SANS_FONT_IDS`, compared with the client's `FONT_OPTIONS`),
 so no free text from the settings or the snapshot ever reaches it; keep it
 that way if you add anything to it.

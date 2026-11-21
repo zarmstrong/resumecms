@@ -61,6 +61,55 @@ test("on a colored margin (issue #213) the footer keeps the text color while it 
   assert.equal(ink({ background: 'navy', text: '#d5dbe1' }), '#14181c');
 });
 
+// WCAG contrast ratio, worked out apart from pdfFooter.js's own.
+const luminance = (hex) => {
+  const channel = (i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+};
+const ratio = (a, b) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+test('on a mid-tone margin where neither near-black nor white reaches 4.5:1, the footer is pure black or white', () => {
+  const ink = (colors) => pdfPageOptions({ pdfPageNumbers: true, colors }).footerTemplate.match(/color: ([^;]+);/)[1];
+  // inkFor() picks near-black here, at 4.27:1; white has 4.17:1.
+  assert.equal(inkFor('#7c7c7c'), '#14181c');
+  assert.ok(ratio('#14181c', '#7c7c7c') < 4.5);
+  assert.equal(ink({ background: '#7c7c7c', text: '#ffffff' }), '#000000');
+  assert.equal(ink({ background: '#7c7c7c' }), '#000000');
+  // And white here, at 4.48:1.
+  assert.equal(inkFor('#777777'), '#ffffff');
+  assert.equal(ink({ background: '#777777', text: '#14181c' }), '#000000');
+  // A text color that reads there is still kept.
+  assert.equal(ink({ background: '#7c7c7c', text: '#000000' }), '#000000');
+  assert.equal(ink({ background: '#7c7c7c', text: '#050505' }), '#050505');
+});
+
+test('the footer has at least 4.5:1 on the margin, whatever the background and text colors', () => {
+  const hex = (n) => n.toString(16).padStart(2, '0');
+  const texts = [undefined, '#ffffff', '#000000', '#14181c', '#d5dbe1', '#777777', '#7c7c7c', 'red'];
+  let lowest = Infinity;
+  for (let r = 0; r < 256; r += 15) {
+    for (let g = 0; g < 256; g += 15) {
+      for (let b = 0; b < 256; b += 15) {
+        const background = `#${hex(r)}${hex(g)}${hex(b)}`;
+        for (const text of [...texts, background]) {
+          const { footerTemplate } = pdfPageOptions({ pdfPageNumbers: true, colors: { background, text } });
+          const color = footerTemplate.match(/color: (#[0-9a-f]{6});/i)[1];
+          const got = ratio(color, background);
+          lowest = Math.min(lowest, got);
+          if (got < 4.5) assert.fail(`${color} on ${background} (text ${text}) is ${got.toFixed(2)}:1`);
+        }
+      }
+    }
+  }
+  assert.ok(lowest >= 4.5 && lowest < 5, String(lowest));
+});
+
 test("the footer's family follows the resume's font, a missing or unknown one reading as the default serif", () => {
   const family = (font) => pdfPageOptions({ pdfPageNumbers: true, font }).footerTemplate.match(/font-family: ([^;]+);/)[1];
   assert.match(family('lora'), /serif$/);

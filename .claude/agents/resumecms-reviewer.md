@@ -166,7 +166,8 @@ in prose; check the diff against the ones that apply, especially:
 - The PDF footer (`pdfFooter.js`, page numbers) never takes free text from
   the site settings or the snapshot: only `#rrggbb` colors and a font
   family it picks itself, read from the snapshot `/print` was served. Its
-  ink reads on the margin's color, which the server's `pdfMarginColor()`
+  ink has at least 4.5:1 on the margin's color whatever the colors (pure
+  black or white where `inkFor()` falls short), which the server's `pdfMarginColor()`
   and the client's `printMarginColor()` (`pageStyle.js`, the `@page`
   background `usePrintBackground()` paints, issue #213) must agree on;
   the `page.pdf()` margins stay, so a white page's PDF doesn't move.
