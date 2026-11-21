@@ -1438,7 +1438,9 @@ layout overrides; an item without one renders exactly the markup it did
 before, so existing resumes and PDFs don't change. Being free text, the
 date may wrap (an entry's does only in `academic`): it never shrinks, but a long one
 stops at 40% of the row and wraps there, right-aligned (the block's own
-alignment wherever the row stacks). The row stacks where
+alignment wherever the row stacks), and the heading beside it gives way
+(`min-width: 0`, breaking a word that doesn't fit) rather than push the
+row out of a narrow column. The row stacks where
 `.r-experience-top` does (narrow screens, the sidebar rail), a centered
 or right-aligned block puts the date under the heading, and the
 `academic` layout reaches a dated item back over its custom-block indent
@@ -1449,11 +1451,19 @@ item so it comes through as stored, and the editor's `targetSlice()`
 leaves it out. Its staleness check also compares custom items as the
 form writes them back (a legacy item with its `bodyType` and `text`
 added, keys sorted: `comparableItem()`), so a date edit alone, even
-on a block of legacy items, makes no proposal stale. Relocation
+on a block of legacy items, makes no proposal stale, with one exception
+(`twinsRedated()`): a block proposal that words entries differently which
+are the same but for their date goes stale once any of those entries'
+dates isn't the one it was made against, since the date is all that says
+which is which (they may have been reordered, and a block proposal has
+no anchor to follow that with). Relocation
 (`relocateTarget()`) first checks whether only dates changed (the same
 number of items, each the same with dates ignored); then every item
 proposal stays on its index, even when the edit makes two items
-identical or a cleared date makes them so. Otherwise it compares items
+identical or a cleared date makes them so, unless the dated items are
+the anchor's own in another order (`isReordering()`: entries that differ
+only by date were reordered, which one date edit can't do), and then it
+follows its entry by the rules below. Otherwise it compares items
 with the date kept (`placeJson()`), since the lists it's for repeat an
 entry that differs only by date (the same award every year), and drops
 an item proposal that would otherwise stay, not stale, over another

@@ -235,6 +235,17 @@ export function lcsPairs(a, b) {
   return pairs;
 }
 
+// True when `b` holds exactly `a`'s entries in another order.
+/**
+ * @param {string[]} a
+ * @param {string[]} b
+ */
+function isReordering(a, b) {
+  if (a.length !== b.length || a.every((entry, i) => entry === b[i])) return false;
+  const sorted = [...b].sort();
+  return [...a].sort().every((entry, i) => entry === sorted[i]);
+}
+
 // Bullet and item proposals are tied to a position, and positions shift
 // when bullets or items are dragged, deleted, or added. Returns where the
 // proposal applies now, by aligning the bullets (or items) at its depth in
@@ -246,7 +257,10 @@ export function lcsPairs(a, b) {
 // 0. If only custom item dates changed (every position the same with
 //    dates ignored), nothing moved. The rules below compare items with
 //    their dates (placeJson), to tell entries apart that differ only by
-//    date, which a date edit alone mustn't turn into a move.
+//    date, which a date edit alone mustn't turn into a move. Unless the
+//    dated items are the anchor's own in another order: one date edit
+//    can't do that, so entries that differ only by date were reordered,
+//    and the rules below follow the proposal's own.
 // 1. Unchanged bullets are paired in order (longest common subsequence).
 //    If the proposal's own bullet is paired, that's where it is now: this
 //    follows inserts and deletes above it.
@@ -283,20 +297,24 @@ export function relocateTarget(type, proposal, currentData) {
   const currentPositions = positionsOf(currentData, target.kind).filter(sameDepth);
   const o = basePositions.findIndex((t) => targetKey(t) === targetKey(target));
   if (o === -1) return stay;
+  const a = basePositions.map((t) => placeJson(type, anchor, t));
+  const b = currentPositions.map((t) => placeJson(type, currentData, t));
   // Nothing but dates changed (the same items in the same places): every
   // proposal stays put. Matching by date could otherwise pair a twin with
   // the wrong one when a date edit makes two items identical, or tell two
-  // apart that a cleared date made the same.
+  // apart that a cleared date made the same. But the same dated items in
+  // another order are a reorder of entries that differ only by date (the
+  // 2020 and 2021 awards swapped), which no single date edit leaves
+  // behind: those go on to the rules below, by date.
   if (
     type === 'custom' &&
     target.kind === 'item' &&
     basePositions.length === currentPositions.length &&
-    basePositions.every((t, i) => sliceJson(type, anchor, t) === sliceJson(type, currentData, currentPositions[i]))
+    basePositions.every((t, i) => sliceJson(type, anchor, t) === sliceJson(type, currentData, currentPositions[i])) &&
+    !isReordering(a, b)
   ) {
     return stay;
   }
-  const a = basePositions.map((t) => placeJson(type, anchor, t));
-  const b = currentPositions.map((t) => placeJson(type, currentData, t));
   const pairs = lcsPairs(a, b);
 
   const paired = pairs.find(([i]) => i === o);
@@ -369,9 +387,10 @@ export function applyProposal(type, currentData, proposal) {
       // ids, so a current date is matched to a proposed item by position,
       // and only while the proposal isn't stale (every item but its date is
       // as the proposal was made for, so position i is still the same
-      // item). Once items were added, removed, reordered or edited, the
-      // positions can't be trusted, and the proposal keeps the dates it was
-      // made against, which a rewrite never changes.
+      // item, or one it words the same). Once items were added, removed,
+      // reordered or edited, the positions can't be trusted, and the
+      // proposal keeps the dates it was made against, which a rewrite never
+      // changes.
       if (type === 'custom') {
         const items = proposedData.items;
         const current = currentData.items;
@@ -703,5 +722,38 @@ export function bulletChange(item) {
  * @param {Record<string, any> | null | undefined} currentData
  */
 export function isProposalStale(type, proposal, currentData) {
-  return sliceJson(type, proposal.baseData, originOf(proposal)) !== sliceJson(type, currentData, proposal.target);
+  if (sliceJson(type, proposal.baseData, originOf(proposal)) !== sliceJson(type, currentData, proposal.target)) return true;
+  return type === 'custom' && targetKey(proposal.target) === 'block' && twinsRedated(proposal, currentData);
+}
+
+// A custom block proposal goes by position, and a date edit doesn't make
+// it stale. That leaves one case where its positions can't be trusted
+// though nothing but dates differs: entries that are the same but for
+// their date (the same award in 2020 and 2021), which the proposal words
+// differently, and whose dates aren't the ones it was made against. The
+// date is all that tells such entries apart, so they may have been
+// reordered, or one deleted and another added, and each would get the
+// other's rewrite. Entries the proposal words alike can't be mixed up,
+// and a date edited on any other item is still just a date edit.
+/**
+ * @param {AiProposal} proposal
+ * @param {Record<string, any> | null | undefined} currentData
+ */
+function twinsRedated(proposal, currentData) {
+  const base = proposal.baseData?.items;
+  const proposed = proposal.proposedData?.items;
+  const current = currentData?.items;
+  if (!Array.isArray(base) || !Array.isArray(proposed) || !Array.isArray(current)) return false;
+  if (base.length !== proposed.length || base.length !== current.length) return false;
+  const dateless = (item) => JSON.stringify(comparableItem(withoutDate(item ?? null)) ?? null);
+  const dateOf = (item) => (typeof item?.date === 'string' ? item.date : '');
+  /** @type {Map<string, number[]>} */
+  const twins = new Map();
+  base.forEach((item, i) => twins.set(dateless(item), [...(twins.get(dateless(item)) || []), i]));
+  for (const group of twins.values()) {
+    if (group.length < 2) continue;
+    if (group.every((i) => dateless(proposed[i]) === dateless(proposed[group[0]]))) continue;
+    if (group.some((i) => dateOf(current[i]) !== dateOf(base[i]))) return true;
+  }
+  return false;
 }

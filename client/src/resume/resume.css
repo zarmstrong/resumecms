@@ -770,6 +770,15 @@
   font-weight: 600;
 }
 
+/* The heading gives way to the date: it may shrink below its longest
+   word, which then breaks, instead of pushing the row out of a narrow
+   column (two columns, a rail, a phone). An undated item's heading is a
+   plain block and isn't touched. */
+.r-custom-item-top > .r-custom-item-heading {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* The date is free text, so unlike an entry's it may wrap: it never
    shrinks (a short one draws as an entry's does), but a long one ("Accepted,
    Journal of X (in press)") stops at 40% of the row and wraps there,

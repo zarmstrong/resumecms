@@ -357,6 +357,95 @@ test('a date edit that makes two items twins leaves each proposal on its own ite
   }
 });
 
+// Entries that differ only by date, reordered: with dates ignored nothing
+// moved, but no date edit leaves the same dated items in another order.
+test('an item proposal follows its entry when entries that differ only by date are reordered', () => {
+  const award = (date, text = 'Conf X') => ({ heading: 'Best paper', bodyType: 'text', text, date });
+  const base = { title: 'Awards', items: [award('2020'), award('2021')] };
+  const swapped = { ...base, items: [award('2021'), award('2020')] };
+  for (const index of [0, 1]) {
+    const year = base.items[index].date;
+    const proposedData = { ...base, items: base.items.map((it, i) => (i === index ? award(it.date, `R${year}`) : it)) };
+    const proposal = { target: { kind: 'item', index }, baseData: base, proposedData };
+    const target = relocateTarget('custom', proposal, swapped);
+    assert.deepEqual(target, { kind: 'item', index: 1 - index }, `the ${year} award`);
+    const placed = { ...proposal, target, origin: proposal.target, anchorData: swapped };
+    assert.equal(isProposalStale('custom', placed, swapped), false);
+    assert.deepEqual(
+      applyProposal('custom', swapped, placed).items,
+      swapped.items.map((it) => (it.date === year ? award(year, `R${year}`) : it))
+    );
+    assert.deepEqual(previewData('custom', swapped, [placed]).items.find((it) => it.date === year), award(year, `R${year}`));
+  }
+
+  // Three of them, the first dragged to the end; one of another kind stays.
+  const other = { heading: 'Fellow', bodyType: 'text', text: 'Society Y', date: '2020' };
+  const three = { title: 'Awards', items: [award('2019'), award('2020'), award('2021'), other] };
+  const dragged = { ...three, items: [award('2020'), award('2021'), award('2019'), other] };
+  const at = (index) => relocateTarget('custom', { target: { kind: 'item', index }, baseData: three, proposedData: three }, dragged);
+  assert.deepEqual([0, 1, 2].map(at), [{ kind: 'item', index: 2 }, { kind: 'item', index: 0 }, { kind: 'item', index: 1 }]);
+  const fellow = { target: { kind: 'item', index: 3 }, baseData: three, proposedData: three };
+  assert.equal(relocateTarget('custom', fellow, dragged), fellow.target);
+
+  // Exact copies swapped are the same data: nothing to follow.
+  const copies = { title: 'Awards', items: [award('2020'), award('2020')] };
+  const copy = { target: { kind: 'item', index: 0 }, baseData: copies, proposedData: copies };
+  assert.equal(relocateTarget('custom', copy, { ...copies, items: [award('2020'), award('2020')] }), copy.target);
+});
+
+// A block proposal goes by position, and has no anchor to follow a reorder
+// with. Where the date is all that tells entries apart and it words them
+// differently, dates that aren't the ones it was made against make it
+// stale, so each entry can't silently get another year's rewrite.
+test('a custom block proposal goes stale when entries that differ only by date may have traded places', () => {
+  const award = (date, text = 'Conf X') => ({ heading: 'Best paper', bodyType: 'text', text, ...(date ? { date } : {}) });
+  const talk = { heading: 'Keynote', bodyType: 'text', text: 'Conf Z', date: '2018' };
+  const base = { title: 'Awards', items: [award('2020'), award('2021'), talk] };
+  const proposedData = { title: 'Awards', items: [award('2020', 'R2020'), award('2021', 'R2021'), { ...talk, text: 'RZ' }] };
+  const proposal = { blockId: 'b', target: BLOCK_TARGET, baseData: base, proposedData };
+  const blockOf = (data) => [{ id: 'b', type: 'custom', data }];
+
+  assert.equal(isProposalStale('custom', proposal, base), false);
+
+  // Swapped: accepting would put the 2020 rewrite on the 2021 award.
+  const swapped = { ...base, items: [award('2021'), award('2020'), talk] };
+  assert.equal(isProposalStale('custom', proposal, swapped), true);
+  assert.equal(applyProposal('custom', swapped, proposal), proposedData);
+  assert.deepEqual(acceptAllPlan(blockOf(swapped), [proposal]), { changes: [], accepted: [], skipped: [proposal] });
+
+  // Swapped and then redated, or one deleted and another year added: the
+  // dates can't say which entry is which any more.
+  for (const items of [
+    [award('2021'), award('2019'), talk],
+    [award('2021'), award('2022'), talk],
+    [award('2020'), award(), talk],
+  ]) {
+    assert.equal(isProposalStale('custom', proposal, { ...base, items }), true, JSON.stringify(items.map((it) => it.date)));
+  }
+
+  // A date edited on an entry nothing else looks like is only a date edit.
+  const redated = { ...base, items: [award('2020'), award('2021'), { ...talk, date: '2019' }] };
+  assert.equal(isProposalStale('custom', proposal, redated), false);
+  assert.deepEqual(applyProposal('custom', redated, proposal).items, [award('2020', 'R2020'), award('2021', 'R2021'), { ...talk, text: 'RZ', date: '2019' }]);
+  assert.equal(acceptAllPlan(blockOf(redated), [proposal]).accepted.length, 1);
+
+  // Entries it words alike can't be mixed up, wherever they went.
+  const alike = { ...proposal, proposedData: { ...proposedData, items: [award('2020', 'R'), award('2021', 'R'), { ...talk, text: 'RZ' }] } };
+  assert.equal(isProposalStale('custom', alike, swapped), false);
+  assert.deepEqual(applyProposal('custom', swapped, alike).items, [award('2021', 'R'), award('2020', 'R'), { ...talk, text: 'RZ' }]);
+
+  // A legacy pair counts as it's stored after the form normalized it.
+  const legacy = (date) => ({ heading: 'Best paper', body: 'Conf X', date });
+  const legacyProposal = {
+    target: BLOCK_TARGET,
+    baseData: { title: 'Awards', items: [legacy('2020'), legacy('2021')] },
+    proposedData: { title: 'Awards', items: [award('2020', 'R2020'), award('2021', 'R2021')] },
+  };
+  const normalized = (date) => ({ ...legacy(date), bodyType: 'text', text: 'Conf X' });
+  assert.equal(isProposalStale('custom', legacyProposal, { title: 'Awards', items: [normalized('2020'), normalized('2021')] }), false);
+  assert.equal(isProposalStale('custom', legacyProposal, { title: 'Awards', items: [normalized('2021'), normalized('2020')] }), true);
+});
+
 // The form writes every legacy { heading, body } item back with a bodyType
 // and text on any edit to its block, a date's included.
 test('a date edit on a block of legacy custom items makes none of its proposals stale', () => {
