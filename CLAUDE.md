@@ -1422,9 +1422,13 @@ of the resume (the LinkedIn badge as a stray "I" after the last section).
 Every other way of drawing a letter tried (a `::before`, an SVG `<text>`,
 an SVG background image or mask, a tagged PDF) still writes it as text.
 `LinkBadge` is the square badge; `chip-links` draws the bare
-`LinkGlyph`. A browser flow checks every header for a badge holding text.
-The `labeled-header` header's row labels ("e:") are text on purpose: they
-label the value beside them, in reading order.
+`LinkGlyph` inside the link, so a link with no label shows its address
+there rather than being a link with no name. A browser flow finds every
+header's sample link by its address and checks that its text is the label
+alone, that no badge holds text and that the header draws one.
+The `labeled-header` header's row labels ("e:") are text on purpose (the
+flow's `TEXT_LABEL_HEADERS`): they label the value beside them, in
+reading order.
 
 A `credentials` block holds one license, certification or membership, with
 `kind`, `name`, `issuer`, `number`, `issued`, `expires` and `url`. It nests

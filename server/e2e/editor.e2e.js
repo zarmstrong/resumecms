@@ -744,31 +744,53 @@ flow('adds a languages block and preserves its entries after reload', async ({ p
 
 // Issue #222: a link's type letter is drawn as a path, never as text, so a
 // PDF's text layer (what an ATS parser reads) holds only the link itself.
-// Every header, through the template preview's sample header and its link.
+// Every header, through the template preview's sample header and its link:
+// the link is found by its address, not by its badge, so a header that
+// went back to a text letter (or lost its badge) fails rather than passing
+// with nothing to check.
+const SAMPLE_LINK = { label: 'linkedin.com/in/you', url: 'https://linkedin.com/in/you' };
+// The one header with no badge: its row labels ("i:") are text on purpose.
+const TEXT_LABEL_HEADERS = ['labeled-header'];
+
 flow('every header draws its link badges as paths, not text', async ({ page }) => {
   const headers = readdirSync(path.join(REPO_ROOT, 'templates/headers'), { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
-  let badged = 0;
+  assert.ok(headers.length >= 19, `found the header templates (${headers.length})`);
   for (const header of headers) {
     await page.goto(`${server.baseUrl}/template-preview?header=${header}`);
-    await page.waitForSelector('.r-header');
-    const found = await page.evaluate(() => {
+    await page.waitForSelector(`.r-header a[href="${SAMPLE_LINK.url}"]`);
+    const found = await page.evaluate((url) => {
       const glyphs = [...document.querySelectorAll('.r-header .r-link-badge, .r-header .r-link-glyph')];
-      const chips = [...document.querySelectorAll('.r-header a.r-contact-chip:has(.r-link-glyph)')];
       return {
+        links: [...document.querySelectorAll(`.r-header a[href="${url}"]`)].map((el) => el.textContent),
         count: glyphs.length,
         texts: glyphs.map((el) => el.textContent),
-        drawn: glyphs.every((el) => el.matches('svg') ? el.querySelector('path') : el.querySelector('svg path')),
+        drawn: glyphs.every((el) => (el.matches('svg') ? el.querySelector('path') : el.querySelector('svg path'))),
         hidden: glyphs.every((el) => el.closest('[aria-hidden="true"]')),
-        chips: chips.map((el) => el.textContent),
       };
-    });
+    }, SAMPLE_LINK.url);
+    assert.deepEqual(found.links, [SAMPLE_LINK.label], `${header}: the link's text is its label alone`);
     assert.ok(found.texts.every((text) => text === ''), `${header}: no badge holds text (${JSON.stringify(found.texts)})`);
     assert.ok(found.drawn, `${header}: every badge draws its letter as a path`);
     assert.ok(found.hidden, `${header}: every badge is aria-hidden`);
-    assert.ok(found.chips.every((text) => text === 'linkedin.com/in/you'), `${header}: a link chip's text is its label alone (${JSON.stringify(found.chips)})`);
-    if (found.count) badged += 1;
+    if (!TEXT_LABEL_HEADERS.includes(header)) assert.ok(found.count > 0, `${header}: draws a badge for its link`);
   }
-  assert.ok(badged >= 16, `most headers draw a badge (${badged} of ${headers.length})`);
+});
+
+// A link may have an address and no label. A chip's letter is hidden from
+// a screen reader, so the chip shows the address rather than being a link
+// with no name.
+flow('a chip link without a label shows its address', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const { body: before } = await api(page, `/api/resumes/${resumeId}/header`);
+  const header = { ...before.header, links: [{ type: 'linkedin', label: '', url: SAMPLE_LINK.url }] };
+  assert.equal((await api(page, `/api/resumes/${resumeId}/header`, { method: 'PUT', body: JSON.stringify(header) })).status, 200);
+  const { body: site } = await api(page, `/api/resumes/${resumeId}/site`);
+  assert.equal((await api(page, `/api/resumes/${resumeId}/site`, { method: 'PUT', body: JSON.stringify({ ...site.site, template: 'chip-links' }) })).status, 200);
+  await page.reload();
+  const chip = await page.waitForSelector(`.ed-preview-frame a.r-contact-chip[href="${SAMPLE_LINK.url}"]`);
+  assert.equal(await chip.evaluate((el) => el.textContent), SAMPLE_LINK.url);
+  assert.ok(await chip.$('svg.r-link-glyph[aria-hidden="true"] path'), 'the chip still draws its letter');
 });
