@@ -71,11 +71,12 @@ function ColorFields({ colors, defaults, onChange, what }) {
 // palette. `site` is the default resume's published site settings
 // (GET /api/landing's context). `onApply` copies the page's own colors and
 // fonts into that resume's draft (LandingEditorPage's handleApplyStyle),
-// `applyState` says how that went. The template is picked from thumbnails
+// `applyState` says how that went, and `busy` that the page is in the
+// middle of something it can't run beside. The template is picked from thumbnails
 // of the page (LandingTemplatePicker, issue #130), drawn from `preview`
 // ({ draft, context, scheme }: what the editor's preview draws) only while
 // the group is open.
-export function LandingLookFields({ landing, site, onChange, onApply, applyState, preview }) {
+export function LandingLookFields({ landing, site, onChange, onApply, applyState, busy, preview }) {
   const [open, setOpen] = useState(false);
   const style = { ...EMPTY_STYLE, ...landing.style };
   const template = getLandingTemplate(landing.template);
@@ -146,7 +147,7 @@ export function LandingLookFields({ landing, site, onChange, onApply, applyState
             </div>
             <ColorFields colors={style.colors} defaults={DEFAULT_SITE_COLORS} onChange={(colors) => setStyle({ ...style, colors })} />
             <div className="ed-field">
-              <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={onApply} disabled={applyState?.status === 'applying'}>
+              <button type="button" className="ed-btn ed-btn-ghost ed-btn-sub" onClick={onApply} disabled={busy || applyState?.status === 'applying'}>
                 {applyState?.status === 'applying' ? 'Applying…' : 'Apply to the default resume…'}
               </button>
               <span className="ed-field-hint">

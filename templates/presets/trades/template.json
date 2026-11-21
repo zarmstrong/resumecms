@@ -3,6 +3,7 @@
   "label": "Trades",
   "description": "For skilled tradespeople, a bold amber banner and ruled entries keep practical experience easy to scan.",
   "author": "resumecms",
+  "group": "profession",
   "header": "banner",
   "layout": "rule-entries",
   "colors": {

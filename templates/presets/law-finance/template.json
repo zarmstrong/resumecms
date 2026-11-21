@@ -3,6 +3,7 @@
   "label": "Law & finance",
   "description": "For legal and finance professionals, navy double rules and small caps give the resume a formal serif look.",
   "author": "resumecms",
+  "group": "profession",
   "header": "double-rule",
   "layout": "small-caps",
   "colors": {

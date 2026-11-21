@@ -446,7 +446,7 @@ for (const id of presetIds) {
   checkId(id, label);
   const meta = readJson(path.join(dir, 'template.json'), label);
   checkMeta(meta, label, [
-    'id', 'header', 'layout', 'colors', 'font', 'fontSize', 'lineSpacing', 'pillPadding',
+    'id', 'header', 'layout', 'colors', 'font', 'fontSize', 'lineSpacing', 'pillPadding', 'group',
   ]);
   if (!meta) continue;
   if (meta.id !== id) errors.push(`${label}: "id" (${meta.id}) must match its folder name`);
@@ -455,6 +455,9 @@ for (const id of presetIds) {
   }
   if (!layoutIds.includes(meta.layout)) {
     errors.push(`${label}: "layout" references unknown layout "${meta.layout}"`);
+  }
+  if ('group' in meta && meta.group !== 'profession') {
+    errors.push(`${label}: "group" must be "profession" when set`);
   }
   if (meta.colors) {
     for (const [key, value] of Object.entries(meta.colors)) {
@@ -473,9 +476,12 @@ for (const id of landingPresetIds) {
   const label = `templates/landing-presets/${id}`;
   checkId(id, label);
   const meta = readJson(path.join(dir, 'template.json'), label);
-  checkMeta(meta, label, ['id', 'template', 'style', 'sections']);
+  checkMeta(meta, label, ['id', 'template', 'style', 'sections', 'resumePreset']);
   if (!meta) continue;
   if (meta.id !== id) errors.push(`${label}: "id" (${meta.id}) must match its folder name`);
+  if ('resumePreset' in meta && !(typeof meta.resumePreset === 'string' && presetIds.includes(meta.resumePreset))) {
+    errors.push(`${label}: "resumePreset" references unknown resume preset "${meta.resumePreset}"`);
+  }
   if (!landingIds.includes(meta.template)) {
     errors.push(`${label}: "template" references unknown landing template "${meta.template}"`);
   }

@@ -3,6 +3,7 @@
   "label": "Healthcare",
   "description": "A formal page for nurses, therapists, pharmacists, physicians and caregivers: your licenses and certifications first, then where you've worked, how to reach you and answers to the questions you're asked most.",
   "author": "resumecms",
+  "resumePreset": "healthcare",
   "template": "formal",
   "style": {
     "source": "custom",

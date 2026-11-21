@@ -121,6 +121,7 @@ where header style and body layout are browsed and picked independently,
 mixed freely, and previewed live against your actual resume content before
 you apply anything. Its **Presets** mode previews and applies a bundled
 header, layout, colors and type settings, keeping your title and description.
+The presets named for a line of work are listed under **By profession**, the rest under **By look**.
 Headers, layouts, and the curated **presets** that
 bundle a header + layout + optional colors/fonts under one shareable name
 (previewable via `/template-preview/preset/<id>`, and used to generate the
@@ -706,7 +707,7 @@ applied, full size and at desktop or phone width, without changing it; **Use thi
 them again at any time, and asks first. Nothing is published until you
 publish. Presets are files under
 [`templates/landing-presets/`](templates/landing-presets/) (see
-[`templates/README.md`](templates/README.md#landing-page-presets)).
+[`templates/README.md`](templates/README.md#landing-page-presets)). A landing preset with a matching resume preset (Healthcare, say) also offers, once applied, to apply that resume preset to your default resume's draft, in a banner; accepting changes only that draft, and nothing is published.
 
 Its **Search & sharing** group sets the title and description search
 results and link previews use (otherwise the headline, and the

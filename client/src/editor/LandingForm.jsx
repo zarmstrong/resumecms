@@ -187,7 +187,7 @@ function AiField({ ai, ...props }) {
 // `ai` is LandingEditorPage's AI rewrite state and handlers (issue #73),
 // `onUploadImage` its image upload (issue #92, see LandingImageField),
 // `onUploadFile` its document upload (issue #128, see LandingFileField),
-// `look` its "Apply to the default resume" ({ onApply, applyState }, issue
+// `look` its "Apply to the default resume" ({ onApply, applyState, busy }, issue
 // #93) and what its preview draws ({ preview: { draft, context, scheme } },
 // for the template thumbnails, issue #130; see LandingLookFields).
 export function LandingForm({ landing, resumes, context, limits, onChange, ai, onUploadImage, onUploadFile, onTyped, look }) {
@@ -352,6 +352,7 @@ export function LandingForm({ landing, resumes, context, limits, onChange, ai, o
         onChange={set}
         onApply={look?.onApply}
         applyState={look?.applyState}
+        busy={look?.busy}
         preview={look?.preview ?? { draft: landing, context }}
       />
 

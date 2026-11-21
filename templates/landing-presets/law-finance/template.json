@@ -3,6 +3,7 @@
   "label": "Law, finance and accounting",
   "description": "A formal page for lawyers, accountants, financial advisers and paralegals: your practice in brief, your admissions and licenses, where you've worked, your education and how to reach you.",
   "author": "resumecms",
+  "resumePreset": "law-finance",
   "template": "formal",
   "style": {
     "source": "custom",

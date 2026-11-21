@@ -1159,6 +1159,35 @@
   color: var(--signal);
 }
 
+/* The resume preset offer after a landing preset (issue #219). */
+.ed-offer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--signal-dim);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.ed-offer span {
+  flex: 1 1 200px;
+  color: var(--signal);
+}
+
+.ed-offer-failed span {
+  color: var(--warn);
+}
+
+/* Focus moves to the banner itself while its buttons are away. */
+.ed-offer:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
 .ed-tailor-bar-failed {
   flex-basis: 100%;
   order: 1;

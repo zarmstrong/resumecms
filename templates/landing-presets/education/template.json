@@ -3,6 +3,7 @@
   "label": "Teaching and education",
   "description": "For teachers, tutors, coaches and trainers: a few words about how you teach, your certifications, where you've taught and materials to download, such as a teaching philosophy or a sample lesson plan.",
   "author": "resumecms",
+  "resumePreset": "education",
   "template": "classic",
   "style": {
     "source": "custom",

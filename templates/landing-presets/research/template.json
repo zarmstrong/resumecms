@@ -3,6 +3,7 @@
   "label": "Research and academia",
   "description": "A long page with a table of contents, for researchers, academics and consultants: your research in brief, your publications and talks, your education and papers or a CV to download.",
   "author": "resumecms",
+  "resumePreset": "research",
   "template": "directory",
   "style": {
     "source": "custom",
