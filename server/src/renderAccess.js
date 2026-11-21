@@ -9,7 +9,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 // not the resume is public.
 //
 // A cookie rather than a request header: Puppeteer's extra headers go to
-// every request the page makes, Google Fonts included, while a cookie for
+// every request the page makes, a third-party one included, while a cookie for
 // 127.0.0.1 never leaves the box. The key is random per process and never
 // stored, so a signature is only good for this server's lifetime, and only
 // the renderer, which runs in this same process, can mint one.
