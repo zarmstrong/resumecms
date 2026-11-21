@@ -23,7 +23,7 @@ in prose; check the diff against the ones that apply, especially:
   snapshots only (never a draft) on public routes, hidden blocks as
   placeholders, `letterResumeContext()`/`planOutline()`/`resumeOutline()`
   filters kept. Resume credentials are never rewritten or dropped when expired;
-  their numbers never enter AI context, and verification links are absolute http/https.
+  their numbers never enter AI context, and verification links are absolute http/https. Resume languages are never rewritten.
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing

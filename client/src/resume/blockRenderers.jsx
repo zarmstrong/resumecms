@@ -1,4 +1,5 @@
 import { credentialKindLabel, credentialHref, credentialMeta } from './credentials.js';
+import { shownLanguages } from './languages.js';
 import { normalizeBullet } from './bulletUtils.js';
 import { safeHref, linkProps } from './safeUrl.js';
 import { headingFontSize } from './blockStyle.js';
@@ -167,6 +168,21 @@ export function CredentialsBlock({ data }) {
   );
 }
 
+export function LanguagesBlock({ data }) {
+  const entries = shownLanguages(data);
+  if (!entries.length) return null;
+  return (
+    <ul className="r-languages">
+      {entries.map((entry, i) => (
+        <li className="r-language" key={i}>
+          {entry.language}
+          {entry.level ? <span className="r-language-level"> – {entry.level}</span> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function CustomItemBody({ item }) {
   switch (item.bodyType) {
     case 'list':
@@ -227,5 +243,6 @@ export const BLOCK_RENDERERS = {
   experience: ExperienceBlock,
   education: EducationBlock,
   credentials: CredentialsBlock,
+  languages: LanguagesBlock,
   custom: CustomBlock,
 };

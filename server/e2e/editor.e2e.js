@@ -686,3 +686,58 @@ flow('adds a credential, warns on expiry, and preserves its data after reload', 
   assert.deepEqual(stored.data, { kind: 'certification', name: text, issuer: '', number: '', issued: '', expires: 'Jan 2000', url: '' });
   await page.waitForFunction((name) => [...document.querySelectorAll('.r-credential .r-experience-title')].some((el) => el.textContent === name), {}, text);
 });
+
+flow('adds a languages block and preserves its entries after reload', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const created = nextResponse(page, 'POST', `/api/resumes/${resumeId}/blocks`);
+  await page.click('xpath/.//button[normalize-space()="+ Languages"]');
+  const response = await created;
+  assert.equal(response.status(), 201);
+  const { block } = await response.json();
+  assert.equal(block.type, 'languages');
+  const row = await page.waitForSelector('xpath/.//div[contains(@class, "ed-block-row")][.//span[@class="ed-block-type"][.="Languages"]]');
+  await (await row.$('.ed-block-summary')).click();
+  const language1 = await row.waitForSelector('input[aria-label="Language 1"]');
+  const level1 = await row.waitForSelector('input[aria-label="Level 1"]');
+  const text = `Lang ${Date.now()}`;
+  await setText(language1, text);
+  await setText(level1, 'Fluent');
+  await (await row.waitForSelector('xpath/.//button[normalize-space()="+ Add language"]')).click();
+  const language2 = await row.waitForSelector('input[aria-label="Language 2"]');
+  // Wait specifically for the save holding both entries: an earlier save of
+  // the first entry alone must not count.
+  const expected = [
+    { language: text, level: 'Fluent' },
+    { language: 'Spanish', level: '' },
+  ];
+  const saved = page.waitForResponse((r) => {
+    if (!isPut(`/api/resumes/${resumeId}/blocks/${block.id}`)(r.request())) return false;
+    const data = JSON.parse(r.request().postData()).data;
+    return JSON.stringify(data.entries) === JSON.stringify(expected);
+  });
+  saved.catch(() => {});
+  await setText(language2, 'Spanish');
+  await page.waitForFunction(
+    (texts) => {
+      const items = [...document.querySelectorAll('.r-languages .r-language')].map((el) => el.textContent);
+      return texts.every((t) => items.includes(t));
+    },
+    {},
+    [`${text} – Fluent`, 'Spanish']
+  );
+  assert.equal((await saved).status(), 200);
+  // The status leaves "Saving…" only once the queue settles; wait for that
+  // before reloading, as the credential flow does.
+  await page.waitForFunction(
+    () => {
+      const status = document.querySelector('.ed-topbar-status')?.textContent.trim();
+      return Boolean(status) && !status.startsWith('Saving');
+    },
+    { polling: 'mutation' }
+  );
+  await page.reload();
+  await page.waitForSelector(RESUME_SELECT);
+  const stored = await draftBlock(page, resumeId, block.id);
+  assert.deepEqual(stored.data, { entries: expected });
+});

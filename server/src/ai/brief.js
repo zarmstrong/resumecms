@@ -62,9 +62,9 @@ export function outlineScope(type, hasBrief) {
 
 // What a summary rewrite (outlineScope) gets to see of the rest of the
 // resume, so it can describe the person as a whole rather than only
-// reword its own text: job titles and companies, skills, education and credentials,
-// plus with `accomplishments` each job's tagline, description and
-// bullets. `blocks` is the draft in display order; `summary` is the
+// reword its own text: job titles and companies, skills, education,
+// credentials and languages, plus with `accomplishments` each job's tagline,
+// description and bullets. `blocks` is the draft in display order; `summary` is the
 // summary or executive summary block being rewritten. A block or bullet
 // that's hidden anywhere `summary` shows is left out, so nothing hidden
 // reaches the summary's public text (a sub-bullet counts as hidden
@@ -73,7 +73,7 @@ export function outlineScope(type, hasBrief) {
 // all. Null when there's nothing to show.
 /**
  * @typedef {{ jobTitle: string, company: string, dates: string, tagline?: string, description?: string, bullets?: string[] }} OutlineJob
- * @typedef {{ experience?: OutlineJob[], skills?: { category: string, items: string }[], education?: { degree: string, institution: string }[], credentials?: { name: string, issuer: string }[] }} ResumeOutline
+ * @typedef {{ experience?: OutlineJob[], skills?: { category: string, items: string }[], education?: { degree: string, institution: string }[], credentials?: { name: string, issuer: string }[], languages?: { language: string, level?: string }[] }} ResumeOutline
  */
 /**
  * @param {import('../blockRows.js').Block[]} blocks
@@ -86,7 +86,7 @@ export function resumeOutline(blocks, summary, { accomplishments = false } = {})
   const shows = { web: hiddenEverywhere || summary.visibleWeb, print: hiddenEverywhere || summary.visiblePrint };
   const shownWherever = (block) => (!shows.web || block.visibleWeb) && (!shows.print || block.visiblePrint);
   /** @type {Required<ResumeOutline>} */
-  const outline = { experience: [], skills: [], education: [], credentials: [] };
+  const outline = { experience: [], skills: [], education: [], credentials: [], languages: [] };
   for (const block of blocks) {
     if (block.id === summary.id || !shownWherever(block)) continue;
     const data = block.data || {};
@@ -103,6 +103,13 @@ export function resumeOutline(blocks, summary, { accomplishments = false } = {})
     } else if (block.type === 'credentials') {
       const entry = { name: text(data.name), issuer: text(data.issuer) };
       if (entry.name) outline.credentials.push(entry);
+    } else if (block.type === 'languages') {
+      for (const entry of Array.isArray(data.entries) ? data.entries : []) {
+        const language = entry && typeof entry === 'object' ? text(entry.language) : '';
+        if (!language) continue;
+        const level = text(entry.level);
+        outline.languages.push(level ? { language, level } : { language });
+      }
     }
   }
   const nonEmpty = Object.fromEntries(Object.entries(outline).filter(([, list]) => list.length > 0));

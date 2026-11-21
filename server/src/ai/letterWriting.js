@@ -75,7 +75,7 @@ function shownBullets(bullets) {
 // letter goes out with the resume in some form. Headings carry no content
 // of their own and are left out. Null when nothing is left.
 export function letterResumeContext(blocks) {
-  const out = { summary: [], highlights: [], experience: [], skills: [], education: [], credentials: [], otherSections: [] };
+  const out = { summary: [], highlights: [], experience: [], skills: [], education: [], credentials: [], languages: [], otherSections: [] };
   for (const block of blocks || []) {
     if (!block.visibleWeb && !block.visiblePrint) continue;
     const data = isPlainObject(block.data) ? block.data : {};
@@ -114,6 +114,16 @@ export function letterResumeContext(blocks) {
       case 'credentials': {
         const entry = Object.fromEntries(['kind', 'name', 'issuer', 'issued', 'expires'].map((key) => [key, text(data[key])]).filter(([, value]) => value));
         if (entry.name) out.credentials.push(entry);
+        break;
+      }
+      // Languages are facts: each shown entry as written, its level only when there is one.
+      case 'languages': {
+        for (const entry of Array.isArray(data.entries) ? data.entries : []) {
+          const language = isPlainObject(entry) ? text(entry.language) : '';
+          if (!language) continue;
+          const level = text(entry.level);
+          out.languages.push(level ? { language, level } : { language });
+        }
         break;
       }
       case 'custom': {
