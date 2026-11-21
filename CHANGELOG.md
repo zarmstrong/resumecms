@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.2.0](https://github.com/zarmstrong/resumecms/compare/v2.1.0...v2.2.0) (2026-11-21)
+
+
+### Features
+
+* add a languages block type ([#217](https://github.com/zarmstrong/resumecms/issues/217)) ([#220](https://github.com/zarmstrong/resumecms/issues/220)) ([c9953ab](https://github.com/zarmstrong/resumecms/commit/c9953ab3f7bc3ee5753457798eb82b58545dca55))
+* add an optional date to custom block items ([#225](https://github.com/zarmstrong/resumecms/issues/225)) ([c74f9a8](https://github.com/zarmstrong/resumecms/commit/c74f9a879b482a6b3da6f78076e4954e9dbb49c5))
+
+
+### Bug Fixes
+
+* **deps:** bump the server group with 5 updates ([#226](https://github.com/zarmstrong/resumecms/issues/226)) ([c7dbedf](https://github.com/zarmstrong/resumecms/commit/c7dbedfbc8b0589762fe4b1e66db9f8c3d93384e))
+* paint a PDF's margins in the page's background color ([#224](https://github.com/zarmstrong/resumecms/issues/224)) ([0c6dba2](https://github.com/zarmstrong/resumecms/commit/0c6dba21207ed6212c177b790b91421a9fc94aa6))
+
 ## [2.1.0](https://github.com/zarmstrong/resumecms/compare/v2.0.1...v2.1.0) (2026-11-18)
 
 
