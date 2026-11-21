@@ -65,3 +65,19 @@ test('a PDF cached before the on-color text change (issue #142) is rendered agai
   assert.notEqual(letterPdfKey(base), unversioned);
   assert.ok(LETTER_RENDER_VERSION >= 2);
 });
+
+test('a PDF cached before the margins took the page background (issue #213) is rendered again', () => {
+  const base = { data: { date: '', paragraphs: ['Hi'] }, header: { name: 'Ada' }, site: { colors: { background: '#15191d' } }, today: 'November 18, 2026' };
+  const { data, header, site, today } = base;
+  const before = createHash('sha256').update(JSON.stringify({ version: 2, data, header, site, today })).digest('hex');
+  assert.notEqual(letterPdfKey(base), before);
+  assert.ok(LETTER_RENDER_VERSION >= 3);
+});
+
+test('a PDF cached before link badges were drawn as paths (issue #222) is rendered again', () => {
+  const base = { data: { date: '', paragraphs: ['Hi'] }, header: { name: 'Ada', links: [{ type: 'linkedin', label: 'linkedin.com/in/ada', url: 'https://linkedin.com/in/ada' }] }, site: {}, today: 'November 20, 2026' };
+  const { data, header, site, today } = base;
+  const before = createHash('sha256').update(JSON.stringify({ version: 3, data, header, site, today })).digest('hex');
+  assert.notEqual(letterPdfKey(base), before);
+  assert.ok(LETTER_RENDER_VERSION >= 4);
+});

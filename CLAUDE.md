@@ -1777,6 +1777,21 @@ the render carries on and leaves its file for the retry (the editor
 retries on its own). Both go through `settleWithin()`, so a request that
 waits on the PDF queue should too.
 
+A PDF is its page's background edge to edge (issue #213). `page.pdf()`
+keeps its half-inch margins (`PDF_BASE_OPTIONS`) and resume.css's `@page`
+the same, so the layout, page count and line breaks are what they were;
+Chromium leaves that margin white whatever `html` and `body` are painted,
+so `usePrintBackground()` (`client/src/resume/pageStyle.js`, used by
+`ResumeView` and `CoverLetterView` in print mode) also gives the page an
+`@page` background, through the CSSOM rather than as CSS text, and only
+when the background is a `#rrggbb` (`printMarginColor()`; anything else
+leaves the margin white). Moving the half inch inside the page instead
+(zero margins, padding repeated by `box-decoration-break: clone`) also
+paints the margin in Chromium, but changes the layout every template is
+drawn in, and the footer would no longer have a margin of its own. A
+change to it reaches a resume's PDF at its next publish, and a letter's
+through `LETTER_RENDER_VERSION` (3).
+
 Page numbers (issue #206) are opt-in per resume: `site.pdfPageNumbers:
 true` in its site settings (drafted and published with them; missing or
 anything but `true` is off) turns on Chromium's footer through
@@ -1786,10 +1801,15 @@ the page moves). `renderResumePdf()` reads it from the `/api/public/resume`
 body the `/print` page was served, never from the store at queue time, so
 the footer always matches the snapshot drawn. Only the resume renderer
 passes it: cover letters and share cards never get a footer. The footer
-template's only input from the settings is the text color, used only as
-`#rrggbb` and only while it has 4.5:1 on white (the footer sits in the
-margin, which Chromium leaves white whatever the resume's background; the
-default ink otherwise), plus a serif or sans family picked from
+template's only inputs from the settings are the text and background
+colors, each used only as `#rrggbb`: the footer sits in the margin, which
+is painted in the background (`pdfMarginColor()`, white unless it's a
+`#rrggbb`, mirroring the client's `printMarginColor()`, and
+`pageStyle.test.js` compares the two), so the text color is used only
+while it has 4.5:1 on that color, `inkFor()` of it (`favicon.js`, the
+client's `contrastTextFor()`) otherwise, and, on the mid-tones where that
+doesn't reach 4.5:1 either (see "Text on a color"), the better of pure
+black and white, which always does; plus a serif or sans family picked from
 the font id (`SANS_FONT_IDS`, compared with the client's `FONT_OPTIONS`),
 so no free text from the settings or the snapshot ever reaches it; keep it
 that way if you add anything to it.
