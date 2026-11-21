@@ -273,8 +273,9 @@ function isReordering(a, b) {
 //    sub-bullets).
 // 4. Otherwise it can't be placed: null when its current position is gone,
 //    else it stays where it is (stale). A custom item proposal is dropped
-//    instead when it would stay over an item that differs from its own
-//    only by date, since that wouldn't count as stale.
+//    instead when it wouldn't be stale there: its own entry is gone, and
+//    what holds its position is another one that reads the same with
+//    dates ignored (another year's), which it would be accepted over.
 // Returns `proposal.target` itself when nothing moved, so callers can
 // compare by identity. Other targets never move.
 /**
@@ -334,14 +335,49 @@ export function relocateTarget(type, proposal, currentData) {
   const pairedCurrent = new Set(pairs.map(([, j]) => j));
   const moved = b.map((_, j) => j).filter((j) => !pairedCurrent.has(j) && b[j] === a[o]);
   if (moved.length === 1) return keep(currentPositions[moved[0]]);
-  // Staying put relies on the proposal going stale, which a custom item
-  // differing from its own only by date (the same entry from another year,
-  // its own one deleted) wouldn't: it would show and be accepted over the
+  // Staying put relies on the proposal going stale, which over a custom
+  // item that reads as the one it was made for with dates ignored (the
+  // same entry from another year, its own one deleted, whether or not it
+  // was edited first) it wouldn't: it would show and be accepted over the
   // wrong item. Its item is gone, so the proposal goes too.
-  if (stay && placeJson(type, currentData, target) !== a[o] && sliceJson(type, currentData, target) === sliceJson(type, anchor, target)) {
-    return null;
-  }
+  if (stay && type === 'custom' && target.kind === 'item' && !isProposalStale(type, proposal, currentData)) return null;
   return stay;
+}
+
+// A rewrite still loading for a bullet or item is followed like a ready
+// proposal (EditorPage), so a response never lands on whatever took its
+// position meanwhile. `request` is { asked, baseData, target, anchorData }:
+// the position asked for in the block data the request was sent with,
+// where it is now, and the data that was last placed against (at first,
+// `asked` and `baseData`). Returns where it is now, `request.target`
+// itself when nothing moved, or null when its bullet or item is gone.
+/**
+ * @typedef {{ asked: AiTarget, baseData: Record<string, any>, target: AiTarget, anchorData: Record<string, any> }} LoadingRequest
+ */
+/**
+ * @param {string} type
+ * @param {LoadingRequest} request
+ * @param {Record<string, any> | null | undefined} currentData
+ * @returns {AiTarget | null}
+ */
+export function relocateRequest(type, request, currentData) {
+  const { asked, baseData, target, anchorData } = request;
+  return relocateTarget(type, { blockId: '', target, origin: asked, baseData, anchorData, proposedData: baseData }, currentData);
+}
+
+// A proposal as it lands for a request that was followed while it loaded:
+// placed where relocateRequest left it, its text still at `asked` in its
+// own baseData and proposedData.
+/**
+ * @param {AiProposal} proposal
+ * @param {LoadingRequest} request
+ * @returns {AiProposal}
+ */
+export function landProposal(proposal, request) {
+  const { asked, target, anchorData } = request;
+  if (asked?.kind !== 'bullet' && asked?.kind !== 'item') return proposal;
+  const moved = targetKey(target) !== targetKey(asked);
+  return { ...proposal, ...(moved ? { target, origin: asked } : {}), anchorData };
 }
 
 // `currentData` with the proposal's target replaced by what the proposal

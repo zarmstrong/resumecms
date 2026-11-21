@@ -16,6 +16,8 @@ import {
   previewData,
   previewedProposals,
   proposalKey,
+  landProposal,
+  relocateRequest,
   relocateTarget,
   targetKey,
   targetSlice,
@@ -391,6 +393,89 @@ test('an item proposal follows its entry when entries that differ only by date a
   const copies = { title: 'Awards', items: [award('2020'), award('2020')] };
   const copy = { target: { kind: 'item', index: 0 }, baseData: copies, proposedData: copies };
   assert.equal(relocateTarget('custom', copy, { ...copies, items: [award('2020'), award('2020')] }), copy.target);
+});
+
+// An entry edited and then deleted: the proposal compares against what it
+// was made for, not the edited copy, so it can't stay over another year's
+// entry that reads the same.
+test('an item proposal goes with its entry when the entry is edited and then deleted', () => {
+  const award = (date, text = 'Conf X') => ({ heading: 'Best paper', bodyType: 'text', text, date });
+  const base = { title: 'Awards', items: [award('2020'), award('2021')] };
+  const proposal = { target: { kind: 'item', index: 0 }, baseData: base, proposedData: { ...base, items: [award('2020', 'R2020'), award('2021')] } };
+  const edited = { ...base, items: [award('2020', 'Conf X, with a prize'), award('2021')] };
+  assert.equal(relocateTarget('custom', proposal, edited), proposal.target);
+  assert.equal(isProposalStale('custom', proposal, edited), true);
+  const deleted = { ...base, items: [award('2021')] };
+  assert.equal(relocateTarget('custom', { ...proposal, anchorData: edited }, deleted), null);
+
+  // Over an entry that doesn't read the same it stays, stale, as before.
+  const other = { ...base, items: [award('2020'), { heading: 'Fellow', bodyType: 'text', text: 'Society Y' }] };
+  const editedOther = { ...other, items: [award('2020', 'edited'), other.items[1]] };
+  const onOther = { ...proposal, baseData: other, anchorData: editedOther };
+  const left = { ...other, items: [other.items[1]] };
+  assert.equal(relocateTarget('custom', onOther, left), onOther.target);
+  assert.equal(isProposalStale('custom', onOther, left), true);
+});
+
+// A rewrite still loading is followed one change at a time, like a ready
+// proposal: placed in one step when it lands, an entry deleted and another
+// year's added would read as two date edits.
+test('a loading item request follows its entry, and is forgotten with it', () => {
+  const award = (date, text = 'Conf X') => ({ heading: 'Best paper', bodyType: 'text', text, ...(date ? { date } : {}) });
+  const base = { title: 'Awards', items: [award('2020'), award('2021')] };
+  const start = (index) => ({ asked: { kind: 'item', index }, baseData: base, target: { kind: 'item', index }, anchorData: base });
+  // The request as EditorPage keeps it across `steps`, or null once dropped.
+  const follow = (request, steps) => {
+    for (const data of steps) {
+      const target = relocateRequest('custom', request, data);
+      if (target === null) return null;
+      request = { ...request, target, anchorData: data };
+    }
+    return request;
+  };
+  const without2020 = { ...base, items: [award('2021')] };
+  const with2022 = { ...base, items: [award('2021'), award('2022')] };
+
+  // The 2020 award deleted, a 2022 one added: its request is gone, not
+  // waiting to land on the 2021 award.
+  assert.equal(follow(start(0), [without2020, with2022]), null);
+  // The same one step at a time would stay, and not be stale.
+  const late = { target: { kind: 'item', index: 0 }, baseData: base, proposedData: { ...base, items: [award('2020', 'R2020'), award('2021')] } };
+  assert.equal(relocateTarget('custom', late, with2022), late.target);
+  assert.equal(isProposalStale('custom', late, with2022), false);
+
+  // The 2021 award's request follows it to index 0 and lands there.
+  const moved = follow(start(1), [without2020, with2022]);
+  assert.deepEqual(moved.target, { kind: 'item', index: 0 });
+  const proposedData = { ...base, items: [award('2020'), award('2021', 'R2021')] };
+  const landed = landProposal({ blockId: 'b', target: { kind: 'item', index: 1 }, baseData: base, proposedData }, moved);
+  assert.deepEqual(landed.target, { kind: 'item', index: 0 });
+  assert.deepEqual(landed.origin, { kind: 'item', index: 1 });
+  assert.equal(landed.anchorData, with2022);
+  assert.equal(relocateTarget('custom', landed, with2022), landed.target);
+  assert.equal(isProposalStale('custom', landed, with2022), false);
+  assert.deepEqual(applyProposal('custom', with2022, landed).items, [award('2021', 'R2021'), award('2022')]);
+
+  // Edited and then deleted while loading: gone too, compared with what
+  // was sent rather than the edited copy.
+  const edited = { ...base, items: [award('2020', 'Conf X, with a prize'), award('2021')] };
+  assert.equal(follow(start(0), [edited, without2020]), null);
+
+  // A date typed on its own entry meanwhile leaves it where it is.
+  const redated = follow(start(0), [{ ...base, items: [award('202'), award('2021')] }, { ...base, items: [award('2021'), award('2021')] }]);
+  assert.deepEqual(redated.target, { kind: 'item', index: 0 });
+  const unmoved = landProposal({ blockId: 'b', target: { kind: 'item', index: 0 }, baseData: base, proposedData: base }, redated);
+  assert.equal(unmoved.origin, undefined);
+  assert.equal(unmoved.anchorData, redated.anchorData);
+
+  // Other targets aren't positions: their proposal lands as it came.
+  const block = { blockId: 'b', target: BLOCK_TARGET, baseData: base, proposedData: base };
+  assert.equal(landProposal(block, { asked: BLOCK_TARGET, target: BLOCK_TARGET }), block);
+
+  // A bullet's request follows its bullet the same way.
+  const bullets = { bullets: [{ text: 'one' }, { text: 'two' }] };
+  const bullet = { asked: { kind: 'bullet', path: [1] }, baseData: bullets, target: { kind: 'bullet', path: [1] }, anchorData: bullets };
+  assert.deepEqual(relocateRequest('experience', bullet, { bullets: [{ text: 'two' }] }), { kind: 'bullet', path: [0] });
 });
 
 // A block proposal goes by position, and has no anchor to follow a reorder

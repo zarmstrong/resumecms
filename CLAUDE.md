@@ -1467,7 +1467,8 @@ follows its entry by the rules below. Otherwise it compares items
 with the date kept (`placeJson()`), since the lists it's for repeat an
 entry that differs only by date (the same award every year), and drops
 an item proposal that would otherwise stay, not stale, over another
-year's entry once its own is deleted. `applyProposal()`
+year's entry once its own is deleted (compared with what it was made
+for, so also when its own was edited first). `applyProposal()`
 keeps the current date: an item rewrite's from the item at its target,
 a block rewrite's by position, but only while the proposal isn't stale
 (items have no ids, so once they've been added, removed, reordered or
@@ -1505,7 +1506,14 @@ proposal's target onto the block's current data, `previewData()` composes all
 of a block's proposals for the preview, and `isProposalStale()` only compares
 the target's slice. Bullet and item targets are positions, so an effect in
 `EditorPage` re-keys a ready proposal when its bullet or item moves, and
-drops it when its position is gone, or its block is. `relocateTarget()`
+drops it when its position is gone, or its block is. A request still
+loading is followed the same way, one change at a time
+(`relocateRequest()`, from the target and data it was sent with, kept on
+its `aiRequestsRef` entry, which moves to the new key with it), and
+forgotten with its bullet or item, so `handleAiRequest`'s `settle()` finds
+it by request id and `landProposal()` places the response where its bullet
+or item is now, or nowhere; placing it in one step once it lands couldn't
+always tell what happened meanwhile. `relocateTarget()`
 aligns the list at the proposal's depth in `anchorData` (the block data it
 was last placed against) with the current one: unchanged entries pair in
 order (LCS), an unpaired entry in an equal-sized gap was edited in place

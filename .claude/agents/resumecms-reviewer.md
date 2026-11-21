@@ -31,7 +31,10 @@ in prose; check the diff against the ones that apply, especially:
   stale once their dates differ from its base's, `twinsRedated()`),
   relocation keeps it (entries that differ only by date are told
   apart by it) except when only dates changed (then nothing moves, unless
-  the dated items are the same ones reordered), and `applyProposal()` keeps the current date only where it can
+  the dated items are the same ones reordered; an item proposal that
+  can't be placed and wouldn't be stale where it stays is dropped; a
+  request still loading is followed like a ready proposal,
+  `relocateRequest()`/`landProposal()`), and `applyProposal()` keeps the current date only where it can
   tell which item is which: an item rewrite's own item, a block rewrite's
   items by position only while the proposal isn't stale (otherwise the
   proposal's own dates). A custom item without a date renders the same
