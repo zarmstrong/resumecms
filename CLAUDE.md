@@ -1426,6 +1426,72 @@ reading; verification links require absolute http/https URLs. Credentials
 are factual context, never rewritten; their number is public but never sent
 to the AI. A tailoring plan can hide an individual credential.
 
+A `custom` block's item (`{ heading, bodyType, text | items | label/url
+| tagColor }`, or the legacy `{ heading, body }`) may carry a `date`
+(issue #214): free text such as "2021" or "Forthcoming", never parsed,
+stored only while set (`patchCustomItem()` in
+`client/src/resume/customItems.js`, which the editor's per-item Date input
+goes through). `CustomBlock` gives only a dated item the heading row
+`.r-custom-item-top`, the date an `.r-experience-dates` (plus
+`.r-custom-item-date`) so it takes the entry dates' look, pill and
+layout overrides; an item without one renders exactly the markup it did
+before, so existing resumes and PDFs don't change. Being free text, the
+date may wrap (an entry's does only in `academic`): it never shrinks, but a long one
+stops at 40% of the row and wraps there, right-aligned (the block's own
+alignment wherever the row stacks), and the heading beside it gives way
+(`min-width: 0`, breaking a word that doesn't fit) rather than push the
+row out of a narrow column. The row stacks where
+`.r-experience-top` does (narrow screens, the sidebar rail), a centered
+or right-aligned block puts the date under the heading, and the
+`academic` layout reaches a dated item back over its custom-block indent
+into the date column, as for its entries. `blockData.js` and
+`mcp/blockSchemas.js` list the key. The AI never writes it: it's not in
+any custom target's editable set or schema, the merges spread the stored
+item so it comes through as stored, and the editor's `targetSlice()`
+leaves it out. Its staleness check also compares custom items as the
+form writes them back (a legacy item with its `bodyType` and `text`
+added, keys sorted: `comparableItem()`), so a date edit alone, even
+on a block of legacy items, makes no proposal stale, with one exception
+(`twinsRedated()`): a block proposal that words entries differently which
+are the same but for their date goes stale once any of those entries'
+dates isn't the one it was made against, since the date is all that says
+which is which (they may have been reordered, and a block proposal has
+no anchor to follow that with); and a block proposal is stale for good
+once its block's item count has differed from what it was made against
+(`itemCountChanged()`, noted by `EditorPage`'s relocation effect as
+`itemsChanged` on the proposal, or on its request while it loads), since
+an item removed and another added that differs only by date reads as a
+date edit. Relocation
+(`relocateTarget()`) first checks whether only dates changed (the same
+number of items, each the same with dates ignored); then every item
+proposal stays on its index, even when the edit makes two items
+identical or a cleared date makes them so. For custom items it reads
+what one change leaves behind exactly, before the content-pairing rules
+(which an edit that makes two items read alike can mislead): one item
+changed in place moves nothing; the anchor's own items in another order
+(`isReordering()`, which no edit leaves behind: entries that differ only
+by date swapped, say) put the proposal on the one item that reads
+exactly like its own, however many moved, and drop it when an exact copy
+of its own moved; and one item removed drops the proposal when it's its
+own or one of several exact copies of it (the data can't say which
+went), rather than leave it, stale, on whatever took its place, and
+otherwise only shifts it. Otherwise it compares items
+with the date kept (`placeJson()`), since the lists it's for repeat an
+entry that differs only by date (the same award every year), and drops
+an item proposal that would otherwise stay, not stale, over another
+year's entry once its own is deleted (compared with what it was made
+for, so also when its own was edited first). `applyProposal()`
+keeps the current date: an item rewrite's from the item at its target,
+a block rewrite's by position, but only while the proposal isn't stale
+(items have no ids, so once they've been added, removed, reordered or
+edited it keeps the dates it was made against rather than put one
+item's date on another). It is read-only context
+(`itemDates`, or `itemDate` and each other item's `date` for an item
+target, sent only when an item has one, with a prompt rule not to put it
+in the text), as an experience entry's dates are, and goes with
+`customItemProse()` into `letterResumeContext()` and `planOutline()`,
+where an item with only a date is left out.
+
 A `languages` block (issue #217) holds the whole list in one block,
 `entries: [{ language, level }]`, drawn as one wrapped line
 (`client/src/resume/languages.js`'s `shownLanguages()` drops an entry
@@ -1461,7 +1527,14 @@ proposal's target onto the block's current data, `previewData()` composes all
 of a block's proposals for the preview, and `isProposalStale()` only compares
 the target's slice. Bullet and item targets are positions, so an effect in
 `EditorPage` re-keys a ready proposal when its bullet or item moves, and
-drops it when its position is gone, or its block is. `relocateTarget()`
+drops it when its position is gone, or its block is. A request still
+loading is followed the same way, one change at a time
+(`relocateRequest()`, from the target and data it was sent with, kept on
+its `aiRequestsRef` entry, which moves to the new key with it), and
+forgotten with its bullet or item, so `handleAiRequest`'s `settle()` finds
+it by request id and `landProposal()` places the response where its bullet
+or item is now, or nowhere; placing it in one step once it lands couldn't
+always tell what happened meanwhile. `relocateTarget()`
 aligns the list at the proposal's depth in `anchorData` (the block data it
 was last placed against) with the current one: unchanged entries pair in
 order (LCS), an unpaired entry in an equal-sized gap was edited in place
@@ -1761,6 +1834,21 @@ the render carries on and leaves its file for the retry (the editor
 retries on its own). Both go through `settleWithin()`, so a request that
 waits on the PDF queue should too.
 
+A PDF is its page's background edge to edge (issue #213). `page.pdf()`
+keeps its half-inch margins (`PDF_BASE_OPTIONS`) and resume.css's `@page`
+the same, so the layout, page count and line breaks are what they were;
+Chromium leaves that margin white whatever `html` and `body` are painted,
+so `usePrintBackground()` (`client/src/resume/pageStyle.js`, used by
+`ResumeView` and `CoverLetterView` in print mode) also gives the page an
+`@page` background, through the CSSOM rather than as CSS text, and only
+when the background is a `#rrggbb` (`printMarginColor()`; anything else
+leaves the margin white). Moving the half inch inside the page instead
+(zero margins, padding repeated by `box-decoration-break: clone`) also
+paints the margin in Chromium, but changes the layout every template is
+drawn in, and the footer would no longer have a margin of its own. A
+change to it reaches a resume's PDF at its next publish, and a letter's
+through `LETTER_RENDER_VERSION` (3).
+
 Page numbers (issue #206) are opt-in per resume: `site.pdfPageNumbers:
 true` in its site settings (drafted and published with them; missing or
 anything but `true` is off) turns on Chromium's footer through
@@ -1770,10 +1858,15 @@ the page moves). `renderResumePdf()` reads it from the `/api/public/resume`
 body the `/print` page was served, never from the store at queue time, so
 the footer always matches the snapshot drawn. Only the resume renderer
 passes it: cover letters and share cards never get a footer. The footer
-template's only input from the settings is the text color, used only as
-`#rrggbb` and only while it has 4.5:1 on white (the footer sits in the
-margin, which Chromium leaves white whatever the resume's background; the
-default ink otherwise), plus a serif or sans family picked from
+template's only inputs from the settings are the text and background
+colors, each used only as `#rrggbb`: the footer sits in the margin, which
+is painted in the background (`pdfMarginColor()`, white unless it's a
+`#rrggbb`, mirroring the client's `printMarginColor()`, and
+`pageStyle.test.js` compares the two), so the text color is used only
+while it has 4.5:1 on that color, `inkFor()` of it (`favicon.js`, the
+client's `contrastTextFor()`) otherwise, and, on the mid-tones where that
+doesn't reach 4.5:1 either (see "Text on a color"), the better of pure
+black and white, which always does; plus a serif or sans family picked from
 the font id (`SANS_FONT_IDS`, compared with the client's `FONT_OPTIONS`),
 so no free text from the settings or the snapshot ever reaches it; keep it
 that way if you add anything to it.

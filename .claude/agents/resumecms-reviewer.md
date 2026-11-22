@@ -24,6 +24,24 @@ in prose; check the diff against the ones that apply, especially:
   placeholders, `letterResumeContext()`/`planOutline()`/`resumeOutline()`
   filters kept. Resume credentials are never rewritten or dropped when expired;
   their numbers never enter AI context, and verification links are absolute http/https. Resume languages are never rewritten.
+  A custom item's `date` is never in a rewrite's editable set or schema
+  (context only), and every custom merge keeps it as stored. The editor's
+  staleness check ignores it (legacy items compared as the form rewrites
+  them; but a block proposal that words date-only twins differently is
+  stale once their dates differ from its base's, `twinsRedated()`, and
+  stale for good once the item count has differed, `itemsChanged`),
+  relocation keeps it (entries that differ only by date are told
+  apart by it) except when only dates changed (then nothing moves, unless
+  the dated items are the same ones reordered, and then by exact match;
+  a custom item proposal goes with its removed item, and when an exact
+  copy of its item was removed or moved; an item proposal that
+  can't be placed and wouldn't be stale where it stays is dropped; a
+  request still loading is followed like a ready proposal,
+  `relocateRequest()`/`landProposal()`), and `applyProposal()` keeps the current date only where it can
+  tell which item is which: an item rewrite's own item, a block rewrite's
+  items by position only while the proposal isn't stale (otherwise the
+  proposal's own dates). A custom item without a date renders the same
+  markup as before it existed.
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing
@@ -164,8 +182,13 @@ in prose; check the diff against the ones that apply, especially:
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a
   request waits on it, `settleWithin()`.
 - The PDF footer (`pdfFooter.js`, page numbers) never takes free text from
-  the site settings or the snapshot: only a `#rrggbb` color and a font
-  family it picks itself, read from the snapshot `/print` was served.
+  the site settings or the snapshot: only `#rrggbb` colors and a font
+  family it picks itself, read from the snapshot `/print` was served. Its
+  ink has at least 4.5:1 on the margin's color whatever the colors (pure
+  black or white where `inkFor()` falls short), which the server's `pdfMarginColor()`
+  and the client's `printMarginColor()` (`pageStyle.js`, the `@page`
+  background `usePrintBackground()` paints, issue #213) must agree on;
+  the `page.pdf()` margins stay, so a white page's PDF doesn't move.
 - Store handlers in routes are wrapped in `handle()`; MCP content tools sit
   in `CONTENT_TOOLS`.
 - AI output schemas stay strict-mode valid (`additionalProperties: false`,

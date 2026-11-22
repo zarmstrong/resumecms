@@ -178,7 +178,7 @@ export const BLOCK_DATA_SCHEMAS = {
     example: { entries: [{ language: 'English', level: 'Native' }, { language: 'Spanish', level: 'Fluent' }] },
   },
   custom: {
-    description: 'A freeform section: a title and a list of items, each with a heading and a body of one of four kinds.',
+    description: 'A freeform section: a title and a list of items, each with a heading, an optional date, and a body of one of four kinds.',
     properties: {
       title: { type: 'string' },
       items: {
@@ -193,6 +193,11 @@ export const BLOCK_DATA_SCHEMAS = {
             label: { type: 'string', description: 'bodyType link: link text' },
             url: { type: 'string', description: 'bodyType link: https URL' },
             tagColor: { type: 'string', description: 'bodyType tags: optional #rrggbb pill color' },
+            date: {
+              type: 'string',
+              description:
+                "Optional, any body type: free text such as '2021' or 'Mar 2024', shown at the right of the heading (under it in a centered or right-aligned block; in the academic layout, in its date column). Omit it for none. Never changed by an AI rewrite.",
+            },
           },
         },
       },

@@ -143,8 +143,8 @@ function blockContent(block, ref, refs) {
         items: (Array.isArray(data.items) ? data.items : [])
           .filter(isPlainObject)
           .map(customItemProse)
-          .map((item) => compact({ heading: text(item.heading), body: text(item.body) }))
-          .filter((item) => Object.keys(item).length),
+          .map((item) => compact({ heading: text(item.heading), body: text(item.body), date: text(item.date) }))
+          .filter((item) => item.heading || item.body),
       };
     default:
       return {};
