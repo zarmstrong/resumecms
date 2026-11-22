@@ -109,7 +109,9 @@ SIGKILLing it past the grace period only while `/proc` shows it's still
 that server; the server runs in its own process group, so a terminal's
 signals reach it only that way); each
 flow in `editor.e2e.js` gets a fresh browser context, blocks every request
-but the server's (Google Fonts included), waits on the page's state or on
+but the server's, and every font request (the site fonts are the server's
+own since issue #221, and a font arriving mid-click moves its target),
+waits on the page's state or on
 its requests (never a fixed sleep), and leaves a screenshot when it fails
 (`E2E_SCREENSHOT_DIR`, else a folder under the OS temp dir). The flows:
 logging in through the form, editing a block and publishing it, the landing
@@ -1037,7 +1039,8 @@ template doesn't matter); `ShareCard.jsx` didn't change for that.
 `shareImages.js` (pure) keys both by a hash of what they show: a photo by
 its `data:` URL, a card by `cardContent()` (name, title, photo and only the
 colors and fonts it's drawn in) plus `CARD_DESIGN_VERSION`, which must be
-bumped when `client/src/share/ShareCard.jsx` changes. `shareStore.js`
+bumped when `client/src/share/ShareCard.jsx` changes, or the fonts it's
+drawn in do (see "PDF generation"). `shareStore.js`
 (composed into the store like the landing store) renders cards on the PDF
 queue (`withPdfLock`, the render timeout) as `<pdfDir>/cards/<key>.png`:
 `publish()`, `publishLanding()`, `setLandingEnabled()` and boot call
@@ -1815,7 +1818,7 @@ request carrying a valid one (`Cache-Control: private, no-store`,
 renderer throws if the page wasn't served the resume it asked for, so a
 cookie that stops getting through fails renders instead of filing the
 default's content under another name. A cookie rather than a header because
-Puppeteer's extra headers go to every request, Google Fonts included. So
+Puppeteer's extra headers go to every request, a third-party one included. So
 the client needs no change to render any resume. Every render, the
 share card's included, waits for the page's `window.__PDF_READY__`,
 which only the page component sets once its content is drawn, so
@@ -1867,6 +1870,33 @@ paints the margin in Chromium, but changes the layout every template is
 drawn in, and the footer would no longer have a margin of its own. A
 change to it reaches a resume's PDF at its next publish, and a letter's
 through `LETTER_RENDER_VERSION` (3).
+
+The site fonts are self-hosted (issue #221): `client/src/fonts.js` imports
+static instances from the `@fontsource/<family>` packages (OFL), the
+weights each font option uses, and nothing loads from Google Fonts. Google
+serves those families as variable fonts, and Chromium embeds a variable
+font in a PDF as Type3 glyph procedures (the font type resume parsers
+handle worst); a static one embeds as TrueType. Never import an
+`@fontsource-variable` package or put a variable font back: the client's
+`fonts.test.js` checks every `FONT_OPTIONS` family and the UI font is
+imported from a static package, and a browser flow publishes and checks
+the PDF names the font and has no Type3 one. A new font option needs its
+package in `client/package.json` and its weights in `fonts.js`. Two parts
+of `vite.config.js` keep the cost down: `woff2Only()` cuts fontsource's
+woff fallback from its CSS (every supported browser takes woff2), and
+`assetsInlineLimit` never inlines a font, since a small subset's base64
+would sit in the main stylesheet for every visitor. The font files are
+hashed and in the build manifest, so they're served `immutable`. Each
+weight's CSS lists its subsets by `unicode-range`, so a page downloads
+only the files it draws. The OFL asks that its text and each font's
+copyright notice go with every copy, so `fontLicenses()` there writes
+every `@fontsource` dependency's `LICENSE` into `dist/font-licenses.txt`
+(served at `/font-licenses.txt`; written after the bundle so it's never in
+the manifest, hence revalidated), and a browser flow checks each package
+has its section. A change to the fonts stored content is drawn in
+(a family's package, its weights, static for variable) bumps
+`LETTER_RENDER_VERSION` and `CARD_DESIGN_VERSION`, or cached letters and
+share cards keep the old ones; a resume's PDF follows at its next publish.
 
 Page numbers (issue #206) are opt-in per resume: `site.pdfPageNumbers:
 true` in its site settings (drafted and published with them; missing or

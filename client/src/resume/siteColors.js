@@ -50,8 +50,10 @@ export function normalizePillPadding(site) {
   return PILL_PADDING_CSS[value] ? value : DEFAULT_PILL_PADDING;
 }
 
-// Curated resume typefaces. Each `css` value is loaded via the Google
-// Fonts link in index.html (Georgia is a system font, so it needs nothing).
+// Curated resume typefaces. Each `css` value's first family is
+// self-hosted by client/src/fonts.js (static @fontsource instances, issue
+// #221; its test checks every one is there), except Georgia, a system
+// font, which needs nothing.
 export const FONT_OPTIONS = [
   { value: 'source-serif', label: 'Source Serif 4', css: "'Source Serif 4', Georgia, serif" },
   { value: 'pt-serif', label: 'PT Serif', css: "'PT Serif', Georgia, serif" },

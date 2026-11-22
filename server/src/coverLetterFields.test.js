@@ -77,7 +77,7 @@ test('a PDF cached before the margins took the page background (issue #213) is r
 test('a PDF cached before link badges were drawn as paths (issue #222) is rendered again', () => {
   const base = { data: { date: '', paragraphs: ['Hi'] }, header: { name: 'Ada', links: [{ type: 'linkedin', label: 'linkedin.com/in/ada', url: 'https://linkedin.com/in/ada' }] }, site: {}, today: 'November 20, 2026' };
   const { data, header, site, today } = base;
-  const before = createHash('sha256').update(JSON.stringify({ version: 3, data, header, site, today })).digest('hex');
+  const before = createHash('sha256').update(JSON.stringify({ version: 4, data, header, site, today })).digest('hex');
   assert.notEqual(letterPdfKey(base), before);
-  assert.ok(LETTER_RENDER_VERSION >= 4);
+  assert.ok(LETTER_RENDER_VERSION >= 5);
 });

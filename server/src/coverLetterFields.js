@@ -94,9 +94,10 @@ function hasOwnDate(data) {
 // templates, or the colors they get from resume/pageStyle.js), so cached
 // PDFs are rendered again on their next download instead of keeping the
 // old look. 2: on-color text picked by WCAG contrast (issue #142). 3: the
-// page margins painted in the page's background (issue #213). 4: link
-// badges drawn as paths, not text (issue #222).
-export const LETTER_RENDER_VERSION = 4;
+// page margins painted in the page's background (issue #213). 4:
+// self-hosted static fonts, embedded as TrueType, not Type3 (issue #221).
+// 5: link badges drawn as paths, not text (issue #222).
+export const LETTER_RENDER_VERSION = 5;
 
 // Identifies everything a letter's PDF is rendered from: its data, its
 // resume's header and site settings, today's date when the letter shows

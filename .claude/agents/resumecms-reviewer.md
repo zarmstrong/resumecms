@@ -192,6 +192,15 @@ in prose; check the diff against the ones that apply, especially:
   and the client's `printMarginColor()` (`pageStyle.js`, the `@page`
   background `usePrintBackground()` paints, issue #213) must agree on;
   the `page.pdf()` margins stay, so a white page's PDF doesn't move.
+- The site fonts stay self-hosted static instances (issue #221):
+  `client/src/fonts.js` imports only `@fontsource/<family>` weights, never
+  an `@fontsource-variable` package or a Google Fonts link (a variable font
+  embeds in a PDF as Type3), a new `FONT_OPTIONS` family has its package
+  and weights there, and no public page requests a font from a third
+  party. `vite.config.js` keeps `woff2Only()`, never inlines a font, and
+  ships the fonts' licenses (`fontLicenses()`, `/font-licenses.txt`). A
+  change to the fonts stored content is drawn in bumps
+  `LETTER_RENDER_VERSION` and `CARD_DESIGN_VERSION`.
 - Store handlers in routes are wrapped in `handle()`; MCP content tools sit
   in `CONTENT_TOOLS`.
 - AI output schemas stay strict-mode valid (`additionalProperties: false`,
