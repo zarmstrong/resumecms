@@ -116,8 +116,10 @@ its requests (never a fixed sleep), and leaves a screenshot when it fails
 (`E2E_SCREENSHOT_DIR`, else a folder under the OS temp dir). The flows:
 logging in through the form, editing a block and publishing it, the landing
 preset dialog's keyboard and focus, applying a preset and reloading,
-publishing right after a site setting changes, and leaving the editor
-(switcher, Log out) with a save still on its debounce.
+publishing right after a site setting changes, leaving the editor
+(switcher, Log out) with a save still on its debounce, and leaving the
+landing editor by Back while a resume preset or "Apply to the default
+resume" is on its way.
 The files are named `*.e2e.js`, not `*.test.js`, so `npm test` (whose
 `node --test` discovers every `*.test.js` under `server/`) never runs them.
 A new flow waits on real UI state too, and answers a `confirm()` as it
@@ -331,7 +333,20 @@ screen, so it's still reported at the next switch). Switching, New resume
 first, and so does Publish (the server snapshots the stored draft), which
 stops with an error instead while a save has failed, as the landing
 page's does; unmounting sends whatever is still waiting, so a new edit must
-be tracked there too or a switch can outrun it. The switcher's dialogs are
+be tracked there too or a switch can outrun it. An operation that flushes
+before sending its own write (Publish, Discard, each page's
+`afterSaving()`: the landing page's Publish, preset apply and "Apply to
+the default resume", a letter's Duplicate, not its PDF download, which
+only reads) takes `saves.hold()` before its
+first await (issue #235): until its `release()` the queue's `flush()`
+(the leave guard's) goes round for it too and `pending()` counts it, so a
+leave whose flush resolves with the operation's can't navigate before its
+request is sent. The operation waits with the hold's own `flush()`, which
+waits for no hold (the queue's would wait on itself), and releases once
+its request is tracked (or, for the resume's Publish, whose answer can wait
+on the PDF, sent), or it stops; a write that fails meanwhile is reported
+by the flush that waited, as any unkeyed one it saw settle. The plan request flushes without one:
+it writes nothing, and leaving drops the plan. The switcher's dialogs are
 in `ResumeModals.jsx`, and their pure parts (which resume to open, its
 public URL, the settings form's PATCH) in `resumeLinks.js`.
 
@@ -344,7 +359,7 @@ previewed AI proposals, counted through `previewedProposals()` and its
 letter and landing equivalents so stale ones don't count, the plan's
 hides and order, a running tailoring run, dialogs that report
 `onDirtyChange`), and the guard adds the save queue's `pending()`
-(waiting, in flight, failed; `isIdle()`/`subscribe()` for React). The
+(waiting, in flight, failed, held; `isIdle()`/`subscribe()` for React). The
 page's own exits (switcher, Cover letters, Back, New resume, Log out) call
 `guard.leave(next)`: flush, the failed-save confirm, then
 `leaveQuestion()`'s confirm, and `next` only if both are accepted; New
@@ -582,7 +597,7 @@ preset's kebab-case id) saves the built draft so it isn't offered
 again, and from "Start from a preset…", which asks first
 (`presetQuestion()`). Applying waits for the save queue (`afterSaving()`),
 uploads included, so an image or document on its way lands in its section
-before the preset decides what's kept. A landing preset may name the matching resume preset (`resumePreset`, checked by the validator to exist): once it's applied, the landing editor offers, in a banner, to apply that preset to the default resume's draft too (`resumePresetOffer()` in `client/src/editor/presetOffer.js`). Accepting (`applyResumeOffer()`) reads that resume's site settings and saves `presetSite()` of them through `PUT …/site`, so its `touchDraft()` runs and nothing is published; declining only closes the banner. It writes a resume's draft from the landing editor, so the whole apply is tracked on the page's save queue before its first await and holds the page busy (`holdBusy()`): every way out waits for it, as for a save, and it stops before writing if the page went anyway, or the resume's own editor could load the settings from before it and save over the preset. The Look group's "Apply to the default resume" writes a resume's draft too, so its request is tracked the same way and its button is disabled while the page is busy, as the banner's are, so the two never run together. Keep both for anything else that writes a resume from this page. A new banner takes focus (it sits above the button the preset dialog returns focus to) and keeps it through each answer: on itself while it applies and reports, on "Start from a preset…" when it closes. Discard closes an offer not yet accepted. The validator checks a preset's style with the
+before the preset decides what's kept. A landing preset may name the matching resume preset (`resumePreset`, checked by the validator to exist): once it's applied, the landing editor offers, in a banner, to apply that preset to the default resume's draft too (`resumePresetOffer()` in `client/src/editor/presetOffer.js`). Accepting (`applyResumeOffer()`) reads that resume's site settings and saves `presetSite()` of them through `PUT …/site`, so its `touchDraft()` runs and nothing is published; declining only closes the banner. It writes a resume's draft from the landing editor, so the whole apply is tracked on the page's save queue before its first await and holds the page busy (`holdBusy()`): every way out waits for it, as for a save, and it stops before writing if the page went anyway, or the resume's own editor could load the settings from before it and save over the preset. The Look group's "Apply to the default resume" writes a resume's draft too, so its request is tracked the same way, after its wait for the landing saves under `afterSaving()`'s `saves.hold()` (so a Back caught by the router's blocker meanwhile waits for it too; issue #235), and its button is disabled while the page is busy, as the banner's are, so the two never run together. Keep both for anything else that writes a resume from this page. A new banner takes focus (it sits above the button the preset dialog returns focus to) and keeps it through each answer: on itself while it applies and reports, on "Start from a preset…" when it closes. Discard closes an offer not yet accepted. The validator checks a preset's style with the
 server's `checkStyle()` and its sections against `SECTION_KINDS` and
 `LANDING_LIMITS`, which is why `landingFields.js` and what it imports
 must stay free of npm packages.

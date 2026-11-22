@@ -65,10 +65,11 @@ export function hasUnsavedWork(work) {
 }
 
 // Whether leaving needs the guard at all: anything still on the save queue
-// (waiting, in flight, or failed: `pending` is its pending()) or held here.
+// (waiting, in flight, failed, or an operation holding it: `pending` is its
+// pending()) or held here.
 // With neither, leaving goes ahead as if there were no guard.
 export function mustGuard(work, pending) {
-  const queued = pending ? pending.waiting + pending.inFlight + pending.failed > 0 : false;
+  const queued = pending ? pending.waiting + pending.inFlight + pending.failed + (pending.held || 0) > 0 : false;
   return queued || hasUnsavedWork(work);
 }
 

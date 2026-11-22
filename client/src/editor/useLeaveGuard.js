@@ -9,7 +9,8 @@ import { hasUnsavedWork, leaveQuestion, mustGuard } from './unsavedWork.js';
 // ResumesEditor picks pages from.
 //
 // - leave(next): the page's own ways out (the switcher, Back, Cover
-//   letters, New resume, Log out). Flushes the queue, asks about a save
+//   letters, New resume, Log out). Flushes the queue (which also waits
+//   for an operation holding it, saveQueue.js's hold()), asks about a save
 //   that failed as before, then asks about `work` (leaveQuestion), and runs
 //   `next` only if both are confirmed. Resolves with whether it did.
 // - leaveUnasked(next): a way out nothing on the page can survive (its
