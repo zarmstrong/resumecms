@@ -517,15 +517,25 @@ export function EditorPage({
     // debounce goes out first, or a publish right after an edit would leave
     // that edit out. Publishing past a failed save would publish something
     // other than what's on screen, so a failure stops it, as the landing
-    // page's publish does.
-    const failed = await saves.flush();
-    if (failed.length) {
-      setPublishState('idle');
-      setPublishError(`Not published: a save failed (${failed[0].message || 'unknown error'})`);
-      return;
+    // page's publish does. The queue is held until the request is sent
+    // (saves.hold(), issue #235), so a leave whose flush resolves with this
+    // one's waits for it; not for its answer, which can wait on the PDF,
+    // and which nothing the next page reads depends on.
+    const held = saves.hold();
+    let publishing;
+    try {
+      const failed = await held.flush();
+      if (failed.length) {
+        setPublishState('idle');
+        setPublishError(`Not published: a save failed (${failed[0].message || 'unknown error'})`);
+        return;
+      }
+      publishing = rapi.publish();
+    } finally {
+      held.release();
     }
     try {
-      const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion, pdfPending: newPdfPending } = await rapi.publish();
+      const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion, pdfPending: newPdfPending } = await publishing;
       setPublishedAt(newPublishedAt);
       setPdfVersion(newPdfVersion ?? null);
       setPdfStale(!!newPdfPending);
@@ -573,14 +583,19 @@ export function EditorPage({
   async function handleDiscard() {
     // Every save goes out first, so none lands on top of the discarded
     // draft; once it's discarded, a save that failed is moot (and one
-    // typed meanwhile is replaced on screen below).
-    await saves.flush();
+    // typed meanwhile is replaced on screen below). Held until it's done
+    // (saves.hold(), issue #235), so a leave meanwhile, to this resume's
+    // cover letters say, waits for the discarded draft.
+    const held = saves.hold();
     let draft;
     try {
+      await held.flush();
       draft = await rapi.discardDraft();
     } catch (err) {
       setPublishError(err.message || 'Discard failed');
       return;
+    } finally {
+      held.release();
     }
     if (saves.forget(() => true)) setSaveState('idle');
     // Every block's data changes out from under its proposals, and a

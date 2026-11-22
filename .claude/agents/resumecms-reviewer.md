@@ -223,7 +223,12 @@ in prose; check the diff against the ones that apply, especially:
   counted in that page's `unsavedWork.js` function; a new route goes in
   `App.jsx`'s `createBrowserRouter` list. Anything that changes the save
   queue's `pending()` notifies its subscribers, or `beforeunload` misses it
-  (issue #105).
+  (issue #105). An editor operation that flushes before sending a write
+  (an `afterSaving()`, a Publish, a Discard) takes `saves.hold()` before
+  its first await, waits with the hold's own `flush()` (never the queue's,
+  which would wait on itself), and releases it only once its request is
+  tracked or sent, or it stops, so a leave can't navigate before it
+  (issue #235).
 - SPA routes contain no dot; CI jobs stay behind `changes` and in
   `ci-passed`'s `needs` (`lint and types` included).
 - A new `eslint-disable` names one rule and gives a real reason after
