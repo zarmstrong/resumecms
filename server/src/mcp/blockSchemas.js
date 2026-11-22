@@ -115,6 +115,13 @@ export const BLOCK_DATA_SCHEMAS = {
       endDate: { type: 'string', description: 'Free text, e.g. "Current"' },
       tagline: { type: 'string', description: 'One line about the company, shown under the title' },
       description: { type: 'string', description: 'Optional paragraph before the bullets' },
+      hoursPerWeek: { type: 'string', description: 'Optional, for a US federal or formal resume, e.g. "40"' },
+      grade: { type: 'string', description: 'Optional series and grade of a federal position, e.g. "GS-0343-11"' },
+      salary: { type: 'string', description: 'Optional, free text, e.g. "$85,000 per year"' },
+      supervisor: { type: 'string', description: "Optional supervisor's name and contact, as written; public wherever the details line shows" },
+      contactSupervisor: { enum: ['', 'yes', 'no'], description: "Whether the supervisor may be contacted; '' when not stated" },
+      detailsVisibleWeb: { type: 'boolean', description: 'Show the details line on the web page (default true)' },
+      detailsVisiblePrint: { type: 'boolean', description: 'Show the details line in print and the PDF (default true)' },
       bullets: {
         type: 'array',
         items: BULLET,
@@ -178,7 +185,7 @@ export const BLOCK_DATA_SCHEMAS = {
     example: { entries: [{ language: 'English', level: 'Native' }, { language: 'Spanish', level: 'Fluent' }] },
   },
   custom: {
-    description: 'A freeform section: a title and a list of items, each with a heading and a body of one of four kinds.',
+    description: 'A freeform section: a title and a list of items, each with a heading, an optional date, and a body of one of four kinds.',
     properties: {
       title: { type: 'string' },
       items: {
@@ -193,6 +200,11 @@ export const BLOCK_DATA_SCHEMAS = {
             label: { type: 'string', description: 'bodyType link: link text' },
             url: { type: 'string', description: 'bodyType link: https URL' },
             tagColor: { type: 'string', description: 'bodyType tags: optional #rrggbb pill color' },
+            date: {
+              type: 'string',
+              description:
+                "Optional, any body type: free text such as '2021' or 'Mar 2024', shown at the right of the heading (under it in a centered or right-aligned block; in the academic layout, in its date column). Omit it for none. Never changed by an AI rewrite.",
+            },
           },
         },
       },

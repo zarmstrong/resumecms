@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LINK_TYPES, LINK_TYPE_GROUPS, inferLinkType, linkGlyph, followLabelUrl } from './linkTypes.js';
+import { LINK_TYPES, LINK_TYPE_GROUPS, inferLinkType, linkGlyph, linkText, followLabelUrl } from './linkTypes.js';
 import { LINK_TYPES as SERVER_LINK_TYPES } from '../../../server/src/landingFields.js';
 import { HEADER_SCHEMA } from '../../../server/src/mcp/blockSchemas.js';
 
@@ -73,4 +73,12 @@ test('an email or phone URL follows its label until it is edited by hand', () =>
   // Other types never touch the URL.
   assert.equal(followLabelUrl({ type: 'github', label: '', url: '' }, 'github.com/jo'), undefined);
   assert.equal(followLabelUrl({ type: 'custom', label: '', url: '' }, 'jo@example.com'), undefined);
+});
+
+test("a link's text is its label, or its address when the label is blank", () => {
+  const url = 'https://linkedin.com/in/you';
+  assert.equal(linkText({ label: 'LinkedIn', url }), 'LinkedIn');
+  assert.equal(linkText({ label: ' Linked In ', url }), ' Linked In ');
+  for (const label of ['', ' ', ' \t\n', '\u00a0', undefined, null]) assert.equal(linkText({ label, url }), url, JSON.stringify(label));
+  assert.equal(linkText({ url }), url);
 });

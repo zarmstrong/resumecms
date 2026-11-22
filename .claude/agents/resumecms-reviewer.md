@@ -24,6 +24,30 @@ in prose; check the diff against the ones that apply, especially:
   placeholders, `letterResumeContext()`/`planOutline()`/`resumeOutline()`
   filters kept. Resume credentials are never rewritten or dropped when expired;
   their numbers never enter AI context, and verification links are absolute http/https. Resume languages are never rewritten.
+  A custom item's `date` is never in a rewrite's editable set or schema
+  (context only), and every custom merge keeps it as stored. The editor's
+  staleness check ignores it (legacy items compared as the form rewrites
+  them; but a block proposal that words date-only twins differently is
+  stale once their dates differ from its base's, `twinsRedated()`, and
+  stale for good once the item count has differed, `itemsChanged`),
+  relocation keeps it (entries that differ only by date are told
+  apart by it) except when only dates changed (then nothing moves, unless
+  the dated items are the same ones reordered, and then by exact match;
+  a custom item proposal goes with its removed item, and when an exact
+  copy of its item was removed or moved; an item proposal that
+  can't be placed and wouldn't be stale where it stays is dropped; a
+  request still loading is followed like a ready proposal,
+  `relocateRequest()`/`landProposal()`), and `applyProposal()` keeps the current date only where it can
+  tell which item is which: an item rewrite's own item, a block rewrite's
+  items by position only while the proposal isn't stale (otherwise the
+  proposal's own dates). A custom item without a date renders the same
+  markup as before it existed.
+- An experience entry's federal details (`EXPERIENCE_DETAIL_KEYS`) are in a
+  public snapshot only for a surface its `details…` flag allows
+  (`publicBlocks.js`), and never in what the app's own AI builders send (the
+  editor's routes and the MCP draft tools return the whole draft). What's
+  drawn follows `experienceDetailsLine()`: dimmed in the preview, hidden under
+  `@media print` on a web page whose print flag is off.
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing
@@ -159,13 +183,30 @@ in prose; check the diff against the ones that apply, especially:
   previews and the letter/card print routes stay lazy routes in
   `App.jsx`, the editor's CSS loads from its own entry, and a route
   rendered for a PDF or card sets `__PDF_READY__` only once drawn.
+- A decorative letter or icon on a resume (a link's badge) is a path
+  (`LinkGlyph.jsx`), never text, so a PDF's text layer holds only the
+  resume (issue #222).
 - Route mount order in `index.js`: new auth-exempt or differently gated
   groups go before the catch-all `/api`.
 - Anything that writes a PDF or card goes through `withPdfLock` and, when a
   request waits on it, `settleWithin()`.
 - The PDF footer (`pdfFooter.js`, page numbers) never takes free text from
-  the site settings or the snapshot: only a `#rrggbb` color and a font
-  family it picks itself, read from the snapshot `/print` was served.
+  the site settings or the snapshot: only `#rrggbb` colors and a font
+  family it picks itself, read from the snapshot `/print` was served. Its
+  ink has at least 4.5:1 on the margin's color whatever the colors (pure
+  black or white where `inkFor()` falls short), which the server's `pdfMarginColor()`
+  and the client's `printMarginColor()` (`pageStyle.js`, the `@page`
+  background `usePrintBackground()` paints, issue #213) must agree on;
+  the `page.pdf()` margins stay, so a white page's PDF doesn't move.
+- The site fonts stay self-hosted static instances (issue #221):
+  `client/src/fonts.js` imports only `@fontsource/<family>` weights, never
+  an `@fontsource-variable` package or a Google Fonts link (a variable font
+  embeds in a PDF as Type3), a new `FONT_OPTIONS` family has its package
+  and weights there, and no public page requests a font from a third
+  party. `vite.config.js` keeps `woff2Only()`, never inlines a font, and
+  ships the fonts' licenses (`fontLicenses()`, `/font-licenses.txt`). A
+  change to the fonts stored content is drawn in bumps
+  `LETTER_RENDER_VERSION` and `CARD_DESIGN_VERSION`.
 - Store handlers in routes are wrapped in `handle()`; MCP content tools sit
   in `CONTENT_TOOLS`.
 - AI output schemas stay strict-mode valid (`additionalProperties: false`,

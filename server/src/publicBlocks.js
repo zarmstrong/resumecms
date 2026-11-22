@@ -1,3 +1,5 @@
+import { EXPERIENCE_DETAIL_KEYS } from './experienceDetails.js';
+
 // Shapes the published block list for one public surface (web or print).
 //
 // Hidden blocks are NOT dropped outright: column layouts group blocks into
@@ -40,6 +42,20 @@ function filterBulletsForMode(block, mode) {
   };
 }
 
+// The labelled details line of an experience entry (experienceDetails.js) is
+// hidden on a surface whose `detailsVisibleWeb` / `detailsVisiblePrint` flag
+// is false, and its keys leave the snapshot itself, not just the rendered
+// line: the snapshot is public JSON, so hiding the line in CSS wouldn't be
+// enough. A missing flag means shown.
+function filterDetailsForMode(block, mode) {
+  if (block.type !== 'experience') return block;
+  const flag = mode === 'print' ? 'detailsVisiblePrint' : 'detailsVisibleWeb';
+  if (block.data?.[flag] !== false) return block;
+  const data = { ...block.data };
+  for (const key of EXPERIENCE_DETAIL_KEYS) delete data[key];
+  return { ...block, data };
+}
+
 function blockVisible(block, mode) {
   return mode === 'print' ? Boolean(block.visiblePrint) : Boolean(block.visibleWeb);
 }
@@ -60,5 +76,7 @@ function hiddenPlaceholder(block) {
 }
 
 export function blocksForMode(blocks, mode) {
-  return (blocks || []).map((b) => (blockVisible(b, mode) ? filterBulletsForMode(b, mode) : hiddenPlaceholder(b)));
+  return (blocks || []).map((b) =>
+    blockVisible(b, mode) ? filterDetailsForMode(filterBulletsForMode(b, mode), mode) : hiddenPlaceholder(b)
+  );
 }

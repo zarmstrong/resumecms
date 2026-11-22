@@ -19,6 +19,7 @@ test('well-formed data passes, including the documented examples, extras, and st
   assertBlockData('experience', { jobTitle: 'X', bullets: ['one', { text: 'two', children: ['a', { text: 'b' }] }], extra: 1 });
   assertBlockData('heading', { text: 'H', style: { highlight: true, spaceAbove: 'large', align: 'center' } });
   assertBlockData('custom', { title: 'T', items: [{ heading: 'h', bodyType: 'tags', items: 'a, b' }] });
+  assertBlockData('custom', { items: [{ heading: 'Paper', bodyType: 'text', text: 'J.', date: '2021' }, { body: 'legacy', date: 'Forthcoming' }] });
   assertBlockData('summary', {});
   assertBlockData('education', { degree: null });
 });
@@ -31,8 +32,11 @@ test('a key of the wrong kind is a 400 that names it', () => {
   fail('experience', { bullets: 'not a list' }, /^data\.bullets: /);
   fail('experience', { bullets: [{ text: 1 }] }, /^data\.bullets\.0/);
   fail('experience', { bullets: [{ children: 'x' }] }, /^data\.bullets\.0\.children/);
+  fail('experience', { hoursPerWeek: 40 }, /^data\.hoursPerWeek: /);
+  fail('experience', { detailsVisibleWeb: 'no' }, /^data\.detailsVisibleWeb: /);
   fail('custom', { items: { heading: 'h' } }, /^data\.items: /);
   fail('custom', { items: [{ url: 5 }] }, /^data\.items\.0\.url/);
+  fail('custom', { items: [{ date: 2021 }] }, /^data\.items\.0\.date/);
   fail('skills_group', { items: ['Go', 'Python'] }, /^data\.items: /);
   fail('heading', { style: { highlight: 'yes' } }, /^data\.style\.highlight/);
   fail('custom', { style: { align: true } }, /^data\.style\.align/);

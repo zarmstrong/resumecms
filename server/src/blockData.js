@@ -37,6 +37,13 @@ export const BLOCK_DATA_VALIDATORS = {
     endDate: str,
     tagline: str,
     description: str,
+    hoursPerWeek: str,
+    grade: str,
+    salary: str,
+    supervisor: str,
+    contactSupervisor: str,
+    detailsVisibleWeb: bool,
+    detailsVisiblePrint: bool,
     bullets: z.array(bullet).nullish(),
     style,
   }),
@@ -55,6 +62,7 @@ export const BLOCK_DATA_VALIDATORS = {
           label: str,
           url: str,
           tagColor: str,
+          date: str,
         })
       )
       .nullish(),

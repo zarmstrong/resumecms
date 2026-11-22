@@ -103,6 +103,15 @@
   opacity: 0.85;
 }
 
+/* A badge's letter (LinkGlyph.jsx): a path about the height of the UI
+   font's capitals, where the badge used to draw it as text (issue #222).
+   A chip (chip-links) draws it bare, before the label. */
+.r-link-glyph {
+  height: 0.72em;
+  width: auto;
+  flex: none;
+}
+
 .r-header-actions {
   display: flex;
   gap: 8px;
@@ -730,6 +739,24 @@
   color: var(--r-accent, var(--slate));
 }
 
+/* An experience entry's labelled details (issue #223: hours per week,
+   series and grade, salary, supervisor), muted like a credential's details
+   line and kept as plain "Label: value" text for parsers. */
+.r-experience-details {
+  font-family: var(--font-ui);
+  font-size: 0.8125em;
+  color: var(--slate);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+/* One detail with its trailing separator, kept whole; a value too long for
+   the line still breaks (max-width and the parent's overflow-wrap). */
+.r-experience-detail {
+  display: inline-block;
+  max-width: 100%;
+}
+
 .r-experience-tagline {
   font-style: italic;
   color: var(--slate-light);
@@ -772,6 +799,55 @@
 
 .r-custom-item-heading {
   font-weight: 600;
+}
+
+/* A dated item's heading row (issue #214): the heading and its date, the
+   date in .r-experience-dates' look like an entry's. Only the date takes
+   the entry row's weight; the heading keeps its own color. Without a
+   heading the date still sits at the right. */
+.r-custom-item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 600;
+}
+
+/* The heading gives way to the date: it may shrink below its longest
+   word, which then breaks, instead of pushing the row out of a narrow
+   column (two columns, a rail, a phone). An undated item's heading is a
+   plain block and isn't touched. */
+.r-custom-item-top > .r-custom-item-heading {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The date is free text, so unlike an entry's it may wrap: it never
+   shrinks (a short one draws as an entry's does), but a long one ("Accepted,
+   Journal of X (in press)") stops at 40% of the row and wraps there,
+   its lines to the right like the date column, so the heading keeps the
+   rest. Where the row stacks, it gets the full width and the block's
+   alignment back. */
+.r-custom-item-top > .r-custom-item-date {
+  margin-left: auto;
+  flex-shrink: 0;
+  max-width: 40%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+/* In a centered or right-aligned block the date goes under the heading,
+   inline so the block's text-align moves it (and a date pill stays its
+   own width), at any width and in a sidebar rail alike. */
+.r-block:is(.r-align-center, .r-align-right) .r-custom-item-top {
+  display: block;
+}
+
+.r-block:is(.r-align-center, .r-align-right) .r-custom-item-top > .r-custom-item-date {
+  display: inline-block;
+  margin-left: 0;
+  max-width: none;
+  text-align: inherit;
 }
 
 /* Body layout styling now lives per-layout under templates/layouts/<id>/style.css
@@ -997,6 +1073,21 @@
   opacity: 0.35;
 }
 
+/* Editor preview: an experience entry's details line that the web page or
+   the PDF leaves out (detailsVisibleWeb / detailsVisiblePrint), dimmed like
+   a hidden bullet. */
+.r-experience-details-dimmed {
+  opacity: 0.35;
+}
+
+/* The web page's Print button prints the page as it is, so a details line
+   shown on the web but not in print leaves the paper here. */
+@media print {
+  .r-experience-details-print-hidden {
+    display: none;
+  }
+}
+
 /* Screen display (not print) */
 @media screen {
   .r-mode-web {
@@ -1114,9 +1205,16 @@
     gap: 2px;
   }
 
-  .r-experience-top {
+  .r-experience-top,
+  .r-custom-item-top {
     flex-direction: column;
     gap: 2px;
+  }
+
+  .r-custom-item-top > .r-custom-item-date {
+    margin-left: 0;
+    max-width: none;
+    text-align: inherit;
   }
 }
 

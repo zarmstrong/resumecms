@@ -1,12 +1,15 @@
 // @ts-check
-import { DEFAULT_FONT, DEFAULT_LANDING_COLORS, FONT_IDS } from './landingStyle.js';
-import { relativeLuminance } from './favicon.js';
+import { DEFAULT_FONT, FONT_IDS } from './landingStyle.js';
+import { inkFor, relativeLuminance } from './favicon.js';
 
 // What page.pdf() is given for a resume's PDF (issue #206): Letter with a
 // half-inch margin on every side, plus, when the resume's site settings say
 // `pdfPageNumbers: true`, Chromium's footer with "Page N of M" in the
 // bottom margin. The margins never change, so turning it on moves nothing
-// on the page. Cover letters and share cards never get a footer.
+// on the page. The page paints those margins in its own background (issue
+// #213, usePrintBackground() in client/src/resume/pageStyle.js), so the
+// footer is drawn on that color. Cover letters and share cards never get a
+// footer.
 
 export const PDF_BASE_OPTIONS = Object.freeze({
   format: 'Letter',
@@ -23,15 +26,42 @@ const SERIF_STACK = "Georgia, 'Times New Roman', serif";
 const SANS_STACK = 'Helvetica, Arial, sans-serif';
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
-// The footer is drawn in the page's bottom margin, which Chromium leaves
-// white whatever the resume's background (the background fills only the
-// area inside the margins). So the resume's text color is used only while
-// it reads on white (WCAG AA for normal text), and the default ink
-// otherwise: a dark resume's light text would vanish there.
-const MIN_CONTRAST_ON_WHITE = 4.5;
-function footerInk(value) {
-  if (typeof value !== 'string' || !HEX_COLOR.test(value)) return DEFAULT_LANDING_COLORS.text;
-  return 1.05 / (relativeLuminance(value) + 0.05) >= MIN_CONTRAST_ON_WHITE ? value : DEFAULT_LANDING_COLORS.text;
+// The color the page paints its margins, from the site settings /print
+// drew: the client's normalizeSiteColors() background (white when unset)
+// while it's a #rrggbb, white otherwise, as printMarginColor() in
+// client/src/resume/pageStyle.js leaves it (pageStyle.test.js compares
+// the two).
+const WHITE = '#ffffff';
+/** @param {unknown} site */
+export function pdfMarginColor(site) {
+  const settings = /** @type {Record<string, any>} */ (site && typeof site === 'object' ? site : {});
+  const background = settings.colors?.background;
+  return typeof background === 'string' && HEX_COLOR.test(background) ? background : WHITE;
+}
+
+// The footer is drawn in that margin, so it always has WCAG AA contrast for
+// normal text there: the resume's text color while it reads on the margin's
+// color, otherwise whichever of near-black and white reads better
+// (favicon.js's inkFor(), the client's contrastTextFor()). On some
+// mid-tones neither of those reaches it (about 4.2:1 at worst), and then
+// it's the better of pure black and white, one of which has at least
+// 4.58:1 on any color.
+const MIN_CONTRAST = 4.5;
+const BLACK = '#000000';
+const contrast = (a, b) => {
+  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+/**
+ * @param {unknown} text
+ * @param {string} margin a #rrggbb
+ */
+function footerInk(text, margin) {
+  const reads = (color) => contrast(color, margin) >= MIN_CONTRAST;
+  if (typeof text === 'string' && HEX_COLOR.test(text) && reads(text)) return text;
+  const ink = inkFor(margin);
+  if (reads(ink)) return ink;
+  return contrast(BLACK, margin) >= contrast(WHITE, margin) ? BLACK : WHITE;
 }
 
 /**
@@ -45,7 +75,7 @@ export function pdfPageOptions(site) {
   const family = SANS_FONT_IDS.includes(font) ? SANS_STACK : SERIF_STACK;
   // Only a #rrggbb value gets into the template, and nothing else from the
   // settings does, so nothing needs escaping.
-  const color = footerInk(settings.colors?.text);
+  const color = footerInk(settings.colors?.text, pdfMarginColor(settings));
   // A footer template sees none of the page's stylesheets or web fonts, and
   // Chromium's default size for it is tiny, so everything is inline.
   const style = [

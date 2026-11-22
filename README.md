@@ -28,7 +28,9 @@ exact same components.
 - **`/print`** — the print-styled version of the resume (used internally by
   the PDF export; you generally won't visit this directly).
 - **Download PDF** — server-generates a real PDF on demand via headless
-  Chromium, from the same markup as the print view. "Page numbers in the
+  Chromium, from the same markup as the print view, on Letter paper with a
+  half-inch margin that takes the resume's background color, so a dark
+  resume is dark edge to edge (a cover letter's PDF too). "Page numbers in the
   PDF" in a resume's site settings (off by default) adds "Page 1 of 2" at
   the foot of every page from its next publish.
 - **Cover letters** — private letters kept next to each resume, drawn under
@@ -63,6 +65,11 @@ block — built-in or custom — has the same shape:
 Built-in block types: `heading`, `summary`, `executive_summary`,
 `skills_group`, `experience`, `education`, `credentials`, `languages`.
 
+An experience entry can also carry labelled details for a US federal or other
+formal resume (hours per week, series and grade, salary, supervisor, and
+whether they may be contacted), shown as one line under the company; each
+surface (web, print/PDF) can leave them off.
+
 A **credential** (`type: "credentials"`) holds one license, certification or
 membership: name, issuer, number, issued/expires dates and a verification URL.
 Expired credentials stay visible; the editor warns so you can update or hide
@@ -77,10 +84,16 @@ heading, and its AI rewrite can draft the whole thing from the rest of
 your resume (see [AI rewrites](#ai-rewrites)).
 
 **Custom blocks** (`type: "custom"`) are a title plus a list of items, each
-with an optional heading and a body. Use these for anything the built-in
-types don't cover — certifications, publications, volunteer work, side
-projects — without touching any code. They drag, reorder, and toggle
-visibility exactly like built-in blocks.
+with an optional heading, an optional date, and a body. Use these for
+anything the built-in types don't cover — certifications, publications,
+volunteer work, side projects — without touching any code. They drag,
+reorder, and toggle visibility exactly like built-in blocks. An item's
+date (`date`, free text such as "2021" or "Forthcoming") is shown at the
+right of its heading the way experience dates are (under the heading in a
+centered or right-aligned block, and a long one wraps rather than
+crowding the heading); the Academic CV layout puts it in its left-hand
+date column, so a publications list reads by year. An item without a date
+looks as it always has.
 
 Every block also has a **Customize block** section in the editor, stored at
 `data.style`: extra space above/below (`spaceAbove`, `spaceBelow`), a
@@ -891,6 +904,8 @@ Parts of a block can also be rewritten on their own:
   description, whatever the AI returns. Likewise, a bullet rewrite never
   changes the description.
 - Each item in a custom block has a ✨ button that rewrites just that item.
+  An item's date is never rewritten (by this or by the block's rewrite);
+  the AI only reads it as context.
 
 An executive summary's rewrite always sees an outline of the rest of the
 resume: job titles, companies, dates, taglines, descriptions, bullets,
