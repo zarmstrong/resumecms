@@ -1417,6 +1417,25 @@ next publish; a cover letter's at its next download once
 `LETTER_RENDER_VERSION` is bumped; the share card draws no text on a
 color.
 
+A contact link's badge (its type's letter, `linkGlyph()`) is drawn by
+`client/src/resume/LinkGlyph.jsx` as a Font Awesome Free letter icon, an
+SVG path, `aria-hidden` (issue #222): as text, Chromium put the letter in
+the PDF's text layer, often out of place, where a parser read it as part
+of the resume (the LinkedIn badge as a stray "I" after the last section).
+Every other way of drawing a letter tried (a `::before`, an SVG `<text>`,
+an SVG background image or mask, a tagged PDF) still writes it as text.
+`LinkBadge` is the square badge; `chip-links` draws the bare
+`LinkGlyph` inside the link, so a link whose label is empty or only
+spaces shows its address there (`linkText()` in `linkTypes.js`) rather
+than being a link with no name; the landing page's links section, whose
+badge is inside the link too, gets the same from `resolveLanding()` (both
+copies). A browser flow finds every
+header's sample link by its address and checks that its text is the label
+alone, that no badge holds text and that the link has a badge of its own.
+The `labeled-header` header's row labels ("e:") are text on purpose (the
+flow's `TEXT_LABEL_HEADERS`): they label the value beside them, in
+reading order.
+
 A `credentials` block holds one license, certification or membership, with
 `kind`, `name`, `issuer`, `number`, `issued`, `expires` and `url`. It nests
 under a heading and goes to the sidebar rail alongside skills and education.
