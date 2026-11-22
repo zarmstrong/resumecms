@@ -84,10 +84,16 @@ heading, and its AI rewrite can draft the whole thing from the rest of
 your resume (see [AI rewrites](#ai-rewrites)).
 
 **Custom blocks** (`type: "custom"`) are a title plus a list of items, each
-with an optional heading and a body. Use these for anything the built-in
-types don't cover — certifications, publications, volunteer work, side
-projects — without touching any code. They drag, reorder, and toggle
-visibility exactly like built-in blocks.
+with an optional heading, an optional date, and a body. Use these for
+anything the built-in types don't cover — certifications, publications,
+volunteer work, side projects — without touching any code. They drag,
+reorder, and toggle visibility exactly like built-in blocks. An item's
+date (`date`, free text such as "2021" or "Forthcoming") is shown at the
+right of its heading the way experience dates are (under the heading in a
+centered or right-aligned block, and a long one wraps rather than
+crowding the heading); the Academic CV layout puts it in its left-hand
+date column, so a publications list reads by year. An item without a date
+looks as it always has.
 
 Every block also has a **Customize block** section in the editor, stored at
 `data.style`: extra space above/below (`spaceAbove`, `spaceBelow`), a
@@ -897,6 +903,8 @@ Parts of a block can also be rewritten on their own:
   description, whatever the AI returns. Likewise, a bullet rewrite never
   changes the description.
 - Each item in a custom block has a ✨ button that rewrites just that item.
+  An item's date is never rewritten (by this or by the block's rewrite);
+  the AI only reads it as context.
 
 An executive summary's rewrite always sees an outline of the rest of the
 resume: job titles, companies, dates, taglines, descriptions, bullets,

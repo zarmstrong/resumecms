@@ -20,8 +20,10 @@ export const CARD_HEIGHT = 630;
 
 // Bump when the card's design (client/src/share/ShareCard.jsx) changes, so
 // every card is drawn again instead of the old design being kept for as
-// long as its content stays the same.
-export const CARD_DESIGN_VERSION = 1;
+// long as its content stays the same. Also when the fonts it's drawn in
+// change. 2: self-hosted static fonts (issue #221; Source Serif 4's static
+// instance is a little wider than the variable font's optical size).
+export const CARD_DESIGN_VERSION = 2;
 
 const NAME_MAX = 120;
 const TITLE_MAX = 200;

@@ -109,7 +109,9 @@ SIGKILLing it past the grace period only while `/proc` shows it's still
 that server; the server runs in its own process group, so a terminal's
 signals reach it only that way); each
 flow in `editor.e2e.js` gets a fresh browser context, blocks every request
-but the server's (Google Fonts included), waits on the page's state or on
+but the server's, and every font request (the site fonts are the server's
+own since issue #221, and a font arriving mid-click moves its target),
+waits on the page's state or on
 its requests (never a fixed sleep), and leaves a screenshot when it fails
 (`E2E_SCREENSHOT_DIR`, else a folder under the OS temp dir). The flows:
 logging in through the form, editing a block and publishing it, the landing
@@ -1037,7 +1039,8 @@ template doesn't matter); `ShareCard.jsx` didn't change for that.
 `shareImages.js` (pure) keys both by a hash of what they show: a photo by
 its `data:` URL, a card by `cardContent()` (name, title, photo and only the
 colors and fonts it's drawn in) plus `CARD_DESIGN_VERSION`, which must be
-bumped when `client/src/share/ShareCard.jsx` changes. `shareStore.js`
+bumped when `client/src/share/ShareCard.jsx` changes, or the fonts it's
+drawn in do (see "PDF generation"). `shareStore.js`
 (composed into the store like the landing store) renders cards on the PDF
 queue (`withPdfLock`, the render timeout) as `<pdfDir>/cards/<key>.png`:
 `publish()`, `publishLanding()`, `setLandingEnabled()` and boot call
@@ -1414,6 +1417,25 @@ next publish; a cover letter's at its next download once
 `LETTER_RENDER_VERSION` is bumped; the share card draws no text on a
 color.
 
+A contact link's badge (its type's letter, `linkGlyph()`) is drawn by
+`client/src/resume/LinkGlyph.jsx` as a Font Awesome Free letter icon, an
+SVG path, `aria-hidden` (issue #222): as text, Chromium put the letter in
+the PDF's text layer, often out of place, where a parser read it as part
+of the resume (the LinkedIn badge as a stray "I" after the last section).
+Every other way of drawing a letter tried (a `::before`, an SVG `<text>`,
+an SVG background image or mask, a tagged PDF) still writes it as text.
+`LinkBadge` is the square badge; `chip-links` draws the bare
+`LinkGlyph` inside the link, so a link whose label is empty or only
+spaces shows its address there (`linkText()` in `linkTypes.js`) rather
+than being a link with no name; the landing page's links section, whose
+badge is inside the link too, gets the same from `resolveLanding()` (both
+copies). A browser flow finds every
+header's sample link by its address and checks that its text is the label
+alone, that no badge holds text and that the link has a badge of its own.
+The `labeled-header` header's row labels ("e:") are text on purpose (the
+flow's `TEXT_LABEL_HEADERS`): they label the value beside them, in
+reading order.
+
 A `credentials` block holds one license, certification or membership, with
 `kind`, `name`, `issuer`, `number`, `issued`, `expires` and `url`. It nests
 under a heading and goes to the sidebar rail alongside skills and education.
@@ -1425,6 +1447,72 @@ education's, including consecutive timeline entries. The pure
 reading; verification links require absolute http/https URLs. Credentials
 are factual context, never rewritten; their number is public but never sent
 to the AI. A tailoring plan can hide an individual credential.
+
+A `custom` block's item (`{ heading, bodyType, text | items | label/url
+| tagColor }`, or the legacy `{ heading, body }`) may carry a `date`
+(issue #214): free text such as "2021" or "Forthcoming", never parsed,
+stored only while set (`patchCustomItem()` in
+`client/src/resume/customItems.js`, which the editor's per-item Date input
+goes through). `CustomBlock` gives only a dated item the heading row
+`.r-custom-item-top`, the date an `.r-experience-dates` (plus
+`.r-custom-item-date`) so it takes the entry dates' look, pill and
+layout overrides; an item without one renders exactly the markup it did
+before, so existing resumes and PDFs don't change. Being free text, the
+date may wrap (an entry's does only in `academic`): it never shrinks, but a long one
+stops at 40% of the row and wraps there, right-aligned (the block's own
+alignment wherever the row stacks), and the heading beside it gives way
+(`min-width: 0`, breaking a word that doesn't fit) rather than push the
+row out of a narrow column. The row stacks where
+`.r-experience-top` does (narrow screens, the sidebar rail), a centered
+or right-aligned block puts the date under the heading, and the
+`academic` layout reaches a dated item back over its custom-block indent
+into the date column, as for its entries. `blockData.js` and
+`mcp/blockSchemas.js` list the key. The AI never writes it: it's not in
+any custom target's editable set or schema, the merges spread the stored
+item so it comes through as stored, and the editor's `targetSlice()`
+leaves it out. Its staleness check also compares custom items as the
+form writes them back (a legacy item with its `bodyType` and `text`
+added, keys sorted: `comparableItem()`), so a date edit alone, even
+on a block of legacy items, makes no proposal stale, with one exception
+(`twinsRedated()`): a block proposal that words entries differently which
+are the same but for their date goes stale once any of those entries'
+dates isn't the one it was made against, since the date is all that says
+which is which (they may have been reordered, and a block proposal has
+no anchor to follow that with); and a block proposal is stale for good
+once its block's item count has differed from what it was made against
+(`itemCountChanged()`, noted by `EditorPage`'s relocation effect as
+`itemsChanged` on the proposal, or on its request while it loads), since
+an item removed and another added that differs only by date reads as a
+date edit. Relocation
+(`relocateTarget()`) first checks whether only dates changed (the same
+number of items, each the same with dates ignored); then every item
+proposal stays on its index, even when the edit makes two items
+identical or a cleared date makes them so. For custom items it reads
+what one change leaves behind exactly, before the content-pairing rules
+(which an edit that makes two items read alike can mislead): one item
+changed in place moves nothing; the anchor's own items in another order
+(`isReordering()`, which no edit leaves behind: entries that differ only
+by date swapped, say) put the proposal on the one item that reads
+exactly like its own, however many moved, and drop it when an exact copy
+of its own moved; and one item removed drops the proposal when it's its
+own or one of several exact copies of it (the data can't say which
+went), rather than leave it, stale, on whatever took its place, and
+otherwise only shifts it. Otherwise it compares items
+with the date kept (`placeJson()`), since the lists it's for repeat an
+entry that differs only by date (the same award every year), and drops
+an item proposal that would otherwise stay, not stale, over another
+year's entry once its own is deleted (compared with what it was made
+for, so also when its own was edited first). `applyProposal()`
+keeps the current date: an item rewrite's from the item at its target,
+a block rewrite's by position, but only while the proposal isn't stale
+(items have no ids, so once they've been added, removed, reordered or
+edited it keeps the dates it was made against rather than put one
+item's date on another). It is read-only context
+(`itemDates`, or `itemDate` and each other item's `date` for an item
+target, sent only when an item has one, with a prompt rule not to put it
+in the text), as an experience entry's dates are, and goes with
+`customItemProse()` into `letterResumeContext()` and `planOutline()`,
+where an item with only a date is left out.
 
 A `languages` block (issue #217) holds the whole list in one block,
 `entries: [{ language, level }]`, drawn as one wrapped line
@@ -1485,7 +1573,14 @@ proposal's target onto the block's current data, `previewData()` composes all
 of a block's proposals for the preview, and `isProposalStale()` only compares
 the target's slice. Bullet and item targets are positions, so an effect in
 `EditorPage` re-keys a ready proposal when its bullet or item moves, and
-drops it when its position is gone, or its block is. `relocateTarget()`
+drops it when its position is gone, or its block is. A request still
+loading is followed the same way, one change at a time
+(`relocateRequest()`, from the target and data it was sent with, kept on
+its `aiRequestsRef` entry, which moves to the new key with it), and
+forgotten with its bullet or item, so `handleAiRequest`'s `settle()` finds
+it by request id and `landProposal()` places the response where its bullet
+or item is now, or nowhere; placing it in one step once it lands couldn't
+always tell what happened meanwhile. `relocateTarget()`
 aligns the list at the proposal's depth in `anchorData` (the block data it
 was last placed against) with the current one: unchanged entries pair in
 order (LCS), an unpaired entry in an equal-sized gap was edited in place
@@ -1749,7 +1844,7 @@ request carrying a valid one (`Cache-Control: private, no-store`,
 renderer throws if the page wasn't served the resume it asked for, so a
 cookie that stops getting through fails renders instead of filing the
 default's content under another name. A cookie rather than a header because
-Puppeteer's extra headers go to every request, Google Fonts included. So
+Puppeteer's extra headers go to every request, a third-party one included. So
 the client needs no change to render any resume. Every render, the
 share card's included, waits for the page's `window.__PDF_READY__`,
 which only the page component sets once its content is drawn, so
@@ -1801,6 +1896,33 @@ paints the margin in Chromium, but changes the layout every template is
 drawn in, and the footer would no longer have a margin of its own. A
 change to it reaches a resume's PDF at its next publish, and a letter's
 through `LETTER_RENDER_VERSION` (3).
+
+The site fonts are self-hosted (issue #221): `client/src/fonts.js` imports
+static instances from the `@fontsource/<family>` packages (OFL), the
+weights each font option uses, and nothing loads from Google Fonts. Google
+serves those families as variable fonts, and Chromium embeds a variable
+font in a PDF as Type3 glyph procedures (the font type resume parsers
+handle worst); a static one embeds as TrueType. Never import an
+`@fontsource-variable` package or put a variable font back: the client's
+`fonts.test.js` checks every `FONT_OPTIONS` family and the UI font is
+imported from a static package, and a browser flow publishes and checks
+the PDF names the font and has no Type3 one. A new font option needs its
+package in `client/package.json` and its weights in `fonts.js`. Two parts
+of `vite.config.js` keep the cost down: `woff2Only()` cuts fontsource's
+woff fallback from its CSS (every supported browser takes woff2), and
+`assetsInlineLimit` never inlines a font, since a small subset's base64
+would sit in the main stylesheet for every visitor. The font files are
+hashed and in the build manifest, so they're served `immutable`. Each
+weight's CSS lists its subsets by `unicode-range`, so a page downloads
+only the files it draws. The OFL asks that its text and each font's
+copyright notice go with every copy, so `fontLicenses()` there writes
+every `@fontsource` dependency's `LICENSE` into `dist/font-licenses.txt`
+(served at `/font-licenses.txt`; written after the bundle so it's never in
+the manifest, hence revalidated), and a browser flow checks each package
+has its section. A change to the fonts stored content is drawn in
+(a family's package, its weights, static for variable) bumps
+`LETTER_RENDER_VERSION` and `CARD_DESIGN_VERSION`, or cached letters and
+share cards keep the old ones; a resume's PDF follows at its next publish.
 
 Page numbers (issue #206) are opt-in per resume: `site.pdfPageNumbers:
 true` in its site settings (drafted and published with them; missing or

@@ -42,6 +42,8 @@ test('one request per section of the chosen types, plus an experience descriptio
   // a custom section saved before bodyType existed keeps its text in `body`
   const legacy = block('old', 'custom', { title: 'Awards', items: [{ heading: '', body: 'Best paper' }] });
   assert.deepEqual(tailorItems([legacy, block('none', 'custom', { items: [{}] })], ['custom']).map((i) => i.key), ['old:block']);
+  // an item's date isn't text a rewrite could work from (it never rewrites it)
+  assert.deepEqual(tailorItems([block('dated', 'custom', { items: [{ heading: '', text: '', date: '2021' }] })], ['custom']), []);
   assert.deepEqual(tailorItems(blocks, []), []);
 });
 

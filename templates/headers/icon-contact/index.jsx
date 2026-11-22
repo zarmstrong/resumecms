@@ -1,11 +1,12 @@
 import { HeadshotImage, HeaderActions, PhoneText } from '@resume/headerParts.jsx';
 import { safeHref, linkProps } from '@resume/safeUrl.js';
 import { linkGlyph } from '@resume/linkTypes.js';
+import { LinkBadge } from '@resume/LinkGlyph.jsx';
 
 function IconContactItem({ glyph, children }) {
   return (
     <span className="r-icon-contact-item">
-      <span className="r-link-badge" aria-hidden="true">{glyph}</span>
+      <LinkBadge glyph={glyph} />
       {children}
     </span>
   );

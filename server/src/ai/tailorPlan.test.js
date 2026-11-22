@@ -91,6 +91,23 @@ test('a heading hidden everywhere stays in while something under it shows', () =
   assert.deepEqual(planOutline(empty).outline, []);
 });
 
+test("a custom item's date is in the outline, and an item with only a date isn't", () => {
+  const blocks = [
+    block('c', 'custom', {
+      title: 'Publications',
+      items: [
+        { heading: 'On caching', bodyType: 'text', text: 'J. Things.', date: ' 2021 ' },
+        { heading: 'Talk', bodyType: 'text', text: 'Conf.' },
+        { heading: '', bodyType: 'text', text: '', date: '2020' },
+      ],
+    }),
+  ];
+  assert.deepEqual(planOutline(blocks).outline[0].items, [
+    { heading: 'On caching', body: 'J. Things.', date: '2021' },
+    { heading: 'Talk', body: 'Conf.' },
+  ]);
+});
+
 test('the prompt has the brief rules and no header or contact details', () => {
   const { outline } = planOutline(draft());
   const { system, user } = buildPlanPrompt(outline, brief, { hide: true, order: true });
