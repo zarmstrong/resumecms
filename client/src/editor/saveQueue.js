@@ -17,15 +17,29 @@
 // same key succeeds. An unkeyed write's failure is only reported by a flush
 // that waited on it; those writes resync, or never applied locally.
 //
+// hold() is for an operation that flushes before sending a write the next
+// page reads (issue #235: "Apply to the default resume" waits for the
+// landing saves, then writes the resume's site settings). Take it before
+// the first await: until its release(), flush() goes round for it too, so
+// a leave whose flush resolves with the operation's can't navigate before
+// its request is even sent. The operation's own wait is the hold's
+// flush(), which waits for every save and write but for no hold (its own
+// would never come, and two operations each waiting on the other's would
+// never end); calling the queue's flush() while holding never resolves.
+// release() is idempotent; call it once the request is tracked, or in a
+// finally once the operation is done or stopped.
+//
 // pending() says what leaving now would put at risk (issue #105): saves
-// still waiting, writes in flight, and kept failures, as counts. isIdle()
-// is true when all three are none, and subscribe(listener) calls the
-// listener whenever that may have changed (React's useSyncExternalStore).
+// still waiting, writes in flight, kept failures and holds, as counts.
+// isIdle() is true when all four are none, and subscribe(listener) calls
+// the listener whenever that may have changed (React's
+// useSyncExternalStore).
 export function createSaveQueue({ delayMs, timers = globalThis }) {
   const waiting = new Map(); // key -> { timer, run }
   const inFlight = new Map(); // promise -> key (undefined for an unkeyed write)
   const latest = new Map(); // key -> the newest promise tracked under it
   const failed = new Map(); // key -> error
+  const holds = new Set(); // a promise per hold, resolved by its release()
   const listeners = new Set();
 
   function changed() {
@@ -93,27 +107,50 @@ export function createSaveQueue({ delayMs, timers = globalThis }) {
     return cancelled;
   }
 
-  // Goes round until nothing is waiting or in flight: the editor stays
-  // editable meanwhile, and an edit typed during the wait must not miss it.
-  async function flush() {
+  // Goes round until nothing is waiting or in flight (nor held, unless
+  // it's a hold's own): the editor stays editable meanwhile, and an edit
+  // typed during the wait, or by the operation that held it, must not miss
+  // it.
+  async function drain(withHolds) {
     const unkeyed = [];
-    while (waiting.size || inFlight.size) {
+    while (waiting.size || inFlight.size || (withHolds && holds.size)) {
       runWaiting();
       const writes = [...inFlight];
-      const results = await Promise.allSettled(writes.map(([promise]) => promise));
+      const results = await Promise.allSettled([...writes.map(([promise]) => promise), ...(withHolds ? holds : [])]);
       results.forEach((r, i) => {
-        if (r.status === 'rejected' && writes[i][1] === undefined) unkeyed.push(r.reason);
+        if (r.status === 'rejected' && i < writes.length && writes[i][1] === undefined) unkeyed.push(r.reason);
       });
     }
     return [...failed.values(), ...unkeyed];
   }
 
+  function flush() {
+    return drain(true);
+  }
+
+  function hold() {
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    holds.add(held);
+    changed();
+    return {
+      flush: () => drain(false),
+      release() {
+        if (!holds.delete(held)) return;
+        release();
+        changed();
+      },
+    };
+  }
+
   function pending() {
-    return { waiting: waiting.size, inFlight: inFlight.size, failed: failed.size };
+    return { waiting: waiting.size, inFlight: inFlight.size, failed: failed.size, held: holds.size };
   }
 
   function isIdle() {
-    return waiting.size === 0 && inFlight.size === 0 && failed.size === 0;
+    return waiting.size === 0 && inFlight.size === 0 && failed.size === 0 && holds.size === 0;
   }
 
   function subscribe(listener) {
@@ -121,5 +158,5 @@ export function createSaveQueue({ delayMs, timers = globalThis }) {
     return () => listeners.delete(listener);
   }
 
-  return { schedule, track, flush, runWaiting, forget, pending, isIdle, subscribe };
+  return { schedule, track, flush, hold, runWaiting, forget, pending, isIdle, subscribe };
 }

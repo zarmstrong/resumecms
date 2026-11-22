@@ -270,17 +270,22 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
   // Gets every edit to the server first, for what reads the stored draft
   // (a publish, an apply); a save that failed stops it outright, with its
   // error shown, so nothing goes on without an edit unnoticed. Leaving asks
-  // instead (leaveFor).
+  // instead (leaveFor). It holds the save queue until `next` is done
+  // (saves.hold(), issue #235), so a leave whose flush resolves with this
+  // one's, the browser's Back included, waits for what `next` sends (an
+  // apply's write to the resume, a preset's save) instead of going first.
   async function afterSaving(next) {
     const release = holdBusy();
+    const held = saves.hold();
     try {
-      const failed = await saves.flush();
+      const failed = await held.flush();
       if (failed.length) {
         setError(failed[0].message || 'unknown error');
         return;
       }
       await next();
     } finally {
+      held.release();
       release();
     }
   }
@@ -334,7 +339,8 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       setApplyState({ status: 'applying' });
       try {
         // Tracked: it writes to a resume's draft, so leaving waits for it
-        // (see handleOfferAnswer).
+        // (see handleOfferAnswer); until it's sent, afterSaving's hold
+        // does.
         await saves.track(api.applyLandingStyle());
         if (mountedRef.current) {
           setApplyState({ status: 'applied', message: `Copied into the draft of ${name}. Publish that resume to show them on it.` });
@@ -375,9 +381,11 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       .finally(release);
   }
 
+  // Held like afterSaving, so a leave meanwhile waits for the discard.
   async function handleDiscard() {
-    await saves.flush();
+    const held = saves.hold();
     try {
+      await held.flush();
       const { landing: draft, status: current } = await api.discardLandingDraft();
       if (saves.forget(() => true)) setSaveState('idle');
       clearAi();
@@ -389,6 +397,8 @@ export function LandingEditorPage({ resumes, onSwitch, onStatus, onLogout }) {
       setResumeOffer((offer) => (offer?.status === 'applied' ? offer : null));
     } catch (err) {
       setError(err.message || 'Discard failed');
+    } finally {
+      held.release();
     }
   }
 

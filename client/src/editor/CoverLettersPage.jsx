@@ -131,14 +131,18 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
   }
 
   // Gets every edit to the server first, then does `next`. A save that
-  // failed stops it unless confirmed.
+  // failed stops it unless confirmed. It holds the save queue until `next`
+  // is done (saves.hold(), issue #235), so a leave whose flush resolves
+  // with this one's waits for what `next` sends.
   async function afterSaving(next) {
     setBusy(true);
+    const held = saves.hold();
     try {
-      const failures = await saves.flush();
+      const failures = await held.flush();
       if (failures.length && !window.confirm(`A change didn't save (${failures[0].message || 'unknown error'}). Go on without it?`)) return;
       await next();
     } finally {
+      held.release();
       if (mountedRef.current) setBusy(false);
     }
   }

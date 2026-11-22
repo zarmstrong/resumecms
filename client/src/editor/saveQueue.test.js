@@ -184,23 +184,23 @@ test('pending counts what is waiting, in flight and failed, and isIdle is true o
   const unsubscribe = q.subscribe(() => {
     notified += 1;
   });
-  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 0, failed: 0 });
+  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 0, failed: 0, held: 0 });
   assert.equal(q.isIdle(), true);
 
   const header = deferred();
   const site = deferred();
   q.schedule('header', () => q.track(header.promise, 'header'));
   q.schedule('site', () => q.track(site.promise, 'site').catch(() => {}));
-  assert.deepEqual(q.pending(), { waiting: 2, inFlight: 0, failed: 0 }, 'on their debounce');
+  assert.deepEqual(q.pending(), { waiting: 2, inFlight: 0, failed: 0, held: 0 }, 'on their debounce');
   assert.equal(q.isIdle(), false);
 
   timers.fireAll();
-  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 2, failed: 0 }, 'sent, not answered');
+  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 2, failed: 0, held: 0 }, 'sent, not answered');
 
   header.resolve({});
   site.reject(new Error('400 bad site'));
   await new Promise((r) => setImmediate(r));
-  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 0, failed: 1 }, 'the failure is kept');
+  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 0, failed: 1, held: 0 }, 'the failure is kept');
   assert.equal(q.isIdle(), false, 'a kept failure is still unsaved work');
 
   await q.track(Promise.resolve({}), 'site');
@@ -224,7 +224,7 @@ test('an unkeyed write counts while in flight only, and forget clears what it dr
   });
   q.track(upload.promise).catch(() => {});
   assert.equal(notified, 1, 'tracking a write tells the subscriber at once');
-  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 1, failed: 0 });
+  assert.deepEqual(q.pending(), { waiting: 0, inFlight: 1, failed: 0, held: 0 });
   upload.reject(new Error('413'));
   await new Promise((r) => setImmediate(r));
   assert.equal(notified, 2, 'and so does its settling');
@@ -233,7 +233,100 @@ test('an unkeyed write counts while in flight only, and forget clears what it dr
   q.track(Promise.reject(new Error('500')), 'block:1').catch(() => {});
   q.schedule('block:2', () => {});
   await new Promise((r) => setImmediate(r));
-  assert.deepEqual(q.pending(), { waiting: 1, inFlight: 0, failed: 1 });
+  assert.deepEqual(q.pending(), { waiting: 1, inFlight: 0, failed: 1, held: 0 });
   q.forget(() => true);
   assert.equal(q.isIdle(), true);
+});
+
+// Issue #235: an operation that flushes before sending its write (the
+// landing editor's "Apply to the default resume") holds the queue, so a
+// leave's flush resolving with the operation's own can't go before the
+// request is sent.
+test("a hold keeps flush going until it's released, while its own flush waits only for the saves", async () => {
+  const timers = fakeTimers();
+  const q = createSaveQueue({ delayMs: 500, timers });
+  const landing = deferred();
+  q.schedule('landing', () => q.track(landing.promise, 'landing'));
+
+  const held = q.hold();
+  assert.deepEqual(q.pending(), { waiting: 1, inFlight: 0, failed: 0, held: 1 });
+  assert.equal(q.isIdle(), false, 'a hold is something to wait for');
+
+  const order = [];
+  const own = held.flush().then((failed) => order.push(['own', failed.length]));
+  const leave = q.flush().then((failed) => order.push(['leave', failed.length]));
+  assert.equal(timers.pending.size, 0, 'the waiting save went out at once');
+
+  landing.resolve({});
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(order, [['own', 0]], 'the operation goes on once the saves are in; the leave still waits');
+
+  // The operation sends its request, tracked, and then releases.
+  const apply = deferred();
+  q.track(apply.promise);
+  held.release();
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(order, [['own', 0]], 'the leave now waits for the request');
+  apply.resolve({});
+  await Promise.all([own, leave]);
+  assert.deepEqual(order, [['own', 0], ['leave', 0]]);
+  assert.equal(q.isIdle(), true);
+});
+
+test('a save scheduled by the holder before it releases is sent by the waiting flush', async () => {
+  const timers = fakeTimers();
+  const q = createSaveQueue({ delayMs: 500, timers });
+  const held = q.hold();
+  let sent = 0;
+  const leave = q.flush();
+  assert.deepEqual(await held.flush(), []);
+  // A preset applied: an ordinary edit on its debounce, then the release.
+  q.schedule('landing', () => {
+    sent += 1;
+  });
+  held.release();
+  await leave;
+  assert.equal(sent, 1, "the leave's flush sent it rather than leave it on its debounce");
+  assert.equal(timers.pending.size, 0);
+});
+
+test('a hold released without a request lets flush resolve, and releasing twice is harmless', async () => {
+  const q = createSaveQueue({ delayMs: 500, timers: fakeTimers() });
+  let notified = 0;
+  q.subscribe(() => {
+    notified += 1;
+  });
+  const a = q.hold();
+  const b = q.hold();
+  assert.equal(notified, 2, 'each hold tells the subscriber');
+  assert.equal(q.pending().held, 2);
+  let done = false;
+  const flushing = q.flush().then(() => {
+    done = true;
+  });
+  // Each operation's own flush ignores both holds, so neither waits on
+  // the other.
+  assert.deepEqual(await a.flush(), []);
+  assert.deepEqual(await b.flush(), []);
+  a.release();
+  a.release();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(done, false, 'one hold is still taken');
+  assert.equal(q.pending().held, 1, 'a second release() frees nothing more');
+  b.release();
+  await flushing;
+  assert.equal(q.isIdle(), true);
+  assert.equal(notified, 4, 'each release tells the subscriber, once');
+});
+
+test('a failed save tracked while a hold waits is reported by both flushes', async () => {
+  const timers = fakeTimers();
+  const q = createSaveQueue({ delayMs: 500, timers });
+  const held = q.hold();
+  q.schedule('landing', () => q.track(Promise.reject(new Error('400 bad')), 'landing').catch(() => {}));
+  const own = held.flush();
+  const leave = q.flush();
+  assert.deepEqual((await own).map((e) => e.message), ['400 bad']);
+  held.release();
+  assert.deepEqual((await leave).map((e) => e.message), ['400 bad']);
 });
