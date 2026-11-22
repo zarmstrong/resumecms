@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFStream } from 'pdf-lib';
 import { PASSWORD, REPO_ROOT, USERNAME, launchBrowser, saveScreenshot, startServer } from './harness.js';
 
 let server;
@@ -97,9 +98,9 @@ async function runFlow(t, page, context, active, name, fn) {
   }
 }
 
-// A page that reaches only the server under test: the pages' Google Fonts
-// would otherwise make the run depend on the network, and a font arriving
-// mid-click moves what the click was aimed at.
+// A page that reaches only the server under test, and loads no web font
+// even from it (the site fonts are self-hosted since issue #221): a font
+// arriving mid-click moves what the click was aimed at.
 async function newPage(context) {
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
@@ -108,7 +109,8 @@ async function newPage(context) {
   page.on('request', (request) => {
     // Either can reject once the page is gone (a reload, the context
     // closing), which is no failure of the flow's.
-    if (request.url().startsWith(`${server.baseUrl}/`) || request.url().startsWith('data:')) request.continue().catch(() => {});
+    const own = request.url().startsWith(`${server.baseUrl}/`) || request.url().startsWith('data:');
+    if (own && request.resourceType() !== 'font') request.continue().catch(() => {});
     else request.abort('blockedbyclient').catch(() => {});
   });
   return page;
@@ -740,4 +742,95 @@ flow('adds a languages block and preserves its entries after reload', async ({ p
   await page.waitForSelector(RESUME_SELECT);
   const stored = await draftBlock(page, resumeId, block.id);
   assert.deepEqual(stored.data, { entries: expected });
+});
+
+// Issue #221: the PDF embeds the self-hosted static fonts as TrueType,
+// never as Type3 (what Chromium makes of a variable font, such as Google
+// Fonts serves). The server's own Chromium renders it, so the fonts load
+// there even though this page blocks them. A serif and a sans, each found
+// by name, so a fallback font can't pass for it; one flow each, so a slow
+// render of one leaves the other its whole time.
+const pdfName = (dict, key) => String(dict.get(PDFName.of(key)) ?? '');
+
+// Every font dictionary in a PDF. A font Chromium embeds as TrueType is a
+// Type0 font over a CIDFontType2 descendant whose descriptor holds the
+// font program as FontFile2; `embedded` says a font is all of that.
+function pdfFonts(pdf) {
+  return pdf.context
+    .enumerateIndirectObjects()
+    .map(([, object]) => object)
+    .filter((object) => object instanceof PDFDict && pdfName(object, 'Type') === '/Font')
+    .map((dict) => {
+      const descendant = dict.lookupMaybe(PDFName.of('DescendantFonts'), PDFArray)?.lookupMaybe(0, PDFDict);
+      const descriptor = descendant?.lookupMaybe(PDFName.of('FontDescriptor'), PDFDict);
+      return {
+        subtype: pdfName(dict, 'Subtype'),
+        base: pdfName(dict, 'BaseFont'),
+        descendant: descendant ? pdfName(descendant, 'Subtype') : '',
+        embedded:
+          pdfName(dict, 'Subtype') === '/Type0' &&
+          Boolean(descendant) &&
+          pdfName(descendant, 'Subtype') === '/CIDFontType2' &&
+          descriptor?.lookupMaybe(PDFName.of('FontFile2'), PDFStream) instanceof PDFStream,
+      };
+    });
+}
+
+for (const [font, name] of [
+  ['source-serif', 'SourceSerif4'],
+  ['inter', 'Inter'],
+]) {
+  flow(`a published PDF embeds ${font} as TrueType, not Type3`, async ({ page }) => {
+    await login(page);
+    const resumeId = await defaultResumeId(page);
+    const { body } = await api(page, `/api/resumes/${resumeId}/site`);
+    const put = await api(page, `/api/resumes/${resumeId}/site`, { method: 'PUT', body: JSON.stringify({ ...body.site, font }) });
+    assert.equal(put.status, 200, 'the site setting saves');
+    const published = await api(page, `/api/resumes/${resumeId}/publish`, { method: 'POST' });
+    assert.equal(published.status, 200, 'publishes');
+    // A publish answers pdfPending when its render takes longer than it
+    // waits (20 s; a slow machine). The render carries on, so wait for it,
+    // then check the file is this publish's and not an earlier one's.
+    const statusUrl = `/api/resumes/${resumeId}/publish/status`;
+    await page.waitForFunction(async (url) => (await (await fetch(url)).json()).pdfPending === false, { polling: 250, timeout: 40000 }, statusUrl);
+    const status = await api(page, statusUrl);
+    assert.equal(status.body.pdfStale, false, 'the PDF was rendered from this publish');
+    const base64 = await page.evaluate(async (url) => {
+      const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return btoa(binary);
+    }, `/api/resumes/${resumeId}/resume.pdf`);
+    const fonts = pdfFonts(await PDFDocument.load(Buffer.from(base64, 'base64')));
+    const found = JSON.stringify(fonts);
+    assert.deepEqual(fonts.filter((f) => f.subtype === '/Type3'), [], `no Type3 font in ${found}`);
+    // The picked font, at every weight the page draws it in: a composite
+    // font with its program embedded as TrueType. (Not asked of every
+    // font: a glyph the picked one lacks falls back to whatever the
+    // machine has.)
+    const named = fonts.filter((f) => !f.subtype.startsWith('/CIDFontType') && f.base.replace(/[^a-z0-9]/gi, '').toLowerCase().includes(name.toLowerCase()));
+    assert.ok(named.length > 0, `${name} is in the PDF (${found})`);
+    assert.deepEqual(named.filter((f) => !f.embedded), [], `${name} is embedded as TrueType in ${found}`);
+  });
+}
+
+// The fonts' license text goes with them (the OFL asks for it): the build
+// writes one file holding every font package's (vite.config.js).
+flow("the build ships the fonts' licenses", async ({ page }) => {
+  const { dependencies } = JSON.parse(readFileSync(path.join(REPO_ROOT, 'client', 'package.json'), 'utf8'));
+  const packages = Object.keys(dependencies).filter((name) => name.startsWith('@fontsource/'));
+  assert.ok(packages.length > 0, 'the client depends on font packages');
+  const response = await page.goto(`${server.baseUrl}/font-licenses.txt`);
+  assert.equal(response.status(), 200);
+  assert.match(response.headers()['content-type'], /^text\/plain/);
+  assert.equal(response.headers()['cache-control'], 'no-cache', 'an unhashed file is revalidated');
+  const text = await response.text();
+  for (const name of packages) {
+    const start = text.indexOf(`\n${name} `);
+    assert.ok(start >= 0, `${name} has a section`);
+    const next = text.indexOf('\n@fontsource/', start + 1);
+    const section = text.slice(start, next < 0 ? undefined : next);
+    assert.match(section, /SIL OPEN FONT LICENSE Version 1\.1/, `${name}: the license text`);
+    assert.match(section, /Copyright|Google Inc\./, `${name}: its copyright notice`);
+  }
 });
