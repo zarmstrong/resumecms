@@ -1,4 +1,5 @@
 import { credentialKindLabel, credentialHref, credentialMeta } from './credentials.js';
+import { customItemDate } from './customItems.js';
 import { shownLanguages } from './languages.js';
 import { normalizeBullet } from './bulletUtils.js';
 import { safeHref, linkProps } from './safeUrl.js';
@@ -217,6 +218,10 @@ function CustomItemBody({ item }) {
   }
 }
 
+// An item's optional date (customItems.js) gets a heading row, drawn with
+// an entry's date class so it reads like experience and education dates
+// (the academic layout moves it into its date column). An item without one
+// renders exactly as before.
 export function CustomBlock({ data }) {
   return (
     <div className="r-custom">
@@ -224,9 +229,19 @@ export function CustomBlock({ data }) {
       {Array.isArray(data.items) &&
         data.items.map((item, i) => {
           const normalized = normalizeCustomItem(item);
-          return (
+          const heading = normalized.heading ? <div className="r-custom-item-heading">{normalized.heading}</div> : null;
+          const date = customItemDate(normalized);
+          return date ? (
+            <div className="r-custom-item r-custom-item-dated" key={i}>
+              <div className="r-custom-item-top">
+                {heading}
+                <div className="r-experience-dates r-custom-item-date">{date}</div>
+              </div>
+              <CustomItemBody item={normalized} />
+            </div>
+          ) : (
             <div className="r-custom-item" key={i}>
-              {normalized.heading ? <div className="r-custom-item-heading">{normalized.heading}</div> : null}
+              {heading}
               <CustomItemBody item={normalized} />
             </div>
           );

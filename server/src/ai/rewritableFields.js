@@ -243,10 +243,17 @@ function experienceInput(data, target) {
 
 const customItemInput = (item) => ({ heading: item.heading || '', body: item[bodyField(item)] || '' });
 
-// A stored custom item as { heading, body }, whatever its body type (and
-// legacy shape). For prompts that read a custom section as context, like
-// a cover letter's (letterWriting.js).
-export const customItemProse = (item) => customItemInput(normalizeCustomItem(item));
+// A custom item's optional date (issue #214), shown beside its heading. It's
+// a fact like an experience entry's dates: the model may read it, but it's
+// never in the editable set or the schema, and every merge below spreads
+// the stored item, so it comes through exactly as stored.
+const customItemDate = (item) => (typeof item.date === 'string' ? item.date.trim() : '');
+const withDate = (input, date) => (date ? { ...input, date } : input);
+
+// A stored custom item as { heading, body, date? }, whatever its body type
+// (and legacy shape). For prompts that read a custom section as context,
+// like a cover letter's (letterWriting.js).
+export const customItemProse = (item) => withDate(customItemInput(normalizeCustomItem(item)), customItemDate(item));
 
 // An executive summary's highlights as the model sees them: the editor's
 // one-per-line textarea can leave blank entries, which render as nothing.
@@ -272,6 +279,9 @@ export function rewriteInput(type, data = {}, target = BLOCK_TARGET) {
       return experienceInput(data, target);
     case 'custom': {
       const items = (data.items || []).map(normalizeCustomItem);
+      // Dates go in the context only when an item has one, so a section
+      // without them is sent exactly as before.
+      const dates = items.map(customItemDate);
       if (target.kind === 'item') {
         const item = items[target.index];
         return {
@@ -279,7 +289,10 @@ export function rewriteInput(type, data = {}, target = BLOCK_TARGET) {
           context: {
             title: data.title || '',
             itemBodyType: item.bodyType || 'text',
-            items: items.map((it, k) => (k === target.index ? { heading: '', body: TARGET_PLACEHOLDER } : customItemInput(it))),
+            ...(dates[target.index] ? { itemDate: dates[target.index] } : {}),
+            items: items.map((it, k) =>
+              k === target.index ? { heading: '', body: TARGET_PLACEHOLDER } : withDate(customItemInput(it), dates[k])
+            ),
           },
         };
       }
@@ -291,7 +304,10 @@ export function rewriteInput(type, data = {}, target = BLOCK_TARGET) {
             body: item[bodyField(item)] || '',
           })),
         },
-        context: { itemBodyTypes: items.map((item) => item.bodyType || 'text') },
+        context: {
+          itemBodyTypes: items.map((item) => item.bodyType || 'text'),
+          ...(dates.some(Boolean) ? { itemDates: dates } : {}),
+        },
       };
     }
     default:

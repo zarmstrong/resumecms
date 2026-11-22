@@ -55,6 +55,7 @@ export const BLOCK_DATA_VALIDATORS = {
           label: str,
           url: str,
           tagColor: str,
+          date: str,
         })
       )
       .nullish(),
