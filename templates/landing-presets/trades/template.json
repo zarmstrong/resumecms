@@ -3,6 +3,7 @@
   "label": "Trades and home services",
   "description": "A digital business card for electricians, plumbers, builders, cleaners and anyone who's booked by phone: how to reach you first, then what you offer, your licenses, photos of your work and what customers say.",
   "author": "resumecms",
+  "resumePreset": "trades",
   "template": "card",
   "style": {
     "source": "custom",

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ResumeView } from '../resume/ResumeView.jsx';
 import { HEADER_TEMPLATES, LAYOUT_TEMPLATES, PRESETS, normalizeTemplate, normalizeLayout } from '../resume/templateRegistry.js';
-import { presetSite } from '../resume/resumePresets.js';
+import { presetGroups, presetSite } from '../resume/resumePresets.js';
 
 // Real ARIA APG radio-group keyboard behavior, not just the roles: only the
 // checked option (or the first if none is checked) is a tab stop, and arrow
@@ -128,7 +128,15 @@ export function TemplatePickerModal({ header, site, blocks, onChange, onClose })
             </div>
             {mode === 'presets' ? (
               <>
-                <OptionList title="Presets" options={PRESETS} selectedId={presetId} onSelect={setPresetId} />
+                {presetGroups(PRESETS).map((group) => (
+                  <OptionList
+                    key={group.id}
+                    title={group.title}
+                    options={group.presets}
+                    selectedId={presetId}
+                    onSelect={setPresetId}
+                  />
+                ))}
                 <p className="ed-template-picker-notice">
                   A preset replaces the template, layout, colors and type settings (fonts, size, weight, spacing, pill padding, bullet style), and keeps the title and description.
                 </p>

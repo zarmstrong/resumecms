@@ -3,6 +3,7 @@
   "label": "Education",
   "description": "For educators, a centered header and indigo dividers frame experience in a welcoming serif style.",
   "author": "resumecms",
+  "group": "profession",
   "header": "centered",
   "layout": "divider",
   "colors": {

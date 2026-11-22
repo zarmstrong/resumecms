@@ -64,6 +64,10 @@ matching the folder name, lowercase kebab-case:
   you don't need to specify every color.
 - `font`, `fontSize`, `lineSpacing`, `pillPadding` — optional, matching the
   option keys in `siteColors.js`.
+- `group` — optional. `"profession"` lists the preset under **By profession**
+  in the editor's template picker (a preset named for a line of work, such as
+  Healthcare). Leave it out for a preset named for a look, which is listed
+  under **By look**.
 
 ## Headers & layouts
 
@@ -277,6 +281,12 @@ page starts with, each by its kind and title only.
 - `id` matches the folder name; `label`, `description` and `author` are
   required strings.
 - `template` names a folder under `templates/landing/`.
+- `resumePreset` — optional, the id of a resume preset (a folder under
+  `templates/presets/`, checked by the validator). Once the page is started
+  from this preset, the editor offers in a banner to apply that resume preset
+  to the default resume's draft too. Accepting saves only that draft (nothing
+  is published); declining closes the banner. Leave it out when no resume
+  preset matches.
 - `style` is the landing page's own `style` (`source`, `colors` as
   `#rrggbb` or `''`, `font`, `nameFont`, optional `darkColors`), checked
   by the server's own rules, so a font must be one of the site fonts.

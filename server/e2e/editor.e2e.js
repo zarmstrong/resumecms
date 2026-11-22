@@ -371,8 +371,18 @@ flow('applies a resume preset by keyboard, and a reload keeps it', async ({ page
   await page.click('xpath/.//button[normalize-space()="Change template…"]');
   const picker = '[role="dialog"][aria-labelledby="ed-template-picker-title"]';
   const modes = `${picker} .ed-template-picker-modes`;
-  const radios = `${picker} [role="radiogroup"][aria-label="Presets"] [role="radio"]`;
+  const radios = `${picker} [role="radiogroup"][aria-label="By profession"] [role="radio"]`;
+  const looks = `${picker} [role="radiogroup"][aria-label="By look"] [role="radio"]`;
   const useButton = `${picker} .ed-modal-actions .ed-btn-primary`;
+  const checkedIn = (group) => page.$$eval(group, (els) => els.filter((el) => el.getAttribute('aria-checked') === 'true').length);
+  const tabStopsIn = (group) => page.$$eval(group, (els) => els.filter((el) => el.tabIndex === 0).length);
+  // The presets as the picker groups them (issue #219): by `group` in their
+  // template.json, each group in label order.
+  const presetsDir = path.join(REPO_ROOT, 'templates', 'presets');
+  const allPresets = readdirSync(presetsDir)
+    .map((id) => JSON.parse(readFileSync(path.join(presetsDir, id, 'template.json'), 'utf8')))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const lookPresets = allPresets.filter((preset) => preset.group !== 'profession');
 
   // Default mode is unchanged. Reach Presets by Tab from Header & layout,
   // then Tab into the unselected list, whose first option is a tab stop.
@@ -390,6 +400,26 @@ flow('applies a resume preset by keyboard, and a reload keeps it', async ({ page
   assert.equal(await page.$eval(`${radios}:first-child`, (el) => el.getAttribute('aria-checked')), 'false');
   assert.equal(await page.$eval(useButton, (el) => el.disabled), true, 'focus alone does not select a preset');
 
+  // The second group, "By look", is the next tab stop: every other preset,
+  // one choice between the two groups.
+  const optionLabels = (group) => page.$$eval(`${group} .ed-template-picker-option-label`, (els) => els.map((el) => el.textContent));
+  assert.deepEqual(await optionLabels(looks), lookPresets.map((preset) => preset.label));
+  assert.equal((await optionLabels(radios)).length, allPresets.length - lookPresets.length);
+  await page.keyboard.press('Tab');
+  assert.equal(await page.$eval(`${looks}:first-child`, (el) => el === document.activeElement), true);
+  assert.equal(await checkedIn(looks), 0, 'focus alone does not select there either');
+  await page.keyboard.press('Space');
+  assert.equal(await page.$eval(`${looks}:first-child`, (el) => el.getAttribute('aria-checked')), 'true');
+  assert.equal(await page.$eval(useButton, (el) => el.disabled), false);
+  await page.waitForSelector(`${picker} .ed-template-picker-preview .r-layout-${lookPresets[0].layout}`);
+  assert.deepEqual([await checkedIn(radios), await checkedIn(looks)], [0, 1]);
+  assert.deepEqual([await tabStopsIn(radios), await tabStopsIn(looks)], [1, 1]);
+  // Back to the first group, where choosing one clears the look's.
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('Tab');
+  await page.keyboard.up('Shift');
+  assert.equal(await page.$eval(`${radios}:first-child`, (el) => el === document.activeElement), true);
+
   const labels = await page.$$eval(`${radios} .ed-template-picker-option-label`, (els) => els.map((el) => el.textContent));
   const target = labels.indexOf('Law & finance');
   assert.ok(target > 0, 'Law & finance follows the first option');
@@ -397,6 +427,8 @@ flow('applies a resume preset by keyboard, and a reload keeps it', async ({ page
   assert.equal(await page.evaluate(() => document.activeElement.querySelector('.ed-template-picker-option-label')?.textContent), 'Law & finance');
   assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-checked')), 'true');
   assert.equal(await page.$eval(useButton, (el) => el.disabled), false);
+  assert.deepEqual([await checkedIn(radios), await checkedIn(looks)], [1, 0], 'one preset is chosen, across both groups');
+  assert.deepEqual([await tabStopsIn(radios), await tabStopsIn(looks)], [1, 1]);
   await page.waitForSelector(`${picker} .ed-template-picker-preview .r-layout-small-caps`);
   assert.deepEqual(writes, [], 'browsing has saved nothing');
 
@@ -427,7 +459,7 @@ flow('resume picker switches previews, cancels changes, and selects the first pr
   const openPicker = 'xpath/.//button[normalize-space()="Change template…"]';
   const picker = '[role="dialog"][aria-labelledby="ed-template-picker-title"]';
   const mode = `${picker} .ed-template-picker-modes button`;
-  const firstPreset = `${picker} [role="radiogroup"][aria-label="Presets"] [role="radio"]:first-child`;
+  const firstPreset = `${picker} [role="radiogroup"][aria-label="By profession"] [role="radio"]:first-child`;
   const useButton = `${picker} .ed-modal-actions .ed-btn-primary`;
   for (const key of ['Space', 'Enter']) {
     await page.click(openPicker);
@@ -742,6 +774,186 @@ flow('adds a languages block and preserves its entries after reload', async ({ p
   await page.waitForSelector(RESUME_SELECT);
   const stored = await draftBlock(page, resumeId, block.id);
   assert.deepEqual(stored.data, { entries: expected });
+});
+
+// The landing editor's "Start from a preset…" button once it's enabled, and
+// its preset dialog used to apply one (the confirm it asks accepted).
+const START_PRESET = 'xpath/.//button[normalize-space()="Start from a preset…"][not(@disabled)]';
+
+async function applyLandingPreset(page, expectDialog, id) {
+  await page.waitForSelector(START_PRESET);
+  await page.click(START_PRESET);
+  await page.waitForSelector(`${PRESET_DIALOG}[open]`);
+  await page.click(`${PRESET_DIALOG} input[type="radio"][value="${id}"]`);
+  const question = expectDialog('accept');
+  const saved = putResponse(page, '/api/landing');
+  await page.click(`${PRESET_DIALOG} button[type="submit"]`);
+  assert.equal((await question).type, 'confirm');
+  assert.equal((await saved).status(), 200);
+}
+
+// The resume preset offer's banner (issue #219), once it says `text`.
+function offerBanner(page, text) {
+  return page.waitForFunction((t) => [...document.querySelectorAll('.ed-offer')].some((el) => el.textContent.includes(t)), {}, text);
+}
+
+function offerButton(label) {
+  return `xpath/.//div[contains(@class, "ed-offer")]//button[normalize-space()="${label}"][not(@disabled)]`;
+}
+
+// A landing preset that names a resume preset (issue #219) offers it for the
+// default resume, in a banner: "No thanks" leaves the resume's site alone,
+// "Apply to the resume" saves the resume preset into its draft and publishes
+// nothing. The banner's buttons go once answered, so each answer (by
+// keyboard here) leaves focus somewhere: on "Start from a preset…" when the
+// banner closes, on the banner while it reports. Neither dialog opens by
+// itself here: openLandingEditor() skips the one a fresh page gets.
+flow('applying a landing preset offers its resume preset, and only a yes applies it', async ({ page, expectDialog }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const sitePath = `/api/resumes/${resumeId}/site`;
+  const defaultResume = async () => (await api(page, '/api/resumes')).body.resumes.find((r) => r.id === resumeId);
+  const isDirty = async () => (await api(page, `/api/resumes/${resumeId}/publish/status`)).body.isDirty;
+  // Published first, so the draft starts with nothing unpublished whatever
+  // the flows before left in it, and "unpublished changes" below is this
+  // flow's doing.
+  assert.equal((await api(page, `/api/resumes/${resumeId}/publish`, { method: 'POST' })).status, 200);
+  assert.equal(await isDirty(), false);
+  const before = (await api(page, sitePath)).body.site;
+  const publishedAt = (await defaultResume()).publishedAt;
+  const writes = [];
+  page.on('request', (request) => {
+    if (isPut(sitePath)(request)) writes.push(request);
+  });
+  const offerButtons = () =>
+    page.$$eval('.ed-offer button', (buttons) => buttons.map((button) => button.textContent.trim()));
+
+  await openLandingEditor(page);
+  // Healthcare, then No thanks.
+  await applyLandingPreset(page, expectDialog, 'healthcare');
+  await offerBanner(page, 'Use the "Healthcare" preset on your resume');
+  assert.deepEqual(await offerButtons(), ['Apply to the resume', 'No thanks']);
+  // The new banner has focus, described by its question; its buttons are
+  // the next tab stops.
+  await page.waitForFunction(() => document.activeElement?.classList.contains('ed-offer'));
+  assert.equal((await focused(page)).label, 'Resume preset');
+  assert.match(
+    await page.evaluate(() => document.getElementById(document.activeElement.getAttribute('aria-describedby')).textContent),
+    /^Use the "Healthcare" preset on your resume/
+  );
+  await page.keyboard.press('Tab');
+  assert.equal((await focused(page)).text, 'Apply to the resume');
+  await page.keyboard.press('Tab');
+  assert.equal((await focused(page)).text, 'No thanks');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => !document.querySelector('.ed-offer'));
+  assert.equal((await focused(page)).text, 'Start from a preset…', 'focus returns to the preset button');
+  assert.deepEqual(writes, [], 'No thanks sends no resume save');
+  assert.deepEqual((await api(page, sitePath)).body.site, before, 'the resume is unchanged');
+  assert.equal(await isDirty(), false, 'and has nothing unpublished');
+
+  // Trades, then Apply to the resume.
+  await applyLandingPreset(page, expectDialog, 'trades');
+  await offerBanner(page, 'Use the "Trades" preset on your resume');
+  const applied = putResponse(page, sitePath);
+  await page.waitForFunction(() => document.activeElement?.classList.contains('ed-offer'));
+  await page.keyboard.press('Tab');
+  assert.equal((await focused(page)).text, 'Apply to the resume');
+  await page.keyboard.press('Enter');
+  assert.equal((await applied).status(), 200);
+  await offerBanner(page, 'Applied the "Trades" preset to the draft of');
+  assert.equal((await focused(page)).label, 'Resume preset', 'focus is on the banner that reports it');
+  assert.deepEqual(await offerButtons(), ['Dismiss']);
+
+  const preset = JSON.parse(readFileSync(path.join(REPO_ROOT, 'templates', 'presets', 'trades', 'template.json'), 'utf8'));
+  const { body } = await api(page, sitePath);
+  assert.equal(body.site.template, preset.header);
+  assert.equal(body.site.layout, preset.layout);
+  assert.deepEqual(body.site.colors, preset.colors);
+  assert.equal(writes.length, 1, 'applying sends one site save');
+  assert.equal(await isDirty(), true, 'the resume draft has unpublished changes');
+  assert.equal((await defaultResume()).publishedAt, publishedAt, 'the resume was not published');
+
+  await (await page.waitForSelector(offerButton('Dismiss'))).focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => !document.querySelector('.ed-offer'));
+  assert.equal((await focused(page)).text, 'Start from a preset…');
+  assert.equal(writes.length, 1, 'dismissing sends nothing');
+});
+
+// Accepting the offer writes to a resume's draft from the landing editor, so
+// leaving has to wait for it: the resume's own editor would otherwise load
+// the settings from before it and save over the preset (or the preset over
+// its edits). The apply's first request is held here, so it's still on its
+// way when the page is left with the browser's Back: the page stays, busy,
+// until the apply is through, and only then does the resume's editor load.
+flow('leaving the landing editor waits for a resume preset on its way', async ({ page, expectDialog }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const sitePath = `/api/resumes/${resumeId}/site`;
+  // The landing editor reached from the resume's, so Back is the app's own
+  // navigation (the router's blocker), not a page load.
+  await openLandingEditor(page);
+  await page.goto(`${server.baseUrl}/editor`);
+  await page.waitForSelector(RESUME_SELECT);
+  await page.select(RESUME_SELECT, 'landing');
+  await page.waitForFunction(() => new URLSearchParams(location.search).get('page') === 'landing');
+  await applyLandingPreset(page, expectDialog, 'education');
+  await offerBanner(page, 'Use the "Education" preset on your resume');
+
+  const order = [];
+  page.on('request', (request) => {
+    if (isCall('GET', sitePath)(request)) order.push('site read');
+    if (isPut(sitePath)(request)) order.push('preset sent');
+  });
+  page.on('response', (response) => isPut(sitePath)(response.request()) && order.push('preset saved'));
+  // Holds the next read of the resume's site settings until released.
+  await page.evaluate((pathname) => {
+    const send = window.fetch;
+    window.fetch = (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (url.pathname !== pathname || (init?.method || 'GET') !== 'GET') return send(input, init);
+      window.fetch = send;
+      return new Promise((resolve) => {
+        window.releaseSiteRead = () => resolve(send(input, init));
+      });
+    };
+  }, sitePath);
+
+  await page.click(offerButton('Apply to the resume'));
+  await offerBanner(page, 'Applying the "Education" preset to');
+  await page.waitForFunction(() => typeof window.releaseSiteRead === 'function');
+  // Busy: no way out, no second preset, and nothing left to answer.
+  await page.waitForSelector(`${RESUME_SELECT}:disabled`);
+  await page.waitForSelector('xpath/.//button[normalize-space()="Start from a preset…"][@disabled]');
+  await page.waitForSelector('xpath/.//header//button[normalize-space()="Log out"][@disabled]');
+  assert.deepEqual(await page.$$eval('.ed-offer button', (buttons) => buttons.length), 0);
+  assert.equal((await focused(page)).label, 'Resume preset');
+
+  // Back, and the router's answer to it: a blocked Back has moved the
+  // address, so the router moves it forward again, a second popstate. Once
+  // that's in, the page is still the landing editor's and nothing was sent.
+  await page.evaluate(() => {
+    window.pops = 0;
+    window.addEventListener('popstate', () => (window.pops += 1));
+    history.back();
+  });
+  await page.waitForFunction(() => window.pops >= 2 && new URLSearchParams(location.search).get('page') === 'landing');
+  await offerBanner(page, 'Applying the "Education" preset to');
+  assert.deepEqual(order, []);
+
+  const saved = putResponse(page, sitePath);
+  await page.evaluate(() => window.releaseSiteRead());
+  assert.equal((await saved).status(), 200);
+  await page.waitForFunction(() => new URLSearchParams(location.search).get('page') === null);
+  // The resume's editor, drawn once its content (site settings included) is in.
+  await page.waitForSelector('xpath/.//button[.//span[normalize-space()="Site Settings & Colors"]]');
+  // Its own read comes after the preset is stored, so it shows the preset.
+  assert.deepEqual(order, ['site read', 'preset sent', 'preset saved', 'site read']);
+  const preset = JSON.parse(readFileSync(path.join(REPO_ROOT, 'templates', 'presets', 'education', 'template.json'), 'utf8'));
+  const { body } = await api(page, sitePath);
+  assert.equal(body.site.template, preset.header);
+  assert.equal(body.site.layout, preset.layout);
 });
 
 flow('fills an entry\'s federal details and hides them from the web page', async ({ page }) => {

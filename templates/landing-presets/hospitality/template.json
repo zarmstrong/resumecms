@@ -3,6 +3,7 @@
   "label": "Food, hospitality and events",
   "description": "For chefs, bakers, caterers, bartenders and event planners: a wide photo behind your name, then your story, what you offer, pictures of your work, reviews and how to book.",
   "author": "resumecms",
+  "resumePreset": "hospitality",
   "template": "cover",
   "style": {
     "source": "custom",

@@ -582,7 +582,7 @@ preset's kebab-case id) saves the built draft so it isn't offered
 again, and from "Start from a preset…", which asks first
 (`presetQuestion()`). Applying waits for the save queue (`afterSaving()`),
 uploads included, so an image or document on its way lands in its section
-before the preset decides what's kept. The validator checks a preset's style with the
+before the preset decides what's kept. A landing preset may name the matching resume preset (`resumePreset`, checked by the validator to exist): once it's applied, the landing editor offers, in a banner, to apply that preset to the default resume's draft too (`resumePresetOffer()` in `client/src/editor/presetOffer.js`). Accepting (`applyResumeOffer()`) reads that resume's site settings and saves `presetSite()` of them through `PUT …/site`, so its `touchDraft()` runs and nothing is published; declining only closes the banner. It writes a resume's draft from the landing editor, so the whole apply is tracked on the page's save queue before its first await and holds the page busy (`holdBusy()`): every way out waits for it, as for a save, and it stops before writing if the page went anyway, or the resume's own editor could load the settings from before it and save over the preset. The Look group's "Apply to the default resume" writes a resume's draft too, so its request is tracked the same way and its button is disabled while the page is busy, as the banner's are, so the two never run together. Keep both for anything else that writes a resume from this page. A new banner takes focus (it sits above the button the preset dialog returns focus to) and keeps it through each answer: on itself while it applies and reports, on "Start from a preset…" when it closes. Discard closes an offer not yet accepted. The validator checks a preset's style with the
 server's `checkStyle()` and its sections against `SECTION_KINDS` and
 `LANDING_LIMITS`, which is why `landingFields.js` and what it imports
 must stay free of npm packages.
@@ -1213,7 +1213,8 @@ doesn't set to its default, and keeps everything else (title and
 description included). The picker and `/template-preview/preset/:id`
 use the same function, so the applied result draws as that preview does.
 Nothing is written until "Use this preset"; it goes through the ordinary
-site save queue and `touchDraft()`, and publishes nothing.
+site save queue and `touchDraft()`, and publishes nothing. A preset whose
+`template.json` says `"group": "profession"` is listed under "By profession", the rest under "By look" (`presetGroups()`, issue #219).
 
 A landing template needs a `style.css` with every rule scoped under
 `.l-template-<id>` (the validator checks the class appears; `classic`,

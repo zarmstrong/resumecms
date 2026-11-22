@@ -3,6 +3,7 @@
   "label": "Research (CV)",
   "description": "For researchers, a ruled header over a dated academic CV layout in slate and serif, for a long, detailed CV.",
   "author": "resumecms",
+  "group": "profession",
   "header": "ruled",
   "layout": "academic",
   "colors": {

@@ -3,6 +3,7 @@
   "label": "Hospitality",
   "description": "For hospitality professionals, a warm rust photo panel and soft cards present service experience with an inviting serif style.",
   "author": "resumecms",
+  "group": "profession",
   "header": "photopanel",
   "layout": "soft-cards",
   "colors": {

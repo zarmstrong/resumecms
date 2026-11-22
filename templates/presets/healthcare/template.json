@@ -3,6 +3,7 @@
   "label": "Healthcare",
   "description": "For healthcare professionals, a classic header and teal sidebar organize clinical experience and skills.",
   "author": "resumecms",
+  "group": "profession",
   "header": "classic",
   "layout": "sidebar",
   "colors": {

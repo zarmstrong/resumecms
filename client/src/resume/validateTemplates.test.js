@@ -13,7 +13,9 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../scripts/validate-templates.mjs');
 const META = { label: 'L', description: 'D', author: 'A' };
 
-function fixture(landing, presets = {}) {
+// `resume` is the resume side, when a case needs it: { headers, layouts }
+// (ids) and { presets } (id to template.json).
+function fixture(landing, presets = {}, resume = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'resumecms-templates-'));
   for (const [id, meta] of Object.entries(presets)) {
     fs.mkdirSync(path.join(dir, 'landing-presets', id), { recursive: true });
@@ -25,11 +27,22 @@ function fixture(landing, presets = {}) {
       fs.writeFileSync(path.join(dir, 'landing', id, name), typeof body === 'string' ? body : JSON.stringify(body));
     }
   }
+  for (const kind of ['headers', 'layouts']) {
+    for (const id of resume[kind] || []) {
+      fs.mkdirSync(path.join(dir, kind, id), { recursive: true });
+      fs.writeFileSync(path.join(dir, kind, id, 'template.json'), JSON.stringify(META));
+      if (kind === 'headers') fs.writeFileSync(path.join(dir, kind, id, 'index.jsx'), 'export default () => null;');
+    }
+  }
+  for (const [id, meta] of Object.entries(resume.presets || {})) {
+    fs.mkdirSync(path.join(dir, 'presets', id), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'presets', id, 'template.json'), JSON.stringify(meta));
+  }
   return dir;
 }
 
-function validate(landing, presets) {
-  const dir = fixture(landing, presets);
+function validate(landing, presets, resume) {
+  const dir = fixture(landing, presets, resume);
   try {
     const run = spawnSync(process.execPath, [SCRIPT, dir], { encoding: 'utf8' });
     return { ok: run.status === 0, out: run.stdout + run.stderr };
@@ -250,6 +263,52 @@ test('a landing preset names a landing template, a style the server accepts and 
     assert.equal(run.ok, false, `${message} should fail`);
     assert.match(run.out, message);
   }
+});
+
+// Issue #219: the two keys that tie presets to a profession.
+const RESUME_SIDE = { headers: ['banner'], layouts: ['flat'] };
+const resumePreset = (id, extra = {}) => ({ id, ...META, header: 'banner', layout: 'flat', ...extra });
+const landingPreset = (id, extra = {}) => ({
+  id,
+  ...META,
+  template: 'classic',
+  style: { source: 'resume' },
+  sections: [{ kind: 'text', title: 'About' }],
+  ...extra,
+});
+
+test('a resume preset\'s "group" is "profession" or left out', () => {
+  const ok = validate({ classic }, {}, {
+    ...RESUME_SIDE,
+    presets: { trades: resumePreset('trades', { group: 'profession' }), plain: resumePreset('plain') },
+  });
+  assert.equal(ok.ok, true, ok.out);
+  assert.match(ok.out, /2 preset\(s\)/);
+
+  for (const group of ['look', 'Profession', '', null, true, 1, ['profession'], { id: 'profession' }]) {
+    const run = validate({ classic }, {}, { ...RESUME_SIDE, presets: { other: resumePreset('other', { group }) } });
+    assert.equal(run.ok, false, `group ${JSON.stringify(group)} should fail`);
+    assert.match(run.out, /templates\/presets\/other: "group" must be "profession" when set/);
+  }
+});
+
+test('a landing preset\'s "resumePreset" names a resume preset that exists', () => {
+  const resume = { ...RESUME_SIDE, presets: { trades: resumePreset('trades', { group: 'profession' }) } };
+  const ok = validate({ classic }, { trades: landingPreset('trades', { resumePreset: 'trades' }), plain: landingPreset('plain') }, resume);
+  assert.equal(ok.ok, true, ok.out);
+  assert.match(ok.out, /1 preset\(s\), 2 landing preset\(s\)/);
+
+  // An id with no folder, a landing preset's id, a header's, and anything
+  // that isn't a string.
+  for (const name of ['nope', 'other', 'banner', '', null, true, 1, ['trades'], { id: 'trades' }]) {
+    const run = validate({ classic }, { other: landingPreset('other', { resumePreset: name }) }, resume);
+    assert.equal(run.ok, false, `resumePreset ${JSON.stringify(name)} should fail`);
+    assert.match(run.out, /templates\/landing-presets\/other: "resumePreset" references unknown resume preset/);
+  }
+  // With no resume presets at all, any name is unknown.
+  const none = validate({ classic }, { other: landingPreset('other', { resumePreset: 'trades' }) });
+  assert.equal(none.ok, false);
+  assert.match(none.out, /other: "resumePreset" references unknown resume preset "trades"/);
 });
 
 test("the repo's own templates pass", () => {
