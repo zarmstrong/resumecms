@@ -15,7 +15,7 @@
 // edit only on screen (a debounced save, a visibility toggle): its error is
 // kept, and every later flush() reports it, until a newer write under the
 // same key succeeds. An unkeyed write's failure is only reported by a flush
-// that waited on it; those writes resync, or never applied locally.
+// running when it settled; those writes resync, or never applied locally.
 //
 // hold() is for an operation that flushes before sending a write the next
 // page reads (issue #235: "Apply to the default resume" waits for the
@@ -40,6 +40,9 @@ export function createSaveQueue({ delayMs, timers = globalThis }) {
   const latest = new Map(); // key -> the newest promise tracked under it
   const failed = new Map(); // key -> error
   const holds = new Set(); // a promise per hold, resolved by its release()
+  // The unkeyed failures each flush still running has seen settle: a write
+  // tracked while it waits (a holder's request) is reported too.
+  const draining = new Set();
   const listeners = new Set();
 
   function changed() {
@@ -54,6 +57,7 @@ export function createSaveQueue({ delayMs, timers = globalThis }) {
     changed();
     const settle = (err) => {
       inFlight.delete(promise);
+      if (err && key === undefined) for (const unkeyed of draining) unkeyed.push(err);
       // An older write settling late says nothing about the newer one.
       if (key !== undefined && latest.get(key) === promise) {
         if (err) failed.set(key, err);
@@ -111,15 +115,18 @@ export function createSaveQueue({ delayMs, timers = globalThis }) {
   // it's a hold's own): the editor stays editable meanwhile, and an edit
   // typed during the wait, or by the operation that held it, must not miss
   // it.
+  // An unkeyed write's failure is reported if it settles while this runs,
+  // whether it was in flight when it started or tracked since.
   async function drain(withHolds) {
     const unkeyed = [];
-    while (waiting.size || inFlight.size || (withHolds && holds.size)) {
-      runWaiting();
-      const writes = [...inFlight];
-      const results = await Promise.allSettled([...writes.map(([promise]) => promise), ...(withHolds ? holds : [])]);
-      results.forEach((r, i) => {
-        if (r.status === 'rejected' && i < writes.length && writes[i][1] === undefined) unkeyed.push(r.reason);
-      });
+    draining.add(unkeyed);
+    try {
+      while (waiting.size || inFlight.size || (withHolds && holds.size)) {
+        runWaiting();
+        await Promise.allSettled([...inFlight.keys(), ...(withHolds ? holds : [])]);
+      }
+    } finally {
+      draining.delete(unkeyed);
     }
     return [...failed.values(), ...unkeyed];
   }

@@ -330,3 +330,18 @@ test('a failed save tracked while a hold waits is reported by both flushes', asy
   held.release();
   assert.deepEqual((await leave).map((e) => e.message), ['400 bad']);
 });
+
+test("a holder's request that fails before the hold is released is reported by the flush waiting on it", async () => {
+  const q = createSaveQueue({ delayMs: 500, timers: fakeTimers() });
+  const held = q.hold();
+  const leave = q.flush();
+  assert.deepEqual(await held.flush(), []);
+  const apply = deferred();
+  q.track(apply.promise).catch(() => {});
+  apply.reject(new Error('400 no colors of its own'));
+  await new Promise((r) => setImmediate(r));
+  assert.equal(q.pending().inFlight, 0, 'settled while the hold is still taken');
+  held.release();
+  assert.deepEqual((await leave).map((e) => e.message), ['400 no colors of its own']);
+  assert.deepEqual(await q.flush(), [], 'a later flush, which never waited on it, does not report it');
+});

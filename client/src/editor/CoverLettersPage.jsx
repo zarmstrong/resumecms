@@ -131,18 +131,20 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
   }
 
   // Gets every edit to the server first, then does `next`. A save that
-  // failed stops it unless confirmed. It holds the save queue until `next`
-  // is done (saves.hold(), issue #235), so a leave whose flush resolves
-  // with this one's waits for what `next` sends.
-  async function afterSaving(next) {
+  // failed stops it unless confirmed. One that writes (a Duplicate) holds
+  // the save queue until `next` is done (saves.hold(), issue #235), so a
+  // leave whose flush resolves with this one's waits for what `next`
+  // sends; a read (`{ writes: false }`, the PDF download, which can take
+  // a while) doesn't, so leaving never waits on it.
+  async function afterSaving(next, { writes = true } = {}) {
     setBusy(true);
-    const held = saves.hold();
+    const held = writes ? saves.hold() : null;
     try {
-      const failures = await held.flush();
+      const failures = await (held ? held.flush() : saves.flush());
       if (failures.length && !window.confirm(`A change didn't save (${failures[0].message || 'unknown error'}). Go on without it?`)) return;
       await next();
     } finally {
-      held.release();
+      held?.release();
       if (mountedRef.current) setBusy(false);
     }
   }
@@ -325,7 +327,7 @@ export function CoverLettersPage({ resume, resumes, onSwitch, onBack, onLogout }
       } finally {
         if (mountedRef.current) setRendering(false);
       }
-    });
+    }, { writes: false });
   }
 
   async function handleCopyText(letter) {

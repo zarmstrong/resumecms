@@ -336,14 +336,16 @@ page's does; unmounting sends whatever is still waiting, so a new edit must
 be tracked there too or a switch can outrun it. An operation that flushes
 before sending its own write (Publish, Discard, each page's
 `afterSaving()`: the landing page's Publish, preset apply and "Apply to
-the default resume", a letter's Duplicate) takes `saves.hold()` before its
+the default resume", a letter's Duplicate, not its PDF download, which
+only reads) takes `saves.hold()` before its
 first await (issue #235): until its `release()` the queue's `flush()`
 (the leave guard's) goes round for it too and `pending()` counts it, so a
 leave whose flush resolves with the operation's can't navigate before its
 request is sent. The operation waits with the hold's own `flush()`, which
 waits for no hold (the queue's would wait on itself), and releases once
 its request is tracked (or, for the resume's Publish, whose answer can wait
-on the PDF, sent), or it stops. The plan request flushes without one:
+on the PDF, sent), or it stops; a write that fails meanwhile is reported
+by the flush that waited, as any unkeyed one it saw settle. The plan request flushes without one:
 it writes nothing, and leaving drops the plan. The switcher's dialogs are
 in `ResumeModals.jsx`, and their pure parts (which resume to open, its
 public URL, the settings form's PATCH) in `resumeLinks.js`.
