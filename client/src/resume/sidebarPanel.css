@@ -29,8 +29,15 @@
   gap: 2px;
 }
 
-.r-sidebar .r-experience-top {
+.r-sidebar .r-experience-top,
+.r-sidebar .r-custom-item-top {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+}
+
+.r-sidebar .r-custom-item-top > .r-custom-item-date {
+  margin-left: 0;
+  max-width: none;
+  text-align: inherit;
 }

@@ -11,6 +11,7 @@ import {
   rewriteInput,
   targetKey,
   textSimilarity,
+  customItemProse,
 } from './rewritableFields.js';
 import { letterOutputSchema } from './letterWriting.js';
 import { planOutputSchema } from './tailorPlan.js';
@@ -466,6 +467,79 @@ test('an item target edits one custom item, with the others as context', () => {
   });
   assert.deepEqual(merged, { ...data, items: [data.items[0], { ...data.items[1], items: 'English (native), Spanish (fluent)' }] });
   assert.equal(merged.items[0], data.items[0]);
+});
+
+// A custom item's date (issue #214) is read-only context, never editable.
+const datedCustom = {
+  title: 'Publications',
+  items: [
+    { heading: 'On caching', bodyType: 'text', text: 'Journal of Things.', date: '2021' },
+    { heading: 'Undated talk', bodyType: 'text', text: 'Conf.' },
+    { heading: 'Legacy', body: 'Old shape.', date: ' Mar 2019 ' },
+  ],
+};
+
+test("a custom block or item rewrite keeps every item's date, whatever the model returns", () => {
+  const block = mergeRewrite('custom', datedCustom, {
+    title: 'Selected publications',
+    items: [
+      { heading: 'On caching (2024)', body: 'J. Things.', date: '1999' },
+      { heading: 'Talk', body: 'A conference.', date: '2030' },
+      { heading: 'Legacy', body: 'New shape.', date: '' },
+    ],
+    itemDates: ['1', '2', '3'],
+  }).data;
+  assert.deepEqual(block.items.map((item) => item.date), ['2021', undefined, ' Mar 2019 ']);
+  assert.equal(Object.hasOwn(block.items[1], 'date'), false);
+  assert.equal(block.items[0].heading, 'On caching (2024)');
+
+  for (const index of [0, 1, 2]) {
+    const target = { kind: 'item', index };
+    const { data } = mergeRewrite('custom', datedCustom, { heading: 'H', body: 'B', date: 'changed', itemDate: 'changed' }, { target });
+    assert.deepEqual(
+      data.items.map((item) => item.date),
+      ['2021', undefined, ' Mar 2019 '],
+      `item ${index}`
+    );
+    assert.equal(Object.hasOwn(data.items[1], 'date'), false);
+  }
+});
+
+test('a custom item date is context for the model, never editable', () => {
+  const block = rewriteInput('custom', datedCustom);
+  assert.deepEqual(block.editable.items, [
+    { heading: 'On caching', body: 'Journal of Things.' },
+    { heading: 'Undated talk', body: 'Conf.' },
+    { heading: 'Legacy', body: 'Old shape.' },
+  ]);
+  assert.deepEqual(block.context.itemDates, ['2021', '', 'Mar 2019']);
+
+  const item = rewriteInput('custom', datedCustom, { kind: 'item', index: 0 });
+  assert.deepEqual(item.editable, { heading: 'On caching', body: 'Journal of Things.' });
+  assert.equal(item.context.itemDate, '2021');
+  assert.deepEqual(item.context.items, [
+    { heading: '', body: '[the part being rewritten]' },
+    { heading: 'Undated talk', body: 'Conf.' },
+    { heading: 'Legacy', body: 'Old shape.', date: 'Mar 2019' },
+  ]);
+  assert.equal(Object.hasOwn(rewriteInput('custom', datedCustom, { kind: 'item', index: 1 }).context, 'itemDate'), false);
+
+  // The output schemas have no date to return.
+  assert.deepEqual(Object.keys(outputSchema('custom').properties.rewrite.properties.items.items.properties), ['heading', 'body']);
+  assert.deepEqual(Object.keys(outputSchema('custom', { kind: 'item', index: 0 }).properties.rewrite.properties), ['heading', 'body']);
+});
+
+test('a custom block without dates is sent to the model as before', () => {
+  const undated = { title: 't', items: [{ heading: 'a', bodyType: 'text', text: 'x' }, { heading: 'b', body: 'y', date: '  ' }] };
+  assert.deepEqual(rewriteInput('custom', undated).context, { itemBodyTypes: ['text', 'text'] });
+  assert.deepEqual(Object.keys(rewriteInput('custom', undated, { kind: 'item', index: 0 }).context), ['title', 'itemBodyType', 'items']);
+  assert.deepEqual(rewriteInput('custom', undated, { kind: 'item', index: 0 }).context.items[1], { heading: 'b', body: 'y' });
+});
+
+test('customItemProse gives an item its date only when it has one', () => {
+  assert.deepEqual(customItemProse(datedCustom.items[0]), { heading: 'On caching', body: 'Journal of Things.', date: '2021' });
+  assert.deepEqual(customItemProse(datedCustom.items[1]), { heading: 'Undated talk', body: 'Conf.' });
+  assert.deepEqual(customItemProse(datedCustom.items[2]), { heading: 'Legacy', body: 'Old shape.', date: 'Mar 2019' });
 });
 
 test('textSimilarity ignores case and punctuation', () => {
