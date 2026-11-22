@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Runs the local checks for the worktree this script is in: the template
 # validator, both packages' tests, lint and type checks, the client build
-# and the browser suite, stopping at the first failure. It never touches Docker or a running service; to deploy,
-# see scripts/deploy-host.sh.
+# and the browser suite, stopping at the first failure. It never touches Docker or a running service (deploying is
+# a host script outside the repo).
 #
 # Needs `npm ci` in server/ and client/ first.
 set -euo pipefail

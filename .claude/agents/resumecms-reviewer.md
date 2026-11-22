@@ -174,11 +174,8 @@ in prose; check the diff against the ones that apply, especially:
   `docker-compose.yml` or an example): the boot refuses a missing, short or
   placeholder one through `checkSessionSecret()`, before `db.js` loads; a
   new example value goes in `PLACEHOLDER_SECRETS`.
-- `scripts/deploy-host.sh` rebuilds production: it keeps refusing unless
-  run as `/opt/resumecms`'s own copy on a clean `main` at origin's `main`
-  (re-checked right before Docker), and asks unless `--yes`. Nothing else
-  in the repo (`scripts/check.sh` included) touches Docker or
-  `/opt/resumecms`.
+- Nothing in the repo (`scripts/check.sh` included) touches Docker or
+  `/opt/resumecms`; deploying is a host script outside the repo.
 - Public pages never import editor code: the editor, login, template
   previews and the letter/card print routes stay lazy routes in
   `App.jsx`, the editor's CSS loads from its own entry, and a route
