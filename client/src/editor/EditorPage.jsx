@@ -10,7 +10,7 @@ import { pdfUrl } from '../resume/pdfUrl.js';
 import { BLOCK_TYPE_LABELS, defaultDataForType } from './blockDefaults.js';
 import { createBlockReorderItems } from './blockDrag.js';
 import { createSaveQueue } from './saveQueue.js';
-import { createSiteSync, rebaseSite } from './siteSync.js';
+import { createSiteSync, replayChange } from './siteSync.js';
 import { useLeaveGuard } from './useLeaveGuard.js';
 import { editorUnsavedWork } from './unsavedWork.js';
 import { publicUrl } from './resumeLinks.js';
@@ -614,11 +614,15 @@ export function EditorPage({
     );
   }
 
-  // `newSite` is the form's edit of the settings it was drawn with; if a
-  // save's rebase replaced them since, the edit goes on top of those.
-  function handleSiteChange(newSite) {
-    const next = siteRef.current === site ? newSite : rebaseSite(site, newSite, siteRef.current);
+  // `newSite` is the form's edit of the settings it was drawn with, and
+  // `replay` how to make the same edit to others (siteSync.js; by default
+  // the keys it changed), kept until a save confirms it, for a 409's
+  // retry. If a retry replaced the settings on screen since the form drew
+  // them, the edit is replayed on those.
+  function handleSiteChange(newSite, replay = replayChange(site, newSite)) {
+    const next = siteRef.current === site ? newSite : replay(siteRef.current);
     siteRef.current = next;
+    siteSync.record(replay);
     setSite(next);
     markDirty();
     setSaveState('saving');

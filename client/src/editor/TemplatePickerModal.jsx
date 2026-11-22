@@ -86,7 +86,9 @@ export function TemplatePickerModal({ header, site, blocks, onChange, onClose })
   function handleUse() {
     if (mode === 'presets') {
       if (!preset) return;
-      onChange(previewSite);
+      // A 409's retry applies the preset again to what's stored
+      // (editor/siteSync.js), since it resets keys whatever their value.
+      onChange(previewSite, (stored) => presetSite(stored || {}, preset));
       onClose();
       return;
     }

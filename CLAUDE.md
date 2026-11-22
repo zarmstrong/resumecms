@@ -347,13 +347,18 @@ synchronously). A PUT without `If-Match` (or `*`) replaces unchecked, as
 before, and the MCP tool still merges without one. The editor never asks
 on a 409: `editor/siteSync.js`'s `createSiteSync()` runs the page's site
 saves one at a time (inside the one `track()`ed promise, so retries stay
-on the save queue), and on a 409 re-reads, puts back on top of the stored
-settings only the keys it changed since what it last loaded or saved
-(`rebaseSite()`, removed keys included, `colors` key by key), shows that
-and retries, up to `SITE_SAVE_ATTEMPTS`. `EditorPage` keeps the settings
-on screen in `siteRef`, which a save reads when its turn comes, and
-`handleSiteChange()` rebases a form edit made from settings a retry has
-since replaced. The discard response carries `siteRevision`. The landing
+on the save queue), and on a 409 re-reads, replays on the stored settings
+every edit the server hasn't confirmed yet, in order, shows that and
+retries, up to `SITE_SAVE_ATTEMPTS`. An edit is replayed by what it meant:
+`handleSiteChange(newSite, replay)` records it (`record()`), by default
+`replayChange()`, the keys it changed (`rebaseSite()`, removed keys
+included, `colors` key by key), but a color picked is `replayColor()`
+(the form writes every color as drawn, defaults filled in) and a preset
+is `presetSite()` again (it resets keys whatever their value); a new
+control whose value diff says more or less than its edit passes its own.
+`EditorPage` keeps the settings on screen in `siteRef`, which a save
+reads when its turn comes, and replays a form edit made from settings a
+retry has since replaced. The discard response carries `siteRevision`. The landing
 editor's `applyResumeOffer()` reads with the revision too and on a 409
 reads again and reapplies `presetSite()` (which drops keys, so it can't
 be a merge). Anything else that writes a resume's site settings from the

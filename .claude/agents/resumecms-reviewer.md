@@ -19,9 +19,10 @@ in prose; check the diff against the ones that apply, especially:
   `touchDraft()` there (or `touchLanding()` for the landing page), not in a
   route or MCP tool. Cover letters and tailoring notes never do.
 - A client write of a resume's whole site settings sends the revision it
-  read as `If-Match` and, on a 409, re-reads and reapplies only its own
-  changes (`rebaseSite()` in `editor/siteSync.js`, or a fresh
-  `presetSite()` for the preset offer), tracked on the page's save queue;
+  read as `If-Match` and, on a 409, re-reads and replays only its own
+  unconfirmed edits by what they meant (`editor/siteSync.js`: a value diff,
+  one color, or `presetSite()` again, as the preset offer does), tracked on
+  the page's save queue;
   the revision is computed from the stored row (`siteRevision.js`), never
   stored or put in the site keys or a snapshot (issue #234).
 - Nothing internal leaves the server publicly: `publicAiSettings()`,

@@ -11,7 +11,7 @@ import { pdfPathFor } from './pdfPaths.js';
 // Dependency-free, so the server's suite can compare its mirror (the
 // client's CI job doesn't install the server's packages).
 import { NESTABLE_TYPES as CLIENT_NESTABLE_TYPES } from '../../client/src/editor/blockDefaults.js';
-import { createSiteSync } from '../../client/src/editor/siteSync.js';
+import { createSiteSync, replayChange } from '../../client/src/editor/siteSync.js';
 
 // Exercises the real SQL against an in-memory database — the regression
 // guard for the logic that used to live inline in routes/blocks.js and
@@ -349,13 +349,18 @@ test('two writers racing on the site settings both keep their change, with no 40
   let screen = loaded.site;
   const sync = createSiteSync({ ...routes, read: () => screen, write: (s) => (screen = s) });
   sync.reset(loaded);
+  // A form edit, as EditorPage's handleSiteChange() records it.
+  const edit = (next) => {
+    sync.record(replayChange(screen, next));
+    screen = next;
+  };
 
   // Meanwhile, through MCP: page numbers on and the heading color changed.
   store.setSite({ pdfPageNumbers: true, colors: { heading: '#333333' } }, { merge: true });
   // The editor changes the accent and drops the layout (a preset's reset).
   const { layout, ...rest } = screen;
   assert.equal(layout, 'flat');
-  screen = { ...rest, colors: { ...rest.colors, accent: '#444444' } };
+  edit({ ...rest, colors: { ...rest.colors, accent: '#444444' } });
   await sync.save();
 
   const both = { title: 'Jo', pdfPageNumbers: true, colors: { accent: '#444444', heading: '#333333' } };
@@ -363,7 +368,7 @@ test('two writers racing on the site settings both keep their change, with no 40
   assert.deepEqual(screen, both); // the other writer's change is shown too
 
   // And the other way round: the editor saves first, the merge comes after.
-  screen = { ...screen, font: 'lora' };
+  edit({ ...screen, font: 'lora' });
   await sync.save();
   store.setSite({ title: 'Jo Smith' }, { merge: true });
   assert.deepEqual(setting('site'), { ...both, font: 'lora', title: 'Jo Smith' });
