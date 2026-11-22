@@ -1523,6 +1523,30 @@ skills and education, and in the Academic CV hangs beside the entries like
 a custom block. Languages are factual context for the AI, never rewritten,
 and a tailoring plan can hide the block.
 
+An experience entry may carry labelled details for a US federal (USAJOBS) or
+other formal resume (issue #223): `hoursPerWeek`, `grade` (series and grade),
+`salary`, `supervisor` and `contactSupervisor` (`'yes'`, `'no'`, or `''` for
+not stated; `contactAnswer()` reads anything else as not stated, by
+comparing it, never by a lookup an inherited key like `__proto__` would
+answer), drawn under the company as one plain "Label: value" line
+(`client/src/resume/experienceDetails.js`), only the filled ones.
+`detailsVisibleWeb` and `detailsVisiblePrint` (only `false` hides; missing
+means shown) hide the line per surface, and `publicBlocks.js` drops the keys
+(`EXPERIENCE_DETAIL_KEYS`, `server/src/experienceDetails.js`, mirrored
+client-side) from that surface's snapshot, since the snapshot is public.
+`experienceDetailsLine(data, mode)` reads the same flags for what
+`ExperienceBlock` draws: the editor's preview always shows the line, dimmed
+while either surface hides it, like a hidden bullet; the web page draws one
+hidden in print with a class that `@media print` hides, since its Print
+button prints that same page (a line shown only in print isn't in the web
+snapshot, so it's on the PDF and not on a browser's printout). The details
+are never context for the app's own AI: every AI builder and the landing
+page's `experienceRoles()` read named fields, and
+`ai/experienceDetailsContext.test.js` pins that, so keep it if you add a
+builder that copies a block's data. The editor's routes and the MCP draft
+tools (`get_draft`, `list_blocks`, `get_block`) return the whole draft, these
+keys included whatever the flags say, as they do a credential's number.
+
 ### AI rewrites
 
 `POST /api/ai/rewrite` (`server/src/routes/ai.js`) never writes anything. It
@@ -1570,8 +1594,10 @@ which `applyProposal()`, `isProposalStale()` and the review diff read from.
 shows (the banner count and outline use it too), and a mounted row panel
 resyncs its instruction and tense when a different request (`requestId`)
 moves under it. The helpers take the block type because an
-experience `block` target doesn't own the description: accepting one keeps
-the current description.
+experience `block` target doesn't own the description, nor the entry's
+labelled details and their two flags (`EXPERIENCE_UNOWNED`, see "Resume
+rendering pipeline"): accepting one keeps the current ones, and an edit to
+them doesn't make it stale.
 
 `REWRITABLE_TYPES` there is an explicit allowlist like `NESTABLE_TYPES`, mirrored
 client-side as `AI_REWRITABLE_TYPES` in `client/src/editor/aiReview.js`. A new

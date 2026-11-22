@@ -42,6 +42,12 @@ in prose; check the diff against the ones that apply, especially:
   items by position only while the proposal isn't stale (otherwise the
   proposal's own dates). A custom item without a date renders the same
   markup as before it existed.
+- An experience entry's federal details (`EXPERIENCE_DETAIL_KEYS`) are in a
+  public snapshot only for a surface its `details…` flag allows
+  (`publicBlocks.js`), and never in what the app's own AI builders send (the
+  editor's routes and the MCP draft tools return the whole draft). What's
+  drawn follows `experienceDetailsLine()`: dimmed in the preview, hidden under
+  `@media print` on a web page whose print flag is off.
 - Mirrored pairs changed on both sides (CLAUDE.md names them: landing
   resolver, page meta, block schemas vs `blockData.js`, rewritable types,
   link types, button icons, `NESTABLE_TYPES`, letter dates, the landing

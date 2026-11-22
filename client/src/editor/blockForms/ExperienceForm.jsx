@@ -4,6 +4,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useDndContext, useDraggable, useDroppable, useSensor, useSensors,
 } from '@dnd-kit/core';
 import { MAX_BULLET_DEPTH, normalizeBullet } from '../../resume/bulletUtils.js';
+import { contactAnswer, experienceDetails } from '../../resume/experienceDetails.js';
 import { VisibilityToggle } from '../VisibilityToggle.jsx';
 import { targetKey } from '../aiReview.js';
 import { useRowPanelOpen } from '../useRowPanelOpen.js';
@@ -44,6 +45,7 @@ function lowerFirst(text) {
 // panel open.
 export function ExperienceForm({ data, onChange, aiPanel = null, aiEntries = null }) {
   const bullets = (data.bullets || []).map((b) => normalizeBullet(b));
+  const detailSummary = experienceDetails(data).map((detail) => detail.label).join(', ');
   const [importText, setImportText] = useState(null); // null = import panel hidden
   const [liveMessage, setLiveMessage] = useState('');
   const liveTimer = useRef(null);
@@ -283,6 +285,90 @@ export function ExperienceForm({ data, onChange, aiPanel = null, aiEntries = nul
         label: data.description?.trim() ? '✨ Rewrite description with AI' : '✨ Write description with AI',
         className: 'ed-ai-panel-field',
       })}
+
+      <details className="ed-collapsible">
+        <summary>
+          Federal and formal details{' '}
+          <span className="ed-collapsible-summary">{detailSummary}</span>
+        </summary>
+        <div className="ed-collapsible-body">
+          <span className="ed-field-hint">
+            For a US federal (USAJOBS) or other formal resume. Shown under the company as one labelled line, only the
+            fields you fill in.
+          </span>
+          <div className="ed-field-row">
+            <label className="ed-field ed-field-narrow">
+              <span>Hours per week</span>
+              <input
+                className="ed-input"
+                value={data.hoursPerWeek || ''}
+                onChange={(e) => onChange({ ...data, hoursPerWeek: e.target.value })}
+                placeholder="40"
+              />
+            </label>
+            <label className="ed-field">
+              <span>Series and grade</span>
+              <input
+                className="ed-input"
+                value={data.grade || ''}
+                onChange={(e) => onChange({ ...data, grade: e.target.value })}
+                placeholder="GS-0343-11"
+              />
+              <span className="ed-field-hint">Federal positions only.</span>
+            </label>
+          </div>
+          <label className="ed-field">
+            <span>Salary</span>
+            <input
+              className="ed-input"
+              value={data.salary || ''}
+              onChange={(e) => onChange({ ...data, salary: e.target.value })}
+              placeholder="$85,000 per year"
+            />
+          </label>
+          <label className="ed-field">
+            <span>Supervisor</span>
+            <input
+              className="ed-input"
+              value={data.supervisor || ''}
+              onChange={(e) => onChange({ ...data, supervisor: e.target.value })}
+              placeholder="Jane Doe, (555) 555-0100"
+            />
+          </label>
+          <label className="ed-field">
+            <span>May we contact your supervisor?</span>
+            <select
+              className="ed-input"
+              value={contactAnswer(data.contactSupervisor)}
+              onChange={(e) => onChange({ ...data, contactSupervisor: e.target.value })}
+            >
+              <option value="">Not stated</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+          <label className="ed-field ed-checkbox-field">
+            <input
+              type="checkbox"
+              checked={data.detailsVisibleWeb !== false}
+              onChange={(e) => onChange({ ...data, detailsVisibleWeb: e.target.checked })}
+            />
+            <span>Show on the web page</span>
+          </label>
+          <label className="ed-field ed-checkbox-field">
+            <input
+              type="checkbox"
+              checked={data.detailsVisiblePrint !== false}
+              onChange={(e) => onChange({ ...data, detailsVisiblePrint: e.target.checked })}
+            />
+            <span>Show in print and the PDF</span>
+          </label>
+          <span className="ed-field-hint">
+            Your resume's web page and PDF are public. A supervisor's name and phone are someone else's details: for an
+            application, consider a private copy of this resume, or leave them off the web page.
+          </span>
+        </div>
+      </details>
 
       <div className="ed-field">
         <span>Bullet points</span>

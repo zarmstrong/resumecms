@@ -739,6 +739,24 @@
   color: var(--r-accent, var(--slate));
 }
 
+/* An experience entry's labelled details (issue #223: hours per week,
+   series and grade, salary, supervisor), muted like a credential's details
+   line and kept as plain "Label: value" text for parsers. */
+.r-experience-details {
+  font-family: var(--font-ui);
+  font-size: 0.8125em;
+  color: var(--slate);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+/* One detail with its trailing separator, kept whole; a value too long for
+   the line still breaks (max-width and the parent's overflow-wrap). */
+.r-experience-detail {
+  display: inline-block;
+  max-width: 100%;
+}
+
 .r-experience-tagline {
   font-style: italic;
   color: var(--slate-light);
@@ -1053,6 +1071,21 @@
 /* Editor preview: dim individual bullets hidden from both web + print */
 .r-bullet-dimmed {
   opacity: 0.35;
+}
+
+/* Editor preview: an experience entry's details line that the web page or
+   the PDF leaves out (detailsVisibleWeb / detailsVisiblePrint), dimmed like
+   a hidden bullet. */
+.r-experience-details-dimmed {
+  opacity: 0.35;
+}
+
+/* The web page's Print button prints the page as it is, so a details line
+   shown on the web but not in print leaves the paper here. */
+@media print {
+  .r-experience-details-print-hidden {
+    display: none;
+  }
 }
 
 /* Screen display (not print) */
