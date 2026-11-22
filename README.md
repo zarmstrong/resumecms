@@ -236,7 +236,7 @@ while the server still holds its session; see [Editor sessions](#editor-sessions
 | `POST /api/auth/totp/cancel` | `{ secret }` → drops the pending setup if it's that secret, so it can no longer be confirmed; any current factor is untouched (auth-gated) |
 | `POST /api/auth/totp/disable` | `{ currentPassword, totpToken }` → turns 2FA off and signs out every other session, giving this one a new cookie (auth-gated; while 2FA is on, 401 without both; with it off it only clears a pending setup and signs nobody out). Setup, confirm and disable are rate-limited like login (10 failed attempts / IP / 15 min) |
 | `GET/PUT /api/header` | header/contact fields |
-| `GET/PUT /api/site` | site settings (title and description for search results and link previews, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides) |
+| `GET/PUT /api/site` | site settings (title and description for search results and link previews, colors: accent/heading/text/background, plus optional skills-category and employment-dates text/pill overrides). `GET` answers `{ site, revision }`; `PUT` replaces the settings whole and answers the same. Send the `revision` you read back as `If-Match: "<revision>"` and the PUT is a 409 (nothing written) when the settings were changed since, by another tab, an MCP client or the landing editor: read them again, reapply your change and retry. A `PUT` without `If-Match` (or with `*`) replaces them unchecked, as before; to change only some keys, the MCP `update_site_settings` tool merges |
 | `GET /api/blocks` | all blocks, unfiltered, in display order (editor use) |
 | `POST /api/blocks` | create a block: `{ type, data, parentId? }` (`type` must be one of the built-in types; `data`'s documented keys are type-checked, e.g. `bullets` must be an array) |
 | `PUT /api/blocks/:id` | update `data` (replaced whole; `null` leaves it unchanged), `visibleWeb`/`visiblePrint` (booleans), and/or `parentId` |
@@ -244,7 +244,7 @@ while the server still holds its session; see [Editor sessions](#editor-sessions
 | `POST /api/blocks/reorder` | `{ items: [{ id, parentId }, ...] }` in the desired display order |
 | `GET /api/publish/status` | `{ publishedAt, isDirty, pdfStale, pdfVersion, pdfPending }` |
 | `POST /api/publish` | snapshot the draft to the public site and re-render the PDF: `{ publishedAt, pdfVersion, pdfPending }`. It waits up to 20 s for the PDF; a render still queued or running after that answers `pdfPending: true` and finishes in the background (poll the status until `pdfPending` is false) |
-| `POST /api/discard-draft` | restore the draft from the last published snapshot |
+| `POST /api/discard-draft` | restore the draft from the last published snapshot: `{ header, site, blocks, siteRevision }` |
 | `GET /api/resumes` | every resume, default first: `{ id, slug, name, isDefault, isPublic, hostnames, tailoring, createdAt, updatedAt, publishedAt, isDirty, pdfStale }`. `tailoring` is the brief it was tailored for, `{ audience, posting, guidance }`, or null |
 | `POST /api/resumes` | `{ name, slug?, copyFrom?, tailoring? }` → a new private, unpublished resume. With `copyFrom` (a resume id) it starts as a copy of that resume's draft, and keeps its `tailoring` unless one (or null) is sent; without it, with the default resume's header and site settings and no blocks. `slug` (lowercase letters, digits and dashes) defaults to one made from the name; a taken one is a 409 |
 | `GET /api/resumes/:id` | one resume, same shape as the list |

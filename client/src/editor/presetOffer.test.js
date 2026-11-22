@@ -117,3 +117,58 @@ test('a failed read writes nothing, and either failure rejects', async () => {
   assert.deepEqual(noRead.calls, [['get']]);
   await assert.rejects(applyResumeOffer(offerFor(TRADES), fakeTarget({}, { failPut: true })), /put failed/);
 });
+
+// A target whose stored settings another writer changes between the
+// offer's read and its write, `races` times: its PUT is checked against the
+// revision it read, like the server's.
+function racedTarget(site, races) {
+  let stored = site;
+  let revision = 1;
+  const calls = [];
+  return {
+    calls,
+    getSite: async () => {
+      calls.push(['get']);
+      const answer = { site: stored, revision: `r${revision}` };
+      if (races > 0) {
+        races -= 1;
+        stored = { ...stored, title: `${stored.title}!` };
+        revision += 1;
+      }
+      return answer;
+    },
+    putSite: async (next, asked) => {
+      calls.push(['put', next, asked]);
+      if (asked !== `r${revision}`) throw Object.assign(new Error('changed elsewhere'), { status: 409 });
+      stored = next;
+      revision += 1;
+      return { site: stored, revision: `r${revision}` };
+    },
+  };
+}
+
+test('a change saved elsewhere between the read and the write is read again, not overwritten', async () => {
+  const target = racedTarget({ title: 'Jo', accent: '#111111' }, 1);
+  assert.equal(await applyResumeOffer(offerFor(TRADES), target), true);
+  assert.deepEqual(target.calls.map((c) => c[0]), ['get', 'put', 'get', 'put']);
+  assert.equal(target.calls[1][2], 'r1');
+  // The retry is the preset over the other writer's title, sent at its revision.
+  assert.deepEqual(target.calls[3], [
+    'put',
+    { title: 'Jo!', template: 'banner', layout: 'rule-entries', colors: { accent: '#8a4b00' }, font: 'inter' },
+    'r2',
+  ]);
+});
+
+test('the page going away during a retry stops it before writing', async () => {
+  const target = racedTarget({ title: 'Jo' }, 1);
+  let reads = 0;
+  assert.equal(await applyResumeOffer(offerFor(TRADES), target, () => ++reads < 2), false);
+  assert.deepEqual(target.calls.map((c) => c[0]), ['get', 'put', 'get']);
+});
+
+test('it gives up with the 409 after its attempts', async () => {
+  const target = racedTarget({ title: 'Jo' }, 10);
+  await assert.rejects(applyResumeOffer(offerFor(TRADES), target, () => true, 3), (e) => e.status === 409);
+  assert.equal(target.calls.filter((c) => c[0] === 'put').length, 3);
+});

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { store } from '../store.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { handle } from './sendError.js';
+import { revisionsFromIfMatch } from '../siteRevision.js';
 
 // Thin HTTP wrappers over the shared resume store (resumeStore.js), which
 // holds all the actual logic — nesting rules, positions, touchDraft() — so
@@ -23,12 +24,18 @@ export function createBlockRoutes(storeFor) {
     res.json({ header: storeFor(req).setHeader(req.body) });
   }));
 
+  // The site settings come with their revision (siteRevision.js), and a PUT
+  // replaces them only if its `If-Match` still names the stored one (a 409
+  // otherwise, issue #234); one without If-Match replaces them unchecked.
   router.get('/site', handle((req, res) => {
-    res.json({ site: storeFor(req).getSite() });
+    const store = storeFor(req);
+    res.json({ site: store.getSite(), revision: store.getSiteRevision() });
   }));
 
   router.put('/site', handle((req, res) => {
-    res.json({ site: storeFor(req).setSite(req.body) });
+    const store = storeFor(req);
+    const site = store.setSite(req.body, { revision: revisionsFromIfMatch(req.headers['if-match']) });
+    res.json({ site, revision: store.getSiteRevision() });
   }));
 
   router.get('/blocks', handle((req, res) => {

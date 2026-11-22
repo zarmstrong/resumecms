@@ -476,6 +476,19 @@ test("its own colors and fonts can be applied to the default resume's site setti
   assert.deepEqual(store.forResume(defaultId).getSite(), before);
 });
 
+test("applying the page's style moves the resume's site revision, so an editor's older save can't undo it", async () => {
+  const { store } = await makeStore();
+  store.setSite({ title: 'Jo', layout: 'sidebar' });
+  const loaded = store.getSiteRevision(); // an editor tab opened now
+  store.setLanding({
+    ...store.getLanding(),
+    style: { source: 'custom', colors: { accent: '#aa0000' }, font: 'inter', nameFont: '' },
+  });
+  store.applyLandingStyleToResume();
+  assert.equal(status(() => store.setSite({ title: 'Jo', layout: 'flat' }, { revision: loaded })), 409);
+  assert.equal(store.getSite().font, 'inter');
+});
+
 test("the page's template and style are checked on save and resolve publicly", async () => {
   const { store } = await makeStore();
   assert.equal(status(() => store.setLanding({ style: { source: 'custom', colors: { accent: 'tomato' } } })), 400);

@@ -23,8 +23,11 @@ export function createPublishRoutes(storeFor) {
     res.json(await storeFor(req).publish());
   }));
 
+  // With the restored site settings' revision, for the editor's next save.
   router.post('/discard-draft', handle((req, res) => {
-    res.json(storeFor(req).discardDraft());
+    const store = storeFor(req);
+    const draft = store.discardDraft();
+    res.json({ ...draft, siteRevision: store.getSiteRevision() });
   }));
 
   return router;

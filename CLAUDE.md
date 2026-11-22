@@ -350,6 +350,35 @@ it writes nothing, and leaving drops the plan. The switcher's dialogs are
 in `ResumeModals.jsx`, and their pure parts (which resume to open, its
 public URL, the settings form's PATCH) in `resumeLinks.js`.
 
+A resume's site settings are saved whole, so a save says what it was made
+from (issue #234): `GET …/site` answers `{ site, revision }`, the revision
+a hash of the stored row (`server/src/siteRevision.js`, computed on
+demand, never stored, so it's neither a site key nor in the published
+snapshot, and every writer of the row moves it: a PUT, the MCP merge,
+`applyLandingStyleToResume()`, discard, a copy), and `PUT …/site` with
+`If-Match: "<revision>"` is a 409 that writes nothing unless the stored
+row still has it (`setSite(…, { revision })`, checked and written
+synchronously). A PUT without `If-Match` (or `*`) replaces unchecked, as
+before, and the MCP tool still merges without one. The editor never asks
+on a 409: `editor/siteSync.js`'s `createSiteSync()` runs the page's site
+saves one at a time (inside the one `track()`ed promise, so retries stay
+on the save queue), and on a 409 re-reads, replays on the stored settings
+every edit the server hasn't confirmed yet, in order, shows that and
+retries, up to `SITE_SAVE_ATTEMPTS`. An edit is replayed by what it meant:
+`handleSiteChange(newSite, replay)` records it (`record()`), by default
+`replayChange()`, the keys it changed (`rebaseSite()`, removed keys
+included, `colors` key by key), but a color picked is `replayColor()`
+(the form writes every color as drawn, defaults filled in) and a preset
+is `presetSite()` again (it resets keys whatever their value); a new
+control whose value diff says more or less than its edit passes its own.
+`EditorPage` keeps the settings on screen in `siteRef`, which a save
+reads when its turn comes, and replays a form edit made from settings a
+retry has since replaced. The discard response carries `siteRevision`. The landing
+editor's `applyResumeOffer()` reads with the revision too and on a 409
+reads again and reapplies `presetSite()` (which drops keys, so it can't
+be a merge). Anything else that writes a resume's site settings from the
+client sends the revision it read the same way.
+
 Every way out of an editor page goes through `useLeaveGuard()`
 (`editor/useLeaveGuard.js`, issue #105), shared by `EditorPage`,
 `CoverLettersPage` and `LandingEditorPage`. Each page describes what it
@@ -597,7 +626,7 @@ preset's kebab-case id) saves the built draft so it isn't offered
 again, and from "Start from a preset…", which asks first
 (`presetQuestion()`). Applying waits for the save queue (`afterSaving()`),
 uploads included, so an image or document on its way lands in its section
-before the preset decides what's kept. A landing preset may name the matching resume preset (`resumePreset`, checked by the validator to exist): once it's applied, the landing editor offers, in a banner, to apply that preset to the default resume's draft too (`resumePresetOffer()` in `client/src/editor/presetOffer.js`). Accepting (`applyResumeOffer()`) reads that resume's site settings and saves `presetSite()` of them through `PUT …/site`, so its `touchDraft()` runs and nothing is published; declining only closes the banner. It writes a resume's draft from the landing editor, so the whole apply is tracked on the page's save queue before its first await and holds the page busy (`holdBusy()`): every way out waits for it, as for a save, and it stops before writing if the page went anyway, or the resume's own editor could load the settings from before it and save over the preset. The Look group's "Apply to the default resume" writes a resume's draft too, so its request is tracked the same way, after its wait for the landing saves under `afterSaving()`'s `saves.hold()` (so a Back caught by the router's blocker meanwhile waits for it too; issue #235), and its button is disabled while the page is busy, as the banner's are, so the two never run together. Keep both for anything else that writes a resume from this page. A new banner takes focus (it sits above the button the preset dialog returns focus to) and keeps it through each answer: on itself while it applies and reports, on "Start from a preset…" when it closes. Discard closes an offer not yet accepted. The validator checks a preset's style with the
+before the preset decides what's kept. A landing preset may name the matching resume preset (`resumePreset`, checked by the validator to exist): once it's applied, the landing editor offers, in a banner, to apply that preset to the default resume's draft too (`resumePresetOffer()` in `client/src/editor/presetOffer.js`). Accepting (`applyResumeOffer()`) reads that resume's site settings and saves `presetSite()` of them through `PUT …/site` with the revision it read (a 409 reads again and reapplies it, see "Several resumes"), so its `touchDraft()` runs and nothing is published; declining only closes the banner. It writes a resume's draft from the landing editor, so the whole apply is tracked on the page's save queue before its first await and holds the page busy (`holdBusy()`): every way out waits for it, as for a save, and it stops before writing if the page went anyway, or the resume's own editor could load the settings from before it and save over the preset. The Look group's "Apply to the default resume" writes a resume's draft too, so its request is tracked the same way, after its wait for the landing saves under `afterSaving()`'s `saves.hold()` (so a Back caught by the router's blocker meanwhile waits for it too; issue #235), and its button is disabled while the page is busy, as the banner's are, so the two never run together. Keep both for anything else that writes a resume from this page. A new banner takes focus (it sits above the button the preset dialog returns focus to) and keeps it through each answer: on itself while it applies and reports, on "Start from a preset…" when it closes. Discard closes an offer not yet accepted. The validator checks a preset's style with the
 server's `checkStyle()` and its sections against `SECTION_KINDS` and
 `LANDING_LIMITS`, which is why `landingFields.js` and what it imports
 must stay free of npm packages.
