@@ -10,6 +10,7 @@ import { pdfUrl } from '../resume/pdfUrl.js';
 import { BLOCK_TYPE_LABELS, defaultDataForType } from './blockDefaults.js';
 import { createBlockReorderItems } from './blockDrag.js';
 import { createSaveQueue } from './saveQueue.js';
+import { createSiteSync, rebaseSite } from './siteSync.js';
 import { useLeaveGuard } from './useLeaveGuard.js';
 import { editorUnsavedWork } from './unsavedWork.js';
 import { publicUrl } from './resumeLinks.js';
@@ -187,6 +188,23 @@ export function EditorPage({
   const aiProposalsRef = useRef(aiProposals);
   aiProposalsRef.current = aiProposals;
   const reorderRequestIdRef = useRef(0);
+  // The site settings on screen, which a save reads when its turn comes and
+  // a 409's rebase replaces (siteSync.js, issue #234), so it's set with the
+  // state rather than from a render.
+  const siteRef = useRef(site);
+  const siteSync = useMemo(
+    () =>
+      createSiteSync({
+        getSite: () => rapi.getSite(),
+        putSite: (s, revision) => rapi.putSite(s, revision),
+        read: () => siteRef.current,
+        write: (s) => {
+          siteRef.current = s;
+          if (mountedRef.current) setSite(s);
+        },
+      }),
+    [rapi]
+  );
   // Requests still in flight, per proposal key ({ id, blockId, target,
   // status: 'loading' }, the fields dropAiProposals' predicates can rely on,
   // plus, for a bullet or item, what relocateRequest needs: `asked` and
@@ -269,6 +287,8 @@ export function EditorPage({
       api.getCredentials(),
     ]).then(([h, s, b, status, credentials]) => {
       setHeader(h.header);
+      siteRef.current = s.site;
+      siteSync.reset(s);
       setSite(s.site);
       setBlocks(b.blocks);
       setPublishedAt(status.publishedAt);
@@ -570,6 +590,8 @@ export function EditorPage({
     dropPlan();
     setTailorRun(null); // it pointed at rewrites that are gone
     setHeader(draft.header);
+    siteRef.current = draft.site;
+    siteSync.reset({ site: draft.site, revision: draft.siteRevision });
     setSite(draft.site);
     setBlocks(draft.blocks);
     setIsDirty(false);
@@ -592,11 +614,15 @@ export function EditorPage({
     );
   }
 
+  // `newSite` is the form's edit of the settings it was drawn with; if a
+  // save's rebase replaced them since, the edit goes on top of those.
   function handleSiteChange(newSite) {
-    setSite(newSite);
+    const next = siteRef.current === site ? newSite : rebaseSite(site, newSite, siteRef.current);
+    siteRef.current = next;
+    setSite(next);
     markDirty();
     setSaveState('saving');
-    saves.schedule('site', () => saves.track(rapi.putSite(newSite), 'site').then(flashSaved, saveFailed));
+    saves.schedule('site', () => saves.track(siteSync.save(), 'site').then(flashSaved, saveFailed));
   }
 
   async function handleVisibilityChange(id, patch) {

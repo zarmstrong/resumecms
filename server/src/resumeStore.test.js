@@ -11,6 +11,7 @@ import { pdfPathFor } from './pdfPaths.js';
 // Dependency-free, so the server's suite can compare its mirror (the
 // client's CI job doesn't install the server's packages).
 import { NESTABLE_TYPES as CLIENT_NESTABLE_TYPES } from '../../client/src/editor/blockDefaults.js';
+import { createSiteSync } from '../../client/src/editor/siteSync.js';
 
 // Exercises the real SQL against an in-memory database — the regression
 // guard for the logic that used to live inline in routes/blocks.js and
@@ -302,6 +303,90 @@ test('header and site can merge instead of replace (colors one level deep)', () 
   assert.throws(() => store.setHeader(['x'], { merge: true }), (e) => e.status === 400 && /header must be an object/.test(e.message));
   assert.deepEqual(store.getSite(), { title: 'T', layout: 'sidebar', colors: { accent: '#abcdef' } });
   assert.deepEqual(store.setSite({ colors: null }, { merge: true }), { title: 'T', layout: 'sidebar' });
+});
+
+// The editor's REST calls over a store, as routes/blocks.js makes them:
+// GET gives { site, revision }, PUT sends the revision it was made from.
+function siteRoutes(store) {
+  return {
+    getSite: async () => ({ site: store.getSite(), revision: store.getSiteRevision() }),
+    putSite: async (site, revision) => ({ site: store.setSite(site, { revision }), revision: store.getSiteRevision() }),
+  };
+}
+
+test('a site write made from an old revision is a 409 and writes nothing; one without a revision is unchecked', () => {
+  const { store, setting } = makeStore();
+  store.setSite({ title: 'T' });
+  const loaded = store.getSiteRevision();
+  assert.equal(typeof loaded, 'string');
+  // The same row reads as the same revision, and the revision is no site key.
+  assert.equal(store.getSiteRevision(), loaded);
+  assert.deepEqual(store.setSite({ title: 'T' }, { revision: loaded }), { title: 'T' });
+  assert.equal(store.getSiteRevision(), loaded);
+
+  store.setSite({ pdfPageNumbers: true }, { merge: true }); // MCP's update_site_settings
+  assert.notEqual(store.getSiteRevision(), loaded);
+  for (const revision of [loaded, [loaded, 'other']]) {
+    assert.throws(() => store.setSite({ title: 'T', font: 'lora' }, { revision }), (e) => e.status === 409);
+    assert.throws(() => store.setSite({ font: 'lora' }, { merge: true, revision }), (e) => e.status === 409);
+  }
+  assert.deepEqual(setting('site'), { title: 'T', pdfPageNumbers: true });
+  // One of several revisions matching is enough.
+  assert.deepEqual(store.setSite({ title: 'U', pdfPageNumbers: true }, { revision: ['other', store.getSiteRevision()] }), {
+    title: 'U',
+    pdfPageNumbers: true,
+  });
+  // No revision: replaced as before.
+  assert.deepEqual(store.setSite({ title: 'V' }), { title: 'V' });
+  assert.equal(setting('published_resume'), null);
+});
+
+test('two writers racing on the site settings both keep their change, with no 409 reaching the editor', async () => {
+  const { store, setting } = makeStore();
+  store.setSite({ title: 'Jo', layout: 'flat', colors: { accent: '#111111', heading: '#222222' } });
+  const routes = siteRoutes(store);
+  const loaded = await routes.getSite();
+  let screen = loaded.site;
+  const sync = createSiteSync({ ...routes, read: () => screen, write: (s) => (screen = s) });
+  sync.reset(loaded);
+
+  // Meanwhile, through MCP: page numbers on and the heading color changed.
+  store.setSite({ pdfPageNumbers: true, colors: { heading: '#333333' } }, { merge: true });
+  // The editor changes the accent and drops the layout (a preset's reset).
+  const { layout, ...rest } = screen;
+  assert.equal(layout, 'flat');
+  screen = { ...rest, colors: { ...rest.colors, accent: '#444444' } };
+  await sync.save();
+
+  const both = { title: 'Jo', pdfPageNumbers: true, colors: { accent: '#444444', heading: '#333333' } };
+  assert.deepEqual(setting('site'), both);
+  assert.deepEqual(screen, both); // the other writer's change is shown too
+
+  // And the other way round: the editor saves first, the merge comes after.
+  screen = { ...screen, font: 'lora' };
+  await sync.save();
+  store.setSite({ title: 'Jo Smith' }, { merge: true });
+  assert.deepEqual(setting('site'), { ...both, font: 'lora', title: 'Jo Smith' });
+  assert.equal(store.getPublishStatus().isDirty, true);
+});
+
+test('every writer of the site row moves its revision: discard, a copy, a merge', async () => {
+  const { store, defaultId } = makeStore();
+  store.setSite({ title: 'Published' });
+  await store.publish();
+  store.setSite({ title: 'Draft' });
+  const draft = store.getSiteRevision();
+  store.discardDraft();
+  assert.notEqual(store.getSiteRevision(), draft);
+  assert.throws(() => store.setSite({ title: 'Lost' }, { revision: draft }), (e) => e.status === 409);
+
+  const copy = store.forResume(store.createResume({ name: 'Copy', copyFrom: defaultId }).id);
+  // A copy's row is the source's, so its revision is too; a fresh resume's isn't.
+  assert.equal(copy.getSiteRevision(), store.getSiteRevision());
+  const fresh = store.forResume(store.createResume({ name: 'Fresh' }).id);
+  assert.equal(typeof fresh.getSiteRevision(), 'string');
+  copy.setSite({ font: 'lora' }, { merge: true });
+  assert.notEqual(copy.getSiteRevision(), store.getSiteRevision());
 });
 
 test('publish snapshots the draft, writes the PDF, and clears isDirty', async () => {
