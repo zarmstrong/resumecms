@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.2.0](https://github.com/zarmstrong/resumecms/compare/v2.1.0...v2.2.0) (2026-11-22)
+
+
+### Features
+
+* add a languages block type ([#217](https://github.com/zarmstrong/resumecms/issues/217)) ([#220](https://github.com/zarmstrong/resumecms/issues/220)) ([c9953ab](https://github.com/zarmstrong/resumecms/commit/c9953ab3f7bc3ee5753457798eb82b58545dca55))
+* add an optional date to custom block items ([#225](https://github.com/zarmstrong/resumecms/issues/225)) ([c74f9a8](https://github.com/zarmstrong/resumecms/commit/c74f9a879b482a6b3da6f78076e4954e9dbb49c5))
+* add optional labelled federal details to an experience entry ([#223](https://github.com/zarmstrong/resumecms/issues/223)) ([#236](https://github.com/zarmstrong/resumecms/issues/236)) ([3bccb7f](https://github.com/zarmstrong/resumecms/commit/3bccb7f686545898a32861c0fb72a2354d450011))
+* group resume presets by profession, and offer the matching one with a landing preset ([#219](https://github.com/zarmstrong/resumecms/issues/219)) ([#237](https://github.com/zarmstrong/resumecms/issues/237)) ([2173efb](https://github.com/zarmstrong/resumecms/commit/2173efbcff31ac204ac163019bf29f47a30b7eed))
+
+
+### Bug Fixes
+
+* **deps:** bump react-router-dom from 7.18.5 to 7.18.6 ([#227](https://github.com/zarmstrong/resumecms/issues/227)) ([84d9c7f](https://github.com/zarmstrong/resumecms/commit/84d9c7f13500da20a629c25ed83a4c1afd89aa53))
+* **deps:** bump the server group with 5 updates ([#226](https://github.com/zarmstrong/resumecms/issues/226)) ([c7dbedf](https://github.com/zarmstrong/resumecms/commit/c7dbedfbc8b0589762fe4b1e66db9f8c3d93384e))
+* draw link badges as paths so their letters stay out of the PDF's text ([#222](https://github.com/zarmstrong/resumecms/issues/222)) ([#233](https://github.com/zarmstrong/resumecms/issues/233)) ([e9849ef](https://github.com/zarmstrong/resumecms/commit/e9849efa5b627122fc0214a710c0eeb94caaca16))
+* paint a PDF's margins in the page's background color ([#224](https://github.com/zarmstrong/resumecms/issues/224)) ([0c6dba2](https://github.com/zarmstrong/resumecms/commit/0c6dba21207ed6212c177b790b91421a9fc94aa6))
+* self-host static fonts so resume PDFs embed TrueType, not Type3 ([#221](https://github.com/zarmstrong/resumecms/issues/221)) ([#229](https://github.com/zarmstrong/resumecms/issues/229)) ([3d96681](https://github.com/zarmstrong/resumecms/commit/3d96681c8c067ad85f433408d1878325bbd47494))
+
 ## [2.1.0](https://github.com/zarmstrong/resumecms/compare/v2.0.1...v2.1.0) (2026-11-18)
 
 
