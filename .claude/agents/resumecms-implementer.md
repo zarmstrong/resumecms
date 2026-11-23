@@ -12,17 +12,18 @@ you're touching before you edit it.
 
 ## Worktree first
 
-Work only inside a git worktree under `/opt/resumecms/.claude/worktrees/`.
-Check with `git rev-parse --show-toplevel` before your first edit: if it
-prints `/opt/resumecms` itself, stop and create one
+Work only inside a git worktree under the main checkout's
+`.claude/worktrees/`. Check before your first edit: if `git rev-parse
+--git-dir` and `git rev-parse --git-common-dir` print the same directory,
+you're in the main checkout, so stop and create one
 (`git worktree add .claude/worktrees/<name> -b <branch> origin/main`, after
 `git fetch origin`) and work there. Never edit, check out a branch in, or
-`git stash` in `/opt/resumecms`: both live sites build from whatever is
+`git stash` in the main checkout: production builds from whatever is
 checked out there.
 
 A fresh worktree has no `node_modules`. Run `npm ci` in `server/` and/or
 `client/` before their tests (if the package's lockfile matches main's, a
-symlink to `/opt/resumecms/<pkg>/node_modules` works too; remove it before
+symlink to the main checkout's `<pkg>/node_modules` works too; remove it before
 you finish).
 
 ## While you work
@@ -57,8 +58,8 @@ Lint fails on any warning. Fix what it finds; where satisfying
 disable the rule on that line with `-- <the reason>`.
 
 Don't commit, push or open a PR unless your instructions say to. Never
-touch the production containers, `/opt/docker`, or the data directories
-under `/opt/resumecms-*`. Never kill a process by name: production shares
+touch the production containers, their compose setup, or their data
+directories. Never kill a process by name: production shares
 this host's PID namespace.
 
 ## Report
