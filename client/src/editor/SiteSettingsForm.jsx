@@ -14,6 +14,7 @@ import { normalizeTemplate, normalizeLayout, getHeaderTemplate, getLayoutTemplat
 import { TemplatePickerModal } from './TemplatePickerModal.jsx';
 import { SearchSharingFields } from './SearchSharingFields.jsx';
 import { OVERRIDE_LIMITS, resumePageMeta } from '../share/pageMeta.js';
+import { replayColor } from './siteSync.js';
 
 const PILL_PADDING_OPTIONS = [
   { value: 'compact', label: 'Compact' },
@@ -166,7 +167,9 @@ export function SiteSettingsForm({ header, site, blocks, onChange }) {
   const pageNumbersHintId = useId();
 
   function setColor(key, value) {
-    onChange({ ...site, colors: { ...colors, [key]: value } });
+    // Every color as drawn goes to the screen, but a 409's retry replays
+    // only this one (editor/siteSync.js).
+    onChange({ ...site, colors: { ...colors, [key]: value } }, replayColor(key, value));
   }
 
   return (

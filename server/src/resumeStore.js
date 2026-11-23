@@ -17,6 +17,7 @@ import { resumeSitePatch } from './landingStyle.js';
 import { createCoverLetterStore, removeLetterPdf } from './coverLetterStore.js';
 import { createShareStore } from './shareStore.js';
 import { landingPage, resumePage } from './pageMeta.js';
+import { siteRevision } from './siteRevision.js';
 
 // The single implementation of every content operation the editor's REST
 // routes and the MCP tools expose: blocks, header, site settings, publish
@@ -133,6 +134,7 @@ const RESUME_METHODS = /** @type {const} */ ([
   'getHeader',
   'setHeader',
   'getSite',
+  'getSiteRevision',
   'setSite',
   'listBlocks',
   'getBlock',
@@ -779,8 +781,28 @@ export function createResumeStore({
       return getSetting('site');
     }
 
+    // The stored row's revision (siteRevision.js): what the editor's PUT
+    // sends back as `If-Match`.
+    function getSiteRevision() {
+      return siteRevision(getSetting('site'));
+    }
+
     // `merge: true` shallow-merges, with `colors` itself merged one level deep.
-    function setSite(site, { merge = false } = {}) {
+    // `revision` (one or several, from an If-Match) is the row the write was
+    // made from: unless the stored one still has it, nothing is written and
+    // it's a 409 (issue #234). Without one the write isn't checked, as
+    // before. Checked and written synchronously, so nothing interleaves.
+    /**
+     * @param {any} site
+     * @param {{ merge?: boolean, revision?: string | string[] }} [options]
+     */
+    function setSite(site, { merge = false, revision } = {}) {
+      if (revision !== undefined) {
+        const expected = Array.isArray(revision) ? revision : [revision];
+        if (!expected.includes(getSiteRevision())) {
+          throw httpError(409, 'The site settings were changed elsewhere since they were loaded');
+        }
+      }
       let next;
       if (merge) {
         assertObject(site, 'site');
@@ -1169,6 +1191,7 @@ export function createResumeStore({
       getHeader,
       setHeader,
       getSite,
+      getSiteRevision,
       setSite,
       listBlocks,
       getBlock,

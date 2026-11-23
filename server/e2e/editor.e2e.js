@@ -359,6 +359,53 @@ flow('publishing right after a site setting changes publishes it', async ({ page
   await page.waitForFunction(() => /^Published /.test(document.querySelector('.ed-topbar-status')?.textContent));
 });
 
+// Issue #234: a site save made from settings loaded before a change saved
+// elsewhere is refused (409), and the editor puts its own change on top of
+// the stored settings and sends it again, without asking; the next save
+// keeps the other change too.
+flow('a site save after a change made elsewhere keeps both', async ({ page }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const sitePath = `/api/resumes/${resumeId}/site`;
+  const before = (await api(page, sitePath)).body.site;
+  await page.click('xpath/.//button[.//span[normalize-space()="Site Settings & Colors"]]');
+  const checkbox = 'xpath/.//label[.//span[normalize-space()="Page numbers in the PDF"]]//input[@type="checkbox"]';
+  await page.waitForSelector(checkbox);
+  // Another tab (or an MCP client) saves a title meanwhile.
+  const title = `Elsewhere ${Date.now()}`;
+  assert.equal((await api(page, sitePath, { method: 'PUT', body: JSON.stringify({ ...before, title }) })).status, 200);
+  // The editor's own saves from here on.
+  const statuses = [];
+  page.on('response', (response) => {
+    if (isPut(sitePath)(response.request())) statuses.push(response.status());
+  });
+  // The save that lands: the editor's PUT answered 200.
+  const landed = () => {
+    const response = page.waitForResponse((r) => isPut(sitePath)(r.request()) && r.status() === 200);
+    response.catch(() => {});
+    return response;
+  };
+
+  let put = landed();
+  await page.click(checkbox);
+  await put;
+  const once = (await api(page, sitePath)).body.site;
+  assert.equal(once.title, title, "the other tab's title survives");
+  assert.equal(!!once.pdfPageNumbers, !before.pdfPageNumbers, "and so does this tab's change");
+  assert.deepEqual(statuses, [409, 200]);
+
+  // The editor now holds the title too, so its next save keeps it.
+  put = landed();
+  await page.click(checkbox);
+  await put;
+  const twice = (await api(page, sitePath)).body.site;
+  assert.equal(twice.title, title);
+  assert.equal(!!twice.pdfPageNumbers, !!before.pdfPageNumbers);
+  assert.deepEqual(statuses, [409, 200, 200], 'no second conflict');
+
+  assert.equal((await api(page, sitePath, { method: 'PUT', body: JSON.stringify(before) })).status, 200);
+});
+
 flow('applies a resume preset by keyboard, and a reload keeps it', async ({ page }) => {
   await login(page);
   const resumeId = await defaultResumeId(page);
@@ -954,6 +1001,97 @@ flow('leaving the landing editor waits for a resume preset on its way', async ({
   const { body } = await api(page, sitePath);
   assert.equal(body.site.template, preset.header);
   assert.equal(body.site.layout, preset.layout);
+});
+
+// "Apply to the default resume" (issue #235) waits for the landing saves
+// before it sends its write, so a leave whose own flush resolves with that
+// wait could go first: the resume's editor would read the settings from
+// before the copy. Here the color's save is held on its way when Apply is
+// confirmed and Back pressed, and the apply's request once it's sent: the
+// page stays until the apply is answered, and only then does the resume's
+// editor read its site settings.
+flow('leaving the landing editor waits for Apply to the default resume behind a save', async ({ page, expectDialog }) => {
+  await login(page);
+  const resumeId = await defaultResumeId(page);
+  const sitePath = `/api/resumes/${resumeId}/site`;
+  const applyPath = '/api/landing/apply-style';
+  await openLandingEditor(page);
+  await page.goto(`${server.baseUrl}/editor`);
+  await page.waitForSelector(RESUME_SELECT);
+  await page.select(RESUME_SELECT, 'landing');
+  await page.waitForFunction(() => new URLSearchParams(location.search).get('page') === 'landing');
+
+  // The Look group open, with the page's own colors (saved before the
+  // flow's edit, whatever an earlier flow left).
+  await page.click('xpath/.//details[contains(@class, "ed-collapsible")]/summary[starts-with(normalize-space(), "Look")]');
+  const source = await page.waitForSelector('xpath/.//label[span[normalize-space()="Colors and fonts"]]/select');
+  if ((await source.evaluate((el) => el.value)) !== 'custom') {
+    const saved = putResponse(page, '/api/landing');
+    await source.select('custom');
+    assert.equal((await saved).status(), 200);
+  }
+  const accent = await page.waitForSelector('input[aria-label="Accent color, as #rrggbb"]');
+  const current = await accent.evaluate((el) => el.value);
+  const color = current === '#1f6f5c' ? '#7a2e8e' : '#1f6f5c';
+
+  const order = [];
+  page.on('request', (request) => isCall('GET', sitePath)(request) && order.push('site read'));
+  page.on('response', (response) => isCall('POST', applyPath)(response.request()) && order.push('applied'));
+  // Holds the next landing save and the next apply, each until released.
+  await page.evaluate(
+    (holds) => {
+      const send = window.fetch;
+      const waiting = new Map(holds.map((hold) => [hold.method + ' ' + hold.pathname, hold.release]));
+      window.fetch = (input, init) => {
+        const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+        const key = (init?.method || 'GET') + ' ' + url.pathname;
+        const release = waiting.get(key);
+        if (!release) return send(input, init);
+        waiting.delete(key);
+        return new Promise((resolve) => {
+          window[release] = () => resolve(send(input, init));
+        });
+      };
+    },
+    [
+      { method: 'PUT', pathname: '/api/landing', release: 'releaseLandingSave' },
+      { method: 'POST', pathname: applyPath, release: 'releaseApply' },
+    ]
+  );
+
+  await setText(accent, color);
+  const question = expectDialog('accept');
+  await page.click('xpath/.//button[normalize-space()="Apply to the default resume…"][not(@disabled)]');
+  assert.equal((await question).type, 'confirm');
+  // The apply waits for the color's save, which is held on its way.
+  await page.waitForFunction(() => typeof window.releaseLandingSave === 'function');
+  assert.equal(await page.evaluate(() => typeof window.releaseApply), 'undefined', 'nothing applied before the save is in');
+
+  // Back, blocked (see the flow above for the two popstates).
+  await page.evaluate(() => {
+    window.pops = 0;
+    window.addEventListener('popstate', () => (window.pops += 1));
+    history.back();
+  });
+  await page.waitForFunction(() => window.pops >= 2 && new URLSearchParams(location.search).get('page') === 'landing');
+
+  // The save lands, and the apply goes out (held): the page is still the
+  // landing editor's, and the resume's settings haven't been read.
+  const landed = putResponse(page, '/api/landing');
+  await page.evaluate(() => window.releaseLandingSave());
+  assert.equal((await landed).status(), 200);
+  await page.waitForFunction(() => typeof window.releaseApply === 'function');
+  assert.equal(await page.evaluate(() => new URLSearchParams(location.search).get('page')), 'landing');
+  assert.deepEqual(order, []);
+
+  const applied = nextResponse(page, 'POST', applyPath);
+  await page.evaluate(() => window.releaseApply());
+  assert.equal((await applied).status(), 200);
+  await page.waitForFunction(() => new URLSearchParams(location.search).get('page') === null);
+  await page.waitForSelector('xpath/.//button[.//span[normalize-space()="Site Settings & Colors"]]');
+  assert.deepEqual(order, ['applied', 'site read'], "the resume's editor read its settings after the apply");
+  const { body } = await api(page, sitePath);
+  assert.equal(body.site.colors.accent, color, 'and the copied color is in its draft');
 });
 
 flow('fills an entry\'s federal details and hides them from the web page', async ({ page }) => {

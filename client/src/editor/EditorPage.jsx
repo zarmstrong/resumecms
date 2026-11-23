@@ -10,6 +10,7 @@ import { pdfUrl } from '../resume/pdfUrl.js';
 import { BLOCK_TYPE_LABELS, defaultDataForType } from './blockDefaults.js';
 import { createBlockReorderItems } from './blockDrag.js';
 import { createSaveQueue } from './saveQueue.js';
+import { createSiteSync, replayChange } from './siteSync.js';
 import { useLeaveGuard } from './useLeaveGuard.js';
 import { editorUnsavedWork } from './unsavedWork.js';
 import { publicUrl } from './resumeLinks.js';
@@ -187,6 +188,23 @@ export function EditorPage({
   const aiProposalsRef = useRef(aiProposals);
   aiProposalsRef.current = aiProposals;
   const reorderRequestIdRef = useRef(0);
+  // The site settings on screen, which a save reads when its turn comes and
+  // a 409's rebase replaces (siteSync.js, issue #234), so it's set with the
+  // state rather than from a render.
+  const siteRef = useRef(site);
+  const siteSync = useMemo(
+    () =>
+      createSiteSync({
+        getSite: () => rapi.getSite(),
+        putSite: (s, revision) => rapi.putSite(s, revision),
+        read: () => siteRef.current,
+        write: (s) => {
+          siteRef.current = s;
+          if (mountedRef.current) setSite(s);
+        },
+      }),
+    [rapi]
+  );
   // Requests still in flight, per proposal key ({ id, blockId, target,
   // status: 'loading' }, the fields dropAiProposals' predicates can rely on,
   // plus, for a bullet or item, what relocateRequest needs: `asked` and
@@ -269,6 +287,8 @@ export function EditorPage({
       api.getCredentials(),
     ]).then(([h, s, b, status, credentials]) => {
       setHeader(h.header);
+      siteRef.current = s.site;
+      siteSync.reset(s);
       setSite(s.site);
       setBlocks(b.blocks);
       setPublishedAt(status.publishedAt);
@@ -497,15 +517,25 @@ export function EditorPage({
     // debounce goes out first, or a publish right after an edit would leave
     // that edit out. Publishing past a failed save would publish something
     // other than what's on screen, so a failure stops it, as the landing
-    // page's publish does.
-    const failed = await saves.flush();
-    if (failed.length) {
-      setPublishState('idle');
-      setPublishError(`Not published: a save failed (${failed[0].message || 'unknown error'})`);
-      return;
+    // page's publish does. The queue is held until the request is sent
+    // (saves.hold(), issue #235), so a leave whose flush resolves with this
+    // one's waits for it; not for its answer, which can wait on the PDF,
+    // and which nothing the next page reads depends on.
+    const held = saves.hold();
+    let publishing;
+    try {
+      const failed = await held.flush();
+      if (failed.length) {
+        setPublishState('idle');
+        setPublishError(`Not published: a save failed (${failed[0].message || 'unknown error'})`);
+        return;
+      }
+      publishing = rapi.publish();
+    } finally {
+      held.release();
     }
     try {
-      const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion, pdfPending: newPdfPending } = await rapi.publish();
+      const { publishedAt: newPublishedAt, pdfVersion: newPdfVersion, pdfPending: newPdfPending } = await publishing;
       setPublishedAt(newPublishedAt);
       setPdfVersion(newPdfVersion ?? null);
       setPdfStale(!!newPdfPending);
@@ -553,14 +583,19 @@ export function EditorPage({
   async function handleDiscard() {
     // Every save goes out first, so none lands on top of the discarded
     // draft; once it's discarded, a save that failed is moot (and one
-    // typed meanwhile is replaced on screen below).
-    await saves.flush();
+    // typed meanwhile is replaced on screen below). Held until it's done
+    // (saves.hold(), issue #235), so a leave meanwhile, to this resume's
+    // cover letters say, waits for the discarded draft.
+    const held = saves.hold();
     let draft;
     try {
+      await held.flush();
       draft = await rapi.discardDraft();
     } catch (err) {
       setPublishError(err.message || 'Discard failed');
       return;
+    } finally {
+      held.release();
     }
     if (saves.forget(() => true)) setSaveState('idle');
     // Every block's data changes out from under its proposals, and a
@@ -570,6 +605,8 @@ export function EditorPage({
     dropPlan();
     setTailorRun(null); // it pointed at rewrites that are gone
     setHeader(draft.header);
+    siteRef.current = draft.site;
+    siteSync.reset({ site: draft.site, revision: draft.siteRevision });
     setSite(draft.site);
     setBlocks(draft.blocks);
     setIsDirty(false);
@@ -592,11 +629,19 @@ export function EditorPage({
     );
   }
 
-  function handleSiteChange(newSite) {
-    setSite(newSite);
+  // `newSite` is the form's edit of the settings it was drawn with, and
+  // `replay` how to make the same edit to others (siteSync.js; by default
+  // the keys it changed), kept until a save confirms it, for a 409's
+  // retry. If a retry replaced the settings on screen since the form drew
+  // them, the edit is replayed on those.
+  function handleSiteChange(newSite, replay = replayChange(site, newSite)) {
+    const next = siteRef.current === site ? newSite : replay(siteRef.current);
+    siteRef.current = next;
+    siteSync.record(replay);
+    setSite(next);
     markDirty();
     setSaveState('saving');
-    saves.schedule('site', () => saves.track(rapi.putSite(newSite), 'site').then(flashSaved, saveFailed));
+    saves.schedule('site', () => saves.track(siteSync.save(), 'site').then(flashSaved, saveFailed));
   }
 
   async function handleVisibilityChange(id, patch) {

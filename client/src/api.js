@@ -145,8 +145,23 @@ export function resumeApi(resumeId) {
     getHeader: () => request(`${prefix}/header`),
     putHeader: (header) => request(`${prefix}/header`, { method: 'PUT', body: JSON.stringify(header) }),
 
+    // { site, revision } (issue #234). A PUT with the revision it was made
+    // from is refused with a 409 once the stored settings have moved on
+    // (editor/siteSync.js); one without it replaces them unchecked.
     getSite: () => request(`${prefix}/site`),
-    putSite: (site) => request(`${prefix}/site`, { method: 'PUT', body: JSON.stringify(site) }),
+    /**
+     * @param {Record<string, any>} site
+     * @param {string} [revision]
+     */
+    putSite: (site, revision) =>
+      request(`${prefix}/site`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(revision ? { 'If-Match': `"${revision}"` } : {}),
+        },
+        body: JSON.stringify(site),
+      }),
 
     getBlocks: () => request(`${prefix}/blocks`),
     /**

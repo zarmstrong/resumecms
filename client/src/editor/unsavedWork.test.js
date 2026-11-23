@@ -31,7 +31,7 @@ const hide = (blockId, extra = {}) => ({
   ...extra,
 });
 const order = (list) => ({ blockIds: [...list].reverse().map((b) => b.id), basis: list.map((b) => b.id), basisParents: Object.fromEntries(list.map((b) => [b.id, null])) });
-const idle = { waiting: 0, inFlight: 0, failed: 0 };
+const idle = { waiting: 0, inFlight: 0, failed: 0, held: 0 };
 
 test('nothing open is nothing to ask about', () => {
   const work = editorUnsavedWork({ blocks });
@@ -45,6 +45,8 @@ test('the save queue alone makes the guard step in, but asks nothing', () => {
   assert.equal(mustGuard(work, { ...idle, waiting: 1 }), true, 'a save on its debounce');
   assert.equal(mustGuard(work, { ...idle, inFlight: 1 }), true, 'a request in flight (an upload too)');
   assert.equal(mustGuard(work, { ...idle, failed: 1 }), true, 'a save that failed');
+  assert.equal(mustGuard(work, { ...idle, held: 1 }), true, 'an operation holding the queue before its request is sent');
+  assert.equal(mustGuard(work, { waiting: 0, inFlight: 0, failed: 0 }), false, 'a pending() without holds counts none');
   assert.equal(leaveQuestion(work), null, 'the queue is flushed, and its failure asked about, before this');
 });
 

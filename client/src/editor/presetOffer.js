@@ -1,4 +1,5 @@
 import { presetSite } from '../resume/resumePresets.js';
+import { SITE_SAVE_ATTEMPTS } from './siteSync.js';
 
 // After a landing preset is applied (issue #219): the matching resume preset
 // to offer for the default resume, if the landing preset names one
@@ -38,14 +39,23 @@ export function offerMessage(offer) {
 // presetSite() (what the template picker's "Use this preset" does), saved
 // with an ordinary PUT, so the store's touchDraft() runs and nothing is
 // published. `target` is that resume's API (`resumeApi(id)`: getSite,
-// putSite). `goOn()` is asked between the read and the write: once it says
+// putSite). `goOn()` is asked between each read and its write: once it says
 // no (the page that asked is gone) nothing is written, so a write can't
-// land on a draft another editor page has loaded since. Resolves with
-// whether it wrote. The save is the whole site object, as every site save
-// is, so the last write wins over one made elsewhere in between.
-export async function applyResumeOffer(offer, target, goOn = () => true) {
-  const { site } = await target.getSite();
-  if (!goOn()) return false;
-  await target.putSite(presetSite(site || {}, offer.preset));
-  return true;
+// land on a draft another editor page has loaded since. The PUT carries the
+// revision it was read at (issue #234), so a change saved elsewhere in
+// between is a 409, not overwritten: then it reads again and applies the
+// preset to that, up to `attempts` times. (presetSite() drops keys the
+// preset doesn't set, which is why it's a fresh read and not a merge.)
+// Resolves with whether it wrote.
+export async function applyResumeOffer(offer, target, goOn = () => true, attempts = SITE_SAVE_ATTEMPTS) {
+  for (let attempt = 1; ; attempt += 1) {
+    const { site, revision } = await target.getSite();
+    if (!goOn()) return false;
+    try {
+      await target.putSite(presetSite(site || {}, offer.preset), revision);
+      return true;
+    } catch (err) {
+      if (err?.status !== 409 || attempt >= attempts) throw err;
+    }
+  }
 }
