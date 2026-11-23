@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.1](https://github.com/zarmstrong/resumecms/compare/v2.2.0...v2.2.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* hold the landing editor's exits until Apply to the default resume is sent ([#235](https://github.com/zarmstrong/resumecms/issues/235)) ([#240](https://github.com/zarmstrong/resumecms/issues/240)) ([6fad05f](https://github.com/zarmstrong/resumecms/commit/6fad05f1d9f52c6962f1c3b3ce64b676b53f990f))
+* keep site settings changes made elsewhere from being overwritten ([#234](https://github.com/zarmstrong/resumecms/issues/234)) ([#241](https://github.com/zarmstrong/resumecms/issues/241)) ([0213126](https://github.com/zarmstrong/resumecms/commit/021312673ed4576b963112434fd9f48f56e46d9e))
+
 ## [2.2.0](https://github.com/zarmstrong/resumecms/compare/v2.1.0...v2.2.0) (2026-11-22)
 
 
