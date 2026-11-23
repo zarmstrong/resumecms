@@ -16,9 +16,10 @@ a scratch directory outside it.
   server, find its PID with `ss -ltnp` on your port, confirm
   `/proc/<pid>/environ` holds your scratch `RESUMECMS_DATA_DIR`, and kill
   only that PID.
-- Ports 55330 and 55340 are the live sites. Pick a free port above 56000.
-- Never touch `/opt/docker`, `/opt/resumecms-*` (live data), or the
-  `/opt/resumecms` checkout itself.
+- The live sites listen on this host too. Pick a free port above 56000
+  (check it with `ss -ltn` first).
+- Never touch the production containers, their compose setup, their data
+  directories, or the main checkout itself.
 
 ## Running the server
 

@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # Runs the local checks for the worktree this script is in: the template
 # validator, both packages' tests, lint and type checks, the client build
-# and the browser suite, stopping at the first failure. It never touches Docker or a running service; to deploy,
-# see scripts/deploy-host.sh.
+# and the browser suite, stopping at the first failure. It never touches Docker or a running service.
 #
 # Needs `npm ci` in server/ and client/ first.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 
-# The client build writes client/dist, and production builds from
-# /opt/resumecms, which is never worked in: run this from a worktree.
-if [[ "$root" == "$(realpath -e /opt/resumecms 2>/dev/null || echo /opt/resumecms)" ]]; then
-  echo "check: not in /opt/resumecms (production builds from it); run it from a worktree" >&2
+# The client build writes client/dist, and production builds from the
+# main checkout, which is never worked in: run this from a linked worktree
+# (its git dir differs from the common one).
+git_dir=$(cd "$root" && git rev-parse --path-format=absolute --git-dir)
+common_dir=$(cd "$root" && git rev-parse --path-format=absolute --git-common-dir)
+if [[ "$git_dir" == "$common_dir" ]]; then
+  echo "check: not in the main checkout (production builds from it); run it from a worktree" >&2
   exit 1
 fi
 

@@ -189,7 +189,7 @@ fails unless you install Chromium yourself and set `PUPPETEER_EXECUTABLE_PATH`.
 
 Always work in a git worktree under `.claude/worktrees/<name>`, branched
 from an up-to-date `origin/main`, and never edit, switch branches or
-`git stash` in the main `/opt/resumecms` checkout. The production sites are
+`git stash` in the main checkout. The production sites are
 built from that checkout, so whatever is in it ships on the next rebuild.
 Keep it on a clean `main`. A fresh worktree has no `node_modules`: run
 `npm ci` in `server/` and `client/` before their tests.
@@ -198,19 +198,9 @@ Keep it on a clean `main`. A fresh worktree has no `node_modules`: run
 template validator, both packages' tests, lint and type checks, the
 client build and the browser suite; it stops if
 either package has no `node_modules`, so run `npm ci` in both first),
-refuses to run in `/opt/resumecms`, and never touches Docker.
-`scripts/deploy-host.sh` is the deploy step, not a build step: it rebuilds
-this host's live services (`docker compose up -d --build` in
-`/opt/docker`) from `/opt/resumecms`, so run it only on purpose, and only
-as `/opt/resumecms/scripts/deploy-host.sh` (a worktree's copy refuses). It
-refuses unless that checkout is a clean `main` (nothing modified, staged
-or untracked, and no ignored file under `server/`, `client/` or
-`templates/` but `node_modules` and `dist`) at exactly origin's `main`
-(by `git ls-remote`, so it writes nothing to the checkout), checked again
-right before building; names the services first (pass some to rebuild
-only those), asks unless given `--yes`, runs one at a time, and fails
-unless each site answers on its port within 90 s of `up`.
-`--dry-run` stops before Docker.
+refuses to run in the main checkout (only in a linked worktree), and
+never touches Docker. Deploying is done outside the repo; nothing in
+the repo touches Docker or the live services.
 
 Subagents follow the same rule. Agents that write code run with
 `isolation: worktree`, and the project's own agents are in
