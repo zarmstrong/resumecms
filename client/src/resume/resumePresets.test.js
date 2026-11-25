@@ -120,9 +120,9 @@ test('presetGroups leaves out a group with nothing in it', () => {
   assert.deepEqual(presetGroups([]), []);
 });
 
-test('exactly the seven profession presets are marked group: "profession" in templates/presets', () => {
+test('exactly the eight profession presets are marked group: "profession" in templates/presets', () => {
   const marked = PRESETS.filter((p) => p.group !== undefined).map((p) => p.id).sort();
-  assert.deepEqual(marked, ['creative', 'education', 'healthcare', 'hospitality', 'law-finance', 'research', 'trades']);
+  assert.deepEqual(marked, ['creative', 'education', 'federal', 'healthcare', 'hospitality', 'law-finance', 'research', 'trades']);
   for (const preset of PRESETS.filter((p) => p.group !== undefined)) {
     assert.equal(preset.group, 'profession', preset.id);
   }

@@ -1,0 +1,15 @@
+{
+  "id": "federal",
+  "label": "Federal (USAJOBS)",
+  "description": "For US federal applications, a plain one-column resume that reads cleanly to a parser, in a compact sans-serif to fit USAJOBS's two-page limit. Add each job's hours per week, series and grade, and supervisor under its entry, with month/year dates.",
+  "author": "resumecms",
+  "group": "profession",
+  "header": "classic",
+  "layout": "minimal",
+  "colors": {
+    "accent": "#1f2328"
+  },
+  "font": "open-sans",
+  "fontSize": "small",
+  "lineSpacing": "snug"
+}
