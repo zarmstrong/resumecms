@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.3.0](https://github.com/zarmstrong/resumecms/compare/v2.2.1...v2.3.0) (2026-11-25)
+
+
+### Features
+
+* add a federal (USAJOBS) resume preset ([#246](https://github.com/zarmstrong/resumecms/issues/246)) ([cb10f5c](https://github.com/zarmstrong/resumecms/commit/cb10f5c9d4fdcd1f7b9995988ca093a8e812e2e6))
+
+
+### Bug Fixes
+
+* **deps:** bump @anthropic-ai/sdk from 1.10.0 to 1.12.0 in /server ([#243](https://github.com/zarmstrong/resumecms/issues/243)) ([2414e2b](https://github.com/zarmstrong/resumecms/commit/2414e2bf184ff1fa80f319218989100c0e3d6728))
+* **deps:** bump openai from 7.60.0 to 7.62.0 in /server ([#244](https://github.com/zarmstrong/resumecms/issues/244)) ([dbe8062](https://github.com/zarmstrong/resumecms/commit/dbe80629dd46de615a302235108dfa1ce90e3004))
+
 ## [2.2.1](https://github.com/zarmstrong/resumecms/compare/v2.2.0...v2.2.1) (2026-11-23)
 
 
