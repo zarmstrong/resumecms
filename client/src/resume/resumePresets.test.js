@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { presetGroups, presetSite } from './resumePresets.js';
-import { DEFAULT_SITE_COLORS, normalizeSiteColors, contrastRatio, relativeLuminance } from './siteColors.js';
+import {
+  DEFAULT_SITE_COLORS, normalizeSiteColors, contrastRatio, relativeLuminance,
+  FONT_OPTIONS, FONT_SIZE_CSS, LINE_SPACING_CSS, PILL_PADDING_CSS,
+} from './siteColors.js';
 
 // Read the registry's metadata directly: import.meta.glob is Vite-only.
 const TEMPLATE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../templates');
@@ -77,11 +80,28 @@ test('every preset applies a registered header and layout', () => {
   }
 });
 
-test('all seven profession presets have accents with at least 4.5:1 contrast against white', () => {
-  for (const id of ['trades', 'healthcare', 'law-finance', 'education', 'research', 'creative', 'hospitality']) {
-    const preset = PRESETS.find((p) => p.id === id);
-    assert.ok(preset, id);
-    assert.ok(contrastRatio(relativeLuminance(preset.colors.accent), relativeLuminance('#ffffff')) >= 4.5, id);
+test('every profession preset has an accent with at least 4.5:1 contrast against white', () => {
+  const profession = PRESETS.filter((p) => p.group === 'profession');
+  assert.ok(profession.length > 0);
+  for (const preset of profession) {
+    assert.ok(contrastRatio(relativeLuminance(preset.colors.accent), relativeLuminance('#ffffff')) >= 4.5, preset.id);
+  }
+});
+
+// The validator can't import siteColors.js (it uses no npm packages), so a
+// preset's type settings are checked here: a misspelt one would otherwise
+// fall back to the default without a word.
+test('every preset type setting names an option the site settings know', () => {
+  const known = {
+    font: FONT_OPTIONS.map((f) => f.value),
+    fontSize: Object.keys(FONT_SIZE_CSS),
+    lineSpacing: Object.keys(LINE_SPACING_CSS),
+    pillPadding: Object.keys(PILL_PADDING_CSS),
+  };
+  for (const preset of PRESETS) {
+    for (const [key, values] of Object.entries(known)) {
+      if (preset[key] !== undefined) assert.ok(values.includes(preset[key]), `${preset.id}: ${key} "${preset[key]}"`);
+    }
   }
 });
 
@@ -120,9 +140,9 @@ test('presetGroups leaves out a group with nothing in it', () => {
   assert.deepEqual(presetGroups([]), []);
 });
 
-test('exactly the seven profession presets are marked group: "profession" in templates/presets', () => {
+test('exactly the eight profession presets are marked group: "profession" in templates/presets', () => {
   const marked = PRESETS.filter((p) => p.group !== undefined).map((p) => p.id).sort();
-  assert.deepEqual(marked, ['creative', 'education', 'healthcare', 'hospitality', 'law-finance', 'research', 'trades']);
+  assert.deepEqual(marked, ['creative', 'education', 'federal', 'healthcare', 'hospitality', 'law-finance', 'research', 'trades']);
   for (const preset of PRESETS.filter((p) => p.group !== undefined)) {
     assert.equal(preset.group, 'profession', preset.id);
   }
