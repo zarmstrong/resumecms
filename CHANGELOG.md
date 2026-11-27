@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.1](https://github.com/zarmstrong/resumecms/compare/v2.3.0...v2.3.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* **deps:** bump react-router-dom from 7.18.6 to 7.18.7 in /client ([#249](https://github.com/zarmstrong/resumecms/issues/249)) ([4779e01](https://github.com/zarmstrong/resumecms/commit/4779e0112a0b896021e1131678cc265c13ce1dd6))
+* **deps:** bump the server runtime group with 3 updates ([#247](https://github.com/zarmstrong/resumecms/issues/247)) ([3850e35](https://github.com/zarmstrong/resumecms/commit/3850e35d296031170063e5771832eb843a64bcdd))
+
 ## [2.3.0](https://github.com/zarmstrong/resumecms/compare/v2.2.1...v2.3.0) (2026-11-25)
 
 
